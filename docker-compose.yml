@@ -1,0 +1,49 @@
+services:
+  # Frontend container (Nginx + static files)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: character-generator-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-2427}:80"
+    volumes:
+      - ./logs:/var/log/nginx
+    networks:
+      - app-network
+    depends_on:
+      - proxy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Backend container (Node.js proxy server)
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    container_name: character-generator-proxy
+    restart: unless-stopped
+    ports:
+      - "${PROXY_PORT:-2426}:${PROXY_PORT:-2426}"
+    environment:
+      - NODE_ENV=production
+      - PORT=${PROXY_PORT:-2426}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-2427}}
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2426/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  app-network:
+    driver: bridge
+    name: character-generator-network

@@ -1,0 +1,36 @@
+# Proxy-only Dockerfile
+FROM node:18-alpine
+
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+# Copy package files
+COPY proxy/package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy proxy source
+COPY proxy/server.js ./
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Change ownership
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE 2426
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:2426/health || exit 1
+
+# Start the proxy server
+CMD ["node", "server.js"]

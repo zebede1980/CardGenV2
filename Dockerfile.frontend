@@ -1,0 +1,25 @@
+# Frontend-only Dockerfile
+FROM nginx:alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Copy nginx configuration
+COPY .docker/nginx/nginx-frontend.conf /etc/nginx/nginx.conf
+
+# Copy frontend files preserving directory structure
+COPY src/ /usr/share/nginx/html/src/
+COPY index.html /usr/share/nginx/html/
+COPY favicon.png /usr/share/nginx/html/
+
+# Set permissions
+RUN chmod -R 755 /usr/share/nginx/html
+
+# Expose port
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost/health || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]
