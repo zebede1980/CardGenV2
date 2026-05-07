@@ -153,7 +153,7 @@ class CharacterGenerator {
 
   // Convert to SillyTavern Spec V2 format
   toSpecV2Format(character) {
-    return {
+    const spec = {
       spec: "chara_card_v2",
       spec_version: "2.0",
       data: {
@@ -163,9 +163,14 @@ class CharacterGenerator {
         scenario: character.scenario || "",
         first_mes: character.firstMessage || "Hello!",
         mes_example: character.mesExample || "",
+        alternate_greetings: character.alternateGreetings || [],
         tags: [],
       },
     };
+    if (character.character_book) {
+      spec.data.character_book = character.character_book;
+    }
+    return spec;
   }
 }
 

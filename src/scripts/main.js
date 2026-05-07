@@ -14,6 +14,7 @@ class CharacterGeneratorApp {
     this.originalCharacter = null; // Store the original AI-generated version
     this.currentImageUrl = null;
     this.lorebookEntries = []; // Holds {id, keys, content}
+    this.altGreetings = []; // Holds {id, content}
     this.lorebookData = null; // Store loaded lorebook data
     this.referenceImageDataUrl = "";
     // Removed currentImageBlob - we now convert fresh from URL on download
@@ -410,6 +411,33 @@ class CharacterGeneratorApp {
         keysInput.value = target.textContent;
         keysInput.focus();
     });
+
+    // Alt Greetings Manager
+    const manageAltGreetingsBtn = document.getElementById("manage-alt-greetings-btn");
+    const altGreetingsModal = document.getElementById("alt-greetings-manager-modal");
+    const altGreetingsModalCloseBtn = document.getElementById("alt-greetings-modal-close-btn");
+    const generateAltContBtn = document.getElementById("generate-alt-greeting-cont-btn");
+    const generateAltRandBtn = document.getElementById("generate-alt-greeting-rand-btn");
+    const saveAltGreetingBtn = document.getElementById("save-alt-greeting-btn");
+    const cancelAltEditBtn = document.getElementById("cancel-alt-greeting-edit-btn");
+    const altGreetingsList = document.getElementById("alt-greetings-list");
+
+    if (manageAltGreetingsBtn) manageAltGreetingsBtn.addEventListener("click", () => this.openAltGreetingsManager());
+    if (altGreetingsModalCloseBtn) altGreetingsModalCloseBtn.addEventListener("click", () => this.closeAltGreetingsManager());
+    if (altGreetingsModal) altGreetingsModal.addEventListener("click", (e) => {
+        if (e.target === altGreetingsModal) this.closeAltGreetingsManager();
+    });
+    if (generateAltContBtn) generateAltContBtn.addEventListener("click", () => this.handleGenerateAltGreeting("continuation"));
+    if (generateAltRandBtn) generateAltRandBtn.addEventListener("click", () => this.handleGenerateAltGreeting("random"));
+    if (saveAltGreetingBtn) saveAltGreetingBtn.addEventListener("click", () => this.handleSaveAltGreeting());
+    if (cancelAltEditBtn) cancelAltEditBtn.addEventListener("click", () => this.resetAltGreetingsEditor());
+
+    if (altGreetingsList) altGreetingsList.addEventListener("click", (e) => {
+        const target = e.target.closest("button[data-action]");
+        if (!target) return;
+        if (target.dataset.action === "edit-alt-greeting") this.handleEditAltGreeting(target.dataset.id);
+        if (target.dataset.action === "delete-alt-greeting") this.handleDeleteAltGreeting(target.dataset.id);
+    });
   }
 
   async checkAPIStatus() {
@@ -529,6 +557,8 @@ class CharacterGeneratorApp {
     this.setGeneratingState(true);
     this.lorebookEntries = [];
     this.updateLorebookEntryCount();
+    this.altGreetings = [];
+    this.updateAltGreetingsCount();
     this.clearStream();
 
     try {
@@ -816,6 +846,9 @@ class CharacterGeneratorApp {
           this.currentCharacter.mesExample = exampleMessagesOutput.innerText.trim();
         }
       }
+
+      // Embed Lorebook in Character Object before export
+      this.currentCharacter.character_book = this.buildCharacterBook();
 
       // Always convert from currentImageUrl to ensure we get the latest image
       // This ensures regenerated or uploaded images are properly included
@@ -1191,6 +1224,9 @@ class CharacterGeneratorApp {
         }
       }
 
+      // Embed Lorebook in Character Object before export
+      this.currentCharacter.character_book = this.buildCharacterBook();
+
       // Convert to Spec V2 format
       const specV2Data = this.characterGenerator.toSpecV2Format(
         this.currentCharacter,
@@ -1342,6 +1378,8 @@ class CharacterGeneratorApp {
     this.currentImageUrl = null;
     this.lorebookEntries = [];
     this.updateLorebookEntryCount();
+    this.altGreetings = [];
+    this.updateAltGreetingsCount();
     document.getElementById("image-controls").style.display = "none";
 
     // Clear image content and prompt editor
@@ -1712,8 +1750,29 @@ class CharacterGeneratorApp {
 
       document.getElementById("image-controls").style.display = "block";
       await this.saveCardToLibrary();
-      this.lorebookEntries = [];
+      
+      if (characterData.character_book && characterData.character_book.entries) {
+        this.lorebookEntries = characterData.character_book.entries.map(e => ({
+          id: e.id || Date.now().toString() + Math.random().toString().slice(2, 5),
+          keys: e.keys || [],
+          content: e.content || "",
+          enabled: e.enabled !== false
+        }));
+      } else {
+        this.lorebookEntries = [];
+      }
       this.updateLorebookEntryCount();
+
+      if (characterData.alternateGreetings) {
+        this.altGreetings = characterData.alternateGreetings.map((content, i) => ({
+          id: Date.now().toString() + i,
+          content
+        }));
+      } else {
+        this.altGreetings = [];
+      }
+      this.updateAltGreetingsCount();
+
       await this.refreshLibraryViews();
       this.showNotification("Card imported for editing", "success");
     } catch (error) {
@@ -1872,6 +1931,8 @@ class CharacterGeneratorApp {
     document.getElementById('lorebook-entry-id').value = '';
     document.getElementById('lorebook-entry-keys').value = '';
     document.getElementById('lorebook-entry-content').value = '';
+    const hintInput = document.getElementById('lorebook-entry-hint');
+    if (hintInput) hintInput.value = '';
     document.getElementById('cancel-lorebook-edit-btn').style.display = 'none';
   }
 
@@ -1906,9 +1967,11 @@ class CharacterGeneratorApp {
     const btn = document.getElementById("generate-lorebook-content-btn");
     const keysInput = document.getElementById("lorebook-entry-keys");
     const contentTextarea = document.getElementById("lorebook-entry-content");
+    const hintInput = document.getElementById("lorebook-entry-hint");
     if (!this.currentCharacter || !btn || !keysInput || !contentTextarea) return;
 
     const keys = keysInput.value.trim();
+    const hint = hintInput ? hintInput.value.trim() : "";
     if (!keys) {
       this.showNotification("Please provide at least one key for the entry.", "warning");
       return;
@@ -1919,7 +1982,7 @@ class CharacterGeneratorApp {
     contentTextarea.value = "Generating content with AI...";
 
     try {
-      const content = await this.lorebookGenerator.generateEntryContent(this.currentCharacter, keys);
+      const content = await this.lorebookGenerator.generateEntryContent(this.currentCharacter, keys, hint);
       contentTextarea.value = content;
     } catch (error) {
       this.showNotification(`Failed to generate content: ${error.message}`, "error");
@@ -1955,6 +2018,13 @@ class CharacterGeneratorApp {
         enabled: true,
       });
     }
+    
+    this.renderLorebookEntries();
+    this.updateLorebookEntryCount();
+    this.resetLorebookEditor();
+    this.currentCharacter.character_book = this.buildCharacterBook(); // Sync to character data
+    this.saveCardToLibrary(); // Save changes silently to the local library
+    this.showNotification("Lorebook entry saved successfully!", "success");
   }
 
   async savePromptToLibrary(promptData) {
@@ -2336,8 +2406,39 @@ class CharacterGeneratorApp {
     document.getElementById('lorebook-entry-id').value = entry.id;
     document.getElementById('lorebook-entry-keys').value = entry.keys.join(', ');
     document.getElementById('lorebook-entry-content').value = entry.content;
+    const hintInput = document.getElementById('lorebook-entry-hint');
+    if (hintInput) hintInput.value = '';
     document.getElementById('cancel-lorebook-edit-btn').style.display = 'inline-block';
     document.getElementById('lorebook-entry-editor').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  buildCharacterBook() {
+    if (!this.lorebookEntries || this.lorebookEntries.length === 0) return undefined;
+    
+    return {
+      name: `${this.currentCharacter?.name || 'Character'} Lorebook`,
+      description: "Generated by SillyTavern Character Generator",
+      scan_depth: 50,
+      token_budget: 500,
+      recursive_scanning: false,
+      extensions: {},
+      entries: this.lorebookEntries.map((entry, index) => ({
+        keys: entry.keys,
+        content: entry.content,
+        extensions: {},
+        enabled: entry.enabled,
+        insertion_order: 50,
+        case_sensitive: false,
+        name: entry.keys[0] || "",
+        priority: 10,
+        id: parseInt(entry.id) || (Date.now() + index),
+        comment: "",
+        selective: false,
+        secondary_keys: [],
+        constant: false,
+        position: "before_char"
+      }))
+    };
   }
 
   handleDeleteLorebookEntry(id) {
@@ -2348,6 +2449,176 @@ class CharacterGeneratorApp {
       this.resetLorebookEditor(); // In case the deleted one was being edited
       this.showNotification("Lorebook entry deleted.", "info");
     }
+  }
+
+  openAltGreetingsManager() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate or import a character first.", "warning");
+      return;
+    }
+    const modal = document.getElementById("alt-greetings-manager-modal");
+    if (modal) {
+      modal.classList.add("show");
+      document.body.style.overflow = "hidden";
+      this.renderAltGreetings();
+      this.resetAltGreetingsEditor();
+    }
+  }
+
+  closeAltGreetingsManager() {
+    const modal = document.getElementById("alt-greetings-manager-modal");
+    if (modal) {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+    }
+  }
+
+  updateAltGreetingsCount() {
+    const countEl = document.getElementById("alt-greetings-count");
+    const limitText = document.getElementById("alt-greetings-limit-text");
+    if (countEl) {
+        const count = this.altGreetings.length;
+        countEl.textContent = `${count} ${count === 1 ? 'entry' : 'entries'}`;
+    }
+    if (limitText) {
+        limitText.textContent = `(${this.altGreetings.length}/5)`;
+    }
+
+    const editor = document.getElementById("alt-greeting-editor");
+    const id = document.getElementById('alt-greeting-id')?.value;
+    if (editor) {
+        if (this.altGreetings.length >= 5 && !id) {
+            editor.style.opacity = "0.5";
+            editor.style.pointerEvents = "none";
+        } else {
+            editor.style.opacity = "1";
+            editor.style.pointerEvents = "auto";
+        }
+    }
+  }
+
+  renderAltGreetings() {
+    const listEl = document.getElementById("alt-greetings-list");
+    if (!listEl) return;
+
+    if (this.altGreetings.length === 0) {
+        listEl.innerHTML = '<p class="library-empty">No alternate greetings yet.</p>';
+        return;
+    }
+
+    listEl.innerHTML = this.altGreetings.map((greeting, index) => `
+        <div class="library-item" style="align-items: flex-start;">
+            <div style="flex: 1;">
+                <div class="library-item-title" style="margin-bottom: 0.5rem;">Greeting ${index + 1}</div>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0; white-space: pre-wrap; max-height: 80px; overflow: hidden; text-overflow: ellipsis;">${greeting.content}</p>
+            </div>
+            <div class="library-item-actions">
+                <button class="btn-small" data-action="edit-alt-greeting" data-id="${greeting.id}">Edit</button>
+                <button class="btn-small" data-action="delete-alt-greeting" data-id="${greeting.id}">Delete</button>
+            </div>
+        </div>
+    `).join('');
+  }
+
+  resetAltGreetingsEditor() {
+    document.getElementById('alt-greeting-editor-title').textContent = 'Add New Greeting';
+    document.getElementById('alt-greeting-id').value = '';
+    document.getElementById('alt-greeting-content').value = '';
+    const hintInput = document.getElementById('alt-greeting-hint');
+    if (hintInput) hintInput.value = '';
+    document.getElementById('cancel-alt-greeting-edit-btn').style.display = 'none';
+    this.updateAltGreetingsCount();
+  }
+
+  async handleGenerateAltGreeting(type) {
+    const contentTextarea = document.getElementById("alt-greeting-content");
+    const hintInput = document.getElementById("alt-greeting-hint");
+    const contBtn = document.getElementById("generate-alt-greeting-cont-btn");
+    const randBtn = document.getElementById("generate-alt-greeting-rand-btn");
+
+    if (!this.currentCharacter || !contentTextarea) return;
+
+    const hint = hintInput ? hintInput.value.trim() : "";
+    const pov = document.getElementById("pov-select")?.value || "third";
+
+    contBtn.disabled = true;
+    randBtn.disabled = true;
+    contentTextarea.value = "Generating alternate greeting with AI...";
+
+    try {
+        const content = await window.apiHandler.generateAltGreeting(this.currentCharacter, type, hint, pov);
+        contentTextarea.value = content;
+    } catch (error) {
+        this.showNotification(`Failed to generate greeting: ${error.message}`, "error");
+        contentTextarea.value = `Error: ${error.message}`;
+    } finally {
+        contBtn.disabled = false;
+        randBtn.disabled = false;
+    }
+  }
+
+  handleSaveAltGreeting() {
+    const id = document.getElementById('alt-greeting-id').value;
+    const content = document.getElementById('alt-greeting-content').value.trim();
+
+    if (!content) {
+        this.showNotification("Greeting content cannot be empty.", "warning");
+        return;
+    }
+
+    if (id) {
+        const index = this.altGreetings.findIndex(g => g.id == id);
+        if (index > -1) {
+            this.altGreetings[index].content = content;
+        }
+    } else {
+        if (this.altGreetings.length >= 5) {
+            this.showNotification("You can only have up to 5 alternate greetings.", "warning");
+            return;
+        }
+        this.altGreetings.push({
+            id: Date.now().toString() + Math.random().toString().slice(2, 5),
+            content
+        });
+    }
+    
+    this.renderAltGreetings();
+    this.updateAltGreetingsCount();
+    this.resetAltGreetingsEditor();
+    this.syncAltGreetingsToCharacter();
+    this.saveCardToLibrary();
+    this.showNotification("Alternate greeting saved successfully!", "success");
+  }
+
+  handleEditAltGreeting(id) {
+    const greeting = this.altGreetings.find(g => g.id == id);
+    if (!greeting) return;
+
+    document.getElementById('alt-greeting-editor-title').textContent = 'Edit Greeting';
+    document.getElementById('alt-greeting-id').value = greeting.id;
+    document.getElementById('alt-greeting-content').value = greeting.content;
+    const hintInput = document.getElementById('alt-greeting-hint');
+    if (hintInput) hintInput.value = '';
+    document.getElementById('cancel-alt-greeting-edit-btn').style.display = 'inline-block';
+    document.getElementById('alt-greeting-editor').scrollIntoView({ behavior: 'smooth' });
+    this.updateAltGreetingsCount();
+  }
+
+  handleDeleteAltGreeting(id) {
+    if (confirm("Are you sure you want to delete this alternate greeting?")) {
+        this.altGreetings = this.altGreetings.filter(g => g.id != id);
+        this.renderAltGreetings();
+        this.updateAltGreetingsCount();
+        this.resetAltGreetingsEditor();
+        this.syncAltGreetingsToCharacter();
+        this.saveCardToLibrary();
+        this.showNotification("Alternate greeting deleted.", "info");
+    }
+  }
+
+  syncAltGreetingsToCharacter() {
+    if (!this.currentCharacter) return;
+    this.currentCharacter.alternateGreetings = this.altGreetings.map(g => g.content);
   }
 
   handleDownloadLorebook() {

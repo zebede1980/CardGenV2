@@ -1360,6 +1360,58 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
     return this.processNormalResponse(response).trim();
   }
 
+  async generateAltGreeting(character, type = "random", customPrompt = "", pov = "third") {
+    if (!character) throw new Error("Character is required");
+
+    const model = this.config.get("api.text.model");
+    const povText = pov === "third" ? "third-person" : "first-person";
+    const charName = character.name || "{{char}}";
+
+    const contextInstruction = type === "continuation"
+        ? "Write an alternate first message that takes place AFTER the original scenario has concluded. It should be a new encounter or continuation of their story, serving as a fresh starting point for a new roleplay session."
+        : "Write a completely original and random alternate first message. It should establish a brand new scenario, setting, or situation different from the original one, serving as a fresh starting point.";
+
+    const systemPrompt = `You are an expert at writing roleplay opening messages. Your task is to write a single, detailed alternate first message for the character "${charName}".
+Write in ${povText} perspective. Focus on actions, thoughts, and dialogue to set the scene.
+${contextInstruction}
+Do NOT include markdown headers, <START> tags, or explanations. Output ONLY the narrative text. Do NOT roleplay for the user ({{user}}).`;
+
+    const hintText = customPrompt ? `\nUSER DIRECTION: ${customPrompt}` : "";
+
+    const userPrompt = `Character Profile Context:
+Name: ${charName}
+Description: ${character.description}
+Personality: ${character.personality}
+Original Scenario: ${character.scenario}
+Original First Message: ${character.firstMessage}
+
+Please write the alternate first message now.${hintText}
+
+Output ONLY the message content.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 1500,
+      stream: true
+    };
+
+    try {
+      console.log(`=== STARTING ALT GREETING GENERATION (${type}) ===`);
+      const response = await this.makeRequest("/chat/completions", data, false, true);
+      const output = await this.handleStreamResponse(response, () => {});
+      console.log("Alternate greeting generated successfully.");
+      return output.trim();
+    } catch (error) {
+      console.error("=== ALT GREETING GENERATION FAILED ===", error);
+      throw error;
+    }
+  }
+
   async suggestLorebookTopics(character) {
     if (!character) {
       throw new Error("Character is required to suggest lorebook topics");
