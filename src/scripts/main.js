@@ -347,6 +347,16 @@ class CharacterGeneratorApp {
     if (regenerateNameBtn) {
       regenerateNameBtn.addEventListener("click", () => this.handleRegenerateName());
     }
+
+    const regenDescBtn = document.getElementById("regenerate-description-btn");
+    const regenPersBtn = document.getElementById("regenerate-personality-btn");
+    const regenScenBtn = document.getElementById("regenerate-scenario-btn");
+    const regenFirstMsgBtn = document.getElementById("regenerate-first-message-btn");
+
+    if (regenDescBtn) regenDescBtn.addEventListener("click", () => this.handleRegenerateField("description"));
+    if (regenPersBtn) regenPersBtn.addEventListener("click", () => this.handleRegenerateField("personality"));
+    if (regenScenBtn) regenScenBtn.addEventListener("click", () => this.handleRegenerateField("scenario"));
+    if (regenFirstMsgBtn) regenFirstMsgBtn.addEventListener("click", () => this.handleRegenerateField("firstMessage"));
   }
 
   async checkAPIStatus() {
@@ -983,6 +993,50 @@ class CharacterGeneratorApp {
     }
   }
 
+  async handleRegenerateField(field) {
+    if (!this.currentCharacter) return;
+
+    let promptInputId, btnId, textAreaId;
+    switch(field) {
+      case 'description': promptInputId = 'description-prompt'; btnId = 'regenerate-description-btn'; textAreaId = 'character-description'; break;
+      case 'personality': promptInputId = 'personality-prompt'; btnId = 'regenerate-personality-btn'; textAreaId = 'character-personality'; break;
+      case 'scenario': promptInputId = 'scenario-prompt'; btnId = 'regenerate-scenario-btn'; textAreaId = 'character-scenario'; break;
+      case 'firstMessage': promptInputId = 'first-message-prompt'; btnId = 'regenerate-first-message-btn'; textAreaId = 'character-first-message'; break;
+    }
+
+    const promptInput = document.getElementById(promptInputId);
+    const regenBtn = document.getElementById(btnId);
+    const textArea = document.getElementById(textAreaId);
+
+    if (!regenBtn || !textArea) return;
+
+    const customPrompt = promptInput?.value?.trim() || "";
+
+    try {
+      regenBtn.disabled = true;
+      const originalText = regenBtn.textContent;
+      regenBtn.textContent = "⏳...";
+
+      const pov = document.getElementById("pov-select")?.value || "third";
+      const newValue = await window.apiHandler.regenerateField(this.currentCharacter, field, customPrompt, pov);
+
+      if (newValue) {
+        textArea.value = newValue;
+        this.currentCharacter[field] = newValue;
+        this.handleCharacterEdit(field);
+        this.showNotification(`${field} regenerated!`, "success");
+      }
+
+      regenBtn.textContent = originalText;
+      regenBtn.disabled = false;
+    } catch (error) {
+      console.error(`Failed to regenerate ${field}:`, error);
+      this.showNotification(`Failed to regenerate ${field}: ${error.message}`, "error");
+      regenBtn.disabled = false;
+      regenBtn.textContent = "🔄 Redo";
+    }
+  }
+
   handleResetField(field) {
     if (!this.originalCharacter) {
       this.showNotification("No original character to reset to", "warning");
@@ -1253,6 +1307,12 @@ class CharacterGeneratorApp {
     if (nameInput) {
       nameInput.value = "";
     }
+
+    const promptsToClear = ['description-prompt', 'personality-prompt', 'scenario-prompt', 'first-message-prompt'];
+    promptsToClear.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
 
     const exampleMessagesPrompt = document.getElementById("example-messages-prompt");
     if (exampleMessagesPrompt) {

@@ -220,7 +220,7 @@
                 </section>
 
                 <section class="result-section" style="display: none">
-                    <div class="result-grid">
+                    <div style="display: flex; flex-direction: column; gap: 2rem;">
                         <div class="character-preview">
                             <h2
                                 class="section-title"
@@ -253,6 +253,8 @@
                                         justify-content: space-between;
                                         align-items: center;
                                         margin-bottom: 0.5rem;
+                                        flex-wrap: wrap;
+                                        gap: 0.5rem;
                                     "
                                 >
                                     <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
@@ -317,6 +319,9 @@
                                     >
                                         Description
                                     </h3>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="description-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-description-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
                                     <button
                                         id="reset-description-btn"
                                         class="btn-secondary"
@@ -329,6 +334,7 @@
                                     >
                                         🔄 Reset
                                     </button>
+                                    </div>
                                 </div>
                                 <textarea
                                     id="character-description"
@@ -362,6 +368,8 @@
                                         justify-content: space-between;
                                         align-items: center;
                                         margin-bottom: 0.5rem;
+                                        flex-wrap: wrap;
+                                        gap: 0.5rem;
                                     "
                                 >
                                     <h3
@@ -373,6 +381,9 @@
                                     >
                                         Personality
                                     </h3>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="personality-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-personality-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
                                     <button
                                         id="reset-personality-btn"
                                         class="btn-secondary"
@@ -385,6 +396,7 @@
                                     >
                                         🔄 Reset
                                     </button>
+                                    </div>
                                 </div>
                                 <textarea
                                     id="character-personality"
@@ -418,6 +430,8 @@
                                         justify-content: space-between;
                                         align-items: center;
                                         margin-bottom: 0.5rem;
+                                        flex-wrap: wrap;
+                                        gap: 0.5rem;
                                     "
                                 >
                                     <h3
@@ -429,6 +443,9 @@
                                     >
                                         Scenario
                                     </h3>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="scenario-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-scenario-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
                                     <button
                                         id="reset-scenario-btn"
                                         class="btn-secondary"
@@ -441,6 +458,7 @@
                                     >
                                         🔄 Reset
                                     </button>
+                                    </div>
                                 </div>
                                 <textarea
                                     id="character-scenario"
@@ -474,6 +492,8 @@
                                         justify-content: space-between;
                                         align-items: center;
                                         margin-bottom: 0.5rem;
+                                        flex-wrap: wrap;
+                                        gap: 0.5rem;
                                     "
                                 >
                                     <h3
@@ -485,6 +505,9 @@
                                     >
                                         First Message
                                     </h3>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="first-message-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-first-message-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
                                     <button
                                         id="reset-first-message-btn"
                                         class="btn-secondary"
@@ -497,6 +520,7 @@
                                     >
                                         🔄 Reset
                                     </button>
+                                    </div>
                                 </div>
                                 <textarea
                                     id="character-first-message"
