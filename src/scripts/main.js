@@ -155,6 +155,16 @@ class CharacterGeneratorApp {
       this.handleRegeneratePrompt(),
     );
 
+    // Auto-regenerate prompt when image style changes
+    const imageStyleSelect = document.getElementById("image-style");
+    if (imageStyleSelect) {
+      imageStyleSelect.addEventListener("change", () => {
+        if (this.currentCharacter) {
+          this.handleRegeneratePrompt();
+        }
+      });
+    }
+
     // Character field reset buttons
     const resetNameBtn = document.getElementById("reset-name-btn");
     const resetDescriptionBtn = document.getElementById(
@@ -922,10 +932,16 @@ class CharacterGeneratorApp {
 
     const customPromptTextarea = document.getElementById("custom-image-prompt");
     const promptEditor = document.getElementById("image-prompt-editor");
+    const regeneratePromptBtn = document.getElementById("regenerate-prompt-btn");
 
     if (!customPromptTextarea || !promptEditor) {
       this.showNotification("Prompt editor not found", "error");
       return;
+    }
+
+    if (regeneratePromptBtn) {
+      regeneratePromptBtn.disabled = true;
+      regeneratePromptBtn.textContent = "⏳...";
     }
 
     try {
@@ -949,6 +965,11 @@ class CharacterGeneratorApp {
       customPromptTextarea.value = fallbackPrompt;
       window.updatePromptCharCount();
       this.showNotification("Using fallback prompt generation", "warning");
+    } finally {
+      if (regeneratePromptBtn) {
+        regeneratePromptBtn.disabled = false;
+        regeneratePromptBtn.textContent = "💡 Prompt";
+      }
     }
 
     // Ensure prompt editor is visible
@@ -1061,20 +1082,21 @@ class CharacterGeneratorApp {
           }
       }
 
-      // Variations
-      const variations = [
-          basePrompt,
-          basePrompt + ", alternative angle, cinematic lighting",
-          basePrompt + ", close-up focus, highly detailed",
-          basePrompt + ", dynamic composition, atmospheric"
+      // Models
+      const models = [
+          "z-image-turbo",
+          "chroma",
+          "hidream",
+          "qwen-image"
       ];
 
       // Call API 4 times concurrently
-      const promises = variations.map((promptVar, index) => 
+      const promises = models.map((modelName, index) => 
           window.apiHandler.generateImage(
               this.currentCharacter.description,
               this.currentCharacter.name,
-              promptVar
+              basePrompt,
+              modelName
           ).then(async imageUrl => {
               // Convert to blob URL immediately
               let displayUrl = imageUrl;
@@ -1086,9 +1108,9 @@ class CharacterGeneratorApp {
                       displayUrl = URL.createObjectURL(blob);
                   }
               }
-              return { url: displayUrl, prompt: promptVar, index };
+              return { url: displayUrl, prompt: basePrompt, model: modelName, index };
           }).catch(err => {
-              console.error(`Image variation ${index} failed:`, err);
+              console.error(`Image generation with ${modelName} failed:`, err);
               return null;
           })
       );
@@ -1113,9 +1135,12 @@ class CharacterGeneratorApp {
           wrapper.onmouseenter = () => wrapper.style.border = "2px solid var(--accent)";
           wrapper.onmouseleave = () => wrapper.style.border = "2px solid transparent";
           
-          wrapper.onclick = () => this.selectImageOption(res.url, res.prompt, validResults);
+          wrapper.onclick = () => this.selectImageOption(res.url, res.prompt, res.model, validResults);
 
-          wrapper.innerHTML = `<img src="${res.url}" style="width: 100%; height: auto; display: block;" alt="Option ${res.index + 1}">`;
+          wrapper.innerHTML = `
+            <img src="${res.url}" style="width: 100%; height: auto; display: block;" alt="Option ${res.index + 1}">
+            <div style="padding: 0.5rem; text-align: center; font-size: 0.8rem; color: var(--text-secondary); background: rgba(0,0,0,0.1); border-top: 1px solid var(--border); font-family: monospace;">${res.model}</div>
+          `;
           grid.appendChild(wrapper);
       });
       this.showNotification(`Generated ${validResults.length} image options!`, "success");
@@ -1142,7 +1167,7 @@ class CharacterGeneratorApp {
       }
   }
 
-  async selectImageOption(selectedUrl, selectedPrompt, allResults) {
+  async selectImageOption(selectedUrl, selectedPrompt, selectedModel, allResults) {
       this.closeImageOptionsModal();
       
       if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:") && this.currentImageUrl !== selectedUrl) {
@@ -1166,6 +1191,12 @@ class CharacterGeneratorApp {
       if (customPromptTextarea) {
           customPromptTextarea.value = selectedPrompt;
           window.updatePromptCharCount();
+      }
+
+      const imageModelInput = document.getElementById("image-model");
+      if (imageModelInput) {
+          imageModelInput.value = selectedModel;
+          this.saveAPISettings(); // Save the newly selected model to config
       }
 
       this.showNotification("Image selected and saved to card!", "success");

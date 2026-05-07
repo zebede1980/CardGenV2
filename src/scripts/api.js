@@ -309,6 +309,7 @@ class APIHandler {
     characterDescription,
     characterName,
     customPrompt = null,
+    modelOverride = null
   ) {
     // Use custom prompt if provided, otherwise generate one from AI
     let imagePrompt;
@@ -354,7 +355,7 @@ class APIHandler {
     // Store the prompt so it can be accessed later
     this.lastGeneratedImagePrompt = imagePrompt;
 
-    const model = this.config.get("api.image.model");
+    const model = modelOverride || this.config.get("api.image.model");
 
     console.log("=== SENDING TO IMAGE API ===");
     console.log("Using image model:", model);
@@ -617,6 +618,7 @@ Shortened prompt:`,
         case "realistic": styleTags = "Hyper-realistic photography, 8k resolution, highly detailed face, photorealistic, natural lighting, DSLR, masterpiece."; break;
         case "anime": styleTags = "High quality anime style, 2d, cel shaded, vibrant colors, studio ghibli style, detailed anime character design."; break;
         case "waifu": styleTags = "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character, distinct anime features."; break;
+        case "sexy": styleTags = "Sexy, alluring, highly attractive, seductive, beautiful, masterpiece, highly detailed, stunning, appealingly posed."; break;
         case "comic": styleTags = "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading, vibrant comic colors."; break;
         case "cinematic": styleTags = "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting, photorealistic."; break;
         case "fantasy": styleTags = "Digital fantasy art, artstation masterpiece, trending on artstation, stylized digital illustration, epic fantasy."; break;
