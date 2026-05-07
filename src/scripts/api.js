@@ -1513,9 +1513,9 @@ Output a JSON array of strings with your suggestions.`;
     }
 
     const model = this.config.get("api.text.model");
-    const systemPrompt = `You are an expert in writing concise, informative lorebook entries for roleplaying. Based on the provided character context and keywords, write a detailed encyclopedia-style entry for the topic.
+    const systemPrompt = `You are an expert in writing concise, highly functional lorebook entries for AI roleplaying. Based on the provided character context and keywords, write clear, simple, and direct facts about the topic.
 
-The entry should be 1-3 paragraphs long. It should be written from a neutral, omniscient narrator's perspective.
+The entry should focus purely on what the AI needs to know to understand the topic and interact with it correctly. Keep the text functional, omitting unnecessary flowery prose. It should be 1-3 short paragraphs long, written from a neutral, omniscient narrator's perspective.
 Do NOT include the keywords in the output.
 Output ONLY the generated text for the entry, with no extra explanations or formatting.`;
 
