@@ -4,6 +4,7 @@ class CharacterGeneratorApp {
     this.characterGenerator = window.characterGenerator;
     this.imageGenerator = window.imageGenerator;
     this.pngEncoder = window.pngEncoder;
+    this.lorebookGenerator = window.lorebookGenerator;
     this.config = window.config;
     this.apiHandler = window.apiHandler;
     this.storage = window.characterStorage;
@@ -12,6 +13,7 @@ class CharacterGeneratorApp {
     this.currentCharacter = null;
     this.originalCharacter = null; // Store the original AI-generated version
     this.currentImageUrl = null;
+    this.lorebookEntries = []; // Holds {id, keys, content}
     this.lorebookData = null; // Store loaded lorebook data
     this.referenceImageDataUrl = "";
     // Removed currentImageBlob - we now convert fresh from URL on download
@@ -368,6 +370,46 @@ class CharacterGeneratorApp {
     if (regenPersBtn) regenPersBtn.addEventListener("click", () => this.handleRegenerateField("personality"));
     if (regenScenBtn) regenScenBtn.addEventListener("click", () => this.handleRegenerateField("scenario"));
     if (regenFirstMsgBtn) regenFirstMsgBtn.addEventListener("click", () => this.handleRegenerateField("firstMessage"));
+
+    // Lorebook Manager
+    const manageLorebookBtn = document.getElementById("manage-lorebook-btn");
+    const lorebookModal = document.getElementById("lorebook-manager-modal");
+    const lorebookModalCloseBtn = document.getElementById("lorebook-modal-close-btn");
+    const suggestTopicsBtn = document.getElementById("suggest-lorebook-topics-btn");
+    const generateContentBtn = document.getElementById("generate-lorebook-content-btn");
+    const saveEntryBtn = document.getElementById("save-lorebook-entry-btn");
+    const cancelEditBtn = document.getElementById("cancel-lorebook-edit-btn");
+    const downloadLorebookBtn = document.getElementById("download-lorebook-btn");
+    const entriesList = document.getElementById("lorebook-entries-list");
+    const topicSuggestions = document.getElementById("lorebook-topic-suggestions");
+
+    if (manageLorebookBtn) manageLorebookBtn.addEventListener("click", () => this.openLorebookManager());
+    if (lorebookModalCloseBtn) lorebookModalCloseBtn.addEventListener("click", () => this.closeLorebookManager());
+    if (lorebookModal) lorebookModal.addEventListener("click", (e) => {
+        if (e.target === lorebookModal) this.closeLorebookManager();
+    });
+    if (suggestTopicsBtn) suggestTopicsBtn.addEventListener("click", () => this.handleSuggestLorebookTopics());
+    if (generateContentBtn) generateContentBtn.addEventListener("click", () => this.handleGenerateLorebookContent());
+    if (saveEntryBtn) saveEntryBtn.addEventListener("click", () => this.handleSaveLorebookEntry());
+    if (cancelEditBtn) cancelEditBtn.addEventListener("click", () => this.resetLorebookEditor());
+    if (downloadLorebookBtn) downloadLorebookBtn.addEventListener("click", () => this.handleDownloadLorebook());
+
+    if (entriesList) entriesList.addEventListener("click", (e) => {
+        const target = e.target.closest("button[data-action]");
+        if (!target) return;
+        const id = target.dataset.id;
+        const action = target.dataset.action;
+        if (action === "edit-lorebook-entry") this.handleEditLorebookEntry(id);
+        if (action === "delete-lorebook-entry") this.handleDeleteLorebookEntry(id);
+    });
+
+    if (topicSuggestions) topicSuggestions.addEventListener("click", (e) => {
+        const target = e.target.closest("button.topic-suggestion");
+        if (!target) return;
+        const keysInput = document.getElementById("lorebook-entry-keys");
+        keysInput.value = target.textContent;
+        keysInput.focus();
+    });
   }
 
   async checkAPIStatus() {
@@ -485,6 +527,8 @@ class CharacterGeneratorApp {
 
     this.isGenerating = true;
     this.setGeneratingState(true);
+    this.lorebookEntries = [];
+    this.updateLorebookEntryCount();
     this.clearStream();
 
     try {
@@ -1296,6 +1340,8 @@ class CharacterGeneratorApp {
     streamSection.style.display = "none";
     this.currentCharacter = null;
     this.currentImageUrl = null;
+    this.lorebookEntries = [];
+    this.updateLorebookEntryCount();
     document.getElementById("image-controls").style.display = "none";
 
     // Clear image content and prompt editor
@@ -1666,6 +1712,8 @@ class CharacterGeneratorApp {
 
       document.getElementById("image-controls").style.display = "block";
       await this.saveCardToLibrary();
+      this.lorebookEntries = [];
+      this.updateLorebookEntryCount();
       await this.refreshLibraryViews();
       this.showNotification("Card imported for editing", "success");
     } catch (error) {
@@ -1763,6 +1811,149 @@ class CharacterGeneratorApp {
       } else {
         outputDiv.textContent = `⚠️ Generation failed: ${error.message}`;
       }
+    }
+  }
+
+  openLorebookManager() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate or import a character first.", "warning");
+      return;
+    }
+    const modal = document.getElementById("lorebook-manager-modal");
+    if (modal) {
+      modal.classList.add("show");
+      document.body.style.overflow = "hidden";
+      this.renderLorebookEntries();
+      this.resetLorebookEditor();
+    }
+  }
+
+  closeLorebookManager() {
+    const modal = document.getElementById("lorebook-manager-modal");
+    if (modal) {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+    }
+  }
+
+  updateLorebookEntryCount() {
+      const countEl = document.getElementById("lorebook-entry-count");
+      if (countEl) {
+          const count = this.lorebookEntries.length;
+          countEl.textContent = `${count} ${count === 1 ? 'entry' : 'entries'}`;
+      }
+  }
+
+  renderLorebookEntries() {
+    const listEl = document.getElementById("lorebook-entries-list");
+    if (!listEl) return;
+
+    if (this.lorebookEntries.length === 0) {
+      listEl.innerHTML = '<p class="library-empty">No lorebook entries yet.</p>';
+      return;
+    }
+
+    listEl.innerHTML = this.lorebookEntries.map(entry => `
+      <div class="library-item" style="align-items: flex-start;">
+        <div style="flex: 1;">
+          <div class="library-item-title" style="margin-bottom: 0.5rem;">${entry.keys.join(', ')}</div>
+          <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0; white-space: pre-wrap; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">${entry.content}</p>
+        </div>
+        <div class="library-item-actions">
+          <button class="btn-small" data-action="edit-lorebook-entry" data-id="${entry.id}">Edit</button>
+          <button class="btn-small" data-action="delete-lorebook-entry" data-id="${entry.id}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  resetLorebookEditor() {
+    document.getElementById('lorebook-editor-title').textContent = 'Add New Entry';
+    document.getElementById('lorebook-entry-id').value = '';
+    document.getElementById('lorebook-entry-keys').value = '';
+    document.getElementById('lorebook-entry-content').value = '';
+    document.getElementById('cancel-lorebook-edit-btn').style.display = 'none';
+  }
+
+  async handleSuggestLorebookTopics() {
+    const btn = document.getElementById("suggest-lorebook-topics-btn");
+    const suggestionsContainer = document.getElementById("lorebook-topic-suggestions");
+    if (!this.currentCharacter || !btn || !suggestionsContainer) return;
+
+    btn.disabled = true;
+    btn.textContent = "Suggesting...";
+    suggestionsContainer.innerHTML = '';
+
+    try {
+      const topics = await this.lorebookGenerator.suggestTopics(this.currentCharacter);
+      if (topics && topics.length > 0) {
+        suggestionsContainer.innerHTML = topics.map(topic =>
+          `<button class="btn-small topic-suggestion" style="background: var(--surface-color);">${topic}</button>`
+        ).join('');
+      } else {
+        suggestionsContainer.innerHTML = '<p style="font-size: 0.875rem; color: var(--text-secondary);">No suggestions found.</p>';
+      }
+    } catch (error) {
+      this.showNotification(`Failed to get suggestions: ${error.message}`, "error");
+      suggestionsContainer.innerHTML = `<p style="font-size: 0.875rem; color: var(--error);">Error fetching suggestions.</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Suggest Topics from Card";
+    }
+  }
+
+  async handleGenerateLorebookContent() {
+    const btn = document.getElementById("generate-lorebook-content-btn");
+    const keysInput = document.getElementById("lorebook-entry-keys");
+    const contentTextarea = document.getElementById("lorebook-entry-content");
+    if (!this.currentCharacter || !btn || !keysInput || !contentTextarea) return;
+
+    const keys = keysInput.value.trim();
+    if (!keys) {
+      this.showNotification("Please provide at least one key for the entry.", "warning");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Generating...";
+    contentTextarea.value = "Generating content with AI...";
+
+    try {
+      const content = await this.lorebookGenerator.generateEntryContent(this.currentCharacter, keys);
+      contentTextarea.value = content;
+    } catch (error) {
+      this.showNotification(`Failed to generate content: ${error.message}`, "error");
+      contentTextarea.value = `Error: ${error.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🔄 Generate with AI";
+    }
+  }
+
+  handleSaveLorebookEntry() {
+    const id = document.getElementById('lorebook-entry-id').value;
+    const keys = document.getElementById('lorebook-entry-keys').value.trim();
+    const content = document.getElementById('lorebook-entry-content').value.trim();
+
+    if (!keys || !content) {
+      this.showNotification("Keys and content cannot be empty.", "warning");
+      return;
+    }
+
+    const keysArray = keys.split(',').map(k => k.trim()).filter(Boolean);
+
+    if (id) { // Editing existing
+      const index = this.lorebookEntries.findIndex(e => e.id == id);
+      if (index > -1) {
+        this.lorebookEntries[index] = { ...this.lorebookEntries[index], keys: keysArray, content };
+      }
+    } else { // Adding new
+      this.lorebookEntries.push({
+        id: Date.now().toString(),
+        keys: keysArray,
+        content,
+        enabled: true,
+      });
     }
   }
 
@@ -2137,6 +2328,63 @@ class CharacterGeneratorApp {
     }
   }
 
+  handleEditLorebookEntry(id) {
+    const entry = this.lorebookEntries.find(e => e.id == id);
+    if (!entry) return;
+
+    document.getElementById('lorebook-editor-title').textContent = 'Edit Entry';
+    document.getElementById('lorebook-entry-id').value = entry.id;
+    document.getElementById('lorebook-entry-keys').value = entry.keys.join(', ');
+    document.getElementById('lorebook-entry-content').value = entry.content;
+    document.getElementById('cancel-lorebook-edit-btn').style.display = 'inline-block';
+    document.getElementById('lorebook-entry-editor').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  handleDeleteLorebookEntry(id) {
+    if (confirm("Are you sure you want to delete this lorebook entry?")) {
+      this.lorebookEntries = this.lorebookEntries.filter(e => e.id != id);
+      this.renderLorebookEntries();
+      this.updateLorebookEntryCount();
+      this.resetLorebookEditor(); // In case the deleted one was being edited
+      this.showNotification("Lorebook entry deleted.", "info");
+    }
+  }
+
+  handleDownloadLorebook() {
+    if (this.lorebookEntries.length === 0) {
+      this.showNotification("There are no entries to download.", "warning");
+      return;
+    }
+
+    const lorebookData = {
+      name: `${this.currentCharacter?.name || 'Character'} Lorebook`,
+      description: `A collection of lore entries for the character "${this.currentCharacter?.name || 'Unknown'}". Generated by SillyTavern Character Generator.`,
+      scan_depth: 100,
+      token_budget: 2048,
+      recursive_scanning: false,
+      extensions: {},
+      entries: this.lorebookEntries.map((entry, index) => ({
+        keys: entry.keys,
+        comment: `Entry for ${entry.keys[0]}`,
+        content: entry.content,
+        insertion_order: (index + 1) * 10,
+        enabled: entry.enabled,
+        case_sensitive: false,
+        priority: 100,
+        id: entry.id, // Using our own ID
+        constant: false,
+        selective: false,
+        secondary_keys: [],
+      })),
+    };
+
+    const jsonString = JSON.stringify(lorebookData, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const filename = `${(this.currentCharacter?.name || 'character').replace(/[^a-zA-Z0-9]/g, '_')}_lorebook.json`;
+    this.downloadBlob(blob, filename);
+    this.showNotification("Lorebook downloaded!", "success");
+  }
+
   showNotification(message, type = "info") {
     // Create notification element
     const notification = document.createElement("div");
@@ -2303,6 +2551,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Initialize app
   window.app = new CharacterGeneratorApp();
+
 
   // Add some CSS for tags
   const style = document.createElement("style");

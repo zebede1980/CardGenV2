@@ -1343,6 +1343,126 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
     return this.processNormalResponse(response).trim();
   }
 
+  async suggestLorebookTopics(character) {
+    if (!character) {
+      throw new Error("Character is required to suggest lorebook topics");
+    }
+
+    const model = this.config.get("api.text.model");
+    const systemPrompt = `You are an expert in roleplaying and world-building. Your task is to analyze a character profile and identify 3-5 key nouns (people, places, organizations, unique items, or concepts) that would be ideal candidates for a lorebook entry.
+
+Return ONLY a single JSON array of strings. Do not include any other text, explanation, or markdown.
+
+Example response:
+["The Crimson Legion", "The Shadow Syndicate", "The Sunstone", "City of Eldoria"]`;
+
+    const userPrompt = `Analyze the following character profile and identify key topics for lorebook entries.
+
+Character Profile:
+Name: ${character.name}
+Description: ${character.description}
+Personality: ${character.personality}
+Scenario: ${character.scenario}
+
+Output a JSON array of strings with your suggestions.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.2,
+      max_tokens: 500,
+      stream: false, // We need a single JSON object back
+      response_format: { type: "json_object" } // Request JSON output if supported
+    };
+
+    try {
+      console.log("=== STARTING LOREBOOK TOPIC SUGGESTION ===");
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      const output = this.processNormalResponse(response);
+      
+      // The output might be a stringified JSON inside a JSON object, e.g. { "topics": ["topic1"] } or just the stringified array.
+      let parsed;
+      try {
+        parsed = JSON.parse(output);
+      } catch (e) {
+        console.error("Failed to parse entire output as JSON, trying to find JSON array in string", output);
+        const jsonMatch = output.match(/\[\s*".*?"\s*\]/s);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("No valid JSON array found in AI response for topics.");
+        }
+      }
+
+      // Handle cases where the response is an object with a key
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        const key = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+        if (key) {
+          return parsed[key];
+        }
+      }
+      
+      throw new Error("AI response for topics was not a valid JSON array.");
+
+    } catch (error) {
+      console.error("=== LOREBOOK TOPIC SUGGESTION FAILED ===", error);
+      throw error;
+    }
+  }
+
+  async generateLorebookEntry(character, keywords, hint = "") {
+    if (!character || !keywords) {
+      throw new Error("Character and keywords are required");
+    }
+
+    const model = this.config.get("api.text.model");
+    const systemPrompt = `You are an expert in writing concise, informative lorebook entries for roleplaying. Based on the provided character context and keywords, write a detailed encyclopedia-style entry for the topic.
+
+The entry should be 1-3 paragraphs long. It should be written from a neutral, omniscient narrator's perspective.
+Do NOT include the keywords in the output.
+Output ONLY the generated text for the entry, with no extra explanations or formatting.`;
+
+    const hintText = hint ? `\n\nUser has provided a hint for the content: "${hint}"` : "";
+
+    const userPrompt = `Character Profile Context:
+Name: ${character.name}
+Description: ${character.description}
+Scenario: ${character.scenario}
+
+Please write a lorebook entry for the following topic.
+Keywords: "${keywords}"
+${hintText}
+
+Output only the lorebook entry content.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+      stream: true
+    };
+
+    try {
+      console.log(`=== STARTING LOREBOOK ENTRY GENERATION: ${keywords} ===`);
+      const response = await this.makeRequest("/chat/completions", data, false, true);
+      const output = await this.handleStreamResponse(response, () => {});
+      console.log(`Lorebook entry for "${keywords}" generated successfully.`);
+      return output.trim();
+    } catch (error) {
+      console.error(`=== LOREBOOK ENTRY GENERATION FAILED: ${keywords} ===`, error);
+      throw error;
+    }
+  }
+
   // Method to stop current generation
   stopGeneration() {
     this.userStopRequested = true;
