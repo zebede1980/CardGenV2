@@ -405,6 +405,7 @@ class CharacterGeneratorApp {
     const saveEntryBtn = document.getElementById("save-lorebook-entry-btn");
     const cancelEditBtn = document.getElementById("cancel-lorebook-edit-btn");
     const downloadLorebookBtn = document.getElementById("download-lorebook-btn");
+    const injectLorebookBtn = document.getElementById("inject-lorebook-btn");
     const entriesList = document.getElementById("lorebook-entries-list");
     const topicSuggestions = document.getElementById("lorebook-topic-suggestions");
 
@@ -418,6 +419,7 @@ class CharacterGeneratorApp {
     if (saveEntryBtn) saveEntryBtn.addEventListener("click", () => this.handleSaveLorebookEntry());
     if (cancelEditBtn) cancelEditBtn.addEventListener("click", () => this.resetLorebookEditor());
     if (downloadLorebookBtn) downloadLorebookBtn.addEventListener("click", () => this.handleDownloadLorebook());
+    if (injectLorebookBtn) injectLorebookBtn.addEventListener("click", () => this.handleInjectLorebookKeys());
 
     if (entriesList) entriesList.addEventListener("click", (e) => {
         const target = e.target.closest("button[data-action]");
