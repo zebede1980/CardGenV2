@@ -1090,6 +1090,63 @@ BEGIN IMAGE PROMPT NOW:`;
     }
   }
 
+  async generateName(character) {
+    if (!character) {
+      throw new Error("Character is required to generate a name");
+    }
+
+    const model = this.config.get("api.text.model");
+
+    const systemPrompt = `You are an expert character creator. Based on the provided character description and personality, generate a highly creative, unique, and fitting name for them.
+Avoid cliché or extremely common names. Do NOT use placeholders.
+Output ONLY the new name, nothing else.`;
+
+    const userPrompt = `Description:
+${character.description || "No description provided"}
+
+Personality:
+${character.personality || "No personality provided"}
+
+Please generate a single, unique name.`;
+
+    const data = {
+      model,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
+      temperature: 0.8,
+      max_tokens: 50,
+      stream: false,
+    };
+
+    try {
+      console.log("=== STARTING NAME GENERATION ===");
+      const response = await this.makeRequest(
+        "/chat/completions",
+        data,
+        false,
+        false,
+      );
+      const output = this.processNormalResponse(response);
+      let newName = output.trim();
+      // Remove enclosing quotes if any
+      if (newName.startsWith('"') && newName.endsWith('"')) {
+        newName = newName.substring(1, newName.length - 1);
+      }
+      return newName;
+    } catch (error) {
+      console.error("=== NAME GENERATION FAILED ===", error);
+      throw error;
+    }
+  }
+
   async generateExampleMessages(character, count = 3, pov = "third", customPrompt = "") {
     if (!character) {
       throw new Error("Character is required for example message generation");

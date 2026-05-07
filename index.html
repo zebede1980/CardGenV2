@@ -245,6 +245,56 @@
                                 AI-generated version.
                             </div>
 
+                            <!-- Name Field -->
+                            <div class="character-field" style="margin-bottom: 1.5rem">
+                                <div
+                                    style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        margin-bottom: 0.5rem;
+                                    "
+                                >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
+                                        Name
+                                    </h3>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button
+                                            id="regenerate-name-btn"
+                                            class="btn-small"
+                                            style="padding: 0.3rem 0.8rem; font-size: 0.75rem;"
+                                            title="Generate a new name with AI"
+                                        >
+                                            🔄 Gen Name
+                                        </button>
+                                        <button
+                                            id="reset-name-btn"
+                                            class="btn-secondary"
+                                            style="display: none; padding: 0.3rem 0.8rem; font-size: 0.75rem;"
+                                            title="Reset name to original"
+                                        >
+                                            🔄 Reset
+                                        </button>
+                                    </div>
+                                </div>
+                                <input
+                                    type="text"
+                                    id="character-generated-name"
+                                    class="content-box"
+                                    style="
+                                        width: 100%;
+                                        font-family: inherit;
+                                        font-size: 0.9375rem;
+                                        padding: 1rem;
+                                        border: 1px solid rgba(139, 92, 246, 0.2);
+                                        border-radius: 0.5rem;
+                                        background: var(--surface-color);
+                                        color: var(--text-color);
+                                    "
+                                    placeholder="Character name will appear here..."
+                                />
+                            </div>
+
                             <!-- Description Field -->
                             <div
                                 class="character-field"

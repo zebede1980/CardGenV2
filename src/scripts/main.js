@@ -136,6 +136,7 @@ class CharacterGeneratorApp {
     );
 
     // Character field reset buttons
+    const resetNameBtn = document.getElementById("reset-name-btn");
     const resetDescriptionBtn = document.getElementById(
       "reset-description-btn",
     );
@@ -147,6 +148,9 @@ class CharacterGeneratorApp {
       "reset-first-message-btn",
     );
 
+    if (resetNameBtn) {
+      resetNameBtn.addEventListener("click", () => this.handleResetField("name"));
+    }
     resetDescriptionBtn.addEventListener("click", () =>
       this.handleResetField("description"),
     );
@@ -161,6 +165,7 @@ class CharacterGeneratorApp {
     );
 
     // Character field textareas - show reset button when edited
+    const nameInput = document.getElementById("character-generated-name");
     const descriptionTextarea = document.getElementById(
       "character-description",
     );
@@ -172,6 +177,9 @@ class CharacterGeneratorApp {
       "character-first-message",
     );
 
+    if (nameInput) {
+      nameInput.addEventListener("input", () => this.handleCharacterEdit("name"));
+    }
     descriptionTextarea.addEventListener("input", () =>
       this.handleCharacterEdit("description"),
     );
@@ -321,6 +329,7 @@ class CharacterGeneratorApp {
     // Example messages controls
     const exampleMessagesCount = document.getElementById("example-messages-count");
     const regenerateExamplesBtn = document.getElementById("regenerate-examples-btn");
+    const regenerateNameBtn = document.getElementById("regenerate-name-btn");
 
     if (exampleMessagesCount) {
       // Auto-regenerate if the user changes the count manually
@@ -333,6 +342,10 @@ class CharacterGeneratorApp {
       regenerateExamplesBtn.addEventListener("click", () =>
         this.handleGenerateExampleMessages(),
       );
+    }
+
+    if (regenerateNameBtn) {
+      regenerateNameBtn.addEventListener("click", () => this.handleRegenerateName());
     }
   }
 
@@ -701,6 +714,7 @@ class CharacterGeneratorApp {
       this.showNotification("Creating character card...", "info");
 
       // Get the current (possibly edited) character fields
+      const nameInput = document.getElementById("character-generated-name");
       const descriptionTextarea = document.getElementById(
         "character-description",
       );
@@ -716,6 +730,9 @@ class CharacterGeneratorApp {
       );
 
       // Update currentCharacter with edited content
+      if (nameInput) {
+        this.currentCharacter.name = nameInput.value.trim();
+      }
       this.currentCharacter.description = descriptionTextarea.value.trim();
       this.currentCharacter.personality = personalityTextarea.value.trim();
       this.currentCharacter.scenario = scenarioTextarea.value.trim();
@@ -934,6 +951,38 @@ class CharacterGeneratorApp {
     // This ensures regenerated images are properly included in downloads
   }
 
+  async handleRegenerateName() {
+    if (!this.currentCharacter) return;
+
+    const nameInput = document.getElementById("character-generated-name");
+    const regenBtn = document.getElementById("regenerate-name-btn");
+
+    if (!nameInput || !regenBtn) return;
+
+    try {
+      regenBtn.disabled = true;
+      const originalText = regenBtn.textContent;
+      regenBtn.textContent = "⏳...";
+
+      const newName = await window.apiHandler.generateName(this.currentCharacter);
+
+      if (newName) {
+        nameInput.value = newName;
+        this.currentCharacter.name = newName;
+        this.handleCharacterEdit("name");
+        this.showNotification("Name regenerated!", "success");
+      }
+
+      regenBtn.textContent = originalText;
+      regenBtn.disabled = false;
+    } catch (error) {
+      console.error("Name generation failed:", error);
+      this.showNotification(`Failed to generate name: ${error.message}`, "error");
+      regenBtn.disabled = false;
+      regenBtn.textContent = "🔄 Gen Name";
+    }
+  }
+
   handleResetField(field) {
     if (!this.originalCharacter) {
       this.showNotification("No original character to reset to", "warning");
@@ -943,6 +992,12 @@ class CharacterGeneratorApp {
     let textarea, resetBtn, originalValue, fieldName;
 
     switch (field) {
+      case "name":
+        textarea = document.getElementById("character-generated-name");
+        resetBtn = document.getElementById("reset-name-btn");
+        originalValue = this.originalCharacter.name;
+        fieldName = "Name";
+        break;
       case "description":
         textarea = document.getElementById("character-description");
         resetBtn = document.getElementById("reset-description-btn");
@@ -989,6 +1044,7 @@ class CharacterGeneratorApp {
       this.showNotification("Preparing character JSON...", "info");
 
       // Get the current (possibly edited) character fields
+      const nameInput = document.getElementById("character-generated-name");
       const descriptionTextarea = document.getElementById(
         "character-description",
       );
@@ -1004,6 +1060,9 @@ class CharacterGeneratorApp {
       );
 
       // Update currentCharacter with edited content
+      if (nameInput) {
+        this.currentCharacter.name = nameInput.value.trim();
+      }
       this.currentCharacter.description = descriptionTextarea.value.trim();
       this.currentCharacter.personality = personalityTextarea.value.trim();
       this.currentCharacter.scenario = scenarioTextarea.value.trim();
@@ -1052,6 +1111,12 @@ class CharacterGeneratorApp {
     let textarea, resetBtn, originalValue, currentField;
 
     switch (field) {
+      case "name":
+        textarea = document.getElementById("character-generated-name");
+        resetBtn = document.getElementById("reset-name-btn");
+        originalValue = this.originalCharacter.name;
+        currentField = "name";
+        break;
       case "description":
         textarea = document.getElementById("character-description");
         resetBtn = document.getElementById("reset-description-btn");
@@ -1184,6 +1249,11 @@ class CharacterGeneratorApp {
       window.updatePromptCharCount();
     }
 
+    const nameInput = document.getElementById("character-generated-name");
+    if (nameInput) {
+      nameInput.value = "";
+    }
+
     const exampleMessagesPrompt = document.getElementById("example-messages-prompt");
     if (exampleMessagesPrompt) {
       exampleMessagesPrompt.value = "";
@@ -1269,6 +1339,7 @@ class CharacterGeneratorApp {
 
   displayCharacter() {
     // Update all character fields
+    const nameInput = document.getElementById("character-generated-name");
     const descriptionTextarea = document.getElementById(
       "character-description",
     );
@@ -1280,12 +1351,14 @@ class CharacterGeneratorApp {
       "character-first-message",
     );
 
+    if (nameInput) nameInput.value = this.currentCharacter.name || "";
     descriptionTextarea.value = this.currentCharacter.description || "";
     personalityTextarea.value = this.currentCharacter.personality || "";
     scenarioTextarea.value = this.currentCharacter.scenario || "";
     firstMessageTextarea.value = this.currentCharacter.firstMessage || "";
 
     // Hide all reset buttons initially (will show if user edits)
+    const resetNameBtn = document.getElementById("reset-name-btn");
     const resetDescriptionBtn = document.getElementById(
       "reset-description-btn",
     );
@@ -1297,6 +1370,7 @@ class CharacterGeneratorApp {
       "reset-first-message-btn",
     );
 
+    if (resetNameBtn) resetNameBtn.style.display = "none";
     if (resetDescriptionBtn) resetDescriptionBtn.style.display = "none";
     if (resetPersonalityBtn) resetPersonalityBtn.style.display = "none";
     if (resetScenarioBtn) resetScenarioBtn.style.display = "none";
