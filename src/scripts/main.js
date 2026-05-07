@@ -1382,6 +1382,8 @@ class CharacterGeneratorApp {
     // Hide reset button
     resetBtn.style.display = "none";
 
+    this.updateTokenCounts();
+
     this.showNotification(`${fieldName} reset to original`, "success");
   }
 
@@ -1510,6 +1512,8 @@ class CharacterGeneratorApp {
     } else {
       resetBtn.style.display = "none";
     }
+
+    this.updateTokenCounts();
   }
 
   async handleImageUpload(event) {
@@ -1702,6 +1706,54 @@ class CharacterGeneratorApp {
     }
   }
 
+  estimateTokens(text) {
+    if (!text) return 0;
+    // Simple estimation: 1 token ~= 4 chars in English
+    return Math.ceil(text.length / 4);
+  }
+
+  updateTokenCounts() {
+    if (!this.currentCharacter) return;
+
+    let totalTokens = 0;
+
+    const updateFieldCount = (field, elementId) => {
+      const text = this.currentCharacter[field] || "";
+      const tokens = this.estimateTokens(text);
+      totalTokens += tokens;
+      const el = document.getElementById(elementId);
+      if (el) {
+        el.textContent = `(~${tokens} tokens)`;
+      }
+    };
+
+    updateFieldCount('name', 'name-token-count');
+    updateFieldCount('description', 'description-token-count');
+    updateFieldCount('personality', 'personality-token-count');
+    updateFieldCount('scenario', 'scenario-token-count');
+    updateFieldCount('firstMessage', 'first-message-token-count');
+    updateFieldCount('mesExample', 'example-messages-token-count');
+
+    // Add lorebook and alt greetings to total
+    let lorebookTokens = 0;
+    this.lorebookEntries.forEach(entry => {
+        lorebookTokens += this.estimateTokens(entry.keys.join(', '));
+        lorebookTokens += this.estimateTokens(entry.content);
+    });
+    totalTokens += lorebookTokens;
+
+    let altGreetingsTokens = 0;
+    this.altGreetings.forEach(greeting => {
+        altGreetingsTokens += this.estimateTokens(greeting.content);
+    });
+    totalTokens += altGreetingsTokens;
+
+    const totalEl = document.getElementById('total-token-count');
+    if (totalEl) {
+      totalEl.textContent = `Approx. Total: ${totalTokens} tokens`;
+    }
+  }
+
   displayCharacter() {
     // Update all character fields
     const nameInput = document.getElementById("character-generated-name");
@@ -1768,6 +1820,8 @@ class CharacterGeneratorApp {
     if (downloadJsonBtn) {
       downloadJsonBtn.style.display = "inline-flex";
     }
+
+    this.updateTokenCounts();
   }
 
   async handleSaveCardManual() {
@@ -2071,6 +2125,7 @@ class CharacterGeneratorApp {
         outputDiv.textContent = this.currentCharacter.mesExample;
       }
       outputDiv.style.display = "block";
+      this.updateTokenCounts();
     } catch (error) {
       console.error("Example generation failed:", error);
       if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
@@ -2109,6 +2164,7 @@ class CharacterGeneratorApp {
           const count = this.lorebookEntries.length;
           countEl.textContent = `${count} ${count === 1 ? 'entry' : 'entries'}`;
       }
+      this.updateTokenCounts();
   }
 
   renderLorebookEntries() {
@@ -2725,6 +2781,7 @@ class CharacterGeneratorApp {
             editor.style.pointerEvents = "auto";
         }
     }
+    this.updateTokenCounts();
   }
 
   renderAltGreetings() {

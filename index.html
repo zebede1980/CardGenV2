@@ -262,8 +262,9 @@
                                         gap: 0.5rem;
                                     "
                                 >
-                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                         Name
+                                        <span id="name-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem;">
                                         <button
@@ -315,14 +316,9 @@
                                         margin-bottom: 0.5rem;
                                     "
                                 >
-                                    <h3
-                                        style="
-                                            margin: 0;
-                                            font-size: 1.1rem;
-                                            font-weight: 600;
-                                        "
-                                    >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                         Description
+                                        <span id="description-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="description-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
@@ -377,14 +373,9 @@
                                         gap: 0.5rem;
                                     "
                                 >
-                                    <h3
-                                        style="
-                                            margin: 0;
-                                            font-size: 1.1rem;
-                                            font-weight: 600;
-                                        "
-                                    >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                         Personality
+                                        <span id="personality-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="personality-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
@@ -439,14 +430,9 @@
                                         gap: 0.5rem;
                                     "
                                 >
-                                    <h3
-                                        style="
-                                            margin: 0;
-                                            font-size: 1.1rem;
-                                            font-weight: 600;
-                                        "
-                                    >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                         Scenario
+                                        <span id="scenario-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="scenario-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
@@ -501,14 +487,9 @@
                                         gap: 0.5rem;
                                     "
                                 >
-                                    <h3
-                                        style="
-                                            margin: 0;
-                                            font-size: 1.1rem;
-                                            font-weight: 600;
-                                        "
-                                    >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                         First Message
+                                        <span id="first-message-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="first-message-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
@@ -561,14 +542,9 @@
                                         margin-bottom: 0.5rem;
                                     "
                                 >
-                                    <h3
-                                        style="
-                                            margin: 0;
-                                            font-size: 1.1rem;
-                                            font-weight: 600;
-                                        "
-                                    >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                         Example Messages
+                                        <span id="example-messages-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
                                     </h3>
                                 </div>
                                 <p
@@ -705,6 +681,10 @@
                                         <span id="alt-greetings-count" style="font-size: 0.875rem; color: var(--text-secondary);">0 entries</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div style="text-align: right; margin-bottom: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(139, 92, 246, 0.2);">
+                                <span id="total-token-count" style="font-size: 0.95rem; font-weight: 500; color: var(--text-secondary);"></span>
                             </div>
                         </div>
 
