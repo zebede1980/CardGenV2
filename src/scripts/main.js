@@ -1829,8 +1829,31 @@ class CharacterGeneratorApp {
       this.showNotification("No character to save", "warning");
       return;
     }
+
+    let saveId = null;
+    const charName = this.currentCharacter.name || "Unnamed Character";
+
+    if (this.storageReady && this.storage) {
+      const cards = await this.storage.listCards();
+      const permanentCards = cards.filter(c => c.isPermanent);
+      const existingCard = permanentCards.find(c => c.characterName === charName);
+
+      if (existingCard) {
+        const doOverwrite = confirm(`A character named "${charName}" already exists in your saved library.\n\nWould you like to overwrite it?`);
+        if (doOverwrite) {
+          saveId = existingCard.id;
+        } else {
+          const doSaveNew = confirm(`Would you like to save this as a new, separate version instead?`);
+          if (!doSaveNew) {
+            this.showNotification("Save cancelled", "info");
+            return;
+          }
+        }
+      }
+    }
+
     this.showNotification("Saving card to permanent library...", "info");
-    await this.saveCardToLibrary(true); // true = permanent save
+    await this.saveCardToLibrary(true, saveId);
     await this.refreshLibraryViews();
     this.showNotification("Card saved permanently!", "success");
   }
@@ -2413,7 +2436,7 @@ class CharacterGeneratorApp {
     return safe;
   }
 
-  async saveCardToLibrary(isPermanent = false) {
+  async saveCardToLibrary(isPermanent = false, specificId = null) {
     if (!this.storageReady || !this.storage || !this.currentCharacter) return;
 
     try {
@@ -2428,12 +2451,23 @@ class CharacterGeneratorApp {
         }
       }
 
-      await this.storage.saveCard({
+      const cardData = {
         characterName: this.currentCharacter.name || "Unnamed Character",
         character: JSON.parse(JSON.stringify(this.currentCharacter)),
         imageBlob,
         isPermanent
-      });
+      };
+
+      if (specificId) {
+        cardData.id = specificId;
+        const cards = await this.storage.listCards();
+        const existing = cards.find(c => c.id === specificId);
+        if (existing && existing.createdAt) {
+          cardData.createdAt = existing.createdAt;
+        }
+      }
+
+      await this.storage.saveCard(cardData);
 
       // Prune history (temp cards) to keep only the last 30
       if (!isPermanent) {
