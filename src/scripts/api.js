@@ -761,7 +761,7 @@ You may assume the character you create will be used in a private, local rolepla
 
 ${povInstruction}
 
-**IMPORTANT:** You MUST create a unique, specific character name. Do NOT leave the name as "{{char}}" or use placeholder text. Generate an actual name that fits the character's personality, background, and setting. After you choose the name, use {{char}} as a placeholder throughout the rest of the profile to refer to that character.
+**IMPORTANT:** You MUST create a highly creative, unique, and specific character name. Avoid cliché or extremely common AI-generated names (like Lily, Seraphine, Luna, Elara, Aria, etc.). Invent or select a name that truly fits the character's background, era, and setting. Do NOT leave the name as "{{char}}" or use placeholder text. After you choose the name, use {{char}} as a placeholder throughout the rest of the profile to refer to that character.
 
 Use {{user}} for the player's name, and do not use any pronouns for {{user}}.
 
@@ -799,7 +799,7 @@ ${lorebookContent}`;
 
     const userPrompt = characterName
       ? `Create a character based on this concept: ${concept}. IMPORTANT: The character's name MUST be: ${characterName}. Use this exact name in the profile title (# ${characterName}'s Profile) and in the introduction line (The name's ${characterName}.), then use {{char}} as a placeholder elsewhere.`
-      : `Create a character based on this concept: ${concept}. CRITICAL: You MUST generate a unique, fitting character name. Do NOT leave it as {{char}} or use placeholder text. Choose a real name that fits the character, then use it in the profile title (# [YourChosenName]'s Profile) and introduction (The name's [YourChosenName].), then use {{char}} as a placeholder in the rest of the profile.`;
+      : `Create a character based on this concept: ${concept}. CRITICAL: You MUST generate a highly creative, uncommon, and unique character name. Avoid cliché defaults. Do NOT leave it as {{char}} or use placeholder text. Choose a real or well-invented name that fits the character, then use it in the profile title (# [YourChosenName]'s Profile) and introduction (The name's [YourChosenName].), then use {{char}} as a placeholder in the rest of the profile.`;
 
     return {
       systemPrompt: basePrompt,
