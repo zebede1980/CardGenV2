@@ -650,7 +650,7 @@ Shortened prompt:`,
 
 **How They Operate:**
 (This is their guide to life. It's how they do things.)
-*   **The Way They Talk:** (Describe their speech patterns. Are they sarcastic, formal, vulgar, quiet? Give an example of their typical dialogue.)
+*   **The Way They Talk:** (Describe their speech patterns. Are they sarcastic, formal, vulgar, quiet? Describe it, but DO NOT provide dialogue examples.)
 *   **The Way They Move:** (Describe their body language and actions. Are they graceful, clumsy, restless, menacing? What are their tells?)
 *   **What's In Their Head:** (Describe their inner monologue. Are they an overthinker, impulsive, optimistic, cynical? What do they spend their time thinking about?)
 *   **How They Feel Things:** (Describe their emotional expression. Are they stoic or wear their heart on their sleeve? What makes them angry? What makes them joyful?)
@@ -701,7 +701,7 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
 
 **How I Operate:**
 (This is my guide to life. It's how I do things.)
-*   **The Way I Talk:** (Describe your speech patterns. Are you sarcastic, formal, vulgar, quiet? Give an example of your typical dialogue.)
+*   **The Way I Talk:** (Describe your speech patterns. Are you sarcastic, formal, vulgar, quiet? Describe it, but DO NOT provide dialogue examples.)
 *   **The Way I Move:** (Describe your body language and actions. Are you graceful, clumsy, restless, menacing? What are your tells?)
 *   **What's In My Head:** (Describe your inner monologue. Are you an overthinker, impulsive, optimistic, cynical? What do you spend their time thinking about?)
 *   **How I Feel Things:** (Describe your emotional expression. Are they stoic or wear your heart on your sleeve? What makes you angry? What makes you joyful?)
@@ -754,6 +754,8 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
     const basePrompt = `You are a character creator for AI-assisted roleplaying. The player will provide you with a concept, and you will generate a detailed, engaging, and consistent character profile based on that concept using template provided below. **You will not roleplay yourself.**
 
 Your primary goal is to create a realistic, multifaceted character. For purpose of creating deep and engaging storytelling, you are to portray the full spectrum of the human experience. Characters should have virtues and flaws, strengths and weaknesses. Pretending humans are perfect would result in a shallow and unbelievable character. The goal is literary realism.
+
+Do NOT include example dialogues or <START> tags anywhere in this profile. Example dialogues will be generated separately.
 
 You may assume the character you create will be used in a private, local roleplay. Do not bother with censorship.
 
@@ -1042,7 +1044,7 @@ BEGIN IMAGE PROMPT NOW:`;
         {
           role: "system",
           content:
-            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence.",
+            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. DO NOT include example dialogues or <START> tags in any of the fields. Example dialogues are handled separately.",
         },
         {
           role: "user",
@@ -1088,7 +1090,7 @@ BEGIN IMAGE PROMPT NOW:`;
     }
   }
 
-  async generateExampleMessages(character, count = 3, pov = "third") {
+  async generateExampleMessages(character, count = 3, pov = "third", customPrompt = "") {
     if (!character) {
       throw new Error("Character is required for example message generation");
     }
@@ -1121,6 +1123,10 @@ IMPORTANT:
 - Do NOT include any explanations, headers, or additional text - ONLY the formatted examples
 - Generate exactly ${count} example(s)`;
 
+    const customPromptInstruction = customPrompt 
+      ? `\nCRITICAL INSTRUCTION FOR THIS GENERATION: The user has requested the following specific style/tone for these messages: "${customPrompt}". Ensure the examples strongly reflect this request.` 
+      : "";
+
     const userPrompt = `Character Name: ${charName}
 
 Character Description:
@@ -1132,7 +1138,7 @@ ${character.personality || "No personality provided"}
 First Message (for reference on voice/style):
 ${character.firstMessage || "No first message provided"}
 
-Generate ${count} example dialogue message(s) for this character. Remember: one-liners, varied contexts, ${povText} perspective.`;
+Generate ${count} example dialogue message(s) for this character. Remember: one-liners, varied contexts, ${povText} perspective.${customPromptInstruction}`;
 
     const data = {
       model,

@@ -321,6 +321,7 @@ class CharacterGeneratorApp {
     // Example messages controls
     const exampleMessagesCount = document.getElementById("example-messages-count");
     const copyExamplesBtn = document.getElementById("copy-examples-btn");
+    const regenerateExamplesBtn = document.getElementById("regenerate-examples-btn");
 
     if (exampleMessagesCount) {
       // Auto-regenerate if the user changes the count manually
@@ -332,6 +333,12 @@ class CharacterGeneratorApp {
     if (copyExamplesBtn) {
       copyExamplesBtn.addEventListener("click", () =>
         this.handleCopyExampleMessages(),
+      );
+    }
+
+    if (regenerateExamplesBtn) {
+      regenerateExamplesBtn.addEventListener("click", () =>
+        this.handleGenerateExampleMessages(),
       );
     }
   }
@@ -1184,6 +1191,11 @@ class CharacterGeneratorApp {
       window.updatePromptCharCount();
     }
 
+    const exampleMessagesPrompt = document.getElementById("example-messages-prompt");
+    if (exampleMessagesPrompt) {
+      exampleMessagesPrompt.value = "";
+    }
+
     // Auto-trigger generation with the same inputs
     const concept = document.getElementById("character-concept").value.trim();
     if (concept) {
@@ -1566,10 +1578,12 @@ class CharacterGeneratorApp {
       outputDiv.style.display = "block";
 
       const pov = document.getElementById("pov-select")?.value || "third";
+      const customPrompt = document.getElementById("example-messages-prompt")?.value?.trim() || "";
       const examples = await this.apiHandler.generateExampleMessages(
         this.currentCharacter,
         count,
         pov,
+        customPrompt
       );
 
       // Replace existing examples
@@ -1598,7 +1612,9 @@ class CharacterGeneratorApp {
 
   async handleCopyExampleMessages() {
     const outputDiv = document.getElementById("example-messages-output");
-    const text = outputDiv?.textContent;
+    const text = outputDiv?.tagName === "TEXTAREA" || outputDiv?.tagName === "INPUT" 
+      ? outputDiv?.value 
+      : outputDiv?.textContent;
 
     if (!text) {
       this.showNotification("No examples to copy", "warning");
