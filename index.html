@@ -818,6 +818,9 @@
                         >
                             Download Character JSON
                         </button>
+                        <button id="save-card-btn" class="btn-outline" style="display: none">
+                            💾 Save to Library
+                        </button>
                         <button id="import-card-btn" class="btn-outline">
                             Import Card for Editing
                         </button>
@@ -870,7 +873,7 @@
                     <p id="library-status" class="library-status">
                         Loading local library...
                     </p>
-                    <div class="result-grid">
+                    <div class="result-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
                         <div>
                             <h3 class="library-title">Saved Prompts</h3>
                             <div
@@ -879,9 +882,16 @@
                             ></div>
                         </div>
                         <div>
-                            <h3 class="library-title">Saved Cards</h3>
+                            <h3 class="library-title">Saved Cards (Permanent)</h3>
                             <div
                                 id="stored-cards-list"
+                                class="content-box library-list"
+                            ></div>
+                        </div>
+                        <div>
+                            <h3 class="library-title">History (Last 30)</h3>
+                            <div
+                                id="history-cards-list"
                                 class="content-box library-list"
                             ></div>
                         </div>

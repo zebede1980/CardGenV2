@@ -76,6 +76,10 @@ class CharacterGeneratorApp {
     const downloadJsonBtn = document.getElementById("download-json-btn");
     downloadJsonBtn.addEventListener("click", () => this.handleDownloadJSON());
 
+    // Save Card button
+    const saveCardBtn = document.getElementById("save-card-btn");
+    if (saveCardBtn) saveCardBtn.addEventListener("click", () => this.handleSaveCardManual());
+
     // Regenerate button
     const regenerateBtn = document.getElementById("regenerate-btn");
     regenerateBtn.addEventListener("click", () => this.handleRegenerate());
@@ -313,6 +317,7 @@ class CharacterGeneratorApp {
 
     const promptList = document.getElementById("stored-prompts-list");
     const cardList = document.getElementById("stored-cards-list");
+    const historyList = document.getElementById("history-cards-list");
 
     if (promptList) {
       promptList.addEventListener("click", (event) =>
@@ -322,6 +327,12 @@ class CharacterGeneratorApp {
 
     if (cardList) {
       cardList.addEventListener("click", (event) =>
+        this.handleLibraryCardClick(event),
+      );
+    }
+
+    if (historyList) {
+      historyList.addEventListener("click", (event) =>
         this.handleLibraryCardClick(event),
       );
     }
@@ -1465,10 +1476,22 @@ class CharacterGeneratorApp {
     }
   }
 
+  async handleSaveCardManual() {
+    if (!this.currentCharacter) {
+      this.showNotification("No character to save", "warning");
+      return;
+    }
+    this.showNotification("Saving card to permanent library...", "info");
+    await this.saveCardToLibrary(true); // true = permanent save
+    await this.refreshLibraryViews();
+    this.showNotification("Card saved permanently!", "success");
+  }
+
   showResultSection() {
     const resultSection = document.querySelector(".result-section");
     const downloadBtn = document.getElementById("download-btn");
     const downloadJsonBtn = document.getElementById("download-json-btn");
+    const saveCardBtn = document.getElementById("save-card-btn");
 
     resultSection.style.display = "block";
     downloadBtn.style.display = "inline-flex";
@@ -1476,6 +1499,9 @@ class CharacterGeneratorApp {
     // Show JSON download button when character data is available
     if (downloadJsonBtn && this.currentCharacter) {
       downloadJsonBtn.style.display = "inline-flex";
+    }
+    if (saveCardBtn && this.currentCharacter) {
+      saveCardBtn.style.display = "inline-flex";
     }
 
     // Smooth scroll to results
@@ -1486,10 +1512,12 @@ class CharacterGeneratorApp {
     const resultSection = document.querySelector(".result-section");
     const downloadBtn = document.getElementById("download-btn");
     const downloadJsonBtn = document.getElementById("download-json-btn");
+    const saveCardBtn = document.getElementById("save-card-btn");
 
     resultSection.style.display = "none";
     downloadBtn.style.display = "none";
     if (downloadJsonBtn) downloadJsonBtn.style.display = "none";
+    if (saveCardBtn) saveCardBtn.style.display = "none";
   }
 
   async handleReferenceImageUpload(event) {
@@ -1854,7 +1882,7 @@ class CharacterGeneratorApp {
     return safe;
   }
 
-  async saveCardToLibrary() {
+  async saveCardToLibrary(isPermanent = false) {
     if (!this.storageReady || !this.storage || !this.currentCharacter) return;
 
     try {
@@ -1873,7 +1901,22 @@ class CharacterGeneratorApp {
         characterName: this.currentCharacter.name || "Unnamed Character",
         character: JSON.parse(JSON.stringify(this.currentCharacter)),
         imageBlob,
+        isPermanent
       });
+
+      // Prune history (temp cards) to keep only the last 30
+      if (!isPermanent) {
+        const allCards = await this.storage.listCards();
+        const tempCards = allCards.filter(c => !c.isPermanent);
+        if (tempCards.length > 30) {
+          // Sort oldest first
+          tempCards.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
+          const toDelete = tempCards.slice(0, tempCards.length - 30);
+          for (const card of toDelete) {
+            await this.storage.deleteCard(card.id);
+          }
+        }
+      }
     } catch (error) {
       console.error("Failed to save card:", error);
     }
@@ -1899,6 +1942,7 @@ class CharacterGeneratorApp {
 
       const promptList = document.getElementById("stored-prompts-list");
       const cardList = document.getElementById("stored-cards-list");
+      const historyList = document.getElementById("history-cards-list");
 
       if (promptList) {
         if (!prompts.length) {
@@ -1906,14 +1950,40 @@ class CharacterGeneratorApp {
             '<p class="library-empty">No saved prompts yet.</p>';
         } else {
           promptList.innerHTML = prompts
-            .map(
-              (prompt) => `
+            .map((prompt) => {
+              const promptPreview = prompt.concept ? `"${prompt.concept.substring(0, 30).replace(/\n/g, ' ')}${prompt.concept.length > 30 ? '...' : ''}"` : "(No concept)";
+              const titleName = prompt.characterName || promptPreview;
+              return `
                 <div class="library-item">
-                  <div class="library-item-title">${prompt.characterName || "(No name)"} - ${prompt.pov || "third"} POV</div>
+                  <div class="library-item-title">${titleName} - ${prompt.pov || "third"} POV</div>
                   <div class="library-item-date">${this.formatLibraryTime(prompt.updatedAt)}</div>
                   <div class="library-item-actions">
                     <button class="btn-small" data-action="load-prompt" data-id="${prompt.id}">Load</button>
                     <button class="btn-small" data-action="delete-prompt" data-id="${prompt.id}">Delete</button>
+                  </div>
+                </div>
+              `})
+            .join("");
+        }
+      }
+
+      const permanentCards = cards.filter(c => c.isPermanent);
+      const tempCards = cards.filter(c => !c.isPermanent);
+
+      if (cardList) {
+        if (!permanentCards.length) {
+          cardList.innerHTML =
+            '<p class="library-empty">No permanent cards yet.</p>';
+        } else {
+          cardList.innerHTML = permanentCards
+            .map(
+              (card) => `
+                <div class="library-item">
+                  <div class="library-item-title">${card.characterName || "Unnamed Character"}</div>
+                  <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
+                  <div class="library-item-actions">
+                    <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>
+                    <button class="btn-small" data-action="delete-card" data-id="${card.id}">Delete</button>
                   </div>
                 </div>
               `,
@@ -1922,12 +1992,12 @@ class CharacterGeneratorApp {
         }
       }
 
-      if (cardList) {
-        if (!cards.length) {
-          cardList.innerHTML =
-            '<p class="library-empty">No saved cards yet.</p>';
+      if (historyList) {
+        if (!tempCards.length) {
+          historyList.innerHTML =
+            '<p class="library-empty">No history available.</p>';
         } else {
-          cardList.innerHTML = cards
+          historyList.innerHTML = tempCards
             .map(
               (card) => `
                 <div class="library-item">
@@ -1945,7 +2015,7 @@ class CharacterGeneratorApp {
       }
 
       this.updateLibraryStatus(
-        `Saved ${prompts.length} prompt${prompts.length === 1 ? "" : "s"} and ${cards.length} card${cards.length === 1 ? "" : "s"}.`,
+        `Saved ${prompts.length} prompt(s), ${permanentCards.length} permanent card(s), and ${tempCards.length} history item(s).`,
       );
     } catch (error) {
       console.error("Failed to refresh IndexedDB library view:", error);
@@ -1956,6 +2026,7 @@ class CharacterGeneratorApp {
   renderStorageUnavailableState() {
     const promptList = document.getElementById("stored-prompts-list");
     const cardList = document.getElementById("stored-cards-list");
+    const historyList = document.getElementById("history-cards-list");
     const message =
       '<p class="library-empty">Local storage is unavailable in this browser/session.</p>';
 
@@ -1964,6 +2035,9 @@ class CharacterGeneratorApp {
     }
     if (cardList) {
       cardList.innerHTML = message;
+    }
+    if (historyList) {
+      historyList.innerHTML = message;
     }
   }
 
