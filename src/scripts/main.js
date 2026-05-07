@@ -159,6 +159,7 @@ class CharacterGeneratorApp {
     const imageStyleSelect = document.getElementById("image-style");
     if (imageStyleSelect) {
       imageStyleSelect.addEventListener("change", () => {
+        this.saveAPISettings(); // Ensure the new style is saved to config before regenerating
         if (this.currentCharacter) {
           this.handleRegeneratePrompt();
         }

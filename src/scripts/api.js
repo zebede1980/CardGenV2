@@ -616,13 +616,15 @@ Shortened prompt:`,
 
     switch (styleSetting) {
         case "realistic": styleTags = "Hyper-realistic photography, 8k resolution, highly detailed face, photorealistic, natural lighting, DSLR, masterpiece."; break;
-        case "anime": styleTags = "High quality anime style, 2d, cel shaded, vibrant colors, studio ghibli style, detailed anime character design."; break;
+        case "anime": styleTags = "High quality anime style, vibrant colors, detailed anime character design."; break;
+        case "hand-drawn-anime": styleTags = "Traditional hand-drawn anime style, classic 90s anime aesthetic, cel shading, studio ghibli style, detailed 2D illustration."; break;
         case "waifu": styleTags = "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character, distinct anime features."; break;
         case "sexy": styleTags = "Sexy, alluring, highly attractive, seductive, beautiful, masterpiece, highly detailed, stunning, appealingly posed."; break;
         case "comic": styleTags = "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading, vibrant comic colors."; break;
         case "cinematic": styleTags = "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting, photorealistic."; break;
         case "fantasy": styleTags = "Digital fantasy art, artstation masterpiece, trending on artstation, stylized digital illustration, epic fantasy."; break;
         case "cyberpunk": styleTags = "Cyberpunk style, neon lights, dark futuristic setting, high tech, synthwave aesthetics, highly detailed."; break;
+        case "3d-render": styleTags = "3D render, octane render, unreal engine 5, highly detailed 3D model, stylized 3D, CGI, ray tracing, masterpiece."; break;
         case "watercolor": styleTags = "Watercolor painting style, soft edges, pastel colors, artistic brushstrokes, traditional media look, beautiful illustration."; break;
         case "pixel": styleTags = "Pixel art, 16-bit style, retro gaming aesthetic, crisp pixels, high quality sprite art."; break;
     }
@@ -831,7 +833,24 @@ ${lorebookContent}`;
     const style = this.config.get("api.image.style");
     let styleInstruction = "";
     if (style) {
-        styleInstruction = `\n4. Art Style: Format the prompt to heavily emphasize a "${style}" style. Use relevant style keywords (e.g., if anime: anime, 2d, cel shaded; if realistic: photorealistic, 8k, DSLR; if comic: comic book art).`;
+        let styleTags = "";
+        switch (style) {
+            case "realistic": styleTags = "Hyper-realistic photography, 8k resolution, photorealistic, natural lighting, DSLR, masterpiece"; break;
+            case "anime": styleTags = "High quality anime style, vibrant colors, detailed anime character design"; break;
+            case "hand-drawn-anime": styleTags = "Traditional hand-drawn anime style, classic 90s anime aesthetic, cel shading, studio ghibli style"; break;
+            case "waifu": styleTags = "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character"; break;
+            case "sexy": styleTags = "Sexy, alluring, highly attractive, seductive, beautiful, appealingly posed"; break;
+            case "comic": styleTags = "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading"; break;
+            case "cinematic": styleTags = "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting"; break;
+            case "fantasy": styleTags = "Digital fantasy art, artstation masterpiece, trending on artstation, epic fantasy"; break;
+            case "cyberpunk": styleTags = "Cyberpunk style, neon lights, dark futuristic setting, high tech, synthwave aesthetics"; break;
+            case "3d-render": styleTags = "3D render, octane render, unreal engine 5, stylized 3D, CGI, ray tracing"; break;
+            case "watercolor": styleTags = "Watercolor painting style, soft edges, pastel colors, artistic brushstrokes"; break;
+            case "pixel": styleTags = "Pixel art, 16-bit style, retro gaming aesthetic, crisp pixels"; break;
+        }
+        if (styleTags) {
+            styleInstruction = `\n4. Art Style: You MUST include these EXACT style keywords in the prompt: ${styleTags}.`;
+        }
     }
 
     return `You are an AI assistant specialized in creating clear, short, and distinct text-to-image prompts for image generation models.
