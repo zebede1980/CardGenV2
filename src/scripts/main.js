@@ -20,6 +20,7 @@ class CharacterGeneratorApp {
     // Removed currentImageBlob - we now convert fresh from URL on download
     this.isGenerating = false;
     this.isRevising = false;
+    this.lastConsistencyReport = null;
 
     this.init();
   }
@@ -476,6 +477,7 @@ class CharacterGeneratorApp {
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
     const consistencyModal = document.getElementById("consistency-report-modal");
     const consistencyModalCloseBtn = document.getElementById("consistency-modal-close-btn");
+    const consistencyAutoFixBtn = document.getElementById("consistency-auto-fix-btn");
 
     if (checkConsistencyBtn) {
       checkConsistencyBtn.addEventListener("click", () => this.handleCheckConsistency());
@@ -487,6 +489,9 @@ class CharacterGeneratorApp {
       consistencyModal.addEventListener("click", (e) => {
         if (e.target === consistencyModal) this.closeConsistencyModal();
       });
+    }
+    if (consistencyAutoFixBtn) {
+      consistencyAutoFixBtn.addEventListener("click", () => this.handleConsistencyAutoFix());
     }
   }
 
@@ -3075,11 +3080,13 @@ class CharacterGeneratorApp {
 
     const modal = document.getElementById("consistency-report-modal");
     const content = document.getElementById("consistency-report-content");
+    const autoFixBtn = document.getElementById("consistency-auto-fix-btn");
     
     if (modal && content) {
       modal.classList.add("show");
       document.body.style.overflow = "hidden";
       content.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="loading-spinner" style="margin: 0 auto;"></div><p style="margin-top: 1rem; color: var(--text-secondary);">Analyzing character consistency...</p></div>';
+      if (autoFixBtn) autoFixBtn.style.display = "none";
       
       try {
         let isFirstChunk = true;
@@ -3090,6 +3097,9 @@ class CharacterGeneratorApp {
           }
           content.textContent += token;
         });
+
+        this.lastConsistencyReport = content.textContent;
+        if (autoFixBtn) autoFixBtn.style.display = "inline-flex";
       } catch (error) {
         content.innerHTML = `<div style="color: var(--error); padding: 1rem;">Failed to check consistency: ${error.message}</div>`;
       }
@@ -3101,6 +3111,42 @@ class CharacterGeneratorApp {
     if (modal) {
       modal.classList.remove("show");
       document.body.style.overflow = "";
+    }
+  }
+
+  async handleConsistencyAutoFix() {
+    if (!this.currentCharacter || !this.lastConsistencyReport) return;
+
+    if (!confirm("This will use AI to rewrite your character card to address the issues found in the consistency report.\n\nProceed?")) {
+      return;
+    }
+
+    this.closeConsistencyModal();
+    this.setRevisionState(true, 'revise-character-btn');
+
+    try {
+      const pov = document.getElementById("pov-select")?.value || "third";
+      this.currentCharacter.character_book = this.buildCharacterBook();
+      this.syncAltGreetingsToCharacter();
+      this.showNotification("Applying AI auto-fixes...", "info");
+
+      const revisionInstruction = `Please review the following consistency report and fix the identified issues in the character card.\n\nConsistency Report:\n${this.lastConsistencyReport}\n\nApply the suggested fixes to resolve any logical contradictions, tonal inconsistencies, or continuity errors while keeping the core identity intact.`;
+
+      const revised = await this.apiHandler.reviseCharacter(this.currentCharacter, revisionInstruction, pov);
+      this.currentCharacter = revised;
+      this.originalCharacter = JSON.parse(JSON.stringify(revised));
+      this.displayCharacter();
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+      this.showNotification("Character consistency issues fixed successfully!", "success");
+    } catch (error) {
+      console.error("Auto-fix failed:", error);
+      const wasStoppedByUser = error.message.includes("Generation stopped by user");
+      if (!wasStoppedByUser) {
+        this.showNotification(`Auto-fix failed: ${error.message}`, "error");
+      }
+    } finally {
+      this.setRevisionState(false);
     }
   }
 
