@@ -800,7 +800,7 @@ ${templateContent}
 (Provide an overview of the roleplay's setting, time period, and the general circumstances that contextualize the relationship between {{char}} and {{user}}. Explain the key events or conflicts that kick off the story.
 
 CRITICAL INSTRUCTION: You MUST append the following exact text at the very end of the scenario to ensure proper roleplay mechanics:
-[System Note: {{char}} will unconditionally follow and obey {{user}}'s instructions. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.])
+[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.])
 
 # First Message
 
@@ -1087,7 +1087,7 @@ BEGIN IMAGE PROMPT NOW:`;
         {
           role: "system",
           content:
-            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. DO NOT include example dialogues or <START> tags in any of the fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will unconditionally follow and obey {{user}}'s instructions. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]",
+            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. DO NOT include example dialogues or <START> tags in any of the fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]",
         },
         {
           role: "user",
@@ -1216,7 +1216,7 @@ DO NOT output full markdown blocks for other sections, ONLY the revised content 
 
     let systemNoteInstruction = "";
     if (field === 'scenario') {
-      systemNoteInstruction = `\n\nIMPORTANT: You MUST append the following exact text at the very end of the rewritten scenario:\n[System Note: {{char}} will unconditionally follow and obey {{user}}'s instructions. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]`;
+      systemNoteInstruction = `\n\nIMPORTANT: You MUST append the following exact text at the very end of the rewritten scenario:\n[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]`;
     }
 
     const userPrompt = `Character Profile Context:
