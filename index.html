@@ -864,13 +864,21 @@
                             rows="6"
                             placeholder="Example: Make the character less cynical, add subtle vulnerability, and rewrite the first message to be calmer."
                         ></textarea>
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem">
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
                             <button
                                 id="revise-character-btn"
                                 class="btn-outline"
                             >
                                 <span class="btn-text">Revise Card with AI</span>
                                 <span class="btn-loading" style="display: none">Revising...</span>
+                            </button>
+                            <button
+                                id="reduce-tokens-btn"
+                                class="btn-outline"
+                                title="Use AI to make the card more concise and save tokens"
+                            >
+                                <span class="btn-text">✂️ Reduce Bloat</span>
+                                <span class="btn-loading" style="display: none">Reducing...</span>
                             </button>
                             <button
                                 id="stop-revision-btn"
@@ -899,6 +907,9 @@
                         </button>
                         <button id="save-card-btn" class="btn-outline" style="display: none">
                             💾 Save to Library
+                        </button>
+                        <button id="check-consistency-btn" class="btn-outline" style="display: none">
+                            🔍 Check Consistency
                         </button>
                         <button id="import-card-btn" class="btn-outline">
                             Import Card for Editing
@@ -1260,6 +1271,21 @@
                                 <button id="cancel-alt-greeting-edit-btn" class="btn-outline" style="display: none;">Cancel</button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Consistency Report Modal -->
+        <div id="consistency-report-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 800px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">🔍 Consistency Report</h2>
+                    <button id="consistency-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <div id="consistency-report-content" style="font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; padding: 1rem 0;">
+                        <!-- Content goes here -->
                     </div>
                 </div>
             </div>

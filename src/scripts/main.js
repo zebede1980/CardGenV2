@@ -122,6 +122,13 @@ class CharacterGeneratorApp {
         this.handleReviseCharacter(),
       );
     }
+    
+    const reduceTokensBtn = document.getElementById("reduce-tokens-btn");
+    if (reduceTokensBtn) {
+      reduceTokensBtn.addEventListener("click", () =>
+        this.handleReduceTokens(),
+      );
+    }
 
     const stopRevisionBtn = document.getElementById("stop-revision-btn");
     if (stopRevisionBtn) {
@@ -464,6 +471,23 @@ class CharacterGeneratorApp {
         if (target.dataset.action === "edit-alt-greeting") this.handleEditAltGreeting(target.dataset.id);
         if (target.dataset.action === "delete-alt-greeting") this.handleDeleteAltGreeting(target.dataset.id);
     });
+
+    // Consistency Check
+    const checkConsistencyBtn = document.getElementById("check-consistency-btn");
+    const consistencyModal = document.getElementById("consistency-report-modal");
+    const consistencyModalCloseBtn = document.getElementById("consistency-modal-close-btn");
+
+    if (checkConsistencyBtn) {
+      checkConsistencyBtn.addEventListener("click", () => this.handleCheckConsistency());
+    }
+    if (consistencyModalCloseBtn) {
+      consistencyModalCloseBtn.addEventListener("click", () => this.closeConsistencyModal());
+    }
+    if (consistencyModal) {
+      consistencyModal.addEventListener("click", (e) => {
+        if (e.target === consistencyModal) this.closeConsistencyModal();
+      });
+    }
   }
 
   async checkAPIStatus() {
@@ -1667,25 +1691,42 @@ class CharacterGeneratorApp {
     }
   }
 
-  setRevisionState(isRevising) {
+  setRevisionState(isRevising, buttonId = 'revise-character-btn') {
     this.isRevising = isRevising;
     const reviseBtn = document.getElementById("revise-character-btn");
+    const reduceBtn = document.getElementById("reduce-tokens-btn");
     const stopBtn = document.getElementById("stop-revision-btn");
-    const btnText = reviseBtn?.querySelector(".btn-text");
-    const btnLoading = reviseBtn?.querySelector(".btn-loading");
 
-    if (!reviseBtn || !stopBtn) return;
+    if (reviseBtn) {
+      const btnText = reviseBtn.querySelector(".btn-text");
+      const btnLoading = reviseBtn.querySelector(".btn-loading");
+      if (isRevising && buttonId === 'revise-character-btn') {
+        reviseBtn.disabled = true;
+        if (btnText) btnText.style.display = "none";
+        if (btnLoading) btnLoading.style.display = "inline";
+      } else {
+        reviseBtn.disabled = isRevising;
+        if (btnText) btnText.style.display = "inline";
+        if (btnLoading) btnLoading.style.display = "none";
+      }
+    }
 
-    if (isRevising) {
-      reviseBtn.disabled = true;
-      if (btnText) btnText.style.display = "none";
-      if (btnLoading) btnLoading.style.display = "inline";
-      stopBtn.style.display = "inline-block";
-    } else {
-      reviseBtn.disabled = false;
-      if (btnText) btnText.style.display = "inline";
-      if (btnLoading) btnLoading.style.display = "none";
-      stopBtn.style.display = "none";
+    if (reduceBtn) {
+      const btnText = reduceBtn.querySelector(".btn-text");
+      const btnLoading = reduceBtn.querySelector(".btn-loading");
+      if (isRevising && buttonId === 'reduce-tokens-btn') {
+        reduceBtn.disabled = true;
+        if (btnText) btnText.style.display = "none";
+        if (btnLoading) btnLoading.style.display = "inline";
+      } else {
+        reduceBtn.disabled = isRevising;
+        if (btnText) btnText.style.display = "inline";
+        if (btnLoading) btnLoading.style.display = "none";
+      }
+    }
+
+    if (stopBtn) {
+      stopBtn.style.display = isRevising ? "inline-block" : "none";
     }
   }
 
@@ -1865,6 +1906,7 @@ class CharacterGeneratorApp {
     const downloadBtn = document.getElementById("download-btn");
     const downloadJsonBtn = document.getElementById("download-json-btn");
     const saveCardBtn = document.getElementById("save-card-btn");
+    const checkConsistencyBtn = document.getElementById("check-consistency-btn");
 
     resultSection.style.display = "block";
     downloadBtn.style.display = "inline-flex";
@@ -1876,6 +1918,9 @@ class CharacterGeneratorApp {
     if (saveCardBtn && this.currentCharacter) {
       saveCardBtn.style.display = "inline-flex";
     }
+    if (checkConsistencyBtn && this.currentCharacter) {
+      checkConsistencyBtn.style.display = "inline-flex";
+    }
 
     // Smooth scroll to results
     resultSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1886,11 +1931,13 @@ class CharacterGeneratorApp {
     const downloadBtn = document.getElementById("download-btn");
     const downloadJsonBtn = document.getElementById("download-json-btn");
     const saveCardBtn = document.getElementById("save-card-btn");
+    const checkConsistencyBtn = document.getElementById("check-consistency-btn");
 
     resultSection.style.display = "none";
     downloadBtn.style.display = "none";
     if (downloadJsonBtn) downloadJsonBtn.style.display = "none";
     if (saveCardBtn) saveCardBtn.style.display = "none";
+    if (checkConsistencyBtn) checkConsistencyBtn.style.display = "none";
   }
 
   async handleReferenceImageUpload(event) {
@@ -2084,7 +2131,7 @@ class CharacterGeneratorApp {
       return;
     }
 
-    this.setRevisionState(true);
+    this.setRevisionState(true, 'revise-character-btn');
 
     try {
       const pov = document.getElementById("pov-select")?.value || "third";
@@ -2107,6 +2154,44 @@ class CharacterGeneratorApp {
       const wasStoppedByUser = error.message.includes("Generation stopped by user");
       if (!wasStoppedByUser) {
         this.showNotification(`Revision failed: ${error.message}`, "error");
+      }
+    } finally {
+      this.setRevisionState(false);
+    }
+  }
+
+  async handleReduceTokens() {
+    if (!this.currentCharacter) {
+      this.showNotification("Generate or import a character first", "warning");
+      return;
+    }
+
+    if (!confirm("This will use AI to rewrite the entire card to be extremely concise, removing flowery text and bloat to save tokens while keeping the core identity intact.\n\nProceed?")) {
+      return;
+    }
+
+    this.setRevisionState(true, 'reduce-tokens-btn');
+
+    try {
+      const pov = document.getElementById("pov-select")?.value || "third";
+      this.currentCharacter.character_book = this.buildCharacterBook();
+      this.syncAltGreetingsToCharacter();
+      this.showNotification("Applying AI token reduction...", "info");
+      
+      const reductionInstruction = "Rewrite this entire character card to be extremely concise and token-efficient. Remove all bloat, flowery purple prose, and repetition. Keep only the absolute core facts, personality traits, scenario details, and speaking style. Make every single word count to minimize the overall token length while preserving the character's identity.";
+      
+      const revised = await this.apiHandler.reviseCharacter(this.currentCharacter, reductionInstruction, pov);
+      this.currentCharacter = revised;
+      this.originalCharacter = JSON.parse(JSON.stringify(revised));
+      this.displayCharacter();
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+      this.showNotification("Card bloat reduced successfully!", "success");
+    } catch (error) {
+      console.error("Reduction failed:", error);
+      const wasStoppedByUser = error.message.includes("Generation stopped by user");
+      if (!wasStoppedByUser) {
+        this.showNotification(`Reduction failed: ${error.message}`, "error");
       }
     } finally {
       this.setRevisionState(false);
@@ -2980,6 +3065,43 @@ class CharacterGeneratorApp {
     const filename = `${(this.currentCharacter?.name || 'character').replace(/[^a-zA-Z0-9]/g, '_')}_lorebook.json`;
     this.downloadBlob(blob, filename);
     this.showNotification("Lorebook downloaded!", "success");
+  }
+
+  async handleCheckConsistency() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate or import a character first", "warning");
+      return;
+    }
+
+    const modal = document.getElementById("consistency-report-modal");
+    const content = document.getElementById("consistency-report-content");
+    
+    if (modal && content) {
+      modal.classList.add("show");
+      document.body.style.overflow = "hidden";
+      content.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="loading-spinner" style="margin: 0 auto;"></div><p style="margin-top: 1rem; color: var(--text-secondary);">Analyzing character consistency...</p></div>';
+      
+      try {
+        let isFirstChunk = true;
+        await window.apiHandler.checkConsistency(this.currentCharacter, this.lorebookEntries, (token) => {
+          if (isFirstChunk) {
+            content.innerHTML = '';
+            isFirstChunk = false;
+          }
+          content.textContent += token;
+        });
+      } catch (error) {
+        content.innerHTML = `<div style="color: var(--error); padding: 1rem;">Failed to check consistency: ${error.message}</div>`;
+      }
+    }
+  }
+
+  closeConsistencyModal() {
+    const modal = document.getElementById("consistency-report-modal");
+    if (modal) {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+    }
   }
 
   showNotification(message, type = "info") {

@@ -1570,6 +1570,51 @@ Output only the lorebook entry content.`;
     }
   }
 
+  async checkConsistency(character, lorebookEntries = [], onStream = null) {
+    if (!character) throw new Error("Character is required");
+
+    const model = this.config.get("api.text.model");
+
+    const systemPrompt = `You are an expert narrative editor and continuity checker for roleplay characters. Your task is to analyze a character profile and its associated lorebook entries for any logical contradictions, tonal inconsistencies, or continuity errors.
+
+If you find inconsistencies, list them clearly and suggest how to fix them.
+If everything is consistent, say so and praise the cohesion of the character.
+Keep your report concise, actionable, and formatted nicely.`;
+
+    const lorebookContext = this.formatLorebookContext(lorebookEntries);
+    const userPrompt = `Character Profile:
+Name: ${character.name || "Unknown"}
+Description: ${character.description}
+Personality: ${character.personality}
+Scenario: ${character.scenario}
+First Message: ${character.firstMessage}${lorebookContext}
+
+Please analyze this character and lorebook for consistency.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500,
+      stream: true
+    };
+
+    try {
+      console.log("=== STARTING CONSISTENCY CHECK ===");
+      const response = await this.makeRequest("/chat/completions", data, false, true);
+      const output = await this.handleStreamResponse(response, (chunk, full) => {
+        if (onStream) onStream(chunk, full);
+      });
+      return output.trim();
+    } catch (error) {
+      console.error("=== CONSISTENCY CHECK FAILED ===", error);
+      throw error;
+    }
+  }
+
   // Method to stop current generation
   stopGeneration() {
     this.userStopRequested = true;
