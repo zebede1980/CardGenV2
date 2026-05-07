@@ -610,11 +610,22 @@ Shortened prompt:`,
       prompt += mood + ". ";
     }
 
-    // Add artistic style and quality tags
-    prompt +=
-      "Professional character portrait, detailed features, high quality, realistic style, " +
-      "sharp focus, well-lit, cinematic lighting, depth of field, 4k, highly detailed. " +
-      "Appropriate background that suits the character's setting and personality.";
+    const styleSetting = this.config.get("api.image.style");
+    let styleTags = "Professional character portrait, detailed features, high quality, realistic style, sharp focus, well-lit, cinematic lighting, depth of field, 4k, highly detailed.";
+
+    switch (styleSetting) {
+        case "realistic": styleTags = "Hyper-realistic photography, 8k resolution, highly detailed face, photorealistic, natural lighting, DSLR, masterpiece."; break;
+        case "anime": styleTags = "High quality anime style, 2d, cel shaded, vibrant colors, studio ghibli style, detailed anime character design."; break;
+        case "waifu": styleTags = "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character, distinct anime features."; break;
+        case "comic": styleTags = "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading, vibrant comic colors."; break;
+        case "cinematic": styleTags = "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting, photorealistic."; break;
+        case "fantasy": styleTags = "Digital fantasy art, artstation masterpiece, trending on artstation, stylized digital illustration, epic fantasy."; break;
+        case "cyberpunk": styleTags = "Cyberpunk style, neon lights, dark futuristic setting, high tech, synthwave aesthetics, highly detailed."; break;
+        case "watercolor": styleTags = "Watercolor painting style, soft edges, pastel colors, artistic brushstrokes, traditional media look, beautiful illustration."; break;
+        case "pixel": styleTags = "Pixel art, 16-bit style, retro gaming aesthetic, crisp pixels, high quality sprite art."; break;
+    }
+
+    prompt += styleTags + " Appropriate background that suits the character's setting and personality.";
 
     return prompt;
   }
@@ -815,6 +826,12 @@ ${lorebookContent}`;
     const personalityTraits =
       this.extractPersonalityTraits(characterDescription);
 
+    const style = this.config.get("api.image.style");
+    let styleInstruction = "";
+    if (style) {
+        styleInstruction = `\n4. Art Style: Format the prompt to heavily emphasize a "${style}" style. Use relevant style keywords (e.g., if anime: anime, 2d, cel shaded; if realistic: photorealistic, 8k, DSLR; if comic: comic book art).`;
+    }
+
     return `You are an AI assistant specialized in creating clear, short, and distinct text-to-image prompts for image generation models.
 
 Character Name: ${characterName || "Unknown"}
@@ -832,7 +849,7 @@ Create a brief natural language prompt describing an image of this character. Ex
 
 1. Basic Visual Description: Age, hair, eyes, key facial features, and core outfit.
 2. Attitude & Demeanor: A couple of words on their posture or facial expression reflecting their personality.
-3. Short Scene: A very short, simple background or setting.
+3. Short Scene: A very short, simple background or setting.${styleInstruction}
 
 Use ONLY positive statements about what SHOULD be in the image. You may add a few quality tags at the end (e.g., masterpiece, high quality, highly detailed).
 

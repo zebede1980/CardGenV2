@@ -23,6 +23,7 @@ class Config {
           apiKey: "",
           model: "",
           size: "",
+          style: "",
           timeout: 180000,
         },
       },
@@ -108,12 +109,14 @@ class Config {
     const imageApiKey = document.getElementById("image-api-key")?.value?.trim();
     const imageModel = document.getElementById("image-model")?.value?.trim();
     const imageSize = document.getElementById("image-size")?.value?.trim();
+    const imageStyle = document.getElementById("image-style")?.value;
 
     if (imageBaseUrl !== undefined)
       this.config.api.image.baseUrl = imageBaseUrl;
     if (imageApiKey !== undefined) this.config.api.image.apiKey = imageApiKey;
     if (imageModel !== undefined) this.config.api.image.model = imageModel;
     if (imageSize !== undefined) this.config.api.image.size = imageSize;
+    if (imageStyle !== undefined) this.config.api.image.style = imageStyle;
 
     // Load toggle states
     const enableImageGeneration = document.getElementById(
@@ -169,12 +172,14 @@ class Config {
       const imageApiKey = document.getElementById("image-api-key");
       const imageModel = document.getElementById("image-model");
       const imageSize = document.getElementById("image-size");
+      const imageStyle = document.getElementById("image-style");
 
       if (imageBaseUrl)
         imageBaseUrl.value = this.config.api.image.baseUrl || "";
       if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
       if (imageModel) imageModel.value = this.config.api.image.model || "";
       if (imageSize) imageSize.value = this.config.api.image.size || "";
+      if (imageStyle) imageStyle.value = this.config.api.image.style || "";
 
       // Save toggle states
       const enableImageGeneration = document.getElementById(

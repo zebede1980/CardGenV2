@@ -1046,8 +1046,16 @@
                             type="text"
                             id="image-model"
                             class="input"
+                            list="image-models-list"
                             placeholder="e.g., bytedance/seedream-4 (optional)"
                         />
+                        <datalist id="image-models-list">
+                            <option value="z-image-turbo"></option>
+                            <option value="chroma"></option>
+                            <option value="hidream"></option>
+                            <option value="qwen-image"></option>
+                            <option value="grok-2-image"></option>
+                        </datalist>
                     </div>
 
                     <div class="form-group">
@@ -1060,6 +1068,24 @@
                             class="input"
                             placeholder="e.g., 1024x1024, 512x512 (optional)"
                         />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-style" class="label"
+                            >Image Style (optional)</label
+                        >
+                        <select id="image-style" class="input">
+                            <option value="">None (Default)</option>
+                            <option value="realistic">Realistic / Photography</option>
+                            <option value="anime">Anime</option>
+                            <option value="waifu">Waifu</option>
+                            <option value="comic">Comic Book / Graphic Novel</option>
+                            <option value="cinematic">Cinematic</option>
+                            <option value="fantasy">Fantasy Art</option>
+                            <option value="cyberpunk">Cyberpunk</option>
+                            <option value="watercolor">Watercolor</option>
+                            <option value="pixel">Pixel Art</option>
+                        </select>
                     </div>
 
                     <!-- Image Generation Toggle -->
