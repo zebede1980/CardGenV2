@@ -873,6 +873,7 @@ class CharacterGeneratorApp {
 
       // Embed Lorebook in Character Object before export
       this.currentCharacter.character_book = this.buildCharacterBook();
+      this.syncAltGreetingsToCharacter();
 
       // Always convert from currentImageUrl to ensure we get the latest image
       // This ensures regenerated or uploaded images are properly included
@@ -1428,6 +1429,7 @@ class CharacterGeneratorApp {
 
       // Embed Lorebook in Character Object before export
       this.currentCharacter.character_book = this.buildCharacterBook();
+      this.syncAltGreetingsToCharacter();
 
       // Convert to Spec V2 format
       const specV2Data = this.characterGenerator.toSpecV2Format(
@@ -1897,6 +1899,8 @@ class CharacterGeneratorApp {
         scenario: specData.data.scenario || "",
         firstMessage: specData.data.first_mes || "",
         mesExample: specData.data.mes_example || "",
+        character_book: specData.data.character_book || undefined,
+        alternateGreetings: specData.data.alternate_greetings || [],
       };
     }
 
@@ -1907,6 +1911,8 @@ class CharacterGeneratorApp {
       scenario: specData.scenario || "",
       firstMessage: specData.firstMessage || specData.first_mes || "",
       mesExample: specData.mesExample || specData.mes_example || "",
+      character_book: specData.character_book || undefined,
+      alternateGreetings: specData.alternateGreetings || specData.alternate_greetings || [],
     };
   }
 
