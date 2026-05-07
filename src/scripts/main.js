@@ -133,6 +133,19 @@ class CharacterGeneratorApp {
     regenerateImageBtn.addEventListener("click", () =>
       this.handleRegenerateImage(),
     );
+    
+    // Generate 4 images button
+    const generateFourImagesBtn = document.getElementById("generate-four-images-btn");
+    if (generateFourImagesBtn) {
+        generateFourImagesBtn.addEventListener("click", () => this.handleGenerateFourImages());
+    }
+    
+    const imgOptModalClose = document.getElementById("image-options-modal-close-btn");
+    const imgOptModal = document.getElementById("image-options-modal");
+    if (imgOptModalClose) imgOptModalClose.addEventListener("click", () => this.closeImageOptionsModal());
+    if (imgOptModal) imgOptModal.addEventListener("click", (e) => {
+        if (e.target === imgOptModal) this.closeImageOptionsModal();
+    });
 
     // Regenerate prompt button
     const regeneratePromptBtn = document.getElementById(
@@ -245,7 +258,7 @@ class CharacterGeneratorApp {
 
     // Save API settings on input change
     const apiInputs = document.querySelectorAll(
-      "#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-model",
+      "#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-model, #image-style",
     );
     apiInputs.forEach((input) => {
       input.addEventListener("change", () => this.saveAPISettings());
@@ -1002,6 +1015,163 @@ class CharacterGeneratorApp {
         "error",
       );
     }
+  }
+
+  async handleGenerateFourImages() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate a character first", "warning");
+      return;
+    }
+
+    const imageApiBase = this.config.get("api.image.baseUrl");
+    const imageApiKey = this.config.get("api.image.apiKey");
+
+    if (!imageApiBase || !imageApiKey) {
+      this.showNotification("Please configure image API settings first", "warning");
+      return;
+    }
+
+    this.openImageOptionsModal();
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    
+    grid.innerHTML = "";
+    loading.style.display = "block";
+
+    try {
+      // Get base prompt
+      const customPromptTextarea = document.getElementById("custom-image-prompt");
+      let basePrompt = customPromptTextarea?.value?.trim();
+
+      if (!basePrompt) {
+          try {
+              basePrompt = await window.apiHandler.generateImagePrompt(
+                  this.currentCharacter.description,
+                  this.currentCharacter.name
+              );
+              if (customPromptTextarea) {
+                  customPromptTextarea.value = basePrompt;
+                  window.updatePromptCharCount();
+              }
+          } catch (e) {
+              basePrompt = window.apiHandler.buildDirectImagePrompt(
+                  this.currentCharacter.description,
+                  this.currentCharacter.name
+              );
+          }
+      }
+
+      // Variations
+      const variations = [
+          basePrompt,
+          basePrompt + ", alternative angle, cinematic lighting",
+          basePrompt + ", close-up focus, highly detailed",
+          basePrompt + ", dynamic composition, atmospheric"
+      ];
+
+      // Call API 4 times concurrently
+      const promises = variations.map((promptVar, index) => 
+          window.apiHandler.generateImage(
+              this.currentCharacter.description,
+              this.currentCharacter.name,
+              promptVar
+          ).then(async imageUrl => {
+              // Convert to blob URL immediately
+              let displayUrl = imageUrl;
+              if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+                  const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+                  const response = await fetch(proxyUrl);
+                  if (response.ok) {
+                      const blob = await response.blob();
+                      displayUrl = URL.createObjectURL(blob);
+                  }
+              }
+              return { url: displayUrl, prompt: promptVar, index };
+          }).catch(err => {
+              console.error(`Image variation ${index} failed:`, err);
+              return null;
+          })
+      );
+
+      const results = await Promise.all(promises);
+      loading.style.display = "none";
+
+      const validResults = results.filter(r => r !== null);
+      if (validResults.length === 0) {
+          throw new Error("All image generations failed.");
+      }
+
+      validResults.forEach(res => {
+          const wrapper = document.createElement("div");
+          wrapper.style.cursor = "pointer";
+          wrapper.style.border = "2px solid transparent";
+          wrapper.style.borderRadius = "0.5rem";
+          wrapper.style.overflow = "hidden";
+          wrapper.style.transition = "border-color 0.2s";
+          wrapper.style.backgroundColor = "var(--surface-color)";
+          
+          wrapper.onmouseenter = () => wrapper.style.border = "2px solid var(--accent)";
+          wrapper.onmouseleave = () => wrapper.style.border = "2px solid transparent";
+          
+          wrapper.onclick = () => this.selectImageOption(res.url, res.prompt, validResults);
+
+          wrapper.innerHTML = `<img src="${res.url}" style="width: 100%; height: auto; display: block;" alt="Option ${res.index + 1}">`;
+          grid.appendChild(wrapper);
+      });
+      this.showNotification(`Generated ${validResults.length} image options!`, "success");
+
+    } catch (error) {
+      loading.style.display = "none";
+      this.showNotification(`Failed to generate images: ${error.message}`, "error");
+    }
+  }
+
+  openImageOptionsModal() {
+      const modal = document.getElementById("image-options-modal");
+      if (modal) {
+          modal.classList.add("show");
+          document.body.style.overflow = "hidden";
+      }
+  }
+
+  closeImageOptionsModal() {
+      const modal = document.getElementById("image-options-modal");
+      if (modal) {
+          modal.classList.remove("show");
+          document.body.style.overflow = "";
+      }
+  }
+
+  async selectImageOption(selectedUrl, selectedPrompt, allResults) {
+      this.closeImageOptionsModal();
+      
+      if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:") && this.currentImageUrl !== selectedUrl) {
+        URL.revokeObjectURL(this.currentImageUrl);
+      }
+
+      this.currentImageUrl = selectedUrl;
+      
+      allResults.forEach(res => {
+          if (res.url !== selectedUrl && res.url.startsWith("blob:")) {
+              URL.revokeObjectURL(res.url);
+          }
+      });
+
+      const imageContainer = document.getElementById("image-content");
+      if (imageContainer) {
+          imageContainer.innerHTML = window.imageGenerator.formatImageForDisplay(selectedUrl);
+      }
+
+      const customPromptTextarea = document.getElementById("custom-image-prompt");
+      if (customPromptTextarea) {
+          customPromptTextarea.value = selectedPrompt;
+          window.updatePromptCharCount();
+      }
+
+      this.showNotification("Image selected and saved to card!", "success");
+      
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
   }
 
   async generateImage() {

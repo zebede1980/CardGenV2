@@ -811,6 +811,23 @@
                                 style="margin-top: 1rem; display: none"
                                 id="image-controls"
                             >
+                                <div class="form-group" style="margin-bottom: 1rem;">
+                                    <label for="image-style" class="label"
+                                        >Image Style (optional)</label
+                                    >
+                                    <select id="image-style" class="input">
+                                        <option value="">None (Default)</option>
+                                        <option value="realistic">Realistic / Photography</option>
+                                        <option value="anime">Anime</option>
+                                        <option value="waifu">Waifu</option>
+                                        <option value="comic">Comic Book / Graphic Novel</option>
+                                        <option value="cinematic">Cinematic</option>
+                                        <option value="fantasy">Fantasy Art</option>
+                                        <option value="cyberpunk">Cyberpunk</option>
+                                        <option value="watercolor">Watercolor</option>
+                                        <option value="pixel">Pixel Art</option>
+                                    </select>
+                                </div>
                                 <div class="image-controls-wrapper">
                                     <div class="image-buttons-row">
                                         <button
@@ -826,6 +843,13 @@
                                             title="Generate a new image using the current prompt"
                                         >
                                             🖼️ Image
+                                        </button>
+                                        <button
+                                            id="generate-four-images-btn"
+                                            class="btn-small"
+                                            title="Generate 4 image options to choose from"
+                                        >
+                                            🖼️ Gen 4 Options
                                         </button>
                                         <button
                                             id="upload-image-btn"
@@ -1090,24 +1114,6 @@
                         />
                     </div>
 
-                    <div class="form-group">
-                        <label for="image-style" class="label"
-                            >Image Style (optional)</label
-                        >
-                        <select id="image-style" class="input">
-                            <option value="">None (Default)</option>
-                            <option value="realistic">Realistic / Photography</option>
-                            <option value="anime">Anime</option>
-                            <option value="waifu">Waifu</option>
-                            <option value="comic">Comic Book / Graphic Novel</option>
-                            <option value="cinematic">Cinematic</option>
-                            <option value="fantasy">Fantasy Art</option>
-                            <option value="cyberpunk">Cyberpunk</option>
-                            <option value="watercolor">Watercolor</option>
-                            <option value="pixel">Pixel Art</option>
-                        </select>
-                    </div>
-
                     <!-- Image Generation Toggle -->
                     <div class="form-group">
                         <label class="label">Image Generation</label>
@@ -1264,6 +1270,25 @@
                                 <button id="cancel-alt-greeting-edit-btn" class="btn-outline" style="display: none;">Cancel</button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Options Modal -->
+        <div id="image-options-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 800px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">🖼️ Choose an Image Option</h2>
+                    <button id="image-options-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                    <div id="image-options-loading" style="display: none; text-align: center; padding: 2rem;">
+                        <div class="loading-spinner" style="margin: 0 auto;"></div>
+                        <p style="margin-top: 1rem; color: var(--text-secondary);">Generating 4 image variations... this might take a minute.</p>
+                    </div>
+                    <div id="image-options-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                        <!-- Images injected here -->
                     </div>
                 </div>
             </div>
