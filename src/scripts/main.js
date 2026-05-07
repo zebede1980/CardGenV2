@@ -1315,7 +1315,7 @@ class CharacterGeneratorApp {
       regenBtn.textContent = "⏳...";
 
       const pov = document.getElementById("pov-select")?.value || "third";
-      const newValue = await window.apiHandler.regenerateField(this.currentCharacter, field, customPrompt, pov);
+      const newValue = await window.apiHandler.regenerateField(this.currentCharacter, field, customPrompt, pov, this.lorebookEntries);
 
       if (newValue) {
         textArea.value = newValue;
@@ -2086,6 +2086,8 @@ class CharacterGeneratorApp {
 
     try {
       const pov = document.getElementById("pov-select")?.value || "third";
+      this.currentCharacter.character_book = this.buildCharacterBook();
+      this.syncAltGreetingsToCharacter();
       this.showNotification("Applying AI revision...", "info");
       const revised = await this.apiHandler.reviseCharacter(
         this.currentCharacter,
@@ -2132,7 +2134,8 @@ class CharacterGeneratorApp {
         this.currentCharacter,
         count,
         pov,
-        customPrompt
+        customPrompt,
+        this.lorebookEntries
       );
 
       // Replace existing examples
@@ -2867,7 +2870,7 @@ class CharacterGeneratorApp {
     contentTextarea.value = "Generating alternate greeting with AI...";
 
     try {
-        const content = await window.apiHandler.generateAltGreeting(this.currentCharacter, type, hint, pov);
+        const content = await window.apiHandler.generateAltGreeting(this.currentCharacter, type, hint, pov, this.lorebookEntries);
         contentTextarea.value = content;
     } catch (error) {
         this.showNotification(`Failed to generate greeting: ${error.message}`, "error");

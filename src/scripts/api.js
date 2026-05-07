@@ -755,10 +755,11 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
       // console.log("BuildCharacterPrompt - Enabled entries:", entries); // DEBUG LOG
 
       if (entries.length > 0) {
-        lorebookContent = `\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the character in their specific universe.\n\n`;
+        lorebookContent = `\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the character in their specific universe. Try to naturally include some of the exact 'Keys' below in the Scenario and First Message so they trigger during the roleplay.\n\n`;
 
         entries.forEach((entry) => {
-          lorebookContent += `**Keys:** ${entry.key.join(", ")}\n`;
+          const keys = entry.keys || entry.key || [];
+          lorebookContent += `**Keys:** ${keys.join(", ")}\n`;
           lorebookContent += `**Content:**\n${entry.content}\n\n---\n\n`;
         });
         // console.log("BuildCharacterPrompt - Generated Content:", lorebookContent); // DEBUG LOG
@@ -1190,7 +1191,18 @@ Please generate a single, unique name.`;
     }
   }
 
-  async regenerateField(character, field, customPrompt = "", pov = "third") {
+  formatLorebookContext(lorebookEntries) {
+    if (!lorebookEntries || !Array.isArray(lorebookEntries) || lorebookEntries.length === 0) return "";
+    let context = "\n\nAvailable World Info / Lorebook Context (Use this to inform your generation. Try to naturally include some of the exact 'Keys' below in your text so they trigger during the roleplay):\n";
+    lorebookEntries.forEach(entry => {
+      if (entry.enabled !== false && entry.keys && entry.keys.length > 0) {
+        context += `- Keys: [${entry.keys.join(", ")}] | Content: ${entry.content}\n`;
+      }
+    });
+    return context;
+  }
+
+  async regenerateField(character, field, customPrompt = "", pov = "third", lorebookEntries = []) {
     if (!character) throw new Error("Character is required");
 
     const model = this.config.get("api.text.model");
@@ -1219,11 +1231,12 @@ DO NOT output full markdown blocks for other sections, ONLY the revised content 
       systemNoteInstruction = `\n\nIMPORTANT: You MUST append the following exact text at the very end of the rewritten scenario:\n[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]`;
     }
 
+    const lorebookContext = this.formatLorebookContext(lorebookEntries);
     const userPrompt = `Character Profile Context:
 Name: ${charName}
 Description: ${character.description}
 Personality: ${character.personality}
-Scenario: ${character.scenario}
+Scenario: ${character.scenario}${lorebookContext}
 
 Please REWRITE the ${fieldName} section.${customInstruction}${systemNoteInstruction}
 
@@ -1253,7 +1266,7 @@ Output ONLY the new ${fieldName} content without surrounding explanation.`;
     }
   }
 
-  async generateExampleMessages(character, count = 3, pov = "third", customPrompt = "") {
+  async generateExampleMessages(character, count = 3, pov = "third", customPrompt = "", lorebookEntries = []) {
     if (!character) {
       throw new Error("Character is required for example message generation");
     }
@@ -1289,6 +1302,7 @@ IMPORTANT:
       ? `\nCRITICAL INSTRUCTION FOR THIS GENERATION: The user has requested the following specific style/tone for these messages: "${customPrompt}". Ensure the examples strongly reflect this request.` 
       : "";
 
+    const lorebookContext = this.formatLorebookContext(lorebookEntries);
     const userPrompt = `Character Name: ${charName}
 
 Character Description:
@@ -1298,7 +1312,7 @@ Character Personality:
 ${character.personality || "No personality provided"}
 
 First Message (for reference on voice/style):
-${character.firstMessage || "No first message provided"}
+${character.firstMessage || "No first message provided"}${lorebookContext}
 
 Generate ${count} example dialogue message(s) for this character. Remember: one-liners, varied contexts, ${povText} perspective.${customPromptInstruction}`;
 
@@ -1383,7 +1397,7 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
     return this.processNormalResponse(response).trim();
   }
 
-  async generateAltGreeting(character, type = "random", customPrompt = "", pov = "third") {
+  async generateAltGreeting(character, type = "random", customPrompt = "", pov = "third", lorebookEntries = []) {
     if (!character) throw new Error("Character is required");
 
     const model = this.config.get("api.text.model");
@@ -1401,12 +1415,13 @@ Do NOT include markdown headers, <START> tags, or explanations. Output ONLY the 
 
     const hintText = customPrompt ? `\nUSER DIRECTION: ${customPrompt}` : "";
 
+    const lorebookContext = this.formatLorebookContext(lorebookEntries);
     const userPrompt = `Character Profile Context:
 Name: ${charName}
 Description: ${character.description}
 Personality: ${character.personality}
 Original Scenario: ${character.scenario}
-Original First Message: ${character.firstMessage}
+Original First Message: ${character.firstMessage}${lorebookContext}
 
 Please write the alternate first message now.${hintText}
 
