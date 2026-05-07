@@ -115,6 +115,12 @@ class CharacterGeneratorApp {
         );
       }
     }
+          
+    // Import & Remaster buttons
+    const importRemasterBtn = document.getElementById("import-remaster-btn");
+    const importRemasterTopBtn = document.getElementById("import-remaster-top-btn");
+    const importRemasterInput = document.getElementById("import-remaster-input");
+    const importRemasterTopInput = document.getElementById("import-remaster-top-input");
     
     if (importRemasterInput || importRemasterTopInput) {
       if (importRemasterBtn) {
