@@ -1,5 +1,10 @@
+# Example docker-compose.yml for SillyTavern Character Generator
+# To use this file, rename or copy it to 'docker-compose.yml'
+# and adjust the ports or volume paths as needed.
+
 services:
   # Frontend container (Nginx + static files)
+  # This serves the HTML, CSS, and JS files to your browser.
   frontend:
     build:
       context: .
@@ -7,8 +12,11 @@ services:
     container_name: character-generator-frontend
     restart: unless-stopped
     ports:
+      # Maps the host port to the container's Nginx port (80)
+      # Change '2427' if you want to access the app on a different host port.
       - "${FRONTEND_PORT:-2427}:80"
     volumes:
+      # Optional: Maps Nginx access/error logs to your host machine
       - ./logs:/var/log/nginx
     networks:
       - app-network
@@ -22,6 +30,7 @@ services:
       start_period: 30s
 
   # Backend container (Node.js proxy server)
+  # This handles API requests, bypassing CORS, and saving your configuration/library.
   proxy:
     build:
       context: .
@@ -29,12 +38,15 @@ services:
     container_name: character-generator-proxy
     restart: unless-stopped
     ports:
+      # Maps the proxy's internal port to your host machine
       - "${PROXY_PORT:-2426}:${PROXY_PORT:-2426}"
     environment:
       - NODE_ENV=production
       - PORT=${PROXY_PORT:-2426}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-2427}}
     volumes:
+      # IMPORTANT: This volume persists your local library (cards/prompts)
+      # and API settings (keys, models) across container restarts.
       - ./proxy/data:/app/data
     networks:
       - app-network

@@ -33,7 +33,7 @@
                             id="character-concept"
                             class="textarea"
                             placeholder="Describe your character concept... (e.g., 'A stoic medieval blacksmith with a secret artistic passion')"
-                            rows="4"
+                            rows="8"
                         ></textarea>
                     </div>
 
@@ -79,7 +79,7 @@
                         <textarea
                             id="reference-image-description"
                             class="textarea"
-                            rows="3"
+                            rows="6"
                             placeholder="If you upload an image, this field will be auto-filled by the vision model. You can edit it manually."
                         ></textarea>
                         <p
@@ -118,7 +118,7 @@
                                 <option value="first">
                                     First Person (I am...)
                                 </option>
-                                <option value="third">
+                                <option value="third" selected>
                                     Third Person (He/She is...)
                                 </option>
                             </select>
@@ -285,7 +285,7 @@
                                     class="content-box"
                                     style="
                                         width: 100%;
-                                        min-height: 150px;
+                                        min-height: 300px;
                                         font-family: inherit;
                                         font-size: 0.9375rem;
                                         line-height: 1.6;
@@ -341,7 +341,7 @@
                                     class="content-box"
                                     style="
                                         width: 100%;
-                                        min-height: 120px;
+                                        min-height: 240px;
                                         font-family: inherit;
                                         font-size: 0.9375rem;
                                         line-height: 1.6;
@@ -397,7 +397,7 @@
                                     class="content-box"
                                     style="
                                         width: 100%;
-                                        min-height: 100px;
+                                        min-height: 200px;
                                         font-family: inherit;
                                         font-size: 0.9375rem;
                                         line-height: 1.6;
@@ -453,7 +453,7 @@
                                     class="content-box"
                                     style="
                                         width: 100%;
-                                        min-height: 80px;
+                                        min-height: 200px;
                                         font-family: inherit;
                                         font-size: 0.9375rem;
                                         line-height: 1.6;
@@ -499,10 +499,9 @@
                                         margin-bottom: 0.75rem;
                                     "
                                 >
-                                    💡 Generate example dialogue for manual
-                                    import into SillyTavern's "Example Messages"
-                                    field. These are NOT included in the
-                                    downloaded card.
+                                    💡 Example dialogue is automatically generated for
+                                    manual import into SillyTavern's "Example Messages"
+                                    field. Change the count below to regenerate them.
                                 </p>
                                 <div
                                     style="
@@ -549,13 +548,6 @@
                                         </select>
                                     </div>
                                     <button
-                                        id="generate-examples-btn"
-                                        class="btn-small"
-                                        style="padding: 0.4rem 0.8rem"
-                                    >
-                                        ✨ Generate Examples
-                                    </button>
-                                    <button
                                         id="copy-examples-btn"
                                         class="btn-small"
                                         style="
@@ -580,7 +572,7 @@
                                         font-size: 0.875rem;
                                         line-height: 1.7;
                                         white-space: pre-wrap;
-                                        max-height: 400px;
+                                        max-height: 600px;
                                         overflow-y: auto;
                                     "
                                 ></div>
@@ -634,7 +626,7 @@
                                             <textarea
                                                 id="custom-image-prompt"
                                                 class="input"
-                                                rows="6"
+                                                rows="10"
                                                 maxlength="1000"
                                                 placeholder="Image prompt will appear here when you click Regenerate Image..."
                                                 style="
@@ -761,7 +753,7 @@
                         <textarea
                             id="revision-instruction"
                             class="textarea"
-                            rows="3"
+                            rows="6"
                             placeholder="Example: Make the character less cynical, add subtle vulnerability, and rewrite the first message to be calmer."
                         ></textarea>
                         <button
@@ -939,43 +931,6 @@
                             class="input"
                             placeholder="e.g., 1024x1024, 512x512 (optional)"
                         />
-                    </div>
-
-                    <!-- API Key Persistence Toggle -->
-                    <div class="form-group">
-                        <label class="label">API Key Persistence</label>
-                        <div
-                            style="
-                                display: flex;
-                                align-items: center;
-                                gap: 0.5rem;
-                            "
-                        >
-                            <label class="switch">
-                                <input type="checkbox" id="persist-api-keys" />
-                                <span class="slider"></span>
-                            </label>
-                            <span
-                                style="
-                                    font-size: 0.875rem;
-                                    color: var(--text-secondary);
-                                "
-                            >
-                                Save API keys to browser storage
-                            </span>
-                        </div>
-                        <p
-                            style="
-                                font-size: 0.75rem;
-                                color: #9ca3af;
-                                margin-top: 0.5rem;
-                            "
-                        >
-                            💡 When enabled, API keys are saved locally and
-                            persist after browser restart. When disabled, keys
-                            are cleared when you close the tab or restart the
-                            browser.
-                        </p>
                     </div>
 
                     <!-- Image Generation Toggle -->

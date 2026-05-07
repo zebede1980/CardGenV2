@@ -249,18 +249,6 @@ class CharacterGeneratorApp {
       }
     });
 
-    // API key persistence toggle
-    const persistApiKeysToggle = document.getElementById("persist-api-keys");
-    if (persistApiKeysToggle) {
-      persistApiKeysToggle.addEventListener("change", (e) => {
-        this.config.loadFromForm(); // Update config with new toggle state
-        this.config.saveConfig(); // Save the change
-        console.log(
-          `🔑 API key persistence ${e.target.checked ? "enabled" : "disabled"}`,
-        );
-      });
-    }
-
     // Image generation toggle
     const enableImageGenerationToggle = document.getElementById(
       "enable-image-generation",
@@ -324,14 +312,13 @@ class CharacterGeneratorApp {
       );
     }
 
-    // Example messages generator buttons
-    const generateExamplesBtn = document.getElementById(
-      "generate-examples-btn",
-    );
+    // Example messages controls
+    const exampleMessagesCount = document.getElementById("example-messages-count");
     const copyExamplesBtn = document.getElementById("copy-examples-btn");
 
-    if (generateExamplesBtn) {
-      generateExamplesBtn.addEventListener("click", () =>
+    if (exampleMessagesCount) {
+      // Auto-regenerate if the user changes the count manually
+      exampleMessagesCount.addEventListener("change", () =>
         this.handleGenerateExampleMessages(),
       );
     }
@@ -497,6 +484,9 @@ class CharacterGeneratorApp {
         this.lorebookData,
       );
 
+      this.showStreamMessage("\n\n💬 Generating example messages...\n");
+      await this.handleGenerateExampleMessages();
+
       // Store original for reset functionality
       this.originalCharacter = JSON.parse(
         JSON.stringify(this.currentCharacter),
@@ -504,7 +494,7 @@ class CharacterGeneratorApp {
       await this.saveCardToLibrary();
       await this.refreshLibraryViews();
 
-      this.showStreamMessage("\n\n✅ Character generation complete!\n");
+      this.showStreamMessage("\n✅ Character generation complete!\n");
 
       // Display character
       this.displayCharacter();
@@ -715,12 +705,23 @@ class CharacterGeneratorApp {
       const firstMessageTextarea = document.getElementById(
         "character-first-message",
       );
+      const exampleMessagesOutput = document.getElementById(
+        "example-messages-output",
+      );
 
       // Update currentCharacter with edited content
       this.currentCharacter.description = descriptionTextarea.value.trim();
       this.currentCharacter.personality = personalityTextarea.value.trim();
       this.currentCharacter.scenario = scenarioTextarea.value.trim();
       this.currentCharacter.firstMessage = firstMessageTextarea.value.trim();
+
+      if (exampleMessagesOutput) {
+        if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
+          this.currentCharacter.mesExample = exampleMessagesOutput.value.trim();
+        } else if (exampleMessagesOutput.isContentEditable) {
+          this.currentCharacter.mesExample = exampleMessagesOutput.innerText.trim();
+        }
+      }
 
       // Always convert from currentImageUrl to ensure we get the latest image
       // This ensures regenerated or uploaded images are properly included
@@ -992,12 +993,23 @@ class CharacterGeneratorApp {
       const firstMessageTextarea = document.getElementById(
         "character-first-message",
       );
+      const exampleMessagesOutput = document.getElementById(
+        "example-messages-output",
+      );
 
       // Update currentCharacter with edited content
       this.currentCharacter.description = descriptionTextarea.value.trim();
       this.currentCharacter.personality = personalityTextarea.value.trim();
       this.currentCharacter.scenario = scenarioTextarea.value.trim();
       this.currentCharacter.firstMessage = firstMessageTextarea.value.trim();
+
+      if (exampleMessagesOutput) {
+        if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
+          this.currentCharacter.mesExample = exampleMessagesOutput.value.trim();
+        } else if (exampleMessagesOutput.isContentEditable) {
+          this.currentCharacter.mesExample = exampleMessagesOutput.innerText.trim();
+        }
+      }
 
       // Convert to Spec V2 format
       const specV2Data = this.characterGenerator.toSpecV2Format(
@@ -1254,11 +1266,23 @@ class CharacterGeneratorApp {
     );
     const copyExamplesBtn = document.getElementById("copy-examples-btn");
     if (exampleMessagesOutput) {
-      exampleMessagesOutput.textContent = "";
-      exampleMessagesOutput.style.display = "none";
-    }
-    if (copyExamplesBtn) {
-      copyExamplesBtn.style.display = "none";
+      if (this.currentCharacter.mesExample) {
+        if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
+          exampleMessagesOutput.value = this.currentCharacter.mesExample;
+        } else {
+          exampleMessagesOutput.textContent = this.currentCharacter.mesExample;
+        }
+        exampleMessagesOutput.style.display = "block";
+        if (copyExamplesBtn) copyExamplesBtn.style.display = "inline-block";
+      } else {
+        if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
+          exampleMessagesOutput.value = "";
+        } else {
+          exampleMessagesOutput.textContent = "";
+        }
+        exampleMessagesOutput.style.display = "none";
+        if (copyExamplesBtn) copyExamplesBtn.style.display = "none";
+      }
     }
 
     // Show JSON download button whenever character data is available
@@ -1379,6 +1403,7 @@ class CharacterGeneratorApp {
         personality: specData.data.personality || "",
         scenario: specData.data.scenario || "",
         firstMessage: specData.data.first_mes || "",
+        mesExample: specData.data.mes_example || "",
       };
     }
 
@@ -1388,6 +1413,7 @@ class CharacterGeneratorApp {
       personality: specData.personality || "",
       scenario: specData.scenario || "",
       firstMessage: specData.firstMessage || specData.first_mes || "",
+      mesExample: specData.mesExample || specData.mes_example || "",
     };
   }
 
@@ -1458,7 +1484,7 @@ class CharacterGeneratorApp {
     }
 
     try {
-      const pov = document.getElementById("pov-select")?.value || "first";
+      const pov = document.getElementById("pov-select")?.value || "third";
       this.showNotification("Applying AI revision...", "info");
       const revised = await this.apiHandler.reviseCharacter(
         this.currentCharacter,
@@ -1478,41 +1504,51 @@ class CharacterGeneratorApp {
   }
 
   async handleGenerateExampleMessages() {
-    if (!this.currentCharacter) {
-      this.showNotification("Generate or import a character first", "warning");
-      return;
-    }
+    if (!this.currentCharacter) return;
 
     const count = parseInt(
       document.getElementById("example-messages-count")?.value || "3",
       10,
     );
-    const generateBtn = document.getElementById("generate-examples-btn");
     const copyBtn = document.getElementById("copy-examples-btn");
     const outputDiv = document.getElementById("example-messages-output");
 
     try {
-      generateBtn.disabled = true;
-      generateBtn.textContent = "⏳ Generating...";
-      this.showNotification("Generating example messages...", "info");
+      if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
+        outputDiv.value = "⏳ Generating example messages...";
+      } else {
+        outputDiv.textContent = "⏳ Generating example messages...";
+      }
+      outputDiv.style.display = "block";
 
-      const pov = document.getElementById("pov-select")?.value || "first";
+      const pov = document.getElementById("pov-select")?.value || "third";
       const examples = await this.apiHandler.generateExampleMessages(
         this.currentCharacter,
         count,
         pov,
       );
 
-      outputDiv.textContent = examples;
+      // Replace existing examples
+      this.currentCharacter.mesExample = examples;
+
+      if (this.originalCharacter) {
+        this.originalCharacter.mesExample = this.currentCharacter.mesExample;
+      }
+
+      if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
+        outputDiv.value = this.currentCharacter.mesExample;
+      } else {
+        outputDiv.textContent = this.currentCharacter.mesExample;
+      }
       outputDiv.style.display = "block";
       copyBtn.style.display = "inline-block";
-      this.showNotification(`Generated ${count} example message(s)`, "success");
     } catch (error) {
       console.error("Example generation failed:", error);
-      this.showNotification(`Generation failed: ${error.message}`, "error");
-    } finally {
-      generateBtn.disabled = false;
-      generateBtn.textContent = "✨ Generate Examples";
+      if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
+        outputDiv.value = `⚠️ Generation failed: ${error.message}`;
+      } else {
+        outputDiv.textContent = `⚠️ Generation failed: ${error.message}`;
+      }
     }
   }
 
@@ -1620,7 +1656,7 @@ class CharacterGeneratorApp {
     const safe = {
       concept: promptData?.concept || "",
       characterName: promptData?.characterName || "",
-      pov: promptData?.pov || "first",
+      pov: promptData?.pov || "third",
       referenceImageDescription: promptData?.referenceImageDescription || "",
       referenceImageDataUrl: "",
       lorebookData: null,
@@ -1711,7 +1747,7 @@ class CharacterGeneratorApp {
             .map(
               (prompt) => `
                 <div class="library-item">
-                  <div class="library-item-title">${prompt.characterName || "(No name)"} - ${prompt.pov || "first"} POV</div>
+                  <div class="library-item-title">${prompt.characterName || "(No name)"} - ${prompt.pov || "third"} POV</div>
                   <div class="library-item-date">${this.formatLibraryTime(prompt.updatedAt)}</div>
                   <div class="library-item-actions">
                     <button class="btn-small" data-action="load-prompt" data-id="${prompt.id}">Load</button>
@@ -1791,7 +1827,7 @@ class CharacterGeneratorApp {
           prompt.concept || "";
         document.getElementById("character-name").value =
           prompt.characterName || "";
-        document.getElementById("pov-select").value = prompt.pov || "first";
+        document.getElementById("pov-select").value = prompt.pov || "third";
         const refDescription = document.getElementById(
           "reference-image-description",
         );

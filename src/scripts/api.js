@@ -235,7 +235,7 @@ class APIHandler {
     prompt,
     characterName,
     onStream = null,
-    pov = "first",
+    pov = "third",
     lorebook = null,
   ) {
     const characterPrompt = this.buildCharacterPrompt(
@@ -503,12 +503,12 @@ class APIHandler {
       messages: [
         {
           role: "user",
-          content: `The following image generation prompt is too long. Shorten it to EXACTLY one paragraph (around 800-900 characters) while preserving all the key visual details, character features, and mood. Do NOT add explanations, just output the shortened prompt directly.
+          content: `The following image generation prompt is too long. Shorten it to be clear, short, and distinct (under 300 characters). Focus only on the basic visual description, a couple of words on their attitude/demeanor, and a very short scene. Do NOT add explanations, just output the shortened prompt directly.
 
 Original prompt:
 ${prompt}
 
-Shortened prompt (one paragraph):`,
+Shortened prompt:`,
         },
       ],
       max_tokens: 8192, // High limit for thinking models (reasoning + output)
@@ -619,7 +619,7 @@ Shortened prompt (one paragraph):`,
     return prompt;
   }
 
-  buildCharacterPrompt(concept, characterName, pov = "first", lorebook = null) {
+  buildCharacterPrompt(concept, characterName, pov = "third", lorebook = null) {
     let povInstruction = "";
     let templateInstruction = "";
     let templateContent = "";
@@ -810,7 +810,7 @@ ${lorebookContent}`;
     const personalityTraits =
       this.extractPersonalityTraits(characterDescription);
 
-    return `You are an AI assistant specialized in creating comprehensive text-to-image natural language prompts for image generation models.
+    return `You are an AI assistant specialized in creating clear, short, and distinct text-to-image prompts for image generation models.
 
 Character Name: ${characterName || "Unknown"}
 
@@ -819,36 +819,25 @@ ${characterDescription}
 
 Personality Traits: ${personalityTraits}
 
-⚠️ CRITICAL LENGTH REQUIREMENT ⚠️
-Your response MUST be EXACTLY ONE PARAGRAPH. This is not a suggestion - it is a hard requirement.
-DO NOT write multiple paragraphs. DO NOT exceed 800-900 characters.
-Write ONE flowing paragraph that captures all essential visual details.
+⚠️ CRITICAL REQUIREMENT ⚠️
+Your response MUST be clear, short, and distinct. Do NOT write a long, wordy paragraph.
 
 INSTRUCTIONS:
-Create a detailed natural language prompt describing an image of this character in ONE PARAGRAPH. Analyze the ENTIRE character profile above and extract ALL visual details:
+Create a brief natural language prompt describing an image of this character. Extract ONLY the most essential visual details:
 
-1. Physical Appearance: Age, height, body type, hair (color, length, style), eyes (color, shape), skin tone, facial features, special attributes
-2. Clothing & Accessories: Outfit style, colors, textures, jewelry, weapons, tools
-3. Personality Expression: Facial expression, posture, body language that reflects their personality and emotional state
-4. Setting & Context: Background environment that fits their story and role
-5. Artistic Style: Lighting, colors, mood, composition
+1. Basic Visual Description: Age, hair, eyes, key facial features, and core outfit.
+2. Attitude & Demeanor: A couple of words on their posture or facial expression reflecting their personality.
+3. Short Scene: A very short, simple background or setting.
 
-CRITICAL: Extract visual cues from their background, personality, and current state. For example:
-- A warrior's scars and battle-worn equipment
-- A scholar's tired eyes and ink-stained fingers
-- A noble's expensive fabrics and confident posture
-
-Use ONLY positive statements about what SHOULD be in the image.
+Use ONLY positive statements about what SHOULD be in the image. You may add a few quality tags at the end (e.g., masterpiece, high quality, highly detailed).
 
 CRITICAL RULES:
 1. DO NOT include any reasoning, thinking, planning, or step-by-step analysis
 2. DO NOT use numbered lists or bullet points
-3. DO NOT write multiple paragraphs - ONLY ONE PARAGRAPH
+3. DO NOT write multiple paragraphs
 4. DO NOT explain your process
 5. START IMMEDIATELY with the image description
-6. Write in flowing, natural language
-7. Your ENTIRE response will be sent directly to the image generator
-8. MAXIMUM LENGTH: ONE PARAGRAPH (approximately 800-900 characters)
+6. Keep it brief and focused
 
 BEGIN IMAGE PROMPT NOW:`;
   }
@@ -1033,7 +1022,7 @@ BEGIN IMAGE PROMPT NOW:`;
     return JSON.parse(cleaned);
   }
 
-  async reviseCharacter(currentCharacter, revisionInstruction, pov = "first") {
+  async reviseCharacter(currentCharacter, revisionInstruction, pov = "third") {
     if (!currentCharacter) {
       throw new Error("Character is required for revision");
     }
@@ -1081,10 +1070,11 @@ BEGIN IMAGE PROMPT NOW:`;
       personality: parsed.personality || currentCharacter.personality || "",
       scenario: parsed.scenario || currentCharacter.scenario || "",
       firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
+      mesExample: parsed.mesExample || parsed.mes_example || currentCharacter.mesExample || "",
     };
   }
 
-  async generateExampleMessages(character, count = 3, pov = "first") {
+  async generateExampleMessages(character, count = 3, pov = "third") {
     if (!character) {
       throw new Error("Character is required for example message generation");
     }

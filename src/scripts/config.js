@@ -1,15 +1,11 @@
 // Configuration file for SillyTavern Character Generator
 const LOCAL_STORAGE_KEY = "charGeneratorConfig";
-const SESSION_STORAGE_KEYS = {
-  textApiKey: "charGeneratorConfig:textApiKey",
-  imageApiKey: "charGeneratorConfig:imageApiKey",
-};
 
 class Config {
   constructor() {
     this.config = this.getDefaultConfig();
     this.debugMode = false; // Toggle for verbose logging
-    this.loadConfig().catch(console.error);
+    this.loadPromise = this.loadConfig().catch(console.error);
   }
 
   getDefaultConfig() {
@@ -34,7 +30,6 @@ class Config {
         maxRetries: 3,
         retryDelay: 1000,
         debugMode: false,
-        persistApiKeys: false,
         enableImageGeneration: true,
       },
     };
@@ -59,7 +54,19 @@ class Config {
   }
 
   async loadConfig() {
-    // Try getting config from the server primarily
+    // Load from local storage first so it's available immediately
+    const savedConfig = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedConfig) {
+      try {
+        const saved = JSON.parse(savedConfig);
+        this.config = this.deepMerge(this.config, saved);
+        this.logRedacted("Loaded config from storage:", saved);
+      } catch (error) {
+        console.warn("Failed to load saved config:", error);
+      }
+    }
+
+    // Then sync/override with server config if available
     try {
       const res = await fetch("/api/config");
       if (res.ok) {
@@ -70,23 +77,8 @@ class Config {
         }
       }
     } catch (error) {
-      console.warn("Failed to load config from server, checking local storage:", error);
+      console.warn("Failed to load config from server:", error);
     }
-
-    // Fallback or override with localStorage
-    const savedConfig = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (savedConfig) {
-      try {
-        const saved = JSON.parse(savedConfig);
-        this.stripPersistedApiKeys(saved);
-        this.config = this.deepMerge(this.config, saved);
-        this.logRedacted("Loaded config from storage:", saved);
-      } catch (error) {
-        console.warn("Failed to load saved config:", error);
-      }
-    }
-
-    this.restoreSensitiveValuesFromSession();
 
     // Load debug mode setting
     this.debugMode = this.config.app.debugMode || false;
@@ -124,13 +116,6 @@ class Config {
     if (imageSize !== undefined) this.config.api.image.size = imageSize;
 
     // Load toggle states
-    const persistApiKeys = document.getElementById("persist-api-keys")?.checked;
-    if (persistApiKeys !== undefined) {
-      this.config.app.persistApiKeys = persistApiKeys;
-      // Update storage method when toggle changes
-      this.updateStorageMethod();
-    }
-
     const enableImageGeneration = document.getElementById(
       "enable-image-generation",
     )?.checked;
@@ -154,16 +139,13 @@ class Config {
   }
 
   saveConfig() {
-    const persistableConfig = this.getSanitizedConfigForStorage();
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(persistableConfig));
-    this.persistSensitiveValuesToSession();
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.config));
 
-    // Also save to server for persistence across devices/sessions (Sends full config only if requested)
-    const serverPayload = this.config.app.persistApiKeys ? this.config : persistableConfig;
+    // Also save to server for persistence across devices/sessions
     fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(serverPayload)
+      body: JSON.stringify(this.config)
     }).catch(e => console.error("Failed to sync config to server", e));
   }
 
@@ -195,10 +177,6 @@ class Config {
       if (imageSize) imageSize.value = this.config.api.image.size || "";
 
       // Save toggle states
-      const persistApiKeys = document.getElementById("persist-api-keys");
-      if (persistApiKeys)
-        persistApiKeys.checked = this.config.app.persistApiKeys || false;
-
       const enableImageGeneration = document.getElementById(
         "enable-image-generation",
       );
@@ -231,7 +209,9 @@ class Config {
   }
 
   async waitForConfig() {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (this.loadPromise) {
+      await this.loadPromise;
+    }
     return this.config;
   }
 
@@ -252,162 +232,8 @@ class Config {
     return errors;
   }
 
-  getSanitizedConfigForStorage() {
-    const configCopy = JSON.parse(JSON.stringify(this.config));
-    if (configCopy.api?.text) {
-      configCopy.api.text.apiKey = "";
-    }
-    if (configCopy.api?.image) {
-      configCopy.api.image.apiKey = "";
-    }
-    return configCopy;
-  }
-
-  persistSensitiveValuesToSession() {
-    if (this.config.app.persistApiKeys) {
-      // Store in localStorage when persistence is enabled
-      this.persistLocalStorageValue(
-        SESSION_STORAGE_KEYS.textApiKey,
-        this.config.api.text.apiKey,
-      );
-      this.persistLocalStorageValue(
-        SESSION_STORAGE_KEYS.imageApiKey,
-        this.config.api.image.apiKey,
-      );
-    } else {
-      // Store in sessionStorage when persistence is disabled
-      this.persistSessionValue(
-        SESSION_STORAGE_KEYS.textApiKey,
-        this.config.api.text.apiKey,
-      );
-      this.persistSessionValue(
-        SESSION_STORAGE_KEYS.imageApiKey,
-        this.config.api.image.apiKey,
-      );
-    }
-  }
-
-  persistSessionValue(key, value) {
-    try {
-      if (value) {
-        sessionStorage.setItem(key, value);
-      } else {
-        sessionStorage.removeItem(key);
-      }
-    } catch (error) {
-      console.warn(
-        "Unable to persist sensitive config to sessionStorage:",
-        error,
-      );
-    }
-  }
-
-  persistLocalStorageValue(key, value) {
-    try {
-      if (value) {
-        localStorage.setItem(key, value);
-      } else {
-        localStorage.removeItem(key);
-      }
-    } catch (error) {
-      console.warn(
-        "Unable to persist sensitive config to localStorage:",
-        error,
-      );
-    }
-  }
-
-  restoreSensitiveValuesFromSession() {
-    if (this.config.app.persistApiKeys) {
-      // Restore from localStorage when persistence is enabled
-      const textKey = this.getLocalStorageValue(
-        SESSION_STORAGE_KEYS.textApiKey,
-      );
-      if (textKey !== null) {
-        this.config.api.text.apiKey = textKey;
-      }
-      const imageKey = this.getLocalStorageValue(
-        SESSION_STORAGE_KEYS.imageApiKey,
-      );
-      if (imageKey !== null) {
-        this.config.api.image.apiKey = imageKey;
-      }
-    } else {
-      // Restore from sessionStorage when persistence is disabled
-      const textKey = this.getSessionValue(SESSION_STORAGE_KEYS.textApiKey);
-      if (textKey !== null) {
-        this.config.api.text.apiKey = textKey;
-      }
-      const imageKey = this.getSessionValue(SESSION_STORAGE_KEYS.imageApiKey);
-      if (imageKey !== null) {
-        this.config.api.image.apiKey = imageKey;
-      }
-    }
-  }
-
-  getSessionValue(key) {
-    try {
-      return sessionStorage.getItem(key);
-    } catch (error) {
-      console.warn(
-        "Unable to read sensitive config from sessionStorage:",
-        error,
-      );
-      return null;
-    }
-  }
-
-  getLocalStorageValue(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch (error) {
-      console.warn("Unable to read sensitive config from localStorage:", error);
-      return null;
-    }
-  }
-
-  stripPersistedApiKeys(savedConfig) {
-    if (!this.isObject(savedConfig)) {
-      return;
-    }
-
-    if (savedConfig?.api?.text?.apiKey) {
-      console.warn(
-        "Discarded persisted text API key. Keys are now stored only for the current session.",
-      );
-      savedConfig.api.text.apiKey = "";
-    }
-
-    if (savedConfig?.api?.image?.apiKey) {
-      console.warn(
-        "Discarded persisted image API key. Keys are now stored only for the current session.",
-      );
-      savedConfig.api.image.apiKey = "";
-    }
-  }
-
   clearStoredConfig() {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
-    Object.values(SESSION_STORAGE_KEYS).forEach((key) => {
-      try {
-        sessionStorage.removeItem(key);
-      } catch (error) {
-        console.warn(
-          "Unable to clear sessionStorage for sensitive config:",
-          error,
-        );
-      }
-    });
-    Object.values(SESSION_STORAGE_KEYS).forEach((key) => {
-      try {
-        localStorage.removeItem(key);
-      } catch (error) {
-        console.warn(
-          "Unable to clear localStorage for sensitive config:",
-          error,
-        );
-      }
-    });
   }
 
   redactSensitiveData(data) {

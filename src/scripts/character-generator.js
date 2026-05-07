@@ -14,7 +14,7 @@ class CharacterGenerator {
     return this.apiHandler;
   }
 
-  async generateCharacter(concept, characterName, onStream = null, pov = "first", lorebook = null) {
+  async generateCharacter(concept, characterName, onStream = null, pov = "third", lorebook = null) {
     try {
       this.rawCharacterData = await this.apiHandlerInstance.generateCharacter(
         concept,
@@ -39,6 +39,7 @@ class CharacterGenerator {
       personality: "",
       scenario: "",
       firstMessage: "",
+      mesExample: "",
     };
 
     // Extract character name from profile section
@@ -161,7 +162,7 @@ class CharacterGenerator {
         personality: character.personality || "",
         scenario: character.scenario || "",
         first_mes: character.firstMessage || "Hello!",
-        mes_example: "",
+        mes_example: character.mesExample || "",
         tags: [],
       },
     };
