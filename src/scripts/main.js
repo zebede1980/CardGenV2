@@ -320,19 +320,12 @@ class CharacterGeneratorApp {
 
     // Example messages controls
     const exampleMessagesCount = document.getElementById("example-messages-count");
-    const copyExamplesBtn = document.getElementById("copy-examples-btn");
     const regenerateExamplesBtn = document.getElementById("regenerate-examples-btn");
 
     if (exampleMessagesCount) {
       // Auto-regenerate if the user changes the count manually
       exampleMessagesCount.addEventListener("change", () =>
         this.handleGenerateExampleMessages(),
-      );
-    }
-
-    if (copyExamplesBtn) {
-      copyExamplesBtn.addEventListener("click", () =>
-        this.handleCopyExampleMessages(),
       );
     }
 
@@ -1313,7 +1306,6 @@ class CharacterGeneratorApp {
     const exampleMessagesOutput = document.getElementById(
       "example-messages-output",
     );
-    const copyExamplesBtn = document.getElementById("copy-examples-btn");
     if (exampleMessagesOutput) {
       if (this.currentCharacter.mesExample) {
         if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
@@ -1322,7 +1314,6 @@ class CharacterGeneratorApp {
           exampleMessagesOutput.textContent = this.currentCharacter.mesExample;
         }
         exampleMessagesOutput.style.display = "block";
-        if (copyExamplesBtn) copyExamplesBtn.style.display = "inline-block";
       } else {
         if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
           exampleMessagesOutput.value = "";
@@ -1330,7 +1321,6 @@ class CharacterGeneratorApp {
           exampleMessagesOutput.textContent = "";
         }
         exampleMessagesOutput.style.display = "none";
-        if (copyExamplesBtn) copyExamplesBtn.style.display = "none";
       }
     }
 
@@ -1566,7 +1556,6 @@ class CharacterGeneratorApp {
       document.getElementById("example-messages-count")?.value || "3",
       10,
     );
-    const copyBtn = document.getElementById("copy-examples-btn");
     const outputDiv = document.getElementById("example-messages-output");
 
     try {
@@ -1599,7 +1588,6 @@ class CharacterGeneratorApp {
         outputDiv.textContent = this.currentCharacter.mesExample;
       }
       outputDiv.style.display = "block";
-      copyBtn.style.display = "inline-block";
     } catch (error) {
       console.error("Example generation failed:", error);
       if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
@@ -1607,26 +1595,6 @@ class CharacterGeneratorApp {
       } else {
         outputDiv.textContent = `⚠️ Generation failed: ${error.message}`;
       }
-    }
-  }
-
-  async handleCopyExampleMessages() {
-    const outputDiv = document.getElementById("example-messages-output");
-    const text = outputDiv?.tagName === "TEXTAREA" || outputDiv?.tagName === "INPUT" 
-      ? outputDiv?.value 
-      : outputDiv?.textContent;
-
-    if (!text) {
-      this.showNotification("No examples to copy", "warning");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(text);
-      this.showNotification("Copied to clipboard!", "success");
-    } catch (error) {
-      console.error("Copy failed:", error);
-      this.showNotification("Failed to copy to clipboard", "error");
     }
   }
 

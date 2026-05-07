@@ -547,35 +547,47 @@
                                             <option value="5">5</option>
                                         </select>
                                     </div>
+                                    <div style="flex: 1; min-width: 200px;">
+                                        <input
+                                            type="text"
+                                            id="example-messages-prompt"
+                                            class="input"
+                                            placeholder="Optional: How should they speak? (e.g. angry, poetic)"
+                                            style="height: 2.25rem; padding: 0.25rem 0.5rem;"
+                                        />
+                                    </div>
                                     <button
-                                        id="copy-examples-btn"
+                                        id="regenerate-examples-btn"
                                         class="btn-small"
-                                        style="
-                                            display: none;
-                                            padding: 0.4rem 0.8rem;
-                                        "
+                                        style="padding: 0.4rem 0.8rem;"
                                     >
-                                        📋 Copy to Clipboard
+                                        🔄 Redo
                                     </button>
                                 </div>
-                                <div
+                                <textarea
                                     id="example-messages-output"
+                                    class="content-box"
                                     style="
                                         display: none;
-                                        background: var(--surface-color);
-                                        border: 1px solid
-                                            rgba(139, 92, 246, 0.2);
-                                        border-radius: 0.5rem;
-                                        padding: 1rem;
+                                        width: 100%;
+                                        min-height: 200px;
                                         font-family:
                                             &quot;IBM Plex Mono&quot;, monospace;
                                         font-size: 0.875rem;
                                         line-height: 1.7;
+                                        resize: vertical;
+                                        padding: 1rem;
+                                        border: 1px solid
+                                            rgba(139, 92, 246, 0.2);
+                                        border-radius: 0.5rem;
+                                        background: var(--surface-color);
+                                        color: var(--text-color);
                                         white-space: pre-wrap;
                                         max-height: 600px;
                                         overflow-y: auto;
                                     "
-                                ></div>
+                                    placeholder="Example messages will appear here..."
+                                ></textarea>
                             </div>
                         </div>
 
