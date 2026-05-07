@@ -2866,6 +2866,20 @@ class CharacterGeneratorApp {
     }
   }
 
+  handleInjectLorebookKeys() {
+    if (!this.currentCharacter) return;
+    if (this.lorebookEntries.length === 0) {
+      this.showNotification("Please add at least one Lorebook entry first.", "warning");
+      return;
+    }
+
+    if (confirm("This will use AI to rewrite your current Scenario so it naturally includes your Lorebook keys.\n\n⚠️ Warning: Any manual edits you've made to the Scenario will be overwritten. Proceed?")) {
+      this.closeLorebookManager();
+      this.showNotification("Injecting keys into scenario...", "info");
+      this.handleRegenerateField("scenario");
+    }
+  }
+
   openAltGreetingsManager() {
     if (!this.currentCharacter) {
       this.showNotification("Please generate or import a character first.", "warning");

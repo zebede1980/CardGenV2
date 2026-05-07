@@ -755,7 +755,7 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
       // console.log("BuildCharacterPrompt - Enabled entries:", entries); // DEBUG LOG
 
       if (entries.length > 0) {
-        lorebookContent = `\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the character in their specific universe. Try to naturally include some of the exact 'Keys' below in the Scenario and First Message so they trigger during the roleplay.\n\n`;
+        lorebookContent = `\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the character in their specific universe. Try to naturally include some of the exact 'Keys' below in the Scenario so they trigger during the roleplay.\n\n`;
 
         entries.forEach((entry) => {
           const keys = entry.keys || entry.key || [];
