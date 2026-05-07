@@ -871,7 +871,35 @@
                         </div>
                     </div>
 
-                    <div class="actions">
+                    <div class="form-group" style="margin-top: 1rem">
+                        <label for="revision-instruction" class="label"
+                            >AI Card Revision Request</label
+                        >
+                        <textarea
+                            id="revision-instruction"
+                            class="textarea"
+                            rows="6"
+                            placeholder="Example: Make the character less cynical, add subtle vulnerability, and rewrite the first message to be calmer."
+                        ></textarea>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem">
+                            <button
+                                id="revise-character-btn"
+                                class="btn-outline"
+                            >
+                                <span class="btn-text">Revise Card with AI</span>
+                                <span class="btn-loading" style="display: none">Revising...</span>
+                            </button>
+                            <button
+                                id="stop-revision-btn"
+                                class="btn-stop"
+                                style="display: none"
+                            >
+                                ⏹ Stop
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="actions" style="margin-top: 2rem;">
                         <button
                             id="download-btn"
                             class="btn-secondary"
@@ -901,34 +929,6 @@
                         <button id="regenerate-btn" class="btn-outline">
                             Regenerate
                         </button>
-                    </div>
-
-                    <div class="form-group" style="margin-top: 1rem">
-                        <label for="revision-instruction" class="label"
-                            >AI Card Revision Request</label
-                        >
-                        <textarea
-                            id="revision-instruction"
-                            class="textarea"
-                            rows="6"
-                            placeholder="Example: Make the character less cynical, add subtle vulnerability, and rewrite the first message to be calmer."
-                        ></textarea>
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem">
-                            <button
-                                id="revise-character-btn"
-                                class="btn-outline"
-                            >
-                                <span class="btn-text">Revise Card with AI</span>
-                                <span class="btn-loading" style="display: none">Revising...</span>
-                            </button>
-                            <button
-                                id="stop-revision-btn"
-                                class="btn-stop"
-                                style="display: none"
-                            >
-                                ⏹ Stop
-                            </button>
-                        </div>
                     </div>
                 </section>
 
