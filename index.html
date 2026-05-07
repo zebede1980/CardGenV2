@@ -201,13 +201,22 @@
                                 ⏹ Stop
                             </button>
                         </div>
-                        <div class="top-import-actions" style="margin-top: 0.75rem">
+                        <div class="top-import-actions" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <button id="import-card-top-btn" class="btn-outline">
                                 Import Card for Editing
                             </button>
                             <input
                                 type="file"
                                 id="import-card-top-input"
+                                accept=".png,.json,application/json,image/png"
+                                style="display: none"
+                            />
+                            <button id="import-remaster-top-btn" class="btn-outline" title="Upload a poor quality card and let AI completely rewrite and fix it in one go">
+                                ✨ Import & Remaster
+                            </button>
+                            <input
+                                type="file"
+                                id="import-remaster-top-input"
                                 accept=".png,.json,application/json,image/png"
                                 style="display: none"
                             />
@@ -890,7 +899,7 @@
                         </div>
                     </div>
 
-                    <div class="actions" style="margin-top: 2rem;">
+                    <div class="actions" style="margin-top: 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                         <button
                             id="download-btn"
                             class="btn-secondary"
@@ -917,6 +926,15 @@
                         <input
                             type="file"
                             id="import-card-input"
+                            accept=".png,.json,application/json,image/png"
+                            style="display: none"
+                        />
+                        <button id="import-remaster-btn" class="btn-outline" title="Upload a poor quality card and let AI completely rewrite and fix it in one go">
+                            ✨ Import & Remaster
+                        </button>
+                        <input
+                            type="file"
+                            id="import-remaster-input"
                             accept=".png,.json,application/json,image/png"
                             style="display: none"
                         />

@@ -106,12 +106,35 @@ class CharacterGeneratorApp {
       }
       if (importCardInput) {
         importCardInput.addEventListener("change", (e) =>
-          this.handleImportCard(e),
+          this.handleImportCard(e, false),
         );
       }
       if (importCardTopInput) {
         importCardTopInput.addEventListener("change", (e) =>
-          this.handleImportCard(e),
+          this.handleImportCard(e, false),
+        );
+      }
+    }
+    
+    if (importRemasterInput || importRemasterTopInput) {
+      if (importRemasterBtn) {
+        importRemasterBtn.addEventListener("click", () =>
+          (importRemasterInput || importRemasterTopInput).click(),
+        );
+      }
+      if (importRemasterTopBtn) {
+        importRemasterTopBtn.addEventListener("click", () =>
+          (importRemasterTopInput || importRemasterInput).click(),
+        );
+      }
+      if (importRemasterInput) {
+        importRemasterInput.addEventListener("change", (e) =>
+          this.handleImportCard(e, true),
+        );
+      }
+      if (importRemasterTopInput) {
+        importRemasterTopInput.addEventListener("change", (e) =>
+          this.handleImportCard(e, true),
         );
       }
     }
@@ -2047,7 +2070,7 @@ class CharacterGeneratorApp {
     };
   }
 
-  async handleImportCard(event) {
+  async handleImportCard(event, autoRemaster = false) {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -2113,12 +2136,49 @@ class CharacterGeneratorApp {
       this.updateAltGreetingsCount();
 
       await this.refreshLibraryViews();
-      this.showNotification("Card imported for editing", "success");
+      
+      if (autoRemaster) {
+        this.showNotification("Card imported, starting AI remaster...", "info");
+        await this.handleAutoRemaster();
+      } else {
+        this.showNotification("Card imported for editing", "success");
+      }
     } catch (error) {
       console.error("Card import failed:", error);
       this.showNotification(`Card import failed: ${error.message}`, "error");
     } finally {
       event.target.value = "";
+    }
+  }
+
+  async handleAutoRemaster() {
+    if (!this.currentCharacter) return;
+
+    this.setRevisionState(true, 'revise-character-btn');
+
+    try {
+      const pov = document.getElementById("pov-select")?.value || "third";
+      this.currentCharacter.character_book = this.buildCharacterBook();
+      this.syncAltGreetingsToCharacter();
+      this.showNotification("Applying AI remaster...", "info");
+
+      const revisionInstruction = "This character card is of poor quality, inconsistent, or incomplete. Please completely remaster and rewrite the character card to make it highly detailed, logically consistent, well-written, and deeply engaging while preserving the original core premise, identity, and any visual descriptions. Expand on the lore, personality, and scenario where appropriate to make the character feel alive. Fix any grammatical errors and improve the overall tone.";
+
+      const revised = await this.apiHandler.reviseCharacter(this.currentCharacter, revisionInstruction, pov);
+      this.currentCharacter = revised;
+      this.originalCharacter = JSON.parse(JSON.stringify(revised));
+      this.displayCharacter();
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+      this.showNotification("Card remastered successfully!", "success");
+    } catch (error) {
+      console.error("Remaster failed:", error);
+      const wasStoppedByUser = error.message.includes("Generation stopped by user");
+      if (!wasStoppedByUser) {
+        this.showNotification(`Remaster failed: ${error.message}`, "error");
+      }
+    } finally {
+      this.setRevisionState(false);
     }
   }
 
