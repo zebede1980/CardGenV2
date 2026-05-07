@@ -681,6 +681,12 @@ class CharacterGeneratorApp {
     } finally {
       this.isGenerating = false;
       this.setGeneratingState(false);
+
+      // Auto-collapse the input section after generation
+      const inputSectionDetails = document.getElementById("input-section-details");
+      if (inputSectionDetails) {
+        inputSectionDetails.open = false;
+      }
     }
   }
 

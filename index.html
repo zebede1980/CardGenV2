@@ -24,190 +24,195 @@
             </header>
 
             <main class="main">
-                <section class="input-section">
-                    <div class="form-group">
-                        <label for="character-concept" class="label"
-                            >Character Concept</label
-                        >
-                        <textarea
-                            id="character-concept"
-                            class="textarea"
-                            placeholder="Describe your character concept... (e.g., 'A stoic medieval blacksmith with a secret artistic passion')"
-                            rows="8"
-                        ></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="character-name" class="label"
-                            >Character Name (optional)</label
-                        >
-                        <input
-                            type="text"
-                            id="character-name"
-                            class="input"
-                            placeholder="Leave empty for AI-generated name"
-                        />
-                    </div>
-
-                    <div class="form-group">
-                        <label for="reference-image-file" class="label"
-                            >Reference Image (optional)</label
-                        >
-                        <input
-                            type="file"
-                            id="reference-image-file"
-                            class="input"
-                            accept="image/*"
-                        />
-                        <div
-                            id="reference-image-preview"
-                            style="
-                                margin-top: 0.75rem;
-                                display: none;
-                                max-width: 220px;
-                                border-radius: 0.5rem;
-                                overflow: hidden;
-                                border: 1px solid var(--border);
-                            "
-                        ></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="reference-image-description" class="label"
-                            >Reference Image Description (optional)</label
-                        >
-                        <textarea
-                            id="reference-image-description"
-                            class="textarea"
-                            rows="6"
-                            placeholder="If you upload an image, this field will be auto-filled by the vision model. You can edit it manually."
-                        ></textarea>
-                        <p
-                            style="
-                                font-size: 0.75rem;
-                                color: var(--text-secondary);
-                                margin-top: 0.4rem;
-                            "
-                        >
-                            If description exists without an image, it is still
-                            used for character generation.
-                        </p>
-                    </div>
-
-                    <div
-                        class="form-row"
-                        style="
-                            display: flex;
-                            gap: 1rem;
-                            margin-bottom: 1.5rem;
-                            align-items: start;
-                        "
-                    >
-                        <div
-                            class="form-group"
-                            style="flex: 1; margin-bottom: 0"
-                        >
-                            <label for="pov-select" class="label"
-                                >Point of View</label
+                <section class="input-section" style="margin-bottom: 2rem;">
+                    <details id="input-section-details" open>
+                        <summary class="section-title" style="cursor: pointer; padding: 0.5rem 0; margin-bottom: 1rem; user-select: none;">
+                            Character Generation Inputs
+                        </summary>
+                        <div class="form-group">
+                            <label for="character-concept" class="label"
+                                >Character Concept</label
                             >
-                            <select
-                                id="pov-select"
+                            <textarea
+                                id="character-concept"
+                                class="textarea"
+                                placeholder="Describe your character concept... (e.g., 'A stoic medieval blacksmith with a secret artistic passion')"
+                                rows="8"
+                            ></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="character-name" class="label"
+                                >Character Name (optional)</label
+                            >
+                            <input
+                                type="text"
+                                id="character-name"
                                 class="input"
-                                style="height: 3rem"
+                                placeholder="Leave empty for AI-generated name"
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="reference-image-file" class="label"
+                                >Reference Image (optional)</label
                             >
-                                <option value="first">
-                                    First Person (I am...)
-                                </option>
-                                <option value="third" selected>
-                                    Third Person (He/She is...)
-                                </option>
-                            </select>
+                            <input
+                                type="file"
+                                id="reference-image-file"
+                                class="input"
+                                accept="image/*"
+                            />
+                            <div
+                                id="reference-image-preview"
+                                style="
+                                    margin-top: 0.75rem;
+                                    display: none;
+                                    max-width: 220px;
+                                    border-radius: 0.5rem;
+                                    overflow: hidden;
+                                    border: 1px solid var(--border);
+                                "
+                            ></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="reference-image-description" class="label"
+                                >Reference Image Description (optional)</label
+                            >
+                            <textarea
+                                id="reference-image-description"
+                                class="textarea"
+                                rows="6"
+                                placeholder="If you upload an image, this field will be auto-filled by the vision model. You can edit it manually."
+                            ></textarea>
                             <p
                                 style="
                                     font-size: 0.75rem;
                                     color: var(--text-secondary);
-                                    margin-top: 0.25rem;
-                                    visibility: hidden;
+                                    margin-top: 0.4rem;
                                 "
                             >
-                                Placeholder for alignment
+                                If description exists without an image, it is still
+                                used for character generation.
                             </p>
                         </div>
 
                         <div
-                            class="form-group"
-                            style="flex: 1; margin-bottom: 0"
+                            class="form-row"
+                            style="
+                                display: flex;
+                                gap: 1rem;
+                                margin-bottom: 1.5rem;
+                                align-items: start;
+                            "
                         >
-                            <label for="lorebook-file" class="label"
-                                >Lorebook (World Info)</label
-                            >
                             <div
-                                class="file-input-wrapper"
-                                style="position: relative"
+                                class="form-group"
+                                style="flex: 1; margin-bottom: 0"
                             >
-                                <input
-                                    type="file"
-                                    id="lorebook-file"
-                                    class="input"
-                                    accept=".json"
-                                    style="padding-right: 2.5rem; height: 3rem"
-                                />
-                                <span
-                                    id="lorebook-status"
-                                    style="
-                                        position: absolute;
-                                        right: 0.75rem;
-                                        top: 50%;
-                                        transform: translateY(-50%);
-                                        font-size: 1.2rem;
-                                        display: none;
-                                    "
-                                    title="Lorebook loaded"
-                                    >📚</span
+                                <label for="pov-select" class="label"
+                                    >Point of View</label
                                 >
+                                <select
+                                    id="pov-select"
+                                    class="input"
+                                    style="height: 3rem"
+                                >
+                                    <option value="first">
+                                        First Person (I am...)
+                                    </option>
+                                    <option value="third" selected>
+                                        Third Person (He/She is...)
+                                    </option>
+                                </select>
+                                <p
+                                    style="
+                                        font-size: 0.75rem;
+                                        color: var(--text-secondary);
+                                        margin-top: 0.25rem;
+                                        visibility: hidden;
+                                    "
+                                >
+                                    Placeholder for alignment
+                                </p>
                             </div>
-                            <p
-                                style="
-                                    font-size: 0.75rem;
-                                    color: var(--text-secondary);
-                                    margin-top: 0.25rem;
-                                "
-                            >
-                                Upload a SillyTavern World Info JSON
-                            </p>
-                        </div>
-                    </div>
 
-                    <div class="generation-buttons">
-                        <button
-                            id="generate-btn"
-                            class="btn-primary"
-                            style="flex: 1; min-width: 200px"
-                        >
-                            <span class="btn-text">Generate Character</span>
-                            <span class="btn-loading" style="display: none"
-                                >Generating...</span
+                            <div
+                                class="form-group"
+                                style="flex: 1; margin-bottom: 0"
                             >
-                        </button>
-                        <button
-                            id="stop-btn"
-                            class="btn-stop"
-                            style="display: none"
-                        >
-                            ⏹ Stop
-                        </button>
-                    </div>
-                    <div class="top-import-actions" style="margin-top: 0.75rem">
-                        <button id="import-card-top-btn" class="btn-outline">
-                            Import Card for Editing
-                        </button>
-                        <input
-                            type="file"
-                            id="import-card-top-input"
-                            accept=".png,.json,application/json,image/png"
-                            style="display: none"
-                        />
-                    </div>
+                                <label for="lorebook-file" class="label"
+                                    >Lorebook (World Info)</label
+                                >
+                                <div
+                                    class="file-input-wrapper"
+                                    style="position: relative"
+                                >
+                                    <input
+                                        type="file"
+                                        id="lorebook-file"
+                                        class="input"
+                                        accept=".json"
+                                        style="padding-right: 2.5rem; height: 3rem"
+                                    />
+                                    <span
+                                        id="lorebook-status"
+                                        style="
+                                            position: absolute;
+                                            right: 0.75rem;
+                                            top: 50%;
+                                            transform: translateY(-50%);
+                                            font-size: 1.2rem;
+                                            display: none;
+                                        "
+                                        title="Lorebook loaded"
+                                        >📚</span
+                                    >
+                                </div>
+                                <p
+                                    style="
+                                        font-size: 0.75rem;
+                                        color: var(--text-secondary);
+                                        margin-top: 0.25rem;
+                                    "
+                                >
+                                    Upload a SillyTavern World Info JSON
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="generation-buttons">
+                            <button
+                                id="generate-btn"
+                                class="btn-primary"
+                                style="flex: 1; min-width: 200px"
+                            >
+                                <span class="btn-text">Generate Character</span>
+                                <span class="btn-loading" style="display: none"
+                                    >Generating...</span
+                                >
+                            </button>
+                            <button
+                                id="stop-btn"
+                                class="btn-stop"
+                                style="display: none"
+                            >
+                                ⏹ Stop
+                            </button>
+                        </div>
+                        <div class="top-import-actions" style="margin-top: 0.75rem">
+                            <button id="import-card-top-btn" class="btn-outline">
+                                Import Card for Editing
+                            </button>
+                            <input
+                                type="file"
+                                id="import-card-top-input"
+                                accept=".png,.json,application/json,image/png"
+                                style="display: none"
+                            />
+                        </div>
+                    </details>
                 </section>
 
                 <section class="stream-section">
