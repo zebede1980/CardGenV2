@@ -499,9 +499,9 @@
                                         margin-bottom: 0.75rem;
                                     "
                                 >
-                                    💡 Example dialogue is automatically generated for
-                                    manual import into SillyTavern's "Example Messages"
-                                    field. Change the count below to regenerate them.
+                                💡 Example dialogue is automatically generated and
+                                included natively in your downloaded character card.
+                                Change the count below to regenerate them.
                                 </p>
                                 <div
                                     style="
@@ -756,13 +756,22 @@
                             rows="6"
                             placeholder="Example: Make the character less cynical, add subtle vulnerability, and rewrite the first message to be calmer."
                         ></textarea>
-                        <button
-                            id="revise-character-btn"
-                            class="btn-outline"
-                            style="margin-top: 0.75rem"
-                        >
-                            Revise Card with AI
-                        </button>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem">
+                            <button
+                                id="revise-character-btn"
+                                class="btn-outline"
+                            >
+                                <span class="btn-text">Revise Card with AI</span>
+                                <span class="btn-loading" style="display: none">Revising...</span>
+                            </button>
+                            <button
+                                id="stop-revision-btn"
+                                class="btn-stop"
+                                style="display: none"
+                            >
+                                ⏹ Stop
+                            </button>
+                        </div>
                     </div>
                 </section>
 

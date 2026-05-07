@@ -1030,6 +1030,9 @@ BEGIN IMAGE PROMPT NOW:`;
       throw new Error("Revision instruction is required");
     }
 
+    console.log("=== STARTING AI REVISION ===");
+    console.log("Instruction:", revisionInstruction);
+
     const model = this.config.get("api.text.model");
     const povText = pov === "third" ? "third-person" : "first-person";
 
@@ -1052,26 +1055,37 @@ BEGIN IMAGE PROMPT NOW:`;
       ],
       temperature: 0.7,
       max_tokens: 8192,
-      stream: false,
+      stream: true, // Use streaming to prevent proxy/Nginx timeouts
     };
 
-    const response = await this.makeRequest(
-      "/chat/completions",
-      data,
-      false,
-      false,
-    );
-    const output = this.processNormalResponse(response);
-    const parsed = this.parseJsonFromModelOutput(output);
-
-    return {
-      name: parsed.name || currentCharacter.name || "Unnamed Character",
-      description: parsed.description || currentCharacter.description || "",
-      personality: parsed.personality || currentCharacter.personality || "",
-      scenario: parsed.scenario || currentCharacter.scenario || "",
-      firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
-      mesExample: parsed.mesExample || parsed.mes_example || currentCharacter.mesExample || "",
-    };
+    try {
+      console.log("Sending revision request with data size:", JSON.stringify(data).length);
+      const response = await this.makeRequest(
+        "/chat/completions",
+        data,
+        false,
+        true, // stream = true
+      );
+      
+      console.log("Response received, processing stream...");
+      const output = await this.handleStreamResponse(response, () => {});
+      console.log("Revision stream complete. Output length:", output?.length);
+      
+      const parsed = this.parseJsonFromModelOutput(output);
+      console.log("Successfully parsed JSON output");
+      
+      return {
+        name: parsed.name || currentCharacter.name || "Unnamed Character",
+        description: parsed.description || currentCharacter.description || "",
+        personality: parsed.personality || currentCharacter.personality || "",
+        scenario: parsed.scenario || currentCharacter.scenario || "",
+        firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
+        mesExample: parsed.mesExample || parsed.mes_example || currentCharacter.mesExample || "",
+      };
+    } catch (error) {
+      console.error("=== REVISION FAILED ===", error);
+      throw error;
+    }
   }
 
   async generateExampleMessages(character, count = 3, pov = "third") {
@@ -1134,17 +1148,25 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
       ],
       temperature: 0.8,
       max_tokens: 1024,
-      stream: false,
+      stream: true, // Use streaming to prevent proxy timeouts
     };
 
-    const response = await this.makeRequest(
-      "/chat/completions",
-      data,
-      false,
-      false,
-    );
-    const output = this.processNormalResponse(response);
-    return output.trim();
+    try {
+      console.log("=== STARTING EXAMPLE MESSAGES GENERATION ===");
+      const response = await this.makeRequest(
+        "/chat/completions",
+        data,
+        false,
+        true, // stream = true
+      );
+      
+      const output = await this.handleStreamResponse(response, () => {});
+      console.log("Example messages generated successfully");
+      return output.trim();
+    } catch (error) {
+      console.error("=== EXAMPLE MESSAGES GENERATION FAILED ===", error);
+      throw error;
+    }
   }
 
   async describeReferenceImage(imageDataUrl, manualHint = "") {

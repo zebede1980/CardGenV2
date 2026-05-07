@@ -16,6 +16,7 @@ class CharacterGeneratorApp {
     this.referenceImageDataUrl = "";
     // Removed currentImageBlob - we now convert fresh from URL on download
     this.isGenerating = false;
+    this.isRevising = false;
 
     this.init();
   }
@@ -113,6 +114,11 @@ class CharacterGeneratorApp {
       reviseCharacterBtn.addEventListener("click", () =>
         this.handleReviseCharacter(),
       );
+    }
+
+    const stopRevisionBtn = document.getElementById("stop-revision-btn");
+    if (stopRevisionBtn) {
+      stopRevisionBtn.addEventListener("click", () => this.handleStopRevision());
     }
 
     // Regenerate image button
@@ -1215,6 +1221,28 @@ class CharacterGeneratorApp {
     }
   }
 
+  setRevisionState(isRevising) {
+    this.isRevising = isRevising;
+    const reviseBtn = document.getElementById("revise-character-btn");
+    const stopBtn = document.getElementById("stop-revision-btn");
+    const btnText = reviseBtn?.querySelector(".btn-text");
+    const btnLoading = reviseBtn?.querySelector(".btn-loading");
+
+    if (!reviseBtn || !stopBtn) return;
+
+    if (isRevising) {
+      reviseBtn.disabled = true;
+      if (btnText) btnText.style.display = "none";
+      if (btnLoading) btnLoading.style.display = "inline";
+      stopBtn.style.display = "inline-block";
+    } else {
+      reviseBtn.disabled = false;
+      if (btnText) btnText.style.display = "inline";
+      if (btnLoading) btnLoading.style.display = "none";
+      stopBtn.style.display = "none";
+    }
+  }
+
   handleStop() {
     if (this.isGenerating) {
       this.showStreamMessage("\n\n🛑 Stopping generation...\n");
@@ -1222,6 +1250,15 @@ class CharacterGeneratorApp {
       this.isGenerating = false;
       this.setGeneratingState(false);
       this.showNotification("Generation stopped by user", "warning");
+    }
+  }
+
+  handleStopRevision() {
+    if (this.isRevising) {
+      window.apiHandler.stopGeneration();
+      this.isRevising = false;
+      this.setRevisionState(false);
+      this.showNotification("Revision stopped by user", "warning");
     }
   }
 
@@ -1483,6 +1520,8 @@ class CharacterGeneratorApp {
       return;
     }
 
+    this.setRevisionState(true);
+
     try {
       const pov = document.getElementById("pov-select")?.value || "third";
       this.showNotification("Applying AI revision...", "info");
@@ -1499,7 +1538,12 @@ class CharacterGeneratorApp {
       this.showNotification("Character revised successfully", "success");
     } catch (error) {
       console.error("Revision failed:", error);
-      this.showNotification(`Revision failed: ${error.message}`, "error");
+      const wasStoppedByUser = error.message.includes("Generation stopped by user");
+      if (!wasStoppedByUser) {
+        this.showNotification(`Revision failed: ${error.message}`, "error");
+      }
+    } finally {
+      this.setRevisionState(false);
     }
   }
 
