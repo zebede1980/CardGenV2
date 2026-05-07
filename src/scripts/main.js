@@ -2572,6 +2572,28 @@ class CharacterGeneratorApp {
         this.showResultSection();
         document.getElementById("image-controls").style.display = "block";
 
+        if (card.character.character_book && card.character.character_book.entries) {
+          this.lorebookEntries = card.character.character_book.entries.map(e => ({
+            id: e.id || Date.now().toString() + Math.random().toString().slice(2, 5),
+            keys: e.keys || [],
+            content: e.content || "",
+            enabled: e.enabled !== false
+          }));
+        } else {
+          this.lorebookEntries = [];
+        }
+        this.updateLorebookEntryCount();
+
+        if (card.character.alternateGreetings) {
+          this.altGreetings = card.character.alternateGreetings.map((content, i) => ({
+            id: Date.now().toString() + i,
+            content
+          }));
+        } else {
+          this.altGreetings = [];
+        }
+        this.updateAltGreetingsCount();
+
         if (card.imageBlob instanceof Blob) {
           if (
             this.currentImageUrl &&
