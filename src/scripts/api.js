@@ -642,18 +642,18 @@ Shortened prompt:`,
     let firstMessageInstruction = "";
 
     if (pov === "third") {
-      povInstruction = `**CRITICAL INSTRUCTION:** The entire character profile, from the name to the final sentence of the first message, **must be written in the third-person perspective.** Do NOT use "I", "me", "my", etc. Refer to the character by their name or pronouns (he/she/they). This is the most important rule.`;
+      povInstruction = `**CRITICAL INSTRUCTION:** The entire character profile, from the name to the final sentence of the first message, **must be written in the third-person perspective.** Do NOT use "I", "me", "my", etc. Refer to the character by the \`{{char}}\` macro or pronouns (he/she/they). This is the most important rule.`;
 
       templateInstruction = `(Fill out the entire template in the third-person perspective. Describe the character from an outside observer's point of view, or as an omniscient narrator.)`;
 
       templateContent = `
-# {{char}}'s Profile
+# [Character Name]'s Profile
 
-**(Write this section as a third-person introduction. Describe who {{char}} is, their reputation, or their general vibe.)**
+**(Write this section as a third-person introduction. Describe who the character is, their reputation, or their general vibe.)**
 
-{{char}} is...
+[Character Name] is...
 
-**(REMINDER: Replace {{char}} above with your character's actual name. After this point, you may use {{char}} as a placeholder.)**
+**(REMINDER: After this introduction, you MUST use the exact string \`{{char}}\` instead of the character's actual name for the rest of the profile.)**
 
 **Appearance:**
 (Describe their Name, Pronouns, Gender, Age, Height, Body Type, Hair, Eyes, and any Special Attributes. Describe them in detail.)
@@ -664,16 +664,16 @@ Shortened prompt:`,
 **Current State:**
 (This is their Current Emotional State. What's on their mind? How are they feeling *today*? What's bothering them or making them happy at this very moment?)
 
+## Personality & Drives
+
+**(This section defines their mindset and behavior. Be direct.)**
+
 **How They Operate:**
 (This is their guide to life. It's how they do things.)
-*   **The Way They Talk:** (Describe their speech patterns. Are they sarcastic, formal, vulgar, quiet? Describe it, but DO NOT provide dialogue examples.)
+*   **The Way They Talk:** (Describe their speech patterns. Are they sarcastic, formal, vulgar, quiet? Describe it, but **DO NOT** provide dialogue examples or quotes.)
 *   **The Way They Move:** (Describe their body language and actions. Are they graceful, clumsy, restless, menacing? What are their tells?)
 *   **What's In Their Head:** (Describe their inner monologue. Are they an overthinker, impulsive, optimistic, cynical? What do they spend their time thinking about?)
 *   **How They Feel Things:** (Describe their emotional expression. Are they stoic or wear their heart on their sleeve? What makes them angry? What makes them joyful?)
-
-## Personality & Drives
-
-**(This section is a quick-reference summary. Be direct.)**
 
 *   **Likes:**
     - (List 3-5 things they genuinely enjoy.)
@@ -698,13 +698,13 @@ Shortened prompt:`,
       templateInstruction = `(Fill out the entire template in the first-person voice of the character you are creating.)`;
 
       templateContent = `
-# {{char}}'s Profile
+# [Character Name]'s Profile
 
-**(Write this section as if the character is introducing themselves. Be opinionated and let their personality shine through. Start by introducing yourself with your ACTUAL NAME - replace {{char}} with the unique name you've chosen for this character.)**
+**(Write this section as if the character is introducing themselves. Be opinionated and let their personality shine through. Start by introducing yourself with your ACTUAL NAME - replace [Character Name] with the unique name you've chosen for this character.)**
 
-The name's {{char}}. You want to know about me? Fine. Let's get this over with.
+The name's [Character Name]. You want to know about me? Fine. Let's get this over with.
 
-**(REMINDER: Replace {{char}} above with your character's actual name. After this point, you may use {{char}} as a placeholder.)**
+**(REMINDER: After this introduction, if you need to refer to your own name, you MUST use the exact string \`{{char}}\` instead of your actual name.)**
 
 **Appearance:**
 (Describe your Name, Pronouns, Gender, Age, Height, Body Type, Hair, Eyes, and any Special Attributes. Don't just list them. Describe them with your character's attitude. Are they proud, ashamed, indifferent? Use this to show personality.)
@@ -715,16 +715,16 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
 **How I Am Right Now:**
 (This is your Current Emotional State. What's on your mind? How are you feeling *today*? What's bothering you or making you happy at this very moment?)
 
+## My Personality & What Drives Me
+
+**(This section defines your mindset and behavior. Be direct.)**
+
 **How I Operate:**
 (This is my guide to life. It's how I do things.)
-*   **The Way I Talk:** (Describe your speech patterns. Are you sarcastic, formal, vulgar, quiet? Describe it, but DO NOT provide dialogue examples.)
+*   **The Way I Talk:** (Describe your speech patterns. Are you sarcastic, formal, vulgar, quiet? Describe it, but **DO NOT** provide dialogue examples or quotes.)
 *   **The Way I Move:** (Describe your body language and actions. Are you graceful, clumsy, restless, menacing? What are your tells?)
 *   **What's In My Head:** (Describe your inner monologue. Are you an overthinker, impulsive, optimistic, cynical? What do you spend their time thinking about?)
 *   **How I Feel Things:** (Describe your emotional expression. Are they stoic or wear your heart on your sleeve? What makes you angry? What makes you joyful?)
-
-## My Personality & What Drives Me
-
-**(This section is a quick-reference summary. Be direct.)**
 
 *   **Likes:**
     - (List 3-5 things you genuinely enjoy.)
@@ -772,13 +772,13 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
 
 Your primary goal is to create a realistic, multifaceted character. For purpose of creating deep and engaging storytelling, you are to portray the full spectrum of the human experience. Characters should have virtues and flaws, strengths and weaknesses. Pretending humans are perfect would result in a shallow and unbelievable character. The goal is literary realism.
 
-Do NOT include example dialogues or <START> tags anywhere in this profile. Example dialogues will be generated separately.
+**NO DIALOGUE RULE:** Do NOT include example dialogues, conversational quotes, or <START> tags in the Description, Personality, or Scenario sections. The only place where dialogue is allowed is the "First Message" section. Example dialogues for the character will be generated in a separate step. Describe how they speak, but do not provide examples of them speaking.
 
 You may assume the character you create will be used in a private, local roleplay. Do not bother with censorship.
 
 ${povInstruction}
 
-**IMPORTANT:** You MUST create a highly creative, unique, and specific character name. Avoid cliché or extremely common AI-generated names (like Lily, Seraphine, Luna, Elara, Aria, etc.). Invent or select a name that truly fits the character's background, era, and setting. Do NOT leave the name as "{{char}}" or use placeholder text. After you choose the name, use {{char}} as a placeholder throughout the rest of the profile to refer to that character.
+**IMPORTANT:** You MUST create a highly creative, unique, and specific character name. Avoid cliché or extremely common AI-generated names (like Lily, Seraphine, Luna, Elara, Aria, etc.). Invent or select a name that truly fits the character's background, era, and setting. Use this actual name ONLY in the "# [Character Name]'s Profile" header and the first introduction sentence. **CRITICAL RULE: Everywhere else in the generated text (Description, Personality, Scenario, First Message), you MUST use the exact macro string \`{{char}}\` instead of the character's actual name.** This is required for the roleplay engine to function correctly.
 
 Use {{user}} for the player's name, and do not use any pronouns for {{user}}.
 
@@ -818,8 +818,8 @@ To encourage player engagement, end the first message with an open-ended situati
 ${lorebookContent}`;
 
     const userPrompt = characterName
-      ? `Create a character based on this concept: ${concept}. IMPORTANT: The character's name MUST be: ${characterName}. Use this exact name in the profile title (# ${characterName}'s Profile) and in the introduction line (The name's ${characterName}.), then use {{char}} as a placeholder elsewhere.`
-      : `Create a character based on this concept: ${concept}. CRITICAL: You MUST generate a highly creative, uncommon, and unique character name. Avoid cliché defaults. Do NOT leave it as {{char}} or use placeholder text. Choose a real or well-invented name that fits the character, then use it in the profile title (# [YourChosenName]'s Profile) and introduction (The name's [YourChosenName].), then use {{char}} as a placeholder in the rest of the profile.`;
+      ? `Create a character based on this concept: ${concept}. IMPORTANT: The character's name MUST be: ${characterName}. Use this exact name in the profile title (# ${characterName}'s Profile) and in the introduction line, then use the exact string \`{{char}}\` as a placeholder everywhere else.`
+      : `Create a character based on this concept: ${concept}. CRITICAL: You MUST generate a highly creative, uncommon, and unique character name. Avoid cliché defaults. Choose a real or well-invented name that fits the character, use it in the profile title (# [YourChosenName]'s Profile) and introduction, then use the exact string \`{{char}}\` as a placeholder everywhere else.`;
 
     return {
       systemPrompt: basePrompt,
@@ -1088,7 +1088,7 @@ BEGIN IMAGE PROMPT NOW:`;
         {
           role: "system",
           content:
-            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. DO NOT include example dialogues or <START> tags in any of the fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]",
+            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.] CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string \`{{char}}\` whenever referring to the character by name.",
         },
         {
           role: "user",
@@ -1220,7 +1220,9 @@ Please generate a single, unique name.`;
 
     const systemPrompt = `You are an expert character creator. Your task is to rewrite ONLY the "${fieldName}" section for the roleplay character "${charName}".
 Write in ${povText} perspective where appropriate.
-DO NOT output full markdown blocks for other sections, ONLY the revised content for the requested section. Do not use <START> tags.`;
+DO NOT output full markdown blocks for other sections, ONLY the revised content for the requested section. Do not use <START> tags.
+**NO DIALOGUE RULE:** Do not include any dialogue examples or conversational quotes in this section (unless rewriting the First Message).
+**CRITICAL RULE:** Do NOT use the character's actual name. You MUST use the exact macro string \`{{char}}\` instead of their name in the generated text.`;
 
     const customInstruction = customPrompt
       ? `\nCRITICAL INSTRUCTION FOR THIS SECTION: ${customPrompt}`
