@@ -1447,6 +1447,7 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
     const systemPrompt = `You are an expert at writing roleplay opening messages. Your task is to write a single, detailed alternate first message for the character "${charName}".
 Write in ${povText} perspective. Focus on actions, thoughts, and dialogue to set the scene.
 ${contextInstruction}
+**CRITICAL RULE:** Do NOT use the character's actual name. You MUST use the exact macro string \`{{char}}\` instead of their name in the generated text.
 Do NOT include markdown headers, <START> tags, or explanations. Output ONLY the narrative text. Do NOT roleplay for the user ({{user}}).`;
 
     const hintText = customPrompt ? `\nUSER DIRECTION: ${customPrompt}` : "";
@@ -1568,12 +1569,15 @@ Output a JSON array of strings with your suggestions.`;
 
 The entry should focus purely on what the AI needs to know to understand the topic and interact with it correctly. Keep the text functional, omitting unnecessary flowery prose. It should be 1-3 short paragraphs long, written from a neutral, omniscient narrator's perspective.
 Do NOT include the keywords in the output.
+**CRITICAL RULE:** Do NOT use the character's actual name. You MUST use the exact macro string \`{{char}}\` instead of their name in the generated text.
 Output ONLY the generated text for the entry, with no extra explanations or formatting.`;
 
     const hintText = hint ? `\n\nUser has provided a hint for the content: "${hint}"` : "";
 
+    const charName = character.name || "{{char}}";
+
     const userPrompt = `Character Profile Context:
-Name: ${character.name}
+Name: ${charName}
 Description: ${character.description}
 Scenario: ${character.scenario}
 

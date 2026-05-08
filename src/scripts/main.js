@@ -636,6 +636,35 @@ class CharacterGeneratorApp {
 
     this.isGenerating = true;
     this.setGeneratingState(true);
+    
+    // Hide previous results and clear residual state to prevent bleed-over
+    this.hideResultSection();
+    this.currentImageUrl = null;
+    if (window.apiHandler) {
+      window.apiHandler.lastGeneratedImagePrompt = null;
+    }
+    
+    const customPromptTextarea = document.getElementById("custom-image-prompt");
+    if (customPromptTextarea) {
+      customPromptTextarea.value = "";
+      window.updatePromptCharCount();
+    }
+    
+    const promptsToClear = ['description-prompt', 'personality-prompt', 'scenario-prompt', 'first-message-prompt', 'example-messages-prompt'];
+    promptsToClear.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+
+    const imageContent = document.getElementById("image-content");
+    if (imageContent) {
+      imageContent.innerHTML = `
+        <div class="image-placeholder">
+          <div class="loading-spinner"></div>
+        </div>
+      `;
+    }
+
     this.lorebookEntries = [];
     this.updateLorebookEntryCount();
     this.altGreetings = [];
