@@ -211,7 +211,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const loadingText = loading.querySelector("p");
     if (loadingText)
       loadingText.textContent =
-        "Generating images from 4 different models... this might take a minute.";
+        "Generating 4 images... this might take a minute.";
 
     grid.innerHTML = "";
     loading.style.display = "block";
@@ -238,11 +238,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
       }
 
-      let models = this.config.get("api.image.models") || [];
-      if (models.length === 0) {
-        models = ["z-image-turbo", "chroma", "hidream", "qwen-image"];
+      // Use checked models from the config list; fall back to defaults if none saved
+      let savedModels = this.config.get("api.image.models") || [];
+      if (savedModels.length === 0) {
+        savedModels = ["z-image-turbo", "chroma", "hidream", "qwen-image"];
       }
-      models = models.slice(0, 4);
+      // Build exactly 4 slots: take first 4 if ≥4, otherwise loop/repeat
+      const models = Array.from({ length: 4 }, (_, i) => savedModels[i % savedModels.length]);
 
       const promises = models.map((modelName, index) =>
         window.apiHandler
@@ -560,10 +562,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
         container.innerHTML = models
           .map(
             (m) => `
-              <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer;">
+              <div class="image-model-row" style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;">
+                <label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;">
                   <input type="checkbox" class="image-model-checkbox" value="${m.id}" ${currentSelected.has(m.id) ? "checked" : ""}>
                   ${m.id}
-              </label>
+                </label>
+                <button type="button" class="image-model-delete-btn" data-model="${m.id}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
+              </div>
           `,
           )
           .join("");
@@ -573,6 +578,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
         statusEl.textContent = `Found ${models.length} models`;
         statusEl.style.color = "var(--success)";
+        this.updateActiveModelsDropdown();
       } else {
         container.innerHTML =
           '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">No models returned from API.</p>';

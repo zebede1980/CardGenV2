@@ -265,10 +265,11 @@ class CharacterGeneratorApp {
           manualImageModelInput.value = "";
           return;
         }
-        const label = document.createElement("label");
-        label.style.cssText = "display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:pointer;";
-        label.innerHTML = `<input type="checkbox" class="image-model-checkbox" value="${modelId}" checked> ${modelId}`;
-        container.appendChild(label);
+        const row = document.createElement("div");
+        row.className = "image-model-row";
+        row.style.cssText = "display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;";
+        row.innerHTML = `<label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;"><input type="checkbox" class="image-model-checkbox" value="${modelId}" checked> ${modelId}</label><button type="button" class="image-model-delete-btn" data-model="${modelId}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>`;
+        container.appendChild(row);
         manualImageModelInput.value = "";
         this.saveAPISettings();
         const searchInput = document.getElementById("image-model-search");
@@ -299,6 +300,17 @@ class CharacterGeneratorApp {
     if (imageModelsContainer) {
       imageModelsContainer.addEventListener("change", (e) => {
         if (e.target.classList.contains("image-model-checkbox")) this.saveAPISettings();
+      });
+      imageModelsContainer.addEventListener("click", (e) => {
+        const btn = e.target.closest(".image-model-delete-btn");
+        if (!btn) return;
+        btn.closest(".image-model-row")?.remove();
+        if (!imageModelsContainer.querySelector(".image-model-row")) {
+          imageModelsContainer.innerHTML = '<p style="font-size:0.8rem;color:var(--text-secondary);margin:0;">No models added. Use Fetch from API or enter a model name above.</p>';
+          const searchInput = document.getElementById("image-model-search");
+          if (searchInput) searchInput.style.display = "none";
+        }
+        this.saveAPISettings();
       });
     }
 
@@ -359,6 +371,7 @@ class CharacterGeneratorApp {
   saveAPISettings() {
     this.config.loadFromForm();
     this.config.saveConfig();
+    this.updateActiveModelsDropdown();
     this.checkAPIStatus();
   }
 
