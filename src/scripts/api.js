@@ -1074,7 +1074,7 @@ BEGIN IMAGE PROMPT NOW:`;
         {
           role: "system",
           content:
-            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.] CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string \`{{char}}\` whenever referring to the character by name.",
+            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. **CRITICAL STRUCTURE RULE:** The 'description' field MUST ONLY contain physical appearance, backstory, and current state. The 'personality' field MUST contain behavioral traits, 'How They Operate' (speech style, body language, mindset), likes, dislikes, goals, fears, and quirks. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.] CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string \`{{char}}\` whenever referring to the character by name.",
         },
         {
           role: "user",
@@ -1199,8 +1199,8 @@ Please generate a single, unique name.`;
 
     let fieldName;
     switch(field) {
-      case 'description': fieldName = "Description/Appearance/Background"; break;
-      case 'personality': fieldName = "Personality/Likes/Dislikes/Traits"; break;
+      case 'description': fieldName = "Description (Physical Appearance, Story/Background, and Current State)"; break;
+      case 'personality': fieldName = "Personality (How They Operate, Mindset, Likes, Dislikes, Goals, Fears, and Quirks)"; break;
       case 'scenario': fieldName = "Scenario/Setting"; break;
       case 'firstMessage': fieldName = "First Message/Greeting"; break;
       default: throw new Error("Invalid field specified");
