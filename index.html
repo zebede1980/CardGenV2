@@ -1097,8 +1097,9 @@
                         <label class="label"
                             >Available Image Models</label
                         >
-                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
                             <button id="fetch-image-models-btn" class="btn-small" type="button">Fetch Models</button>
+                            <input type="text" id="image-model-search" class="input" placeholder="Search/Filter..." style="flex: 1; min-width: 150px; height: 2.25rem; padding: 0.25rem 0.5rem; display: none;">
                             <span id="fetch-models-status" style="font-size: 0.8rem; align-self: center;"></span>
                         </div>
                         <div id="image-models-container" style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); padding: 0.5rem; border-radius: 0.375rem; background: var(--surface-color); display: flex; flex-direction: column; gap: 0.5rem;">

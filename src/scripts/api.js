@@ -946,7 +946,11 @@ BEGIN IMAGE PROMPT NOW:`;
         }
         
         const data = await response.json();
-        return data.data || [];
+        let models = data.data || [];
+        if (Array.isArray(models)) {
+            models.sort((a, b) => (a.id || "").localeCompare(b.id || ""));
+        }
+        return models;
     } catch (error) {
         console.error("Failed to fetch models:", error);
         throw error;
