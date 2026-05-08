@@ -553,77 +553,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const models = await this.apiHandler.fetchModels("image");
 
       if (models && models.length > 0) {
-        let filteredModels = models;
-
-        if (models.length > 20) {
-          const imageModels = models.filter((m) => {
-            if (m.endpoints && m.endpoints.some((e) => e.includes("image")))
-              return true;
-            if (
-              m.architecture?.modality &&
-              String(m.architecture.modality).includes("image")
-            )
-              return true;
-            if (m.type === "image") return true;
-
-            const id = String(m.id || "").toLowerCase();
-            const name = String(m.name || "").toLowerCase();
-            const keywords = [
-              "image",
-              "dall-e",
-              "dalle",
-              "sdxl",
-              "stable-diffusion",
-              "flux",
-              "midjourney",
-              "kandinsky",
-              "ideogram",
-              "pixart",
-              "hunyuan",
-              "kolors",
-              "playground",
-              "auraflow",
-              // nano-gpt & newer providers
-              "hidream",
-              "chroma",
-              "recraft",
-              "aurora",
-              "sana",
-              "wan",
-              "kling",
-              "hailuo",
-              "luma",
-              "runway",
-              "pika",
-              "genmo",
-              "cogvideo",
-              "animate",
-              "txt2img",
-              "img2img",
-              "inpaint",
-              "diffusion",
-              "photon",
-              "fal-",
-              "ghibli",
-              "bagel",
-              "upscal",
-              "t2i",
-              "i2i",
-            ];
-
-            return keywords.some((kw) => id.includes(kw) || name.includes(kw));
-          });
-
-          if (imageModels.length > 0) {
-            filteredModels = imageModels;
-          }
-        }
-
         const currentSelected = new Set(
           this.config.get("api.image.models") || [],
         );
 
-        container.innerHTML = filteredModels
+        container.innerHTML = models
           .map(
             (m) => `
               <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer;">
@@ -637,7 +571,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const searchInput = document.getElementById("image-model-search");
         if (searchInput) searchInput.style.display = "block";
 
-        statusEl.textContent = `Found ${filteredModels.length} models`;
+        statusEl.textContent = `Found ${models.length} models`;
         statusEl.style.color = "var(--success)";
       } else {
         container.innerHTML =
