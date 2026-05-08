@@ -121,6 +121,58 @@ class CharacterGenerator {
       }
     }
 
+    // Safety check: forcibly replace the character's name with {{char}} in most fields
+    // to guarantee engine compatibility if the AI forgot the rule.
+    if (character.name && character.name !== "{{char}}" && character.name.toLowerCase() !== "unknown character") {
+      try {
+        const escapedFullName = character.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const fullRegex = new RegExp(`\\b${escapedFullName}\\b`, 'g');
+        
+        let firstRegex = null;
+        const nameParts = character.name.split(" ");
+        if (nameParts.length > 1 && nameParts[0].length > 2) {
+          const escapedFirstName = nameParts[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          firstRegex = new RegExp(`\\b${escapedFirstName}\\b`, 'g');
+        }
+
+        const enforceMacro = (text) => {
+          if (!text) return text;
+          let result = text.replace(fullRegex, '{{char}}');
+          if (firstRegex) result = result.replace(firstRegex, '{{char}}');
+          return result;
+        };
+
+        if (character.description) {
+          const lines = character.description.split('\n');
+          let safeStartIndex = 0;
+          let foundIntro = false;
+          
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim() !== '' && !lines[i].startsWith('#') && !lines[i].startsWith('**') && !foundIntro) {
+              foundIntro = true;
+              continue; // Skip the intro paragraph where name is allowed
+            }
+            if (foundIntro) {
+              safeStartIndex = i;
+              break;
+            }
+          }
+          
+          for (let i = safeStartIndex; i < lines.length; i++) {
+            lines[i] = enforceMacro(lines[i]);
+          }
+          character.description = lines.join('\n');
+        }
+
+        character.personality = enforceMacro(character.personality);
+        character.scenario = enforceMacro(character.scenario);
+        character.firstMessage = enforceMacro(character.firstMessage);
+        if (character.mesExample) character.mesExample = enforceMacro(character.mesExample);
+      } catch (e) {
+        console.warn("Failed to apply {{char}} macro enforcement:", e);
+      }
+    }
+
     return character;
   }
 

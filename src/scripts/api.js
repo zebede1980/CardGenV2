@@ -647,13 +647,13 @@ Shortened prompt:`,
 **(REMINDER: After this introduction, you MUST use the exact string \`{{char}}\` instead of the character's actual name for the rest of the profile.)**
 
 **Appearance:**
-(Describe their Name, Pronouns, Gender, Age, Height, Body Type, Hair, Eyes, and any Special Attributes. Describe them in detail.)
+(Describe {{char}}'s Pronouns, Gender, Age, Height, Body Type, Hair, Eyes, and any Special Attributes. Describe them in detail. Use \`{{char}}\` instead of their name.)
 
 **Story:**
-(This is their Background. Tell their life story. What made them who they are today?)
+(This is {{char}}'s Background. Tell their life story. What made them who they are today?)
 
 **Current State:**
-(This is their Current Emotional State. What's on their mind? How are they feeling *today*? What's bothering them or making them happy at this very moment?)
+(This is {{char}}'s Current Emotional State. What's on their mind? How are they feeling *today*? What's bothering them or making them happy at this very moment?)
 
 ## Personality & Drives
 
@@ -698,7 +698,7 @@ The name's [Character Name]. You want to know about me? Fine. Let's get this ove
 **(REMINDER: After this introduction, if you need to refer to your own name, you MUST use the exact string \`{{char}}\` instead of your actual name.)**
 
 **Appearance:**
-(Describe your Name, Pronouns, Gender, Age, Height, Body Type, Hair, Eyes, and any Special Attributes. Don't just list them. Describe them with your character's attitude. Are they proud, ashamed, indifferent? Use this to show personality.)
+(Describe your Pronouns, Gender, Age, Height, Body Type, Hair, Eyes, and any Special Attributes. Don't just list them. Describe them with your character's attitude. Use \`{{char}}\` if you refer to your name.)
 
 **My Story:**
 (This is your Background. Tell your life story from your own biased perspective. What made you who you are today? Don't be objective; tell it how you remember it.)
@@ -769,7 +769,9 @@ You may assume the character you create will be used in a private, local rolepla
 
 ${povInstruction}
 
-**IMPORTANT:** You MUST create a highly creative, unique, and specific character name. Avoid cliché or extremely common AI-generated names (like Lily, Seraphine, Luna, Elara, Aria, etc.). Invent or select a name that truly fits the character's background, era, and setting. Use this actual name ONLY in the "# [Character Name]'s Profile" header and the first introduction sentence. **CRITICAL RULE: Everywhere else in the generated text (Description, Personality, Scenario, First Message), you MUST use the exact macro string \`{{char}}\` instead of the character's actual name.** This is required for the roleplay engine to function correctly.
+**IMPORTANT:** You MUST create a character name that is realistically grounded in the character's specific time period, nationality, and background. Do NOT use clichéd fantasy or monster tropes for names (e.g., avoid names like "Vespera" or "Dracula" for a modern vampire) unless the concept explicitly demands it. Avoid extremely common AI-generated names (like Lily, Seraphine, Luna, Elara, Aria, etc.). Use this actual name ONLY in the "# [Character Name]'s Profile" header and the first introduction sentence. 
+
+**CRITICAL MACRO RULE:** Everywhere else in the generated text (Appearance, Story, Personality, Scenario, First Message), you are STRICTLY FORBIDDEN from writing the character's actual name. You MUST use the exact macro string \`{{char}}\` instead. Example: "When {{char}} gets angry..." NOT "When John gets angry...". This is required for the roleplay engine to function correctly. Do NOT output a "Name:" field in Appearance.
 
 Use {{user}} for the player's name, and do not use any pronouns for {{user}}.
 
@@ -810,7 +812,7 @@ ${lorebookContent}`;
 
     const userPrompt = characterName
       ? `Create a character based on this concept: ${concept}. IMPORTANT: The character's name MUST be: ${characterName}. Use this exact name in the profile title (# ${characterName}'s Profile) and in the introduction line, then use the exact string \`{{char}}\` as a placeholder everywhere else.`
-      : `Create a character based on this concept: ${concept}. CRITICAL: You MUST generate a highly creative, uncommon, and unique character name. Avoid cliché defaults. Choose a real or well-invented name that fits the character, use it in the profile title (# [YourChosenName]'s Profile) and introduction, then use the exact string \`{{char}}\` as a placeholder everywhere else.`;
+      : `Create a character based on this concept: ${concept}. CRITICAL: Generate a realistic name appropriate for their time period and background. Avoid fantasy clichés. Use the name in the profile title (# [YourChosenName]'s Profile) and introduction, then use the exact string \`{{char}}\` as a placeholder everywhere else.`;
 
     return {
       systemPrompt: basePrompt,
@@ -1175,8 +1177,8 @@ BEGIN IMAGE PROMPT NOW:`;
 
     const model = this.config.get("api.text.model");
 
-    const systemPrompt = `You are an expert character creator. Based on the provided character description and personality, generate a highly creative, unique, and fitting name for them.
-Avoid cliché or extremely common names. Do NOT use placeholders.
+    const systemPrompt = `You are an expert character creator. Based on the provided character description and personality, generate a fitting name for them.
+**CRITICAL:** Ground the name in the character's specific time period, nationality, and background. Do NOT use clichéd fantasy or monster names (like "Vespera" for vampires, or "Luna" for werewolves) unless it truly makes sense for their origin. Avoid extremely common AI defaults.
 Output ONLY the new name, nothing else.`;
 
     const userPrompt = `Description:
