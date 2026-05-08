@@ -1051,7 +1051,53 @@ BEGIN IMAGE PROMPT NOW:`;
       cleaned = jsonMatch[0];
     }
 
-    return JSON.parse(cleaned);
+    try {
+      return JSON.parse(cleaned);
+    } catch (initialError) {
+      console.warn("Initial JSON parse failed, attempting auto-fix:", initialError.message);
+      
+      // Fix unescaped newlines/control characters inside strings
+      let inString = false;
+      let isEscaped = false;
+      let fixed = "";
+      
+      for (let i = 0; i < cleaned.length; i++) {
+        const char = cleaned[i];
+        
+        if (char === '"' && !isEscaped) {
+          inString = !inString;
+        }
+        
+        if (char === '\\' && !isEscaped) {
+          isEscaped = true;
+        } else {
+          isEscaped = false;
+        }
+        
+        if (inString) {
+          if (char === '\n') fixed += '\\n';
+          else if (char === '\r') fixed += '\\r';
+          else if (char === '\t') fixed += '\\t';
+          else fixed += char;
+        } else {
+          fixed += char;
+        }
+      }
+
+      try {
+        return JSON.parse(fixed);
+      } catch (secondError) {
+        // Attempt to fix simple truncation
+        if (inString) fixed += '"';
+        fixed += '}';
+        try {
+          return JSON.parse(fixed);
+        } catch (thirdError) {
+          console.error("JSON auto-fix failed. Final string length:", fixed.length);
+          throw new Error(`Failed to parse AI response as JSON: ${initialError.message}`);
+        }
+      }
+    }
   }
 
   async reviseCharacter(currentCharacter, revisionInstruction, pov = "third") {
@@ -1074,7 +1120,7 @@ BEGIN IMAGE PROMPT NOW:`;
         {
           role: "system",
           content:
-            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. **CRITICAL STRUCTURE RULE:** The 'description' field MUST ONLY contain physical appearance, backstory, and current state. The 'personality' field MUST contain behavioral traits, 'How They Operate' (speech style, body language, mindset), likes, dislikes, goals, fears, and quirks. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.] CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string \`{{char}}\` whenever referring to the character by name.",
+            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence. **CRITICAL STRUCTURE RULE:** The 'description' field MUST ONLY contain physical appearance, backstory, and current state. The 'personality' field MUST contain behavioral traits, 'How They Operate' (speech style, body language, mindset), likes, dislikes, goals, fears, and quirks. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.] CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string \`{{char}}\` whenever referring to the character by name. **CRITICAL JSON RULE:** You MUST properly escape all newlines as \\n within the JSON string values. Do NOT output literal newlines inside strings.",
         },
         {
           role: "user",
