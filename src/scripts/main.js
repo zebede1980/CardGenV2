@@ -106,6 +106,8 @@ class CharacterGeneratorApp {
     document.getElementById("regenerate-image-btn").addEventListener("click", () => this.handleRegenerateImage());
     const generateFourImagesBtn = document.getElementById("generate-four-images-btn");
     if (generateFourImagesBtn) generateFourImagesBtn.addEventListener("click", () => this.handleGenerateFourImages());
+    const generateFourPromptsBtn = document.getElementById("generate-four-prompts-btn");
+    if (generateFourPromptsBtn) generateFourPromptsBtn.addEventListener("click", () => this.handleGenerateFourPrompts());
 
     const imgOptModalClose = document.getElementById("image-options-modal-close-btn");
     const imgOptModal = document.getElementById("image-options-modal");

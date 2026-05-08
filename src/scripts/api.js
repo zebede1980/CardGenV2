@@ -514,7 +514,7 @@ class APIHandler {
       messages: [
         {
           role: "user",
-          content: `The following image generation prompt is too long. Shorten it to be clear, short, and distinct (under 300 characters). Focus only on the basic visual description, a couple of words on their attitude/demeanor, and a very short scene. Do NOT add explanations, just output the shortened prompt directly.
+          content: `The following image generation prompt is too long. Shorten it to under 600 characters while keeping all the specific visual details: physical appearance, outfit, expression, and setting. Remove only filler words and redundancy. Do NOT add explanations, just output the shortened prompt directly.
 
 Original prompt:
 ${prompt}
@@ -821,40 +821,33 @@ ${lorebookContent}`;
   }
 
   buildImagePromptInstruction(characterDescription, characterName) {
-    // Extract personality traits for context
-    const personalityTraits =
-      this.extractPersonalityTraits(characterDescription);
+    const personalityTraits = this.extractPersonalityTraits(characterDescription);
 
-    return `You are an AI assistant specialized in creating clear, short, and distinct text-to-image prompts for image generation models.
+    return `You are an expert at extracting visual details from character profiles to write image generation prompts.
 
 Character Name: ${characterName || "Unknown"}
+Personality Traits Detected: ${personalityTraits}
 
 Full Character Profile:
 ${characterDescription}
 
-Personality Traits: ${personalityTraits}
+Your task: Read the profile above and output a single image generation prompt.
 
-⚠️ CRITICAL REQUIREMENT ⚠️
-Your response MUST be clear, short, and distinct. Do NOT write a long, wordy paragraph.
+Extract these specifics from the profile text:
+- SUBJECT: name, apparent gender, approximate age range, species/ethnicity if notable
+- PHYSICAL: exact hair colour and style, eye colour, any distinctive features (scars, tattoos, unusual traits)
+- OUTFIT: specific clothing that matches their role, world, or status — not generic
+- EXPRESSION: one expression or body language cue that reflects their dominant personality trait (e.g. "cold calculating stare", "warm crooked smile", "guarded tense posture")
+- SETTING: one concrete location or environment drawn from their backstory or scenario
 
-INSTRUCTIONS:
-Create a brief natural language prompt describing an image of this character. Extract ONLY the most essential visual details:
+Format rules:
+- Output ONE paragraph, no lists, no labels, no headers
+- Lead with the subject and physical details, weave in expression and setting naturally
+- End with 3-5 comma-separated quality tags suited to the character's tone (e.g. "cinematic lighting, highly detailed, dramatic shadows" for a noir character; "soft natural light, painterly" for a gentle one)
+- Total output: 150-400 words
+- Do NOT start with "Here is" or any preamble — begin the prompt directly
 
-1. Basic Visual Description: Age, hair, eyes, key facial features, and core outfit.
-2. Attitude & Demeanor: A couple of words on their posture or facial expression reflecting their personality.
-3. Short Scene: A very short, simple background or setting.
-
-Use ONLY positive statements about what SHOULD be in the image. You may add a few quality tags at the end (e.g., masterpiece, high quality, highly detailed).
-
-CRITICAL RULES:
-1. DO NOT include any reasoning, thinking, planning, or step-by-step analysis
-2. DO NOT use numbered lists or bullet points
-3. DO NOT write multiple paragraphs
-4. DO NOT explain your process
-5. START IMMEDIATELY with the image description
-6. Keep it brief and focused
-
-BEGIN IMAGE PROMPT NOW:`;
+BEGIN PROMPT:`;
   }
 
   extractPersonalityTraits(text) {

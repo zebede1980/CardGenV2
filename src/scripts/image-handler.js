@@ -320,6 +320,127 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleGenerateFourPrompts() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate a character first", "warning");
+      return;
+    }
+
+    const imageApiBase = this.config.get("api.image.baseUrl");
+    const imageApiKey = this.config.get("api.image.apiKey");
+
+    if (!imageApiBase || !imageApiKey) {
+      this.showNotification("Please configure image API settings first", "warning");
+      return;
+    }
+
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = "🖼️ Choose an Image Option";
+
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    const loadingText = loading.querySelector("p");
+    if (loadingText) loadingText.textContent = "Generating 4 prompt variations... this might take a minute.";
+
+    grid.innerHTML = "";
+    loading.style.display = "block";
+
+    const model = this.config.get("api.image.model") || (this.config.get("api.image.models") || [])[0] || "";
+    if (!model) {
+      loading.style.display = "none";
+      this.showNotification("No active image model selected", "warning");
+      return;
+    }
+
+    try {
+      // Get or generate the base prompt
+      const customPromptTextarea = document.getElementById("custom-image-prompt");
+      let basePrompt = customPromptTextarea?.value?.trim();
+      if (!basePrompt) {
+        try {
+          basePrompt = await window.apiHandler.generateImagePrompt(
+            this.currentCharacter.description,
+            this.currentCharacter.name,
+          );
+          if (customPromptTextarea) {
+            customPromptTextarea.value = basePrompt;
+            window.updatePromptCharCount();
+          }
+        } catch (e) {
+          basePrompt = window.apiHandler.buildDirectImagePrompt(
+            this.currentCharacter.description,
+            this.currentCharacter.name,
+          );
+        }
+      }
+
+      // Four distinct framing variations on the same base prompt
+      const variations = [
+        { suffix: "", label: "Default" },
+        { suffix: ", close-up portrait, face and shoulders, detailed facial features", label: "Close-up" },
+        { suffix: ", full body shot, dynamic pose, showing complete outfit and stature", label: "Full body" },
+        { suffix: ", cinematic composition, dramatic lighting, environmental storytelling", label: "Cinematic" },
+      ];
+
+      const promises = variations.map(({ suffix, label }, index) => {
+        const prompt = basePrompt + suffix;
+        return window.apiHandler
+          .generateImage(
+            this.currentCharacter.description,
+            this.currentCharacter.name,
+            prompt,
+            model,
+          )
+          .then(async (imageUrl) => {
+            let displayUrl = imageUrl;
+            if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+              const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+              const response = await fetch(proxyUrl);
+              if (response.ok) {
+                const blob = await response.blob();
+                displayUrl = URL.createObjectURL(blob);
+              }
+            }
+            return { url: displayUrl, prompt, model, label, index };
+          })
+          .catch((err) => {
+            console.error(`Variation "${label}" failed:`, err);
+            return null;
+          });
+      });
+
+      const results = await Promise.all(promises);
+      loading.style.display = "none";
+
+      const validResults = results.filter((r) => r !== null);
+      if (validResults.length === 0) throw new Error("All image generations failed.");
+
+      validResults.forEach((res) => {
+        const wrapper = document.createElement("div");
+        wrapper.style.cursor = "pointer";
+        wrapper.style.border = "2px solid transparent";
+        wrapper.style.borderRadius = "0.5rem";
+        wrapper.style.overflow = "hidden";
+        wrapper.style.transition = "border-color 0.2s";
+        wrapper.style.backgroundColor = "var(--surface-color)";
+        wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
+        wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
+        wrapper.onclick = () => this.selectImageOption(res.url, res.prompt, res.model, validResults);
+        wrapper.innerHTML = `
+          <img src="${res.url}" style="width:100%;height:auto;display:block;" alt="${res.label}">
+          <div style="padding:0.5rem;text-align:center;font-size:0.8rem;color:var(--text-secondary);background:rgba(0,0,0,0.1);border-top:1px solid var(--border);font-family:monospace;">${res.label} · ${res.model}</div>
+        `;
+        grid.appendChild(wrapper);
+      });
+
+      this.showNotification(`Generated ${validResults.length} prompt variations!`, "success");
+    } catch (error) {
+      loading.style.display = "none";
+      this.showNotification(`Failed to generate images: ${error.message}`, "error");
+    }
+  },
+
   openImageOptionsModal() {
     const modal = document.getElementById("image-options-modal");
     if (modal) {
