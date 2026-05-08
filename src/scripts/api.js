@@ -1181,13 +1181,18 @@ BEGIN IMAGE PROMPT NOW:`;
 **CRITICAL:** Ground the name in the character's specific time period, nationality, and background. Do NOT use clichéd fantasy or monster names (like "Vespera" for vampires, or "Luna" for werewolves) unless it truly makes sense for their origin. Avoid extremely common AI defaults.
 Output ONLY the new name, nothing else.`;
 
+    const currentNameInfo = character.name && character.name !== "{{char}}" && character.name !== "Unknown Character" 
+      ? `\nCurrent Name: "${character.name}" (DO NOT generate this name again)` 
+      : "";
+
     const userPrompt = `Description:
 ${character.description || "No description provided"}
 
 Personality:
-${character.personality || "No personality provided"}
+${character.personality || "No personality provided"}${currentNameInfo}
 
-Please generate a single, unique name.`;
+Please generate a single, highly creative, and unique name.
+[Randomization Seed: ${Math.floor(Math.random() * 100000)}]`;
 
     const data = {
       model,
@@ -1201,7 +1206,7 @@ Please generate a single, unique name.`;
           content: userPrompt,
         },
       ],
-      temperature: 0.8,
+      temperature: 0.95,
       max_tokens: 50,
       stream: false,
     };
