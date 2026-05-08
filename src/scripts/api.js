@@ -355,20 +355,30 @@ class APIHandler {
     // Store the prompt so it can be accessed later
     this.lastGeneratedImagePrompt = imagePrompt;
 
+    // Apply style tags to the prompt actually sent to the API
+    let finalApiPrompt = imagePrompt;
+    const style = this.config.get("api.image.style");
+    if (style) {
+      const styleTags = this.getImageStyleTags(style);
+      if (styleTags) {
+        finalApiPrompt = `${finalApiPrompt.trim()} ${styleTags}`;
+      }
+    }
+
     const model = modelOverride || this.config.get("api.image.model");
 
     console.log("=== SENDING TO IMAGE API ===");
     console.log("Using image model:", model);
     console.log("Using custom prompt:", !!customPrompt);
-    console.log("Image prompt length:", imagePrompt.length);
+    console.log("Image prompt length:", finalApiPrompt.length);
     console.log("Full image prompt being sent:");
-    console.log(imagePrompt);
+    console.log(finalApiPrompt);
     console.log("=== END PROMPT ===");
 
     // Use ImageRouter format with optional size parameter
     const data = {
       model: model,
-      prompt: imagePrompt,
+      prompt: finalApiPrompt,
       n: 1,
       response_format: "url",
     };
@@ -611,26 +621,7 @@ Shortened prompt:`,
       prompt += mood + ". ";
     }
 
-    const styleSetting = this.config.get("api.image.style");
-    let styleTags = "Professional character portrait, detailed features, high quality, realistic style, sharp focus, well-lit, cinematic lighting, depth of field, 4k, highly detailed.";
-
-    switch (styleSetting) {
-        case "realistic": styleTags = "Hyper-realistic photography, 8k resolution, highly detailed face, photorealistic, natural lighting, DSLR, masterpiece."; break;
-        case "anime": styleTags = "High quality anime style, vibrant colors, detailed anime character design."; break;
-        case "hand-drawn-anime": styleTags = "Traditional hand-drawn anime style, classic 90s anime aesthetic, cel shading, studio ghibli style, detailed 2D illustration."; break;
-        case "painted-anime": styleTags = "Painted anime artwork style, vibrant colors, detailed brushstrokes, high quality illustration, digital painting, anime masterpiece."; break;
-        case "waifu": styleTags = "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character, distinct anime features."; break;
-        case "sexy": styleTags = "Sexy, alluring, highly attractive, seductive, beautiful, masterpiece, highly detailed, stunning, appealingly posed."; break;
-        case "comic": styleTags = "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading, vibrant comic colors."; break;
-        case "cinematic": styleTags = "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting, photorealistic."; break;
-        case "fantasy": styleTags = "Digital fantasy art, artstation masterpiece, trending on artstation, stylized digital illustration, epic fantasy."; break;
-        case "cyberpunk": styleTags = "Cyberpunk style, neon lights, dark futuristic setting, high tech, synthwave aesthetics, highly detailed."; break;
-        case "3d-render": styleTags = "3D render, octane render, unreal engine 5, highly detailed 3D model, stylized 3D, CGI, ray tracing, masterpiece."; break;
-        case "watercolor": styleTags = "Watercolor painting style, soft edges, pastel colors, artistic brushstrokes, traditional media look, beautiful illustration."; break;
-        case "pixel": styleTags = "Pixel art, 16-bit style, retro gaming aesthetic, crisp pixels, high quality sprite art."; break;
-    }
-
-    prompt += styleTags + " Appropriate background that suits the character's setting and personality.";
+    prompt += " Appropriate background that suits the character's setting and personality.";
 
     return prompt;
   }
@@ -832,30 +823,6 @@ ${lorebookContent}`;
     const personalityTraits =
       this.extractPersonalityTraits(characterDescription);
 
-    const style = this.config.get("api.image.style");
-    let styleInstruction = "";
-    if (style) {
-        let styleTags = "";
-        switch (style) {
-            case "realistic": styleTags = "Hyper-realistic photography, 8k resolution, photorealistic, natural lighting, DSLR, masterpiece"; break;
-            case "anime": styleTags = "High quality anime style, vibrant colors, detailed anime character design"; break;
-            case "hand-drawn-anime": styleTags = "Traditional hand-drawn anime style, classic 90s anime aesthetic"; break;
-            case "painted-anime": styleTags = "Painted anime artwork style, vibrant colors, detailed brushstrokes, high quality illustration, painting, anime masterpiece, hand painted"; break;
-            case "waifu": styleTags = "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character"; break;
-            case "sexy": styleTags = "Sexy, alluring, highly attractive, seductive, beautiful, appealingly posed"; break;
-            case "comic": styleTags = "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading"; break;
-            case "cinematic": styleTags = "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting"; break;
-            case "fantasy": styleTags = "Digital fantasy art, artstation masterpiece, trending on artstation, epic fantasy"; break;
-            case "cyberpunk": styleTags = "Cyberpunk style, neon lights, dark futuristic setting, high tech, synthwave aesthetics"; break;
-            case "3d-render": styleTags = "3D render, octane render, unreal engine 5, stylized 3D, CGI, ray tracing"; break;
-            case "watercolor": styleTags = "Watercolor painting style, soft edges, pastel colors, artistic brushstrokes"; break;
-            case "pixel": styleTags = "Pixel art, 16-bit style, retro gaming aesthetic, crisp pixels"; break;
-        }
-        if (styleTags) {
-            styleInstruction = `\n4. Art Style: You MUST include these EXACT style keywords in the prompt: ${styleTags}.`;
-        }
-    }
-
     return `You are an AI assistant specialized in creating clear, short, and distinct text-to-image prompts for image generation models.
 
 Character Name: ${characterName || "Unknown"}
@@ -873,7 +840,7 @@ Create a brief natural language prompt describing an image of this character. Ex
 
 1. Basic Visual Description: Age, hair, eyes, key facial features, and core outfit.
 2. Attitude & Demeanor: A couple of words on their posture or facial expression reflecting their personality.
-3. Short Scene: A very short, simple background or setting.${styleInstruction}
+3. Short Scene: A very short, simple background or setting.
 
 Use ONLY positive statements about what SHOULD be in the image. You may add a few quality tags at the end (e.g., masterpiece, high quality, highly detailed).
 
@@ -925,6 +892,25 @@ BEGIN IMAGE PROMPT NOW:`;
       traits.push("menacing");
 
     return traits.length > 0 ? traits.join(", ") : "complex personality";
+  }
+
+  getImageStyleTags(style) {
+    switch (style) {
+      case "realistic": return "Hyper-realistic photography, 8k resolution, highly detailed face, photorealistic, natural lighting, DSLR, masterpiece.";
+      case "anime": return "High quality anime style, vibrant colors, detailed anime character design.";
+      case "hand-drawn-anime": return "Traditional hand-drawn anime style, classic 90s anime aesthetic, cel shading, studio ghibli style, detailed 2D illustration.";
+      case "painted-anime": return "Painted anime artwork style, vibrant colors, detailed brushstrokes, high quality illustration, digital painting, anime masterpiece.";
+      case "waifu": return "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character, distinct anime features.";
+      case "sexy": return "Sexy, alluring, highly attractive, seductive, beautiful, masterpiece, highly detailed, stunning, appealingly posed.";
+      case "comic": return "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading, vibrant comic colors.";
+      case "cinematic": return "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting, photorealistic.";
+      case "fantasy": return "Digital fantasy art, artstation masterpiece, trending on artstation, stylized digital illustration, epic fantasy.";
+      case "cyberpunk": return "Cyberpunk style, neon lights, dark futuristic setting, high tech, synthwave aesthetics, highly detailed.";
+      case "3d-render": return "3D render, octane render, unreal engine 5, highly detailed 3D model, stylized 3D, CGI, ray tracing, masterpiece.";
+      case "watercolor": return "Watercolor painting style, soft edges, pastel colors, artistic brushstrokes, traditional media look, beautiful illustration.";
+      case "pixel": return "Pixel art, 16-bit style, retro gaming aesthetic, crisp pixels, high quality sprite art.";
+      default: return "";
+    }
   }
 
   async tryAlternativeAuth(endpoint, data) {
@@ -1127,6 +1113,8 @@ BEGIN IMAGE PROMPT NOW:`;
         scenario: parsed.scenario || currentCharacter.scenario || "",
         firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
         mesExample: parsed.mesExample || parsed.mes_example || currentCharacter.mesExample || "",
+        character_book: currentCharacter.character_book,
+        alternateGreetings: currentCharacter.alternateGreetings,
       };
     } catch (error) {
       console.error("=== REVISION FAILED ===", error);

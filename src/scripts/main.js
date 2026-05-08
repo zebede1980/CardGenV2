@@ -197,9 +197,6 @@ class CharacterGeneratorApp {
     if (imageStyleSelect) {
       imageStyleSelect.addEventListener("change", () => {
         this.saveAPISettings(); // Ensure the new style is saved to config before regenerating
-        if (this.currentCharacter) {
-          this.handleRegeneratePrompt();
-        }
       });
     }
 
@@ -2194,7 +2191,6 @@ class CharacterGeneratorApp {
       }
 
       document.getElementById("image-controls").style.display = "block";
-      await this.saveCardToLibrary();
       
       if (characterData.character_book && characterData.character_book.entries) {
         this.lorebookEntries = characterData.character_book.entries.map(e => ({
@@ -2218,6 +2214,7 @@ class CharacterGeneratorApp {
       }
       this.updateAltGreetingsCount();
 
+      await this.saveCardToLibrary();
       await this.refreshLibraryViews();
       
       if (autoRemaster) {
@@ -2678,6 +2675,10 @@ class CharacterGeneratorApp {
     if (!this.storageReady || !this.storage || !this.currentCharacter) return;
 
     try {
+      // Sync these to ensure latest data is saved
+      this.currentCharacter.character_book = this.buildCharacterBook();
+      this.syncAltGreetingsToCharacter();
+
       let imageBlob = null;
       if (this.currentImageUrl) {
         try {
@@ -3005,6 +3006,7 @@ class CharacterGeneratorApp {
       this.renderLorebookEntries();
       this.updateLorebookEntryCount();
       this.resetLorebookEditor(); // In case the deleted one was being edited
+      this.saveCardToLibrary();
       this.showNotification("Lorebook entry deleted.", "info");
     }
   }
