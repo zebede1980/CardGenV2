@@ -76,17 +76,9 @@ class CharacterGeneratorApp {
     const downloadBtn = document.getElementById("download-btn");
     downloadBtn.addEventListener("click", () => this.handleDownload());
 
-    // Download JSON button
-    const downloadJsonBtn = document.getElementById("download-json-btn");
-    downloadJsonBtn.addEventListener("click", () => this.handleDownloadJSON());
-
     // Save Card button
     const saveCardBtn = document.getElementById("save-card-btn");
     if (saveCardBtn) saveCardBtn.addEventListener("click", () => this.handleSaveCardManual());
-
-    // Regenerate button
-    const regenerateBtn = document.getElementById("regenerate-btn");
-    regenerateBtn.addEventListener("click", () => this.handleRegenerate());
 
     // Import card button
     const importCardBtn = document.getElementById("import-card-btn");
@@ -303,7 +295,7 @@ class CharacterGeneratorApp {
 
     // Save API settings on input change
     const apiInputs = document.querySelectorAll(
-      "#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-model, #image-style",
+      "#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-style",
     );
     apiInputs.forEach((input) => {
       input.addEventListener("change", () => this.saveAPISettings());
@@ -472,6 +464,26 @@ class CharacterGeneratorApp {
         keysInput.focus();
     });
 
+    // Fetch Image Models & Active Model Selection
+    const fetchImageModelsBtn = document.getElementById("fetch-image-models-btn");
+    if (fetchImageModelsBtn) fetchImageModelsBtn.addEventListener("click", () => this.handleFetchImageModels());
+    
+    const activeImageModelSelect = document.getElementById("active-image-model");
+    if (activeImageModelSelect) {
+        activeImageModelSelect.addEventListener("change", (e) => {
+            this.config.set("api.image.model", e.target.value);
+        });
+    }
+    
+    const imageModelsContainer = document.getElementById("image-models-container");
+    if (imageModelsContainer) {
+        imageModelsContainer.addEventListener("change", (e) => {
+            if (e.target.classList.contains("image-model-checkbox")) {
+                this.saveAPISettings();
+            }
+        });
+    }
+
     // Alt Greetings Manager
     const manageAltGreetingsBtn = document.getElementById("manage-alt-greetings-btn");
     const altGreetingsModal = document.getElementById("alt-greetings-manager-modal");
@@ -539,6 +551,67 @@ class CharacterGeneratorApp {
       indicator.className = "status-indicator status-offline";
       text.textContent = `API Status: ${error.message}`;
     }
+  }
+
+  async handleFetchImageModels() {
+      const statusEl = document.getElementById("fetch-models-status");
+      const container = document.getElementById("image-models-container");
+      
+      if (!statusEl || !container) return;
+      
+      statusEl.textContent = "Fetching...";
+      statusEl.style.color = "var(--text-secondary)";
+      
+      try {
+          this.config.loadFromForm();
+          const models = await this.apiHandler.fetchModels('image');
+          
+          if (models && models.length > 0) {
+              const currentSelected = new Set(this.config.get("api.image.models") || []);
+              
+              container.innerHTML = models.map(m => `
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer;">
+                      <input type="checkbox" class="image-model-checkbox" value="${m.id}" ${currentSelected.has(m.id) ? 'checked' : ''}>
+                      ${m.id}
+                  </label>
+              `).join('');
+              
+              statusEl.textContent = `Found ${models.length} models`;
+              statusEl.style.color = "var(--success)";
+          } else {
+              container.innerHTML = '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">No models returned from API.</p>';
+              statusEl.textContent = "No models found";
+              statusEl.style.color = "var(--warning)";
+          }
+      } catch (error) {
+          statusEl.textContent = "Failed to fetch";
+          statusEl.style.color = "var(--error)";
+          container.innerHTML = `<p style="font-size: 0.8rem; color: var(--error); margin: 0;">Error: ${error.message}</p>`;
+      }
+  }
+  
+  updateActiveModelsDropdown() {
+      const select = document.getElementById("active-image-model");
+      if (!select) return;
+      
+      const models = this.config.get("api.image.models") || [];
+      const currentModel = this.config.get("api.image.model") || "";
+      
+      if (models.length === 0) {
+          select.innerHTML = '<option value="">Default Model</option>';
+          if (currentModel && !models.includes(currentModel)) {
+              select.innerHTML += `<option value="${currentModel}" selected>${currentModel}</option>`;
+          }
+      } else {
+          select.innerHTML = models.map(model => 
+              `<option value="${model}" ${model === currentModel ? 'selected' : ''}>${model}</option>`
+          ).join('');
+          
+          if (!models.includes(currentModel) && models.length > 0) {
+              this.config.set("api.image.model", models[0]);
+              select.value = models[0];
+          }
+      }
   }
 
   saveAPISettings() {
@@ -672,10 +745,6 @@ class CharacterGeneratorApp {
     this.clearStream();
 
     try {
-      // Show stream section
-      const streamSection = document.querySelector(".stream-section");
-      streamSection.style.display = "block";
-
       const pov = document.getElementById("pov-select").value;
       let effectiveConcept = concept;
 
@@ -1248,12 +1317,12 @@ class CharacterGeneratorApp {
       }
 
       // Models
-      const models = [
-          "z-image-turbo",
-          "chroma",
-          "hidream",
-          "qwen-image"
-      ];
+      let models = this.config.get("api.image.models") || [];
+      if (models.length === 0) {
+          models = ["z-image-turbo", "chroma", "hidream", "qwen-image"];
+      }
+      // Cap at 4 models for Gen 4
+      models = models.slice(0, 4);
 
       // Call API 4 times concurrently
       const promises = models.map((modelName, index) => 
@@ -1358,10 +1427,10 @@ class CharacterGeneratorApp {
           window.updatePromptCharCount();
       }
 
-      const imageModelInput = document.getElementById("image-model");
-      if (imageModelInput) {
-          imageModelInput.value = selectedModel;
-          this.saveAPISettings(); // Save the newly selected model to config
+      const activeImageModelSelect = document.getElementById("active-image-model");
+      if (activeImageModelSelect) {
+          activeImageModelSelect.value = selectedModel;
+          this.config.set("api.image.model", selectedModel);
       }
 
       this.showNotification("Image selected and saved to card!", "success");
@@ -1550,79 +1619,6 @@ class CharacterGeneratorApp {
     this.showNotification(`${fieldName} reset to original`, "success");
   }
 
-  async handleDownloadJSON() {
-    if (!this.currentCharacter) {
-      this.showNotification("No character to download", "warning");
-      return;
-    }
-
-    try {
-      this.showNotification("Preparing character JSON...", "info");
-
-      // Get the current (possibly edited) character fields
-      const nameInput = document.getElementById("character-generated-name");
-      const descriptionTextarea = document.getElementById(
-        "character-description",
-      );
-      const personalityTextarea = document.getElementById(
-        "character-personality",
-      );
-      const scenarioTextarea = document.getElementById("character-scenario");
-      const firstMessageTextarea = document.getElementById(
-        "character-first-message",
-      );
-      const exampleMessagesOutput = document.getElementById(
-        "example-messages-output",
-      );
-
-      // Update currentCharacter with edited content
-      if (nameInput) {
-        this.currentCharacter.name = nameInput.value.trim();
-      }
-      this.currentCharacter.description = descriptionTextarea.value.trim();
-      this.currentCharacter.personality = personalityTextarea.value.trim();
-      this.currentCharacter.scenario = scenarioTextarea.value.trim();
-      this.currentCharacter.firstMessage = firstMessageTextarea.value.trim();
-
-      if (exampleMessagesOutput) {
-        if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
-          this.currentCharacter.mesExample = exampleMessagesOutput.value.trim();
-        } else if (exampleMessagesOutput.isContentEditable) {
-          this.currentCharacter.mesExample = exampleMessagesOutput.innerText.trim();
-        }
-      }
-
-      // Embed Lorebook in Character Object before export
-      this.currentCharacter.character_book = this.buildCharacterBook();
-      this.syncAltGreetingsToCharacter();
-
-      // Convert to Spec V2 format
-      const specV2Data = this.characterGenerator.toSpecV2Format(
-        this.currentCharacter,
-      );
-
-      // Create JSON string with nice formatting
-      const jsonString = JSON.stringify(specV2Data, null, 2);
-
-      // Create blob and download
-      const blob = new Blob([jsonString], { type: "application/json" });
-      this.downloadBlob(
-        blob,
-        `${this.currentCharacter.name || "character"}_data.json`,
-      );
-
-      this.showNotification(
-        "Character JSON downloaded successfully!",
-        "success",
-      );
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
-    } catch (error) {
-      console.error("Error downloading JSON:", error);
-      this.showNotification("Failed to download JSON", "error");
-    }
-  }
-
   handleCharacterEdit(field) {
     if (!this.originalCharacter || !this.currentCharacter) {
       return;
@@ -1737,76 +1733,6 @@ class CharacterGeneratorApp {
 
     // Clean up
     setTimeout(() => URL.revokeObjectURL(url), 100);
-  }
-
-  handleRegenerate() {
-    // Instead of just clearing, automatically trigger generation again
-    this.hideResultSection();
-    this.clearStream();
-    const streamSection = document.querySelector(".stream-section");
-    streamSection.style.display = "none";
-    this.currentCharacter = null;
-    this.currentImageUrl = null;
-    this.lorebookEntries = [];
-    this.updateLorebookEntryCount();
-    this.altGreetings = [];
-    this.updateAltGreetingsCount();
-    document.getElementById("image-controls").style.display = "none";
-
-    // Clear image content and prompt editor
-    const imageContent = document.getElementById("image-content");
-    const promptEditor = document.getElementById("image-prompt-editor");
-    const customPromptTextarea = document.getElementById("custom-image-prompt");
-
-    if (imageContent) {
-      imageContent.innerHTML = `
-        <div class="image-placeholder">
-          <div class="loading-spinner"></div>
-        </div>
-      `;
-    }
-
-    if (promptEditor) {
-      promptEditor.style.display = "none";
-    }
-
-    if (customPromptTextarea) {
-      customPromptTextarea.value = "";
-      window.updatePromptCharCount();
-    }
-
-    const nameInput = document.getElementById("character-generated-name");
-    if (nameInput) {
-      nameInput.value = "";
-    }
-
-    const promptsToClear = ['description-prompt', 'personality-prompt', 'scenario-prompt', 'first-message-prompt'];
-    promptsToClear.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = "";
-    });
-
-    const exampleMessagesPrompt = document.getElementById("example-messages-prompt");
-    if (exampleMessagesPrompt) {
-      exampleMessagesPrompt.value = "";
-    }
-
-    // Auto-trigger generation with the same inputs
-    const concept = document.getElementById("character-concept").value.trim();
-    if (concept) {
-      this.showNotification("Regenerating character...", "info");
-      // Small delay to allow UI to update
-      setTimeout(() => {
-        this.handleGenerate();
-      }, 100);
-    } else {
-      // If no concept, just focus on the input
-      document.getElementById("character-concept").focus();
-      this.showNotification(
-        "Please enter a character concept first",
-        "warning",
-      );
-    }
   }
 
   setGeneratingState(isGenerating) {
@@ -1995,12 +1921,6 @@ class CharacterGeneratorApp {
       }
     }
 
-    // Show JSON download button whenever character data is available
-    const downloadJsonBtn = document.getElementById("download-json-btn");
-    if (downloadJsonBtn) {
-      downloadJsonBtn.style.display = "inline-flex";
-    }
-
     this.updateTokenCounts();
   }
 
@@ -2041,17 +1961,12 @@ class CharacterGeneratorApp {
   showResultSection() {
     const resultSection = document.querySelector(".result-section");
     const downloadBtn = document.getElementById("download-btn");
-    const downloadJsonBtn = document.getElementById("download-json-btn");
     const saveCardBtn = document.getElementById("save-card-btn");
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
 
     resultSection.style.display = "block";
     downloadBtn.style.display = "inline-flex";
 
-    // Show JSON download button when character data is available
-    if (downloadJsonBtn && this.currentCharacter) {
-      downloadJsonBtn.style.display = "inline-flex";
-    }
     if (saveCardBtn && this.currentCharacter) {
       saveCardBtn.style.display = "inline-flex";
     }
@@ -2066,13 +1981,11 @@ class CharacterGeneratorApp {
   hideResultSection() {
     const resultSection = document.querySelector(".result-section");
     const downloadBtn = document.getElementById("download-btn");
-    const downloadJsonBtn = document.getElementById("download-json-btn");
     const saveCardBtn = document.getElementById("save-card-btn");
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
 
     resultSection.style.display = "none";
     downloadBtn.style.display = "none";
-    if (downloadJsonBtn) downloadJsonBtn.style.display = "none";
     if (saveCardBtn) saveCardBtn.style.display = "none";
     if (checkConsistencyBtn) checkConsistencyBtn.style.display = "none";
   }
@@ -3423,13 +3336,7 @@ class CharacterGeneratorApp {
       // Escape to cancel/clear
       if (e.key === "Escape") {
         if (this.isGenerating) {
-          // Cancel generation (would need implementation in API calls)
-          this.showNotification(
-            "Cannot cancel generation in progress",
-            "warning",
-          );
-        } else {
-          this.handleRegenerate();
+          this.handleStop();
         }
       }
     });

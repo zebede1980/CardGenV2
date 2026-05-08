@@ -915,6 +915,44 @@ BEGIN IMAGE PROMPT NOW:`;
     }
   }
 
+  async fetchModels(type = 'image') {
+    const baseUrl = this.config.get(`api.${type}.baseUrl`);
+    const apiKey = this.config.get(`api.${type}.apiKey`);
+
+    if (!baseUrl) throw new Error("API Base URL is required to fetch models");
+
+    let endpoint = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    if (!endpoint.endsWith('/v1') && !endpoint.includes('/models')) {
+        // Attempt to guess correct endpoint if it doesn't seem explicitly provided
+    }
+    const url = `${endpoint}/models`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+            }
+        });
+        
+        if (!response.ok) {
+            let errorMsg = response.statusText;
+            try {
+                const errData = await response.json();
+                errorMsg = errData.error?.message || errData.message || errorMsg;
+            } catch (e) {}
+            throw new Error(`HTTP ${response.status}: ${errorMsg}`);
+        }
+        
+        const data = await response.json();
+        return data.data || [];
+    } catch (error) {
+        console.error("Failed to fetch models:", error);
+        throw error;
+    }
+  }
+
   async tryAlternativeAuth(endpoint, data) {
     const altAuthMethods = [
       () => this.makeRequestWithAuth(endpoint, data, "X-API-Key"),

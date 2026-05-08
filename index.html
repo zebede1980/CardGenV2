@@ -221,16 +221,18 @@
                                 style="display: none"
                             />
                         </div>
-                    </details>
-                </section>
 
-                <section class="stream-section">
-                    <h2 class="section-title">Generation Stream</h2>
-                    <div id="stream-content" class="stream-box">
-                        <div class="stream-placeholder">
-                            Generation output will appear here...
-                        </div>
-                    </div>
+                        <details id="stream-section-details" style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                            <summary class="section-title" style="cursor: pointer; padding: 0.5rem 0; user-select: none; font-size: 1.1rem;">
+                                📡 View Raw Generation Stream (Debug)
+                            </summary>
+                            <div id="stream-content" class="stream-box" style="margin-top: 0.5rem;">
+                                <div class="stream-placeholder">
+                                    Generation output will appear here...
+                                </div>
+                            </div>
+                        </details>
+                    </details>
                 </section>
 
                 <section class="result-section" style="display: none">
@@ -822,6 +824,12 @@
                                     </select>
                                 </div>
                                 <div class="image-controls-wrapper">
+                                <div class="form-group" style="margin-bottom: 1rem;">
+                                    <label for="active-image-model" class="label">Image Model</label>
+                                    <select id="active-image-model" class="input">
+                                        <option value="">Default Model</option>
+                                    </select>
+                                </div>
                                     <div class="image-buttons-row">
                                         <button
                                             id="regenerate-prompt-btn"
@@ -907,13 +915,6 @@
                         >
                             Download Character Card (PNG)
                         </button>
-                        <button
-                            id="download-json-btn"
-                            class="btn-outline"
-                            style="display: none"
-                        >
-                            Download Character JSON
-                        </button>
                         <button id="save-card-btn" class="btn-outline" style="display: none">
                             💾 Save to Library
                         </button>
@@ -938,9 +939,6 @@
                             accept=".png,.json,application/json,image/png"
                             style="display: none"
                         />
-                        <button id="regenerate-btn" class="btn-outline">
-                            Regenerate
-                        </button>
                     </div>
                 </section>
 
@@ -1096,23 +1094,16 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="image-model" class="label"
-                            >Image Model (optional)</label
+                        <label class="label"
+                            >Available Image Models</label
                         >
-                        <input
-                            type="text"
-                            id="image-model"
-                            class="input"
-                            list="image-models-list"
-                            placeholder="e.g., bytedance/seedream-4 (optional)"
-                        />
-                        <datalist id="image-models-list">
-                            <option value="z-image-turbo"></option>
-                            <option value="chroma"></option>
-                            <option value="hidream"></option>
-                            <option value="qwen-image"></option>
-                            <option value="grok-2-image"></option>
-                        </datalist>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <button id="fetch-image-models-btn" class="btn-small" type="button">Fetch Models</button>
+                            <span id="fetch-models-status" style="font-size: 0.8rem; align-self: center;"></span>
+                        </div>
+                        <div id="image-models-container" style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); padding: 0.5rem; border-radius: 0.375rem; background: var(--surface-color); display: flex; flex-direction: column; gap: 0.5rem;">
+                            <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">Click 'Fetch Models' to load available models.</p>
+                        </div>
                     </div>
 
                     <div class="form-group">

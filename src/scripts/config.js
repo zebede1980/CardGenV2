@@ -22,6 +22,7 @@ class Config {
           baseUrl: "",
           apiKey: "",
           model: "",
+          models: [],
           size: "",
           style: "",
           timeout: 180000,
@@ -107,14 +108,15 @@ class Config {
       .getElementById("image-api-base")
       ?.value?.trim();
     const imageApiKey = document.getElementById("image-api-key")?.value?.trim();
-    const imageModel = document.getElementById("image-model")?.value?.trim();
     const imageSize = document.getElementById("image-size")?.value?.trim();
     const imageStyle = document.getElementById("image-style")?.value;
+    
+    const imageModelCheckboxes = document.querySelectorAll(".image-model-checkbox:checked");
+    this.config.api.image.models = Array.from(imageModelCheckboxes).map(cb => cb.value);
 
     if (imageBaseUrl !== undefined)
       this.config.api.image.baseUrl = imageBaseUrl;
     if (imageApiKey !== undefined) this.config.api.image.apiKey = imageApiKey;
-    if (imageModel !== undefined) this.config.api.image.model = imageModel;
     if (imageSize !== undefined) this.config.api.image.size = imageSize;
     if (imageStyle !== undefined) this.config.api.image.style = imageStyle;
 
@@ -170,16 +172,33 @@ class Config {
       // Save image API to form
       const imageBaseUrl = document.getElementById("image-api-base");
       const imageApiKey = document.getElementById("image-api-key");
-      const imageModel = document.getElementById("image-model");
       const imageSize = document.getElementById("image-size");
       const imageStyle = document.getElementById("image-style");
 
       if (imageBaseUrl)
         imageBaseUrl.value = this.config.api.image.baseUrl || "";
       if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
-      if (imageModel) imageModel.value = this.config.api.image.model || "";
       if (imageSize) imageSize.value = this.config.api.image.size || "";
       if (imageStyle) imageStyle.value = this.config.api.image.style || "";
+      
+      const imageModelsContainer = document.getElementById("image-models-container");
+      if (imageModelsContainer) {
+          if (this.config.api.image.models && this.config.api.image.models.length > 0) {
+              imageModelsContainer.innerHTML = this.config.api.image.models.map(model => `
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer;">
+                      <input type="checkbox" class="image-model-checkbox" value="${model}" checked>
+                      ${model}
+                  </label>
+              `).join('');
+          } else {
+              imageModelsContainer.innerHTML = '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">Click \'Fetch Models\' to load available models.</p>';
+          }
+      }
+      
+      // Update main UI dropdown
+      if (window.app && typeof window.app.updateActiveModelsDropdown === 'function') {
+          window.app.updateActiveModelsDropdown();
+      }
 
       // Save toggle states
       const enableImageGeneration = document.getElementById(
