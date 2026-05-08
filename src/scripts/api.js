@@ -355,14 +355,13 @@ class APIHandler {
     // Store the prompt so it can be accessed later
     this.lastGeneratedImagePrompt = imagePrompt;
 
-    // Apply style tags to the prompt actually sent to the API
+    // Apply style tags to the prompt actually sent to the API (bookended: prefix + suffix)
     let finalApiPrompt = imagePrompt;
     const style = this.config.get("api.image.style");
     if (style) {
-      const styleTags = this.getImageStyleTags(style);
-      if (styleTags) {
-        finalApiPrompt = `${finalApiPrompt.trim()} ${styleTags}`;
-      }
+      const { prefix, suffix } = this.getImageStyleTags(style);
+      if (prefix) finalApiPrompt = `${prefix} ${finalApiPrompt.trim()}`;
+      if (suffix) finalApiPrompt = `${finalApiPrompt.trim()}, ${suffix}`;
     }
 
     const model = modelOverride || this.config.get("api.image.model");
@@ -890,21 +889,127 @@ BEGIN PROMPT:`;
   }
 
   getImageStyleTags(style) {
+    // Returns { prefix, suffix } — prefix is prepended, suffix appended.
+    // Bookending reinforces style with natural-language declaration (better for Flux/HiDream)
+    // and trailing keyword tags (better for SDXL-family models).
+    const s = (prefix, suffix) => ({ prefix, suffix });
     switch (style) {
-      case "realistic": return "Hyper-realistic photography, 8k resolution, highly detailed face, photorealistic, natural lighting, DSLR, masterpiece.";
-      case "anime": return "High quality anime style, vibrant colors, detailed anime character design.";
-      case "hand-drawn-anime": return "Traditional hand-drawn anime style, highly detailed and intricate line art, authentic traditional media look, ink and paper texture, classic 90s anime aesthetic, cel shading, studio ghibli style, masterpiece illustration, not CGI.";
-      case "painted-anime": return "Intricate painted anime artwork, rich canvas texture, detailed expressive brushstrokes, traditional oil painting style, masterpiece illustration, authentic real-world art techniques, vibrant colors, not computer generated.";
-      case "waifu": return "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character, distinct anime features.";
-      case "sexy": return "Sexy, alluring, highly attractive, seductive, beautiful, masterpiece, highly detailed, stunning, appealingly posed.";
-      case "comic": return "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading, vibrant comic colors.";
-      case "cinematic": return "Cinematic lighting, dramatic shadows, movie still, epic composition, volumetric lighting, photorealistic.";
-      case "fantasy": return "Digital fantasy art, artstation masterpiece, trending on artstation, stylized digital illustration, epic fantasy.";
-      case "cyberpunk": return "Cyberpunk style, neon lights, dark futuristic setting, high tech, synthwave aesthetics, highly detailed.";
-      case "3d-render": return "3D render, octane render, unreal engine 5, highly detailed 3D model, stylized 3D, CGI, ray tracing, masterpiece.";
-      case "watercolor": return "Watercolor painting style, soft edges, pastel colors, artistic brushstrokes, traditional media look, beautiful illustration.";
-      case "pixel": return "Pixel art, 16-bit style, retro gaming aesthetic, crisp pixels, high quality sprite art.";
-      default: return "";
+      case "realistic":
+        return s(
+          "A hyper-realistic photograph of",
+          "DSLR photo, 85mm portrait lens, natural lighting, shallow depth of field, 8k resolution, photorealistic, highly detailed skin and features, masterpiece"
+        );
+      case "anime":
+        return s(
+          "High quality anime illustration of",
+          "anime style, vibrant colors, clean line art, detailed anime character design, professional anime art, 2D animation quality"
+        );
+      case "hand-drawn-anime":
+        return s(
+          "Traditional hand-drawn anime artwork of",
+          "hand-drawn anime, intricate ink line art, cel shading, classic 90s anime aesthetic, paper texture, authentic traditional media, not CGI, masterpiece illustration"
+        );
+      case "painted-anime":
+        return s(
+          "Painted anime artwork of",
+          "painted anime, rich canvas texture, expressive brushstrokes, traditional oil painting technique, vibrant colors, masterpiece illustration, not computer generated"
+        );
+      case "waifu":
+        return s(
+          "Beautiful waifu anime illustration of",
+          "waifu style, best quality, ultra-detailed, masterpiece, beautiful anime character, soft lighting, distinct anime features, appealing design"
+        );
+      case "sexy":
+        return s(
+          "A seductive, alluring portrait of",
+          "sexy, alluring, highly attractive, beautiful, masterpiece, highly detailed, stunning, tastefully posed, professional lighting"
+        );
+      case "comic":
+        return s(
+          "Western comic book art of",
+          "comic book style, graphic novel, bold ink outlines, halftone shading, dynamic composition, vibrant comic colors, professional illustration"
+        );
+      case "cinematic":
+        return s(
+          "A cinematic film still of",
+          "cinematic photography, anamorphic lens, dramatic chiaroscuro lighting, volumetric light, movie still, epic composition, 35mm film, color graded, photorealistic"
+        );
+      case "fantasy":
+        return s(
+          "Epic digital fantasy art of",
+          "fantasy digital painting, artstation masterpiece, stylized illustration, detailed fantasy art, Greg Rutkowski style, epic atmosphere"
+        );
+      case "cyberpunk":
+        return s(
+          "Cyberpunk digital art of",
+          "cyberpunk aesthetic, neon-lit rain-soaked streets, dark futuristic dystopia, holographic signage, synthwave color palette, high tech low life, highly detailed"
+        );
+      case "3d-render":
+        return s(
+          "A high-quality 3D render of",
+          "octane render, Unreal Engine 5, ray tracing, subsurface scattering, physically based rendering, studio lighting, CGI, masterpiece"
+        );
+      case "watercolor":
+        return s(
+          "A watercolor painting of",
+          "watercolor illustration, wet-on-wet technique, soft diffused edges, translucent washes, pastel tones, watercolor paper texture, beautiful fine art"
+        );
+      case "pixel":
+        return s(
+          "Pixel art of",
+          "pixel art, 16-bit SNES style, crisp pixels, limited color palette, retro game sprite, high quality pixel illustration"
+        );
+      case "oil-painting":
+        return s(
+          "A classical oil painting portrait of",
+          "oil on canvas, old masters technique, impasto brushwork, rich saturated colors, Rembrandt lighting, museum quality fine art, highly detailed"
+        );
+      case "concept-art":
+        return s(
+          "Professional character concept art of",
+          "game concept art, character design sheet, clean rendering, professional illustration, artstation, dynamic lighting, detailed costume design"
+        );
+      case "gothic":
+        return s(
+          "Dark gothic illustration of",
+          "gothic art, dark fantasy, dramatic shadows, moody atmosphere, Victorian gothic aesthetic, intricate dark detail, haunting beauty"
+        );
+      case "art-nouveau":
+        return s(
+          "Art Nouveau illustration of",
+          "Art Nouveau style, Alphonse Mucha inspired, flowing organic lines, decorative floral border motifs, elegant curves, muted jewel tones, vintage poster art, ornamental"
+        );
+      case "noir":
+        return s(
+          "Film noir black and white photograph of",
+          "film noir, black and white photography, hard chiaroscuro lighting, deep shadows, venetian blind light streaks, 1940s aesthetic, grainy 35mm, dramatic contrast"
+        );
+      case "ink-sketch":
+        return s(
+          "Detailed pen and ink sketch of",
+          "pen and ink illustration, cross-hatching, fine line art, monochrome, technical pen drawing, editorial illustration style, high contrast black and white"
+        );
+      case "storybook":
+        return s(
+          "Whimsical storybook illustration of",
+          "children's book illustration, warm inviting palette, soft rounded shapes, charming storybook art, gentle painterly style, fairy tale aesthetic, detailed background"
+        );
+      case "manhwa":
+        return s(
+          "Korean manhwa style illustration of",
+          "manhwa art style, webtoon, clean crisp line art, soft cel shading, expressive large eyes, detailed hair, Korean comic aesthetic, professional webtoon quality"
+        );
+      case "chibi":
+        return s(
+          "Cute chibi anime illustration of",
+          "chibi style, super deformed SD, large head small body, adorable rounded features, pastel colors, clean lines, kawaii, chibi character art"
+        );
+      case "vintage":
+        return s(
+          "Vintage retro illustration of",
+          "vintage illustration, retro poster art, mid-century modern design, muted aged color palette, Art Deco influences, halftone texture, 1950s magazine illustration style"
+        );
+      default: return { prefix: "", suffix: "" };
     }
   }
 
