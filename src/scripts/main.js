@@ -248,6 +248,36 @@ class CharacterGeneratorApp {
     const fetchImageModelsBtn = document.getElementById("fetch-image-models-btn");
     if (fetchImageModelsBtn) fetchImageModelsBtn.addEventListener("click", () => this.handleFetchImageModels());
 
+    // Manual model entry
+    const addImageModelBtn = document.getElementById("add-image-model-btn");
+    const manualImageModelInput = document.getElementById("manual-image-model-input");
+    if (addImageModelBtn && manualImageModelInput) {
+      const addManualModel = () => {
+        const modelId = manualImageModelInput.value.trim();
+        if (!modelId) return;
+        const container = document.getElementById("image-models-container");
+        if (!container) return;
+        // Remove placeholder text if present
+        const placeholder = container.querySelector("p");
+        if (placeholder) placeholder.remove();
+        // Don't add duplicates
+        if (container.querySelector(`input[value="${CSS.escape(modelId)}"]`)) {
+          manualImageModelInput.value = "";
+          return;
+        }
+        const label = document.createElement("label");
+        label.style.cssText = "display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:pointer;";
+        label.innerHTML = `<input type="checkbox" class="image-model-checkbox" value="${modelId}" checked> ${modelId}`;
+        container.appendChild(label);
+        manualImageModelInput.value = "";
+        this.saveAPISettings();
+        const searchInput = document.getElementById("image-model-search");
+        if (searchInput) searchInput.style.display = "block";
+      };
+      addImageModelBtn.addEventListener("click", addManualModel);
+      manualImageModelInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addManualModel(); } });
+    }
+
     const imageModelSearch = document.getElementById("image-model-search");
     if (imageModelSearch) {
       imageModelSearch.addEventListener("input", (e) => {
