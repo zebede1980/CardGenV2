@@ -839,8 +839,8 @@ ${lorebookContent}`;
         switch (style) {
             case "realistic": styleTags = "Hyper-realistic photography, 8k resolution, photorealistic, natural lighting, DSLR, masterpiece"; break;
             case "anime": styleTags = "High quality anime style, vibrant colors, detailed anime character design"; break;
-            case "hand-drawn-anime": styleTags = "Traditional hand-drawn anime style, classic 90s anime aesthetic,  studio ghibli style"; break;
-            case "painted-anime": styleTags = "Painted anime artwork style, vibrant colors, detailed brushstrokes, high quality illustration, digital painting, anime masterpiece"; break;
+            case "hand-drawn-anime": styleTags = "Traditional hand-drawn anime style, classic 90s anime aesthetic"; break;
+            case "painted-anime": styleTags = "Painted anime artwork style, vibrant colors, detailed brushstrokes, high quality illustration, painting, anime masterpiece, hand painted"; break;
             case "waifu": styleTags = "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character"; break;
             case "sexy": styleTags = "Sexy, alluring, highly attractive, seductive, beautiful, appealingly posed"; break;
             case "comic": styleTags = "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading"; break;

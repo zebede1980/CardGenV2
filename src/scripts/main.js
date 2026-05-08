@@ -1087,12 +1087,83 @@ class CharacterGeneratorApp {
       promptEditor.style.display = "block";
     }
 
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = "🖼️ Review Generated Image";
+
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    
+    const loadingText = loading.querySelector("p");
+    if (loadingText) loadingText.textContent = "Generating image... this might take a minute.";
+    
+    grid.innerHTML = "";
+    loading.style.display = "block";
+
     try {
-      this.showNotification("Regenerating image...", "info");
-      await this.generateImage();
-      this.showNotification("Image regenerated successfully!", "success");
+      const customPrompt = customPromptTextarea?.value?.trim();
+      const referenceImageDescription = document.getElementById("reference-image-description")?.value?.trim();
+      
+      const imageDescriptionInput = referenceImageDescription
+        ? `${this.currentCharacter.description}\n\nReference image details:\n${referenceImageDescription}`
+        : this.currentCharacter.description;
+        
+      const promptFromReference = referenceImageDescription
+        ? `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceImageDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`
+        : "";
+        
+      const effectivePrompt = customPrompt || promptFromReference || null;
+
+      const model = this.config.get("api.image.model") || "";
+
+      const imageUrl = await window.apiHandler.generateImage(
+        imageDescriptionInput,
+        this.currentCharacter.name,
+        effectivePrompt,
+        model
+      );
+
+      let displayUrl = imageUrl;
+      if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+          const response = await fetch(proxyUrl);
+          if (response.ok) {
+              const blob = await response.blob();
+              displayUrl = URL.createObjectURL(blob);
+          }
+      }
+
+      loading.style.display = "none";
+
+      const wrapper = document.createElement("div");
+      wrapper.style.cursor = "pointer";
+      wrapper.style.border = "2px solid transparent";
+      wrapper.style.borderRadius = "0.5rem";
+      wrapper.style.overflow = "hidden";
+      wrapper.style.transition = "border-color 0.2s";
+      wrapper.style.backgroundColor = "var(--surface-color)";
+      wrapper.style.maxWidth = "400px";
+      wrapper.style.margin = "0 auto";
+      
+      wrapper.onmouseenter = () => wrapper.style.border = "2px solid var(--accent)";
+      wrapper.onmouseleave = () => wrapper.style.border = "2px solid transparent";
+      
+      const finalPrompt = customPromptTextarea?.value?.trim() || window.apiHandler.lastGeneratedImagePrompt;
+      wrapper.onclick = () => this.selectImageOption(displayUrl, finalPrompt, model, [{url: displayUrl}]);
+
+      wrapper.innerHTML = `
+        <img src="${displayUrl}" style="width: 100%; height: auto; display: block;" alt="Generated Image">
+        <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
+            <button class="btn-primary" style="width: 100%;">Accept Image</button>
+        </div>
+      `;
+      grid.appendChild(wrapper);
+
+      this.showNotification(`Image generated! Review and accept.`, "success");
     } catch (error) {
       console.error("Image regeneration error:", error);
+      loading.style.display = "none";
+      this.closeImageOptionsModal();
       this.showNotification(
         `Image regeneration failed: ${error.message}`,
         "error",
@@ -1115,9 +1186,15 @@ class CharacterGeneratorApp {
     }
 
     this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = "🖼️ Choose an Image Option";
+
     const grid = document.getElementById("image-options-grid");
     const loading = document.getElementById("image-options-loading");
     
+    const loadingText = loading.querySelector("p");
+    if (loadingText) loadingText.textContent = "Generating images from 4 different models... this might take a minute.";
+
     grid.innerHTML = "";
     loading.style.display = "block";
 
