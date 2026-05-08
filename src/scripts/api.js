@@ -898,8 +898,8 @@ BEGIN IMAGE PROMPT NOW:`;
     switch (style) {
       case "realistic": return "Hyper-realistic photography, 8k resolution, highly detailed face, photorealistic, natural lighting, DSLR, masterpiece.";
       case "anime": return "High quality anime style, vibrant colors, detailed anime character design.";
-      case "hand-drawn-anime": return "Traditional hand-drawn anime style, classic 90s anime aesthetic, cel shading, studio ghibli style, detailed 2D illustration.";
-      case "painted-anime": return "Painted anime artwork style, vibrant colors, detailed brushstrokes, high quality illustration, digital painting, anime masterpiece.";
+      case "hand-drawn-anime": return "Traditional hand-drawn anime style, highly detailed and intricate line art, authentic traditional media look, ink and paper texture, classic 90s anime aesthetic, cel shading, studio ghibli style, masterpiece illustration, not CGI.";
+      case "painted-anime": return "Intricate painted anime artwork, rich canvas texture, detailed expressive brushstrokes, traditional oil painting style, masterpiece illustration, authentic real-world art techniques, vibrant colors, not computer generated.";
       case "waifu": return "Waifu anime style, masterpiece, best quality, ultra-detailed, beautiful anime character, distinct anime features.";
       case "sexy": return "Sexy, alluring, highly attractive, seductive, beautiful, masterpiece, highly detailed, stunning, appealingly posed.";
       case "comic": return "Comic book style, graphic novel, strong ink outlines, halftone, western comic art, dynamic shading, vibrant comic colors.";
