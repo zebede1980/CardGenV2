@@ -159,6 +159,12 @@ api-keys.json
 *.cert
 *.p12
 
+# Runtime data files — contain user prompts, generated cards, and API keys
+# These are written by the proxy server at runtime and must never be committed
+proxy/data/config.json
+proxy/data/cards.json
+proxy/data/prompts.json
+
 # Build artifacts
 build/
 out/

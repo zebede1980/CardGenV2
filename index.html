@@ -187,6 +187,7 @@
                                 id="generate-btn"
                                 class="btn-primary"
                                 style="flex: 1; min-width: 200px"
+                                title="Generate a full character card from your concept — includes description, personality, scenario, and first message"
                             >
                                 <span class="btn-text">Generate Character</span>
                                 <span class="btn-loading" style="display: none"
@@ -202,7 +203,7 @@
                             </button>
                         </div>
                         <div class="top-import-actions" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <button id="import-card-top-btn" class="btn-outline">
+                            <button id="import-card-top-btn" class="btn-outline" title="Load an existing SillyTavern character card (.png or .json) into the editor for viewing and manual editing">
                                 Import Card for Editing
                             </button>
                             <input
@@ -211,7 +212,7 @@
                                 accept=".png,.json,application/json,image/png"
                                 style="display: none"
                             />
-                            <button id="import-remaster-top-btn" class="btn-outline" title="Upload a poor quality card and let AI completely rewrite and fix it in one go">
+                            <button id="import-remaster-top-btn" class="btn-outline" title="Import a card and immediately run a full AI rewrite — fixes inconsistencies, tightens language, and reformats it into a clean concise card ready for play">
                                 ✨ Import & Remaster
                             </button>
                             <input
@@ -282,7 +283,7 @@
                                             id="regenerate-name-btn"
                                             class="btn-small"
                                             style="padding: 0.3rem 0.8rem; font-size: 0.75rem;"
-                                            title="Generate a new name with AI"
+                                            title="Ask the AI to generate a different name for this character, grounded in their background and time period"
                                         >
                                             🔄 Gen Name
                                         </button>
@@ -290,7 +291,7 @@
                                             id="reset-name-btn"
                                             class="btn-secondary"
                                             style="display: none; padding: 0.3rem 0.8rem; font-size: 0.75rem;"
-                                            title="Reset name to original"
+                                            title="Revert the name back to the version that was last generated or imported (discards manual edits)"
                                         >
                                             🔄 Reset
                                         </button>
@@ -333,7 +334,7 @@
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="description-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
-                                        <button id="regenerate-description-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
+                                        <button id="regenerate-description-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the Description section with AI. Add an optional instruction in the box to the left to guide the rewrite (e.g. 'make her older and more weathered').">🔄 Redo</button>
                                     <button
                                         id="reset-description-btn"
                                         class="btn-secondary"
@@ -342,7 +343,7 @@
                                             padding: 0.3rem 0.8rem;
                                             font-size: 0.75rem;
                                         "
-                                        title="Reset description to original"
+                                        title="Revert the Description back to the version that was last generated or imported (discards manual edits)"
                                     >
                                         🔄 Reset
                                     </button>
@@ -390,7 +391,7 @@
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="personality-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
-                                        <button id="regenerate-personality-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
+                                        <button id="regenerate-personality-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the Personality section with AI. Add an optional instruction in the box to the left to guide the rewrite (e.g. 'lean into the dark humour').">🔄 Redo</button>
                                     <button
                                         id="reset-personality-btn"
                                         class="btn-secondary"
@@ -399,7 +400,7 @@
                                             padding: 0.3rem 0.8rem;
                                             font-size: 0.75rem;
                                         "
-                                        title="Reset personality to original"
+                                        title="Revert the Personality back to the version that was last generated or imported (discards manual edits)"
                                     >
                                         🔄 Reset
                                     </button>
@@ -447,7 +448,7 @@
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="scenario-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
-                                        <button id="regenerate-scenario-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
+                                        <button id="regenerate-scenario-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the Scenario / Roleplay Setup with AI. Add an optional instruction in the box to the left to change the setting or starting circumstances.">🔄 Redo</button>
                                     <button
                                         id="reset-scenario-btn"
                                         class="btn-secondary"
@@ -456,7 +457,7 @@
                                             padding: 0.3rem 0.8rem;
                                             font-size: 0.75rem;
                                         "
-                                        title="Reset scenario to original"
+                                        title="Revert the Scenario back to the version that was last generated or imported (discards manual edits)"
                                     >
                                         🔄 Reset
                                     </button>
@@ -504,7 +505,7 @@
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="first-message-prompt" class="input" placeholder="Optional: How to rewrite this?" style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
-                                        <button id="regenerate-first-message-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate with AI">🔄 Redo</button>
+                                        <button id="regenerate-first-message-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the First Message / opening scene with AI. Add an optional instruction in the box to the left to set a different mood or situation.">🔄 Redo</button>
                                     <button
                                         id="reset-first-message-btn"
                                         class="btn-secondary"
@@ -513,7 +514,7 @@
                                             padding: 0.3rem 0.8rem;
                                             font-size: 0.75rem;
                                         "
-                                        title="Reset first message to original"
+                                        title="Revert the First Message back to the version that was last generated or imported (discards manual edits)"
                                     >
                                         🔄 Reset
                                     </button>
@@ -668,7 +669,7 @@
                                         💡 Create a companion Lorebook (World Info) for your character. Add entries for key people, places, or concepts to give the AI more context during roleplay.
                                     </p>
                                     <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                        <button id="manage-lorebook-btn" class="btn-outline">
+                                        <button id="manage-lorebook-btn" class="btn-outline" title="Open the Lorebook Manager to add, edit, or delete world-building entries (locations, NPCs, factions, items). The lorebook is embedded in the exported card and injects relevant context into the AI during roleplay when a keyword is mentioned.">
                                             📚 Manage Lorebook
                                         </button>
                                         <span id="lorebook-entry-count" style="font-size: 0.875rem; color: var(--text-secondary);">0 entries</span>
@@ -686,7 +687,7 @@
                                         💡 Add up to 5 alternative starting messages for completely different or continued roleplay scenarios.
                                     </p>
                                     <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                        <button id="manage-alt-greetings-btn" class="btn-outline">
+                                        <button id="manage-alt-greetings-btn" class="btn-outline" title="Open the Alternate Greetings Manager to add or generate alternative opening messages — useful for different starting scenarios or moods without changing the core character.">
                                             💬 Manage Greetings
                                         </button>
                                         <span id="alt-greetings-count" style="font-size: 0.875rem; color: var(--text-secondary);">0 entries</span>
@@ -845,35 +846,35 @@
                                         <button
                                             id="regenerate-prompt-btn"
                                             class="btn-small"
-                                            title="Generate a new image prompt without creating an image"
+                                            title="Generate a new image prompt based on the character's description. You can edit the prompt manually before generating the image."
                                         >
                                             💡 Prompt
                                         </button>
                                         <button
                                             id="regenerate-image-btn"
                                             class="btn-small"
-                                            title="Generate a new image using the current prompt"
+                                            title="Generate a new character image using the current prompt text. Edit the prompt first if you want to adjust the result."
                                         >
                                             🖼️ Image
                                         </button>
                                         <button
                                             id="generate-four-images-btn"
                                             class="btn-small"
-                                            title="Generate 4 images, one per saved model"
+                                            title="Generate four images simultaneously, one from each of your saved image models, so you can compare styles and pick the best result."
                                         >
                                             🖼️ Gen 4 (Models)
                                         </button>
                                         <button
                                             id="generate-four-prompts-btn"
                                             class="btn-small"
-                                            title="Generate 4 images with prompt variations using the active model"
+                                            title="Generate four images from the same model using slight prompt variations, giving you a range of looks to choose from."
                                         >
                                             🖼️ Gen 4 (Prompts)
                                         </button>
                                         <button
                                             id="upload-image-btn"
                                             class="btn-small"
-                                            title="Upload your own character image"
+                                            title="Upload your own image to use as the character portrait instead of AI-generating one. Accepts common image formats."
                                         >
                                             📁 Upload
                                         </button>
@@ -910,7 +911,7 @@
                             <button
                                 id="reduce-tokens-btn"
                                 class="btn-outline"
-                                title="Scan for lore to move to the lorebook, then strip all bloat from the card"
+                                title="Two-in-one: first scans the card for world-building content (locations, NPCs, factions) that belongs in the lorebook and lets you pick what to move, then rewrites the card to remove all flowery prose and repetition, leaving only concise AI-guidance."
                             >
                                 <span class="btn-text">✂️ Reduce Bloat</span>
                                 <span class="btn-loading" style="display: none">Reducing...</span>
@@ -918,7 +919,7 @@
                             <button
                                 id="scan-for-lorebook-btn"
                                 class="btn-outline"
-                                title="Scan the card for world-building content that belongs in the lorebook instead"
+                                title="Analyse the card with AI to find world-building lore (locations, NPCs, factions, historical events) that is better placed in the lorebook. Shows a checklist of candidates — select what you want to move, and the card is updated accordingly."
                             >
                                 <span class="btn-text">📚 Scan for Lorebook Content</span>
                                 <span class="btn-loading" style="display: none">Scanning...</span>
@@ -938,16 +939,17 @@
                             id="download-btn"
                             class="btn-secondary"
                             style="display: none"
+                            title="Export the character card as a SillyTavern-compatible PNG file with the full chara_card_v2 metadata embedded in the image. Lorebook and alternate greetings are included."
                         >
                             Download Character Card (PNG)
                         </button>
-                        <button id="save-card-btn" class="btn-outline" style="display: none">
+                        <button id="save-card-btn" class="btn-outline" style="display: none" title="Manually save the current card to the local library. Cards are also saved automatically after generation and revision.">
                             💾 Save to Library
                         </button>
-                        <button id="check-consistency-btn" class="btn-outline" style="display: none">
+                        <button id="check-consistency-btn" class="btn-outline" style="display: none" title="Ask the AI to review the card for logical contradictions, tonal mismatches, or continuity errors and produce a written report. An Auto-Fix button appears after the report to apply the suggested corrections.">
                             🔍 Check Consistency
                         </button>
-                        <button id="import-card-btn" class="btn-outline">
+                        <button id="import-card-btn" class="btn-outline" title="Load an existing SillyTavern character card (.png or .json) into the editor for viewing and manual editing">
                             Import Card for Editing
                         </button>
                         <input
@@ -956,7 +958,7 @@
                             accept=".png,.json,application/json,image/png"
                             style="display: none"
                         />
-                        <button id="import-remaster-btn" class="btn-outline" title="Upload a poor quality card and let AI completely rewrite and fix it in one go">
+                        <button id="import-remaster-btn" class="btn-outline" title="Import a card and immediately run a full AI rewrite — fixes inconsistencies, tightens language, and reformats it into a clean concise card ready for play">
                             ✨ Import & Remaster
                         </button>
                         <input
@@ -1225,7 +1227,7 @@
                     <div class="form-group" style="margin-bottom: 2rem;">
                         <label class="label">AI Suggestions</label>
                         <div style="display: flex; gap: 1rem; align-items: center;">
-                            <button id="suggest-lorebook-topics-btn" class="btn-outline">Suggest Topics from Card</button>
+                            <button id="suggest-lorebook-topics-btn" class="btn-outline" title="Ask the AI to analyse your character card and suggest 3-5 key nouns (locations, NPCs, factions, items) that would make good lorebook entries. Click a suggestion to pre-fill the Keys field.">Suggest Topics from Card</button>
                             <div id="lorebook-topic-suggestions" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
                         </div>
                          <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
@@ -1263,7 +1265,7 @@
                             </p>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                             <button id="generate-lorebook-content-btn" class="btn-small">🔄 Generate with AI</button>
+                             <button id="generate-lorebook-content-btn" class="btn-small" title="Generate the entry content with AI using the Keys you have entered and the optional hint below. The character card is used as context.">🔄 Generate with AI</button>
                             <div>
                                 <button id="save-lorebook-entry-btn" class="btn-primary">Save Entry</button>
                                 <button id="cancel-lorebook-edit-btn" class="btn-outline" style="display: none;">Cancel</button>
@@ -1272,10 +1274,10 @@
                     </div>
 
                     <div style="text-align: center; margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.5rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; align-items: center;">
-                        <button id="inject-lorebook-btn" class="btn-outline" title="Rewrites the Scenario to include your Lorebook keys">
+                        <button id="inject-lorebook-btn" class="btn-outline" title="Ask the AI to rewrite the character's Scenario so it naturally includes the trigger keywords from your lorebook entries — helping ensure entries activate correctly during roleplay.">
                             ✨ Inject Keys into Card
                         </button>
-                        <button id="download-lorebook-btn" class="btn-secondary">Download Lorebook (.json)</button>
+                        <button id="download-lorebook-btn" class="btn-secondary" title="Export the lorebook as a standalone SillyTavern World Info JSON file. You can import this separately into SillyTavern if you prefer to manage it outside the character card.">Download Lorebook (.json)</button>
                     </div>
                     <p style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; margin-top: 0.75rem;">
                         💡 <strong>Tip:</strong> Click "Inject Keys" to have the AI automatically weave your new keywords into the character's scenario.
@@ -1313,8 +1315,8 @@
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                 <button id="generate-alt-greeting-cont-btn" class="btn-small" title="Propose an encounter that occurs AFTER the first scenario has played out">🔄 Gen Continuation</button>
-                                 <button id="generate-alt-greeting-rand-btn" class="btn-small" title="Create a completely original starting point">🎲 Gen Random</button>
+                                 <button id="generate-alt-greeting-cont-btn" class="btn-small" title="Generate an alternate opening message set after the original scenario has concluded — a new encounter in the same story, useful for starting fresh sessions mid-narrative.">🔄 Gen Continuation</button>
+                                 <button id="generate-alt-greeting-rand-btn" class="btn-small" title="Generate a completely different alternate opening — new setting, new circumstances, same character. Good for adding variety to how a roleplay can begin.">🎲 Gen Random</button>
                              </div>
                             <div>
                                 <button id="save-alt-greeting-btn" class="btn-primary">Save Greeting</button>
@@ -1338,7 +1340,7 @@
                         <!-- Content goes here -->
                     </div>
                     <div style="text-align: center; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
-                        <button id="consistency-auto-fix-btn" class="btn-outline" style="display: none;" title="Use AI to automatically apply these recommendations to your character card">
+                        <button id="consistency-auto-fix-btn" class="btn-outline" style="display: none;" title="Automatically apply the fixes suggested in the consistency report above — the AI rewrites the card to resolve contradictions and continuity errors while preserving the core character.">
                             ✨ Auto-Fix Issues
                         </button>
                     </div>
@@ -1361,9 +1363,9 @@
                         <!-- Candidates injected here -->
                     </div>
                     <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 1.25rem; flex-wrap: wrap;">
-                        <button id="lore-elevation-select-all-btn" class="btn-small">Select All</button>
+                        <button id="lore-elevation-select-all-btn" class="btn-small" title="Toggle selection of all candidates on or off">Select All</button>
                         <button id="lore-elevation-cancel-btn" class="btn-outline">Cancel</button>
-                        <button id="lore-elevation-confirm-btn" class="btn-primary">✨ Elevate Selected</button>
+                        <button id="lore-elevation-confirm-btn" class="btn-primary" title="Create lorebook entries for all checked items and remove their detailed descriptions from the card body, replacing them with brief references.">✨ Elevate Selected</button>
                     </div>
                 </div>
             </div>

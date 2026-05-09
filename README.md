@@ -3,71 +3,85 @@
 ![SillyTavern Character Generator Interface](clean.png)
 ![SillyTavern Character Generator Interface - Generated Card](generated.png)
 
-Web app for generating, editing, importing, revising, and exporting SillyTavern character cards (Spec V2).
+Web app for generating, editing, importing, revising, and exporting SillyTavern character cards (Spec V2 `.png` / `.json`).
+
+Cards are designed as **concise AI-guidance** — clear behavioural direction and character description that an AI can use to portray the character, not prose fiction. The generation prompts, revision tools, and card-quality tools all enforce this principle.
+
+---
 
 ## Features
 
 ### Character Generation
-- AI character generation from a free-text concept description.
-- Optional fixed character name, or let the AI generate one.
-- First-person (`I am...`) or third-person (`He/She is...`) POV templates.
-- Optional lorebook (SillyTavern World Info JSON) uploaded as grounding context.
+- Generate a full character card from a free-text concept description.
+- Optional fixed character name, or let the AI generate one grounded in the character's background and time period.
+- **First-person** (`I am...`) or **third-person** (`She is...`) POV templates.
+- Optional lorebook (SillyTavern World Info JSON) uploaded as grounding context at generation time.
 - Optional reference image upload — auto-described by a vision model if configured, or manually described.
-- Streaming generation output with stop support.
+- Streaming generation with stop support.
+- Generated cards use short prose for backstory/scenario and direct bullet points for traits and behaviours — not padded narrative.
 
 ### Import & Edit
 - Import existing cards (`.png` with embedded `chara_card_v2` data, or `.json`) and edit them in-place.
-- **Import & Remaster** mode: import a card and immediately queue an AI rewrite pass.
-- Per-field reset buttons to revert any field back to the last generated or imported baseline.
+- **Import & Remaster** — import a card and immediately run an AI rewrite pass that fixes inconsistencies, tightens language, and brings the card in line with the conciseness standard.
+- Per-field **Redo** buttons regenerate any single section with AI; an optional instruction box lets you guide the rewrite.
+- Per-field **Reset** buttons revert a section back to the last generated or imported baseline, discarding manual edits.
 
 ### AI Revision Tools
-- **Revise with AI** — apply a free-text instruction to rewrite the whole card.
-- **Reduce Tokens** — AI rewrites the card to be concise and token-efficient, stripping purple prose and bloat.
-- **Consistency Check** — AI analyses the card for logical contradictions, tonal mismatches, or continuity errors and produces a report.
-- **Auto-Fix** — automatically apply the fixes suggested by the last consistency report.
+- **Revise Card with AI** — apply a free-text instruction to rewrite the whole card (e.g. "make her more guarded and less verbose").
+- **✂️ Reduce Bloat** — two-in-one tool:
+  1. Scans the card with AI and presents a checklist of world-building content (locations, NPCs, factions, historical events) that belongs in the lorebook rather than the card body. You choose what to move.
+  2. Strips all flowery prose and repetition from what remains, leaving only direct AI-guidance.
+- **📚 Scan for Lorebook Content** — runs only the lorebook-elevation scan without the bloat-reduction pass. Useful when a card is already concise but you want to clean up embedded lore.
+- **🔍 Check Consistency** — AI reviews the card for logical contradictions, tonal mismatches, or continuity errors and produces a written report.
+- **✨ Auto-Fix** — automatically applies the fixes suggested by the last consistency report.
 
 ### Lorebook Manager
-- Add, edit, and delete lorebook entries directly in the app (keyword + content pairs).
-- AI-powered **Suggest Topics** to surface key nouns from the character profile as lorebook candidates.
-- AI **Generate Entry** fills content for a topic, with an optional hint.
+- Add, edit, and delete lorebook entries (keyword/trigger → content pairs).
+- **Suggest Topics from Card** — AI analyses the character profile and suggests key nouns (locations, NPCs, factions, items) as lorebook candidates.
+- **Generate with AI** — fills entry content for a topic, using the character card as context; an optional hint guides tone and focus.
+- **Inject Keys into Card** — AI rewrites the Scenario to naturally include your lorebook keywords, ensuring they trigger reliably during roleplay.
+- **Download Lorebook (.json)** — export the lorebook as a standalone SillyTavern World Info file.
 - Lorebook is embedded in exported PNG/JSON as `character_book`.
 
 ### Alternate Greetings
 - Add up to 5 alternate first messages per card.
-- Generate a **random** alternate greeting (new scenario) or a **continuation** greeting (picks up after the original scenario).
+- **Gen Random** — generates a completely different opening scenario with the same character.
+- **Gen Continuation** — generates a new encounter set after the original scenario has concluded.
 - Optional hint to guide AI generation.
 - Alternate greetings are embedded in the exported card.
 
-### Example Messages Generator
-- Generate dialogue examples in SillyTavern `<START>` / `<END>` format.
+### Example Messages
+- Generate dialogue examples in SillyTavern `<START>` format, embedded directly in the exported card.
 - Adjustable count (1–5 examples).
+- Optional instruction to set tone or speaking style (e.g. "angry", "whispering", "formal").
 - Works with both generated and imported cards.
-- Not embedded in exported cards — copy to clipboard for manual import into SillyTavern.
 
 ### Image Handling
-- AI image-prompt generation (up to 1000 characters), with an editable prompt box.
-- Regenerate prompt or regenerate image independently.
-- Upload your own image instead.
+- AI generates an image prompt from the character description (up to ~1000 characters), displayed in an editable box.
+- Regenerate the prompt or the image independently.
+- **Generate 4 (Models)** — generates one image per saved model simultaneously for a style comparison.
+- **Generate 4 (Variations)** — generates four prompt variations from the active model.
+- Upload your own image instead of AI-generating one.
 - CORS-bypass proxy for fetching remote image URLs.
 
 ### Library (Server-Side Storage)
-- Prompts and cards are saved to the proxy server's `data/` directory (JSON flat files).
-- Auto-saved on generation and revision; manual save button also available.
+- Prompts and cards are auto-saved to the proxy server's `data/` directory after generation and revision.
+- Manual **Save to Library** button also available.
 - Load or delete saved prompts and cards from the UI.
 - Data persists across restarts when using Docker volumes.
 
 ### Export
-- Download as SillyTavern PNG card with embedded `chara_card_v2` metadata.
-- Download as JSON (`chara_card_v2` structure).
+- **Download Character Card (PNG)** — SillyTavern-compatible PNG with embedded `chara_card_v2` metadata. Lorebook and alternate greetings are included.
+- **Download as JSON** — raw `chara_card_v2` structure.
 
 ### Token Counter
-- Live token-count display for each character field.
+- Live token-count display per field and a running total for the full card, helping you keep the card lean.
 
 ---
 
 ## Requirements
 
-- Node.js 18+ recommended
+- Node.js 18+ (for local dev)
 - OpenAI-compatible text API endpoint (required)
 - OpenAI-compatible image API endpoint (optional)
 - Vision-capable text model (optional — only needed for reference-image auto-description)
@@ -123,8 +137,8 @@ docker compose up -d --build
 | Setting | Notes |
 |---|---|
 | Text API Base URL | OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1`) |
-| Text API Key | Passed as `Authorization: Bearer` header |
-| Text Model | Model name for generation and revision |
+| Text API Key | Passed as `Authorization: Bearer` or `X-API-Key` header |
+| Text Model | Model name for all generation and revision calls |
 | Vision Model | Optional — used to auto-describe reference images |
 | Image API Base URL | Optional — enables image generation |
 | Image API Key | Optional |
@@ -139,16 +153,36 @@ Settings are saved server-side (via `POST /api/config`) so they persist across p
 
 ## Usage
 
-1. Open **API Settings** and configure the text API (required).
-2. Enter a **Character Concept** and optional fixed name.
-3. Optionally upload a **Lorebook JSON** (World Info) for contextual grounding.
-4. Optionally upload a **Reference Image** — it will be auto-described if a vision model is set.
-5. Click **Generate Character**.
-6. Edit any field directly, or use the revision tools (Revise, Reduce Tokens, Consistency Check).
-7. Use the **Lorebook Manager** to add world-building entries.
-8. Use the **Alt Greetings Manager** to add alternate opening messages.
-9. Optionally generate **Example Messages** and copy them to SillyTavern.
-10. Click **Download** to export as PNG or JSON.
+1. Open **API Settings** and configure your text API endpoint, key, and model.
+2. Enter a **Character Concept** in the text box. Be as detailed or as brief as you like.
+3. Optionally set a **Character Name** (or leave blank for the AI to generate one).
+4. Choose **POV** — first-person or third-person.
+5. Optionally upload a **Lorebook JSON** (World Info) as grounding context for generation.
+6. Optionally upload a **Reference Image** — it will be auto-described if a vision model is set.
+7. Click **Generate Character** and watch the card stream in.
+8. Edit any field directly in the text areas. Use **Redo** to regenerate a single section, or **Reset** to revert to the last generated version.
+9. Use the **Revision Tools** to refine the card:
+   - **Reduce Bloat** to move lore to the lorebook and strip prose padding.
+   - **Scan for Lorebook Content** to elevate lore without the bloat pass.
+   - **Revise Card** for any specific change.
+   - **Check Consistency** + **Auto-Fix** for logic and continuity issues.
+10. Open the **Lorebook Manager** to add world-building entries, or let the AI suggest and generate them.
+11. Open **Alternate Greetings** to add alternative opening scenes.
+12. Generate **Example Messages** — they are embedded in the exported card automatically.
+13. Click **Download Character Card (PNG)** to export.
+
+---
+
+## Card Design Philosophy
+
+Character cards in SillyTavern are loaded into the AI's context on every message. Long, flowery cards inflate token costs and can reduce coherence. This tool generates cards that follow a clear standard:
+
+- **Short prose** for backstory and scenario (factual, 2-3 paragraphs max).
+- **Bullet points** for personality traits, behavioural patterns, speech style, goals, fears, and limits.
+- **No padding** — every sentence must serve a direct descriptive or behavioural function.
+- **Lorebook for lore** — world-building detail (locations, factions, history) should live in lorebook entries that inject only when triggered, not in the card body.
+
+The **Reduce Bloat** and **Scan for Lorebook Content** tools help you bring imported or older cards in line with this standard.
 
 ---
 
@@ -171,29 +205,29 @@ src/
     main.js                 — App controller and event binding
     app-ui.js               — UI helpers (notifications, streaming, state buttons)
     character-generator.js  — Character prompt templates and response parsing
-    character-display.js    — Field display, edit, reset, import
-    revision-handler.js     — AI revision, token reduction, consistency check/auto-fix
+    character-display.js    — Field display, edit, reset, import, remaster
+    revision-handler.js     — AI revision, reduce bloat, consistency check/auto-fix
     alt-greetings-handler.js — Alternate greetings CRUD and AI generation
-    lorebook-handler.js     — Lorebook entry CRUD and AI topic/entry generation
+    lorebook-handler.js     — Lorebook CRUD, AI topic/entry generation, lore elevation modal
     library-handler.js      — Save/load/delete prompts & cards from the library
     image-handler.js        — Image generate/upload, reference image, model fetch
     image-generator.js      — Image prompt generation logic
     lorebook-generator.js   — Lorebook AI generation (standalone module)
     png-encoder.js          — Embed chara_card_v2 metadata into PNG files
     api.js                  — APIHandler base (request, streaming, retry, abort)
-    api-character.js        — Character generation and prompt-building methods
+    api-character.js        — Character generation, revision, and field-regeneration prompts
     api-image.js            — Image generation methods
-    api-lorebook.js         — Lorebook/alt-greeting/consistency API methods
+    api-lorebook.js         — Lorebook/alt-greeting/consistency/card-scan API methods
     config.js               — Config management (localStorage + server sync)
     storage.js              — Server-side library storage (cards and prompts)
   styles/
     main.css                — Application styles
 proxy/
   server.js                 — Express proxy (text, image, config, library, CORS)
-  data/
-    cards.json              — Saved card library
-    prompts.json            — Saved prompt library
-    config.json             — Persisted API settings
+  data/                     — Runtime data directory (gitignored)
+    cards.json              — Saved card library (auto-created)
+    prompts.json            — Saved prompt library (auto-created)
+    config.json             — Persisted API settings (auto-created)
 ```
 
 ---
