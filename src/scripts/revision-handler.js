@@ -54,7 +54,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     if (
       !confirm(
-        "This will use AI to rewrite the entire card to be extremely concise, removing flowery text and bloat to save tokens while keeping the core identity intact.\n\nProceed?",
+        "This will:\n1. Scan the card for world-building lore that belongs in the lorebook (you can pick what to move)\n2. Strip all bloat, flowery prose, and repetition from the card\n\nProceed?",
       )
     ) {
       return;
@@ -63,30 +63,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.setRevisionState(true, "reduce-tokens-btn");
 
     try {
-      const pov = document.getElementById("pov-select")?.value || "third";
       this.currentCharacter.character_book = this.buildCharacterBook();
-      this.syncAltGreetingsToCharacter();
-      this.showNotification("Applying AI token reduction...", "info");
+      this.showNotification("Scanning card for lorebook candidates...", "info");
 
-      const reductionInstruction =
-        "Rewrite this entire character card to be extremely concise and token-efficient. Remove all bloat, flowery purple prose, and repetition. Keep only the absolute core facts, personality traits, scenario details, and speaking style. Make every single word count to minimize the overall token length while preserving the character's identity.";
+      let selectedCandidates = [];
+      try {
+        const candidates = await this.apiHandler.scanCardForLorebookCandidates(this.currentCharacter);
+        if (candidates && candidates.length > 0) {
+          // Temporarily release the revision lock so the modal is usable
+          this.setRevisionState(false);
+          const selected = await this.showLoreElevationModal(candidates);
+          this.setRevisionState(true, "reduce-tokens-btn");
+          // null = cancelled — continue with bloat-only pass
+          selectedCandidates = selected || [];
+        }
+      } catch (scanError) {
+        // Scan failure is non-fatal — just skip lorebook elevation and proceed
+        console.warn("Lorebook scan failed (continuing with bloat reduction only):", scanError);
+      }
 
-      const revised = await this.apiHandler.reviseCharacter(
-        this.currentCharacter,
-        reductionInstruction,
-        pov,
-      );
-      this.currentCharacter = revised;
-      this.originalCharacter = JSON.parse(JSON.stringify(revised));
-      this.displayCharacter();
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
+      await this.executeLoreElevation(selectedCandidates, true);
       this.showNotification("Card bloat reduced successfully!", "success");
     } catch (error) {
       console.error("Reduction failed:", error);
-      const wasStoppedByUser = error.message.includes(
-        "Generation stopped by user",
-      );
+      const wasStoppedByUser = error.message?.includes("Generation stopped by user");
       if (!wasStoppedByUser) {
         this.showNotification(`Reduction failed: ${error.message}`, "error");
       }

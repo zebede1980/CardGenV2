@@ -99,6 +99,8 @@ class CharacterGeneratorApp {
     if (reviseCharacterBtn) reviseCharacterBtn.addEventListener("click", () => this.handleReviseCharacter());
     const reduceTokensBtn = document.getElementById("reduce-tokens-btn");
     if (reduceTokensBtn) reduceTokensBtn.addEventListener("click", () => this.handleReduceTokens());
+    const scanForLorebookBtn = document.getElementById("scan-for-lorebook-btn");
+    if (scanForLorebookBtn) scanForLorebookBtn.addEventListener("click", () => this.handleScanForLorebook());
     const stopRevisionBtn = document.getElementById("stop-revision-btn");
     if (stopRevisionBtn) stopRevisionBtn.addEventListener("click", () => this.handleStopRevision());
 

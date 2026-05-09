@@ -333,4 +333,196 @@ Object.assign(CharacterGeneratorApp.prototype, {
     reader.readAsText(file);
   },
 
+  // ─── Lore Elevation ───────────────────────────────────────────────────────
+
+  /**
+   * Show the lore-elevation modal with the given candidates and return a Promise
+   * that resolves with the array of user-selected candidates, or null if cancelled.
+   */
+  showLoreElevationModal(candidates) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("lore-elevation-modal");
+      const list = document.getElementById("lore-elevation-candidates-list");
+      const confirmBtn = document.getElementById("lore-elevation-confirm-btn");
+      const cancelBtn = document.getElementById("lore-elevation-cancel-btn");
+      const closeBtn = document.getElementById("lore-elevation-modal-close-btn");
+      const selectAllBtn = document.getElementById("lore-elevation-select-all-btn");
+      if (!modal || !list) return resolve(null);
+
+      // Render candidate checkboxes
+      list.innerHTML = candidates.map((c, i) => `
+        <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; padding: 0.75rem; background: var(--surface-color); border-radius: 0.375rem; border: 1px solid var(--border);">
+          <input type="checkbox" data-index="${i}" checked style="margin-top: 0.2rem; flex-shrink: 0;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">${c.topic}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Keys: ${c.keys.join(", ")}</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); white-space: pre-wrap; max-height: 80px; overflow: hidden;">${c.content.substring(0, 200)}${c.content.length > 200 ? "…" : ""}</div>
+          </div>
+        </label>
+      `).join("");
+
+      let resolved = false;
+      const done = (result) => {
+        if (resolved) return;
+        resolved = true;
+        this.closeLoreElevationModal();
+        resolve(result);
+      };
+
+      // Select all toggle
+      const handleSelectAll = () => {
+        const checkboxes = list.querySelectorAll("input[type=checkbox]");
+        const allChecked = [...checkboxes].every(cb => cb.checked);
+        checkboxes.forEach(cb => { cb.checked = !allChecked; });
+        selectAllBtn.textContent = allChecked ? "Select All" : "Deselect All";
+      };
+
+      const handleConfirm = () => {
+        const checkboxes = list.querySelectorAll("input[type=checkbox]");
+        const selected = [];
+        checkboxes.forEach((cb) => {
+          if (cb.checked) selected.push(candidates[parseInt(cb.dataset.index)]);
+        });
+        done(selected);
+      };
+
+      const handleCancel = () => done(null);
+
+      // Clone buttons to remove old listeners
+      const newConfirm = confirmBtn.cloneNode(true);
+      const newCancel = cancelBtn.cloneNode(true);
+      const newClose = closeBtn.cloneNode(true);
+      const newSelectAll = selectAllBtn.cloneNode(true);
+      confirmBtn.replaceWith(newConfirm);
+      cancelBtn.replaceWith(newCancel);
+      closeBtn.replaceWith(newClose);
+      selectAllBtn.replaceWith(newSelectAll);
+
+      newConfirm.addEventListener("click", handleConfirm);
+      newCancel.addEventListener("click", handleCancel);
+      newClose.addEventListener("click", handleCancel);
+      newSelectAll.addEventListener("click", handleSelectAll);
+
+      modal.classList.add("show");
+      document.body.style.overflow = "hidden";
+    });
+  },
+
+  closeLoreElevationModal() {
+    const modal = document.getElementById("lore-elevation-modal");
+    if (modal) {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+    }
+  },
+
+  /**
+   * Core elevation logic shared between standalone scan and Reduce Bloat.
+   * Creates lorebook entries for selectedCandidates, then calls reviseCharacter
+   * with an instruction to remove those topics from the card and/or reduce bloat.
+   *
+   * @param {Array} selectedCandidates - candidates the user confirmed
+   * @param {boolean} alsoReduceBloat  - whether to also strip bloat from the card
+   */
+  async executeLoreElevation(selectedCandidates, alsoReduceBloat = false) {
+    const pov = document.getElementById("pov-select")?.value || "third";
+
+    // 1. Create lorebook entries for selected candidates
+    if (selectedCandidates.length > 0) {
+      for (const candidate of selectedCandidates) {
+        this.lorebookEntries.push({
+          id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+          keys: candidate.keys,
+          content: candidate.content,
+          enabled: true,
+        });
+      }
+      this.renderLorebookEntries();
+      this.updateLorebookEntryCount();
+      this.currentCharacter.character_book = this.buildCharacterBook();
+    }
+
+    // 2. Build revision instruction
+    let instruction = "";
+    if (selectedCandidates.length > 0) {
+      const topicList = selectedCandidates.map(c => `"${c.topic}"`).join(", ");
+      instruction += `The following topics have been moved to the lorebook: ${topicList}. Remove the detailed descriptions of these topics from the card body — replace each with at most one brief reference sentence so the card stays anchored in reality without carrying the full lore weight.`;
+    }
+    if (alsoReduceBloat) {
+      if (instruction) instruction += "\n\n";
+      instruction += "Additionally, rewrite the entire card to be extremely concise and token-efficient. Remove all flowery prose, purple language, and repetition. Every sentence must serve a direct behavioural or descriptive purpose. Bullet points for traits and behaviours; short factual prose only for backstory and scenario. Keep only the absolute core facts that an AI needs to portray this character — make every word count.";
+    }
+
+    if (!instruction) return; // Nothing to do
+
+    this.syncAltGreetingsToCharacter();
+    this.showNotification("Applying changes to card...", "info");
+
+    const revised = await this.apiHandler.reviseCharacter(
+      this.currentCharacter,
+      instruction,
+      pov,
+    );
+    this.currentCharacter = revised;
+    this.originalCharacter = JSON.parse(JSON.stringify(revised));
+    this.displayCharacter();
+    await this.saveCardToLibrary();
+    await this.refreshLibraryViews();
+  },
+
+  /**
+   * Standalone "Scan for Lorebook Content" handler.
+   * Scans the card, shows the modal, elevates selected items (no bloat pass).
+   */
+  async handleScanForLorebook() {
+    if (!this.currentCharacter) {
+      this.showNotification("Generate or import a character first.", "warning");
+      return;
+    }
+
+    const btn = document.getElementById("scan-for-lorebook-btn");
+    const btnText = btn?.querySelector(".btn-text");
+    const btnLoading = btn?.querySelector(".btn-loading");
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.style.display = "none";
+    if (btnLoading) btnLoading.style.display = "inline";
+
+    try {
+      this.showNotification("Scanning card for lorebook candidates...", "info");
+      const candidates = await this.apiHandler.scanCardForLorebookCandidates(this.currentCharacter);
+
+      if (!candidates || candidates.length === 0) {
+        this.showNotification("No lorebook candidates found in the card.", "info");
+        return;
+      }
+
+      const selected = await this.showLoreElevationModal(candidates);
+
+      if (selected === null) {
+        // User cancelled
+        return;
+      }
+
+      if (selected.length === 0) {
+        this.showNotification("No items selected — no changes made.", "info");
+        return;
+      }
+
+      this.setRevisionState(true, "scan-for-lorebook-btn");
+      await this.executeLoreElevation(selected, false);
+      this.showNotification(`${selected.length} item(s) moved to lorebook and card updated!`, "success");
+    } catch (error) {
+      console.error("Scan for lorebook failed:", error);
+      const wasStoppedByUser = error.message?.includes("Generation stopped by user");
+      if (!wasStoppedByUser) {
+        this.showNotification(`Scan failed: ${error.message}`, "error");
+      }
+    } finally {
+      this.setRevisionState(false);
+      if (btn) btn.disabled = false;
+      if (btnText) btnText.style.display = "inline";
+      if (btnLoading) btnLoading.style.display = "none";
+    }
+  },
+
 });

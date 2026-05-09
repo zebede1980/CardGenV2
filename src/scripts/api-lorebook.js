@@ -213,4 +213,93 @@ Please analyze this character and lorebook for consistency.`;
     }
   },
 
+  async scanCardForLorebookCandidates(character) {
+    if (!character) throw new Error("Character is required");
+
+    const model = this.config.get("api.text.model");
+
+    const systemPrompt = `You are an expert in AI roleplay character card design. Your task is to analyse a character card and identify content that is world-building lore rather than character guidance.
+
+World-building lore includes: specific locations, named NPCs (other than the main character), factions, organisations, historical events, unique items, or significant concepts that are described in detail within the card itself.
+
+Character guidance that MUST stay in the card includes: the character's personality traits, behavioural patterns, speech style, emotional state, goals, fears, quirks, limits, and direct physical description.
+
+For each lore item you identify, produce a lorebook entry: a concise factual summary of what the AI needs to know about that topic.
+
+Return ONLY a strict JSON array. Each element must have:
+- "topic": short display name (e.g. "The Red Keep")
+- "keys": array of trigger keywords (2-4 strings)
+- "content": 1-3 short paragraphs — factual, neutral, no purple prose
+
+If you find no lore content suitable for elevation, return an empty array: []
+
+Example:
+[
+  {
+    "topic": "The Merchant Guild",
+    "keys": ["Merchant Guild", "the Guild", "Guild"],
+    "content": "The Merchant Guild controls trade across the four city-states. Membership requires a steep buy-in and annual dues. The Guild enforces a strict code: no undercutting, no private deals with nobility without a cut going to the Guild coffers."
+  }
+]`;
+
+    const userPrompt = `Analyse the following character card and identify any world-building lore content (locations, NPCs, factions, items, historical events, organisations) that is described in enough detail to be better served as a lorebook entry rather than living inside the card itself.
+
+Character Name: ${character.name}
+
+Description:
+${character.description}
+
+Personality:
+${character.personality}
+
+Scenario:
+${character.scenario}
+
+Return a JSON array of lorebook candidates. Return [] if none found.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 2000,
+      stream: false,
+    };
+
+    try {
+      console.log("=== STARTING LOREBOOK CARD SCAN ===");
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      const output = this.processNormalResponse(response);
+
+      let parsed;
+      try {
+        parsed = JSON.parse(output);
+      } catch (e) {
+        // Try to extract array from a wrapper object or markdown fence
+        const arrayMatch = output.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          parsed = JSON.parse(arrayMatch[0]);
+        } else {
+          const cleaned = output.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+          parsed = JSON.parse(cleaned);
+        }
+      }
+
+      if (Array.isArray(parsed)) return parsed;
+
+      // Unwrap if AI wrapped the array in an object
+      if (typeof parsed === "object" && parsed !== null) {
+        const key = Object.keys(parsed).find((k) => Array.isArray(parsed[k]));
+        if (key) return parsed[key];
+      }
+
+      return [];
+    } catch (error) {
+      console.error("=== LOREBOOK CARD SCAN FAILED ===", error);
+      throw error;
+    }
+  },
+
 });

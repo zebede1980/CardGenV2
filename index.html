@@ -910,10 +910,18 @@
                             <button
                                 id="reduce-tokens-btn"
                                 class="btn-outline"
-                                title="Use AI to make the card more concise and save tokens"
+                                title="Scan for lore to move to the lorebook, then strip all bloat from the card"
                             >
                                 <span class="btn-text">✂️ Reduce Bloat</span>
                                 <span class="btn-loading" style="display: none">Reducing...</span>
+                            </button>
+                            <button
+                                id="scan-for-lorebook-btn"
+                                class="btn-outline"
+                                title="Scan the card for world-building content that belongs in the lorebook instead"
+                            >
+                                <span class="btn-text">📚 Scan for Lorebook Content</span>
+                                <span class="btn-loading" style="display: none">Scanning...</span>
                             </button>
                             <button
                                 id="stop-revision-btn"
@@ -1333,6 +1341,29 @@
                         <button id="consistency-auto-fix-btn" class="btn-outline" style="display: none;" title="Use AI to automatically apply these recommendations to your character card">
                             ✨ Auto-Fix Issues
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lore Elevation Modal -->
+        <div id="lore-elevation-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 750px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">📚 Elevate Content to Lorebook</h2>
+                    <button id="lore-elevation-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0; margin-bottom: 1.5rem; line-height: 1.6;">
+                        The AI has found the following world-building content inside the character card. Select the items you want to move to the lorebook — they will be created as lorebook entries and removed from the card body, keeping the card focused on character guidance.
+                    </p>
+                    <div id="lore-elevation-candidates-list" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+                        <!-- Candidates injected here -->
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 1.25rem; flex-wrap: wrap;">
+                        <button id="lore-elevation-select-all-btn" class="btn-small">Select All</button>
+                        <button id="lore-elevation-cancel-btn" class="btn-outline">Cancel</button>
+                        <button id="lore-elevation-confirm-btn" class="btn-primary">✨ Elevate Selected</button>
                     </div>
                 </div>
             </div>

@@ -483,7 +483,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.showNotification("Applying AI remaster...", "info");
 
       const revisionInstruction =
-        "This character card is of poor quality, inconsistent, or incomplete. Please completely remaster and rewrite the character card to make it highly detailed, logically consistent, well-written, and deeply engaging while preserving the original core premise, identity, and any visual descriptions. Expand on the lore, personality, and scenario where appropriate to make the character feel alive. Fix any grammatical errors and improve the overall tone.";
+        "This character card is poor quality, inconsistent, or incomplete. Remaster it completely — preserve the core identity, name, and any visual descriptions, but rewrite every section to be concise, logically consistent, and behaviourally precise. The card is guidance for an AI playing the character, not a story. Use direct bullet points for personality traits and behaviours; short factual prose only for backstory and scenario. Fix grammar and remove any purple prose, padding, or repetition. Do not expand sections beyond what is needed to play the character accurately.";
 
       const revised = await this.apiHandler.reviseCharacter(
         this.currentCharacter,
