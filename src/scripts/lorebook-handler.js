@@ -350,16 +350,32 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (!modal || !list) return resolve(null);
 
       // Render candidate checkboxes
-      list.innerHTML = candidates.map((c, i) => `
-        <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; padding: 0.75rem; background: var(--surface-color); border-radius: 0.375rem; border: 1px solid var(--border);">
-          <input type="checkbox" data-index="${i}" checked style="margin-top: 0.2rem; flex-shrink: 0;">
+      // Pre-check conflicts: find existing entries whose keys overlap with each candidate
+      const existingKeys = this.lorebookEntries.flatMap(e => e.keys.map(k => k.toLowerCase()));
+
+      list.innerHTML = candidates.map((c, i) => {
+        const conflictingKeys = c.keys.filter(k => existingKeys.includes(k.toLowerCase()));
+        const hasConflict = conflictingKeys.length > 0;
+        const conflictingEntry = hasConflict
+          ? this.lorebookEntries.find(e => e.keys.some(k => conflictingKeys.map(x => x.toLowerCase()).includes(k.toLowerCase())))
+          : null;
+        const conflictBadge = hasConflict
+          ? `<div style="font-size: 0.75rem; color: var(--warning, #f59e0b); margin-top: 0.3rem; padding: 0.2rem 0.4rem; background: rgba(245,158,11,0.1); border-radius: 0.25rem; border: 1px solid rgba(245,158,11,0.3);">
+               ⚠️ Existing entry already covers: <strong>${conflictingEntry ? conflictingEntry.keys.join(", ") : conflictingKeys.join(", ")}</strong> — unchecked by default, tick to add anyway
+             </div>`
+          : "";
+        return `
+        <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; padding: 0.75rem; background: var(--surface-color); border-radius: 0.375rem; border: 1px solid ${hasConflict ? "rgba(245,158,11,0.4)" : "var(--border)"};">
+          <input type="checkbox" data-index="${i}" ${hasConflict ? "" : "checked"} style="margin-top: 0.2rem; flex-shrink: 0;">
           <div style="flex: 1; min-width: 0;">
             <div style="font-weight: 600; margin-bottom: 0.25rem;">${c.topic}</div>
             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Keys: ${c.keys.join(", ")}</div>
-            <div style="font-size: 0.8rem; color: var(--text-secondary); white-space: pre-wrap; max-height: 80px; overflow: hidden;">${c.content.substring(0, 200)}${c.content.length > 200 ? "…" : ""}</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); white-space: pre-wrap; max-height: 80px; overflow: hidden;">${c.content.substring(0, 200)}${c.content.length > 200 ? "\u2026" : ""}</div>
+            ${conflictBadge}
           </div>
         </label>
-      `).join("");
+      `;
+      }).join("");
 
       let resolved = false;
       const done = (result) => {
@@ -447,6 +463,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (selectedCandidates.length > 0) {
       const topicList = selectedCandidates.map(c => `"${c.topic}"`).join(", ");
       instruction += `The following topics have been moved to the lorebook: ${topicList}. Remove the detailed descriptions of these topics from the card body — replace each with at most one brief reference sentence so the card stays anchored in reality without carrying the full lore weight.`;
+
+      // Collect ALL lorebook trigger keys (existing + newly elevated) for scenario injection
+      const allLorebookKeys = this.lorebookEntries.flatMap(e => e.keys.filter(Boolean));
+      const uniqueKeys = [...new Set(allLorebookKeys)];
+      if (uniqueKeys.length > 0) {
+        instruction += `\n\nCRITICAL — LOREBOOK COHESION: The Scenario field must naturally mention each of the following lorebook trigger keywords at least once so that the entries activate during roleplay. Weave them into the scenario text organically — do not just list them. Keywords to include: ${uniqueKeys.join(", ")}.`;
+      }
     }
     if (alsoReduceBloat) {
       if (instruction) instruction += "\n\n";
