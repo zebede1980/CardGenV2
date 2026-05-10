@@ -207,8 +207,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       // Encode the current character to PNG using the same pipeline as Download
       const pngBlob = await this._encodeCurrentCharacterAsPng();
-      const arrayBuffer = await pngBlob.arrayBuffer();
-      const pngBase64 = this._arrayBufferToBase64(arrayBuffer);
+      console.log(`ST push: pngBlob size=${pngBlob.size} type=${pngBlob.type}`);
+      const pngBase64 = await this._blobToBase64(pngBlob);
+      console.log(`ST push: base64 length=${pngBase64.length}`);
 
       this.showNotification("Sending to SillyTavern…", "info");
       const body = { pngBase64 };
@@ -289,6 +290,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const charData = window.characterGenerator.toSpecV3Format(charWithExtras);
 
     return await window.pngEncoder.createCharacterCard(imageBlob, charData);
+  },
+
+  _blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // result is "data:image/png;base64,<data>" — strip the prefix
+        const b64 = reader.result.split(",")[1];
+        resolve(b64);
+      };
+      reader.onerror = () => reject(new Error("FileReader failed"));
+      reader.readAsDataURL(blob);
+    });
   },
 
   _arrayBufferToBase64(buffer) {
