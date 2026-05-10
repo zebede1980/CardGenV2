@@ -443,16 +443,17 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
   },
 
   /**
-   * Generates 10 varied name options for the character picker modal.
-   * Each call picks multiple cultural styles to ensure real variety across all 10.
+   * Generates 10 varied name options for the Name Generator modal.
+   * Accepts gender, character type, time period, guidance, and a list of
+   * already-shown names to ban — so every reroll is genuinely fresh.
    */
-  async generateNameOptions(character, gender = "any", guidance = "") {
+  async generateNameOptions(character, gender = "any", type = "any", timePeriod = "any", guidance = "", previousNames = []) {
     if (!character) throw new Error("Character is required to generate name options");
 
     const model = this.config.get("api.text.model");
 
-    // Pick 10 distinct cultural styles so every name comes from a different tradition
-    const allStyles = [
+    // Base cultural traditions pool
+    const basePool = [
       "Eastern European (Polish, Czech, Slovak, or Romanian)",
       "Slavic (Russian, Ukrainian, Bulgarian, or Serbian)",
       "Scandinavian (Norwegian, Swedish, Danish, or Icelandic)",
@@ -484,46 +485,117 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
       "Mongolian, Kazakh, or Kyrgyz",
       "Indigenous Mesoamerican (Nahuatl or Maya inspired)",
     ];
-    // Shuffle and take 10
-    const shuffled = allStyles.slice().sort(() => Math.random() - 0.5);
-    const chosenStyles = shuffled.slice(0, 10);
+
+    // Supplementary pool for supernatural types
+    const supernaturalPool = [
+      "Ancient Sumerian or Akkadian",
+      "Ancient Egyptian (pharaonic era)",
+      "Ancient Greek or Mycenaean",
+      "Hebrew or Enochian angelological tradition (Uriel, Raphael as phonetic style references)",
+      "Latin demonological tradition (Ars Goetia phonetics — Bael, Marchosias as style references)",
+      "Old Norse or Proto-Germanic",
+      "Ancient Sanskrit or early Vedic",
+      "Invented — exotic alien phonetics with unusual consonant clusters",
+      "Invented — soft flowing elven-style phonetics",
+      "Invented — harsh guttural infernal phonetics",
+    ];
+
+    // Select the right pool mix based on type
+    let pool;
+    if (["demon"].includes(type)) {
+      pool = [...supernaturalPool, ...basePool.slice(0, 15)];
+    } else if (["angel"].includes(type)) {
+      pool = [...supernaturalPool.slice(0, 6), ...basePool.slice(0, 20)];
+    } else if (["alien"].includes(type)) {
+      pool = [...supernaturalPool.slice(6), ...basePool.filter(s =>
+        ["Japanese", "Finnish", "Vietnamese", "Mongolian", "Mesoamerican", "Korean", "Filipino"].some(k => s.includes(k))
+      ), ...basePool];
+    } else if (["elf", "fae"].includes(type)) {
+      const elvish = basePool.filter(s =>
+        ["Celtic", "Scandinavian", "Finnish", "Baltic", "Greek", "Iberian", "Armenian"].some(k => s.includes(k))
+      );
+      pool = [...elvish, ...basePool];
+    } else {
+      pool = basePool;
+    }
+
+    // Shuffle and deduplicate, take 10
+    const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+    const chosenStyles = [...new Map(shuffled.map(s => [s, s])).values()].slice(0, 10);
     const styleList = chosenStyles.map((s, i) => `${i + 1}. ${s}`).join("\n");
 
-    const genderInstruction = gender === "male"
-      ? "All names must be masculine."
-      : gender === "female"
-        ? "All names must be feminine."
-        : "Gender can be anything — vary it across the 10 names.";
+    // Gender
+    const genderMap = {
+      male: "All names must be masculine.",
+      female: "All names must be feminine.",
+      other: "All names must be gender-neutral or androgynous.",
+    };
+    const genderInstruction = genderMap[gender] || "Gender can vary freely across the 10 names.";
 
-    const guidanceInstruction = guidance
-      ? `\n\nAdditional guidance from the user: "${guidance}"\nApply this guidance to all names, but still maintain cultural diversity.`
+    // Character type
+    const typeMap = {
+      vampire:        "CHARACTER TYPE — Vampire: Names should have an elegant, slightly archaic quality. Eastern European, Western European, and Middle Eastern origins work particularly well. Avoid obviously modern or youthful names.",
+      demon:          "CHARACTER TYPE — Demon: Names should sound distinctly non-human. Ancient languages (Sumerian, Akkadian, Enochian, Latin demonology) and invented phonetics are all valid. Unusual consonant clusters are fine. Names do not need to be easy for Western speakers.",
+      angel:          "CHARACTER TYPE — Angel: Hebrew, Greek, and Latin angelological traditions are most appropriate. Names ending in -iel, -ael, or -el ARE correct and expected — the normal ban on these endings does NOT apply for angels.",
+      elf:            "CHARACTER TYPE — Elf: Names should be flowing, musical, multi-syllable. Celtic, Nordic, Finnish traditions work well. Names ending in -iel or -ael are acceptable for elves.",
+      fae:            "CHARACTER TYPE — Fae / Fairy: Names should be whimsical, nature-inspired, often short or musical. Celtic and Irish traditions ideal. Unusual but melodic sounds encouraged.",
+      anthropomorphic:"CHARACTER TYPE — Anthropomorphic: Talking animal or furry character. Regular human names or slightly nature/animal-inspired names both work well.",
+      werewolf:       "CHARACTER TYPE — Werewolf / Shifter: They live as humans, so regular human names are correct. Germanic, Norse, Slavic, and Celtic traditions fit the folklore particularly well.",
+      ghost:          "CHARACTER TYPE — Ghost / Spirit: They retain the names they had in life. Use period-authentic names that feel historical and grounded.",
+      alien:          "CHARACTER TYPE — Alien: Names should feel distinctly non-human while remaining pronounceable. Favour the most phonetically unusual traditions or invent names with rare phoneme combinations.",
+      undead:         "CHARACTER TYPE — Undead: They retain their living names. Period-appropriate names with a slightly archaic feel.",
+      witch:          "CHARACTER TYPE — Witch / Mage: Can be from any tradition — historical, exotic, or slightly unusual. Some witches use craft names distinct from birth names.",
+    };
+    const typeInstruction = typeMap[type] ? `\n\n${typeMap[type]}` : "\n\nCHARACTER TYPE — Human: Use authentic real-world names from the assigned cultural traditions.";
+
+    // Time period
+    const periodMap = {
+      ancient:      "TIME PERIOD — Ancient (pre-500 AD): Names must feel authentic to ancient cultures — Mesopotamian, Egyptian, Greek, Roman, Celtic Iron Age, Han Dynasty, Vedic India, etc.",
+      medieval:     "TIME PERIOD — Medieval (500–1400 AD): Period-authentic — Old English, Old French, Norse, Slavic, Arabic, Japanese feudal, etc. Avoid obviously modern sounds.",
+      renaissance:  "TIME PERIOD — Renaissance / Early Modern (1400–1700): Names fitting the 15th–17th century globally.",
+      victorian:    "TIME PERIOD — Victorian era (1800s): 19th-century names from across the world.",
+      "early-20th": "TIME PERIOD — Early 20th century (1900–1950).",
+      "mid-20th":   "TIME PERIOD — Mid-to-late 20th century (1950–1990).",
+      contemporary: "TIME PERIOD — Contemporary / modern day (1990s–2020s). Names should feel current.",
+      "near-future":"TIME PERIOD — Near future (2030–2100). Names feel slightly futuristic but grounded in today's trends.",
+      "far-future": "TIME PERIOD — Far future / sci-fi. Names can be invented and genuinely futuristic.",
+      fantasy:      "TIME PERIOD — Fantasy setting. No real-world era constraint — blend historical periods freely.",
+    };
+    const periodInstruction = periodMap[timePeriod] ? `\n\n${periodMap[timePeriod]}` : "";
+
+    // Banned previously-seen names
+    const previousBan = previousNames.length > 0
+      ? `\n\n**PREVIOUSLY SHOWN — do NOT repeat any of these, the user wants entirely fresh options:**\n${previousNames.map(n => `"${n}"`).join(", ")}`
       : "";
 
-    const systemPrompt = `You are an expert in names from cultures around the world. Generate exactly 10 character names with maximum cultural variety.
+    const guidanceInstruction = guidance
+      ? `\n\nAdditional guidance from user: "${guidance}" — apply this to all names while still maintaining cultural variety.`
+      : "";
 
-You will be given 10 cultural traditions (one per name). Each name MUST authentically come from its assigned tradition — use real first names and surnames (or single names where culturally appropriate) from that culture.
+    const systemPrompt = `You are an expert in names from cultures around the world. Generate exactly 10 character names with maximum variety.${typeInstruction}${periodInstruction}
 
 ${genderInstruction}
 
-**BANNED — do NOT use any of these overused AI defaults:**
+You will be given 10 cultural traditions — each name MUST authentically come from its assigned tradition. If a tradition truly cannot produce an appropriate name for this character type, invent a name inspired by that tradition's phonetics that still fits the type.
+
+**BANNED overused AI defaults — do NOT use:**
 - Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
 - Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
 - Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
-- Any name ending in "-ael", "-iel", or "-yn" unless tradition demands it
+- Names ending in -ael, -iel, or -yn UNLESS the character type explicitly permits it${previousBan}
 
-Return ONLY a strict JSON array of exactly 10 strings. No objects, no explanations, no extra text.
+Return ONLY a strict JSON array of exactly 10 strings. No objects, no explanations.
 Example: ["Yuki Tanaka", "Kofi Mensah", "Ingrid Halvorsen", "Mirela Petrović", ...]`;
 
     const userPrompt = `Character context:
-Description: ${character.description || "No description provided"}
-Personality: ${character.personality || "No personality provided"}
-${character.name && character.name !== "{{char}}" && character.name !== "Unknown Character" ? `Current name: "${character.name}" (do NOT repeat this)` : ""}${guidanceInstruction}
+${character.description ? `Description: ${character.description.substring(0, 300)}` : "No description provided"}
+${character.name && character.name !== "{{char}}" && character.name !== "Unknown Character" ? `Current name: "${character.name}" (do NOT use this again)` : ""}${guidanceInstruction}
 
-Cultural traditions to use (one per name, in order):
+Cultural traditions to draw from (one per name, in order):
 ${styleList}
 
-Generate exactly 10 names as a JSON array.
-[Entropy: ${Math.floor(Math.random() * 1000000)}]`;
+Generate exactly 10 names as a JSON array. Make each name as different from the others as possible.
+[Entropy: ${Math.floor(Math.random() * 2000000)}]`;
 
     const data = {
       model,
@@ -532,7 +604,7 @@ Generate exactly 10 names as a JSON array.
         { role: "user", content: userPrompt },
       ],
       temperature: 1.0,
-      max_tokens: 300,
+      max_tokens: 350,
       stream: false,
     };
 
@@ -552,7 +624,6 @@ Generate exactly 10 names as a JSON array.
 
       if (!Array.isArray(parsed)) throw new Error("Response was not an array");
 
-      // Sanitise: strip quotes if AI wrapped individual names
       return parsed
         .slice(0, 10)
         .map((n) => String(n).trim().replace(/^["']|["']$/g, ""))

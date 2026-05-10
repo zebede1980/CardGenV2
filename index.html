@@ -283,9 +283,9 @@
                                             id="regenerate-name-btn"
                                             class="btn-small"
                                             style="padding: 0.3rem 0.8rem; font-size: 0.75rem;"
-                                            title="Open the name picker — choose gender and add guidance, then get 10 culturally varied name suggestions to click and apply"
+                                            title="Open the Name Generator — choose gender, character type, time period and optional guidance, then get 10 culturally varied name suggestions to click and apply. Each reroll avoids all previously shown names."
                                         >
-                                            🎲 Pick Name
+                                            🎲 Name Generator
                                         </button>
                                         <button
                                             id="reset-name-btn"
@@ -1395,29 +1395,65 @@
             </div>
         </div>
 
-        <!-- Name Picker Modal -->
+        <!-- Name Generator Modal -->
         <div id="name-picker-modal" class="modal-overlay">
-            <div class="api-settings-modal" style="max-width: 560px; width: 90%;">
+            <div class="api-settings-modal" style="max-width: 660px; width: 92%;">
                 <div class="modal-header">
-                    <h2 class="modal-title">🎲 Pick a Name</h2>
+                    <h2 class="modal-title">🎲 Name Generator</h2>
                     <button id="name-picker-cancel-btn" class="modal-close">×</button>
                 </div>
                 <div class="modal-body" style="padding: 1.25rem 1.5rem 1.5rem;">
-                    <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                        <div style="flex: 0 0 auto;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
+                        <div>
                             <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Gender</label>
-                            <select id="name-picker-gender" class="content-box" style="padding: 0.45rem 0.75rem; font-size: 0.875rem; width: auto;">
+                            <select id="name-picker-gender" class="content-box" style="width: 100%; padding: 0.45rem 0.5rem; font-size: 0.875rem;">
                                 <option value="any">Any</option>
                                 <option value="female">Female</option>
                                 <option value="male">Male</option>
+                                <option value="other">Non-binary / Other</option>
                             </select>
                         </div>
-                        <div style="flex: 1; min-width: 160px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Guidance <span style="font-weight:400;">(optional)</span></label>
-                            <input id="name-picker-guidance" type="text" class="content-box" placeholder="e.g. medieval, noble family, short name…" style="width: 100%; padding: 0.45rem 0.75rem; font-size: 0.875rem;">
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Character Type</label>
+                            <select id="name-picker-type" class="content-box" style="width: 100%; padding: 0.45rem 0.5rem; font-size: 0.875rem;">
+                                <option value="any">Human / Any</option>
+                                <option value="vampire">Vampire</option>
+                                <option value="demon">Demon</option>
+                                <option value="angel">Angel</option>
+                                <option value="elf">Elf</option>
+                                <option value="fae">Fae / Fairy</option>
+                                <option value="anthropomorphic">Anthropomorphic</option>
+                                <option value="werewolf">Werewolf / Shifter</option>
+                                <option value="ghost">Ghost / Spirit</option>
+                                <option value="alien">Alien</option>
+                                <option value="undead">Undead</option>
+                                <option value="witch">Witch / Mage</option>
+                            </select>
                         </div>
-                        <div style="flex: 0 0 auto; align-self: flex-end;">
-                            <button id="name-picker-generate-btn" class="btn-primary" style="padding: 0.45rem 1rem; font-size: 0.875rem;">🎲 Generate Names</button>
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Time Period</label>
+                            <select id="name-picker-period" class="content-box" style="width: 100%; padding: 0.45rem 0.5rem; font-size: 0.875rem;">
+                                <option value="any">Any</option>
+                                <option value="ancient">Ancient (pre-500 AD)</option>
+                                <option value="medieval">Medieval (500–1400)</option>
+                                <option value="renaissance">Renaissance (1400–1700)</option>
+                                <option value="victorian">Victorian (1800s)</option>
+                                <option value="early-20th">Early 20th Century</option>
+                                <option value="mid-20th">Mid 20th Century</option>
+                                <option value="contemporary">Contemporary</option>
+                                <option value="near-future">Near Future</option>
+                                <option value="far-future">Far Future / Sci-Fi</option>
+                                <option value="fantasy">Fantasy (any era)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-end; margin-bottom: 1rem;">
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Guidance <span style="font-weight: 400;">(optional)</span></label>
+                            <input id="name-picker-guidance" type="text" class="content-box" placeholder="e.g. noble family, short name, sounds harsh, Eastern European feel…" style="width: 100%; padding: 0.45rem 0.75rem; font-size: 0.875rem;">
+                        </div>
+                        <div style="flex: 0 0 auto;">
+                            <button id="name-picker-generate-btn" class="btn-primary" style="padding: 0.45rem 1rem; font-size: 0.875rem; white-space: nowrap;">🎲 Generate Names</button>
                         </div>
                     </div>
                     <p id="name-picker-status" style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem; min-height: 1.2em;"></p>

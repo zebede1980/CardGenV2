@@ -218,6 +218,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   showNamePickerModal() {
     const modal = document.getElementById("name-picker-modal");
     const genderSelect = document.getElementById("name-picker-gender");
+    const typeSelect = document.getElementById("name-picker-type");
+    const periodSelect = document.getElementById("name-picker-period");
     const guidanceInput = document.getElementById("name-picker-guidance");
     const generateBtn = document.getElementById("name-picker-generate-btn");
     const cancelBtn = document.getElementById("name-picker-cancel-btn");
@@ -231,6 +233,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     statusEl.textContent = "";
     guidanceInput.value = "";
     genderSelect.value = "any";
+    typeSelect.value = "any";
+    periodSelect.value = "any";
+
+    // Accumulate all shown names across rerolls so we can ban them from the next roll
+    let seenNames = [];
 
     modal.classList.add("show");
     document.body.style.overflow = "hidden";
@@ -249,16 +256,29 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const onGenerate = async () => {
       const gender = genderSelect.value;
+      const type = typeSelect.value;
+      const timePeriod = periodSelect.value;
       const guidance = guidanceInput.value.trim();
 
       grid.innerHTML = "";
-      statusEl.textContent = "Generating names…";
+      statusEl.textContent = seenNames.length > 0
+        ? `Generating fresh names (${seenNames.length} previous names excluded)…`
+        : "Generating names…";
       generateBtn.disabled = true;
       generateBtn.textContent = "Generating…";
 
       try {
-        const names = await window.apiHandler.generateNameOptions(this.currentCharacter, gender, guidance);
-        statusEl.textContent = "Click a name to use it:";
+        const names = await window.apiHandler.generateNameOptions(
+          this.currentCharacter, gender, type, timePeriod, guidance, seenNames
+        );
+
+        // Accumulate seen names so the next reroll avoids them
+        seenNames = [...seenNames, ...names];
+
+        statusEl.textContent = seenNames.length > 10
+          ? `Click a name to use it — or adjust options and generate again for a completely fresh set:`
+          : "Click a name to use it:";
+
         grid.innerHTML = names.map((name) =>
           `<button class="name-picker-option" data-name="${name.replace(/"/g, "&quot;")}">${name}</button>`
         ).join("");
@@ -290,7 +310,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     modal.addEventListener("click", onBackdrop);
     document.addEventListener("keydown", onEscape);
 
-    // Auto-generate on open so the user sees names immediately
+    // Auto-generate on open
     onGenerate();
   },
 
