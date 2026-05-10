@@ -653,8 +653,15 @@
                                         max-height: 600px;
                                         overflow-y: auto;
                                     "
-                                    placeholder="Example messages will appear here..."
-                                ></textarea>
+                            <!-- Tags row -->
+                            <div class="character-field" style="margin-bottom: 1.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                                    <label class="label" style="margin:0;">Tags</label>
+                                    <button id="auto-tag-btn" class="btn-small" type="button" title="Use AI to automatically generate descriptive tags for this character based on their description, personality and scenario.">🏷️ Auto-Tag</button>
+                                </div>
+                                <div id="character-tags-container" class="tags-container" title="Click a tag to remove it. Type a tag and press Enter or comma to add.">
+                                    <input id="character-tags-input" class="tags-input" type="text" placeholder="Add a tag and press Enter…" autocomplete="off" />
+                                </div>
                             </div>
 
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">

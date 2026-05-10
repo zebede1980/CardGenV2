@@ -235,6 +235,11 @@ class CharacterGeneratorApp {
     const stBaseUrlInput = document.getElementById("st-base-url");
     if (stBaseUrlInput) stBaseUrlInput.addEventListener("change", () => { this.config.loadFromForm(); this.config.saveConfig(); this._updatePushButton(); });
 
+    // Tags
+    const autoTagBtn = document.getElementById("auto-tag-btn");
+    if (autoTagBtn) autoTagBtn.addEventListener("click", () => this.handleAutoTag());
+    this.initTagInput();
+
     // Example messages
     const exampleMessagesCount = document.getElementById("example-messages-count");
     const regenerateExamplesBtn = document.getElementById("regenerate-examples-btn");

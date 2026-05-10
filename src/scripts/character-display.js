@@ -65,6 +65,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     scenarioTextarea.value = this.currentCharacter.scenario || "";
     firstMessageTextarea.value = this.currentCharacter.firstMessage || "";
 
+    this._renderTags(this.currentCharacter.tags || []);
+
     const resetNameBtn = document.getElementById("reset-name-btn");
     const resetDescriptionBtn = document.getElementById("reset-description-btn");
     const resetPersonalityBtn = document.getElementById("reset-personality-btn");
@@ -639,6 +641,92 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
     } finally {
       this.setRevisionState(false);
+    }
+  },
+
+  // ── Tag management ──────────────────────────────────────────────────────────
+
+  _renderTags(tags) {
+    const container = document.getElementById("character-tags-container");
+    const input = document.getElementById("character-tags-input");
+    if (!container || !input) return;
+
+    // Remove all pill elements, keep the input
+    container.querySelectorAll(".tag-pill").forEach(el => el.remove());
+
+    (tags || []).forEach(tag => {
+      const pill = document.createElement("span");
+      pill.className = "tag-pill";
+      pill.dataset.tag = tag;
+      pill.innerHTML = `${this._escapeHtml(tag)}<span class="tag-pill-remove" aria-label="Remove tag">×</span>`;
+      pill.addEventListener("click", () => this._removeTag(tag));
+      container.insertBefore(pill, input);
+    });
+  },
+
+  _escapeHtml(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  },
+
+  _addTag(raw) {
+    if (!this.currentCharacter) return;
+    const tag = raw.trim().toLowerCase().replace(/[^a-z0-9\-\s]/g, "").replace(/\s+/g, "-");
+    if (!tag) return;
+    if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
+    if (!this.currentCharacter.tags.includes(tag)) {
+      this.currentCharacter.tags.push(tag);
+      this._renderTags(this.currentCharacter.tags);
+    }
+  },
+
+  _removeTag(tag) {
+    if (!this.currentCharacter || !Array.isArray(this.currentCharacter.tags)) return;
+    this.currentCharacter.tags = this.currentCharacter.tags.filter(t => t !== tag);
+    this._renderTags(this.currentCharacter.tags);
+  },
+
+  initTagInput() {
+    const container = document.getElementById("character-tags-container");
+    const input = document.getElementById("character-tags-input");
+    if (!container || !input) return;
+
+    container.addEventListener("click", (e) => {
+      if (!e.target.closest(".tag-pill")) input.focus();
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault();
+        this._addTag(input.value);
+        input.value = "";
+      } else if (e.key === "Backspace" && input.value === "" && this.currentCharacter?.tags?.length) {
+        this._removeTag(this.currentCharacter.tags[this.currentCharacter.tags.length - 1]);
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      if (input.value.trim()) {
+        this._addTag(input.value);
+        input.value = "";
+      }
+    });
+  },
+
+  async handleAutoTag() {
+    if (!this.currentCharacter) return;
+    const btn = document.getElementById("auto-tag-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Tagging…"; }
+    try {
+      const tags = await window.apiHandler.generateTags(this.currentCharacter);
+      if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
+      // Merge — keep existing, add new ones
+      tags.forEach(t => { if (!this.currentCharacter.tags.includes(t)) this.currentCharacter.tags.push(t); });
+      this._renderTags(this.currentCharacter.tags);
+      this.showNotification(`Added ${tags.length} tags`, "success");
+    } catch (err) {
+      this.showNotification(`Auto-tag failed: ${err.message}`, "error");
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "🏷️ Auto-Tag"; }
     }
   },
 

@@ -533,7 +533,50 @@ textarea.content-box {
 .st-status-ok { color: #28a745; }
 .st-status-err { color: var(--error, #c93d4a); }
 
-/* ST character card (rich browser view) */
+/* Tags widget */
+.tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 2.2rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-color, #fff);
+    cursor: text;
+}
+.tags-container:focus-within {
+    border-color: var(--primary, #7c3aed);
+    box-shadow: 0 0 0 2px rgba(124,58,237,0.15);
+}
+.tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.72rem;
+    background: var(--surface-secondary, #ede9fe);
+    color: var(--primary, #5b21b6);
+    border-radius: 99px;
+    padding: 0.15rem 0.55rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+.tag-pill:hover { background: #ddd6fe; }
+.tag-pill-remove { font-size: 0.85em; opacity: 0.6; line-height: 1; }
+.tags-input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 0.8rem;
+    color: var(--text-color);
+    min-width: 140px;
+    flex: 1;
+    padding: 0;
+}
+
+
 .st-card {
     display: flex;
     flex-direction: row;

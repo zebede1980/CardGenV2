@@ -86,8 +86,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.data?.tags) ? c.data.tags : []);
         const snippet = this._escHtml((description || firstMes).replace(/\n+/g, " ").trim().slice(0, 120));
         const tagHtml = tags.slice(0, 5).map(t => `<span class="st-card-tag">${this._escHtml(String(t))}</span>`).join("");
-        // Avatar thumbnail: ST serves PNG thumbnails at /thumbnail?type=avatar&file=<avatar>
-        const thumbUrl = avatar ? `${stUrl}/thumbnail?type=avatar&file=${encodeURIComponent(avatar)}` : "";
+        // Route thumbnail through our proxy — the browser can't reach ST directly
+        const thumbUrl = avatar
+          ? `/api/st/thumbnail?file=${encodeURIComponent(avatar)}&stUrl=${encodeURIComponent(stUrl)}`
+          : "";
         const thumbHtml = thumbUrl
           ? `<img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
           : `<div class="st-card-thumb st-card-thumb-placeholder"></div>`;

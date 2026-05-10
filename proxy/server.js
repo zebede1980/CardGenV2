@@ -706,6 +706,37 @@ app.get("/api/st/ping", async (req, res) => {
     res.json({ ok: false, error: error.message });
   }
 });
+
+// Proxy ST avatar thumbnails so the browser doesn't need direct access to ST
+// GET /api/st/thumbnail?file=CharacterName.png&stUrl=http://sillytavern:8000
+app.get("/api/st/thumbnail", async (req, res) => {
+  const file = req.query.file;
+  const stUrl = req.query.stUrl;
+  if (!file || typeof file !== "string") {
+    return res.status(400).end();
+  }
+  if (!stUrl || !/^https?:\/\//i.test(stUrl)) {
+    return res.status(400).end();
+  }
+  const cleanStUrl = stUrl.replace(/\/$/, "");
+  try {
+    const csrfHeaders = await getStCsrfHeaders(cleanStUrl);
+    const response = await fetch(
+      `${cleanStUrl}/thumbnail?type=avatar&file=${encodeURIComponent(file)}`,
+      { method: "GET", headers: { ...csrfHeaders } }
+    );
+    if (!response.ok) {
+      return res.status(response.status).end();
+    }
+    const contentType = response.headers.get("content-type") || "image/png";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    response.body.pipe(res);
+  } catch (error) {
+    console.error("ST thumbnail error:", error);
+    res.status(500).end();
+  }
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

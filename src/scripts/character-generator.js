@@ -217,7 +217,7 @@ class CharacterGenerator {
         first_mes: character.firstMessage || "Hello!",
         mes_example: character.mesExample || "",
         alternate_greetings: character.alternateGreetings || [],
-        tags: [],
+        tags: Array.isArray(character.tags) ? character.tags : [],
         // V3 required fields
         group_only_greetings: character.groupOnlyGreetings || [],
         assets: [{ type: "icon", uri: "ccdefault:", name: "main", ext: "png" }],

@@ -791,4 +791,61 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
     }
   },
 
+  async generateTags(character) {
+    if (!character) throw new Error("Character is required to generate tags");
+    const model = this.config.get("api.text.model");
+
+    const systemPrompt = `You are a tagging assistant for SillyTavern character cards. Analyse the character and output a JSON array of concise, lowercase tags that describe the character. Tags should cover:
+- Gender (e.g. "female", "male", "non-binary")
+- Species / race if not human (e.g. "elf", "android", "vampire")
+- Setting / genre (e.g. "fantasy", "sci-fi", "modern", "historical", "post-apocalyptic")
+- Personality archetype (e.g. "tsundere", "mentor", "villain", "anti-hero")
+- Occupation or role (e.g. "detective", "witch", "soldier")
+- Notable traits (e.g. "sarcastic", "loyal", "mysterious")
+- Content tone (e.g. "romance", "action", "comedy", "dark", "wholesome")
+
+Rules:
+- Output ONLY a valid JSON array of strings, nothing else.
+- 5–12 tags total.
+- All lowercase, no special characters except hyphens.
+- No tag longer than 25 characters.`;
+
+    const userPrompt = `Name: ${character.name || "Unknown"}
+Description: ${(character.description || "").slice(0, 800)}
+Personality: ${(character.personality || "").slice(0, 400)}
+Scenario: ${(character.scenario || "").slice(0, 300)}
+First message: ${(character.firstMessage || "").slice(0, 300)}
+
+Output a JSON array of tags only.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.5,
+      max_tokens: 150,
+      stream: false,
+    };
+
+    try {
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      const output = this.processNormalResponse(response);
+      let parsed;
+      try {
+        parsed = JSON.parse(output);
+      } catch (e) {
+        const arrayMatch = output.match(/\[[\s\S]*?\]/);
+        if (arrayMatch) parsed = JSON.parse(arrayMatch[0]);
+        else throw new Error("Could not parse tags from response");
+      }
+      if (!Array.isArray(parsed)) throw new Error("Response was not an array");
+      return parsed.map(t => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 12);
+    } catch (error) {
+      console.error("=== TAG GENERATION FAILED ===", error);
+      throw error;
+    }
+  },
+
 });
