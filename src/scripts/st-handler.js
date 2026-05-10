@@ -227,6 +227,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         throw new Error((errData.error || `HTTP ${res.status}`) + detail);
       }
       const data = await res.json();
+      console.log("ST import response:", JSON.stringify(data));
 
       // After a successful push, lock stSourceAvatar to the returned filename
       // so subsequent pushes correctly update the same slot
