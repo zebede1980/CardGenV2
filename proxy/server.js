@@ -492,17 +492,38 @@ function getStUrl(req, res) {
 // Cache per base URL for up to 10 minutes; auto-invalidate on 403.
 const stCsrfCache = {};
 
+// Extract only the name=value pairs from Set-Cookie headers (strip Path, HttpOnly, etc.)
+function parseCookieHeaders(rawHeaders) {
+  if (!rawHeaders) return "";
+  const list = Array.isArray(rawHeaders) ? rawHeaders : [rawHeaders];
+  return list.map(c => c.split(";")[0].trim()).filter(Boolean).join("; ");
+}
+
 async function getStCsrfHeaders(stUrl) {
   const cached = stCsrfCache[stUrl];
   if (cached && Date.now() - cached.fetchedAt < 10 * 60 * 1000) {
     return { "X-CSRF-Token": cached.token, "Cookie": cached.cookie };
   }
-  const res = await fetch(`${stUrl}/csrf-token`, { method: "GET" });
-  if (!res.ok) throw new Error(`Failed to fetch ST CSRF token: ${res.status}`);
-  const setCookie = res.headers.get("set-cookie") || "";
-  const data = await res.json();
-  stCsrfCache[stUrl] = { token: data.token, cookie: setCookie, fetchedAt: Date.now() };
-  return { "X-CSRF-Token": data.token, "Cookie": setCookie };
+  // Step 1: hit the root to establish a session cookie
+  const sessionRes = await fetch(`${stUrl}/`, { method: "GET" });
+  const sessionCookieRaw = sessionRes.headers.raw()["set-cookie"];
+  const sessionCookie = parseCookieHeaders(sessionCookieRaw);
+
+  // Step 2: fetch the CSRF token using that session cookie
+  const csrfRes = await fetch(`${stUrl}/csrf-token`, {
+    method: "GET",
+    headers: sessionCookie ? { "Cookie": sessionCookie } : {},
+  });
+  if (!csrfRes.ok) throw new Error(`Failed to fetch ST CSRF token: ${csrfRes.status}`);
+
+  // Merge any additional cookies set by the csrf-token endpoint
+  const csrfCookieRaw = csrfRes.headers.raw()["set-cookie"];
+  const csrfCookie = parseCookieHeaders(csrfCookieRaw);
+  const cookie = [sessionCookie, csrfCookie].filter(Boolean).join("; ");
+
+  const data = await csrfRes.json();
+  stCsrfCache[stUrl] = { token: data.token, cookie, fetchedAt: Date.now() };
+  return { "X-CSRF-Token": data.token, "Cookie": cookie };
 }
 
 // List all characters from ST
