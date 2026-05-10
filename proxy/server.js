@@ -607,6 +607,10 @@ app.post("/api/st/push", async (req, res) => {
   }
   try {
     const pngBuffer = Buffer.from(pngBase64, "base64");
+    // Verify PNG signature (first 8 bytes must be 89 50 4E 47 0D 0A 1A 0A)
+    const PNG_SIG = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    const sigOk = PNG_SIG.every((b, i) => pngBuffer[i] === b);
+    console.log(`ST push: decoded buffer size=${pngBuffer.length} validPngSig=${sigOk}`);
 
     // Build multipart/form-data body manually.
     // Boundary must NOT start with '--' (those are added as delimiters).
