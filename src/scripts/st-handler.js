@@ -251,17 +251,35 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async _encodeCurrentCharacterAsPng() {
     const character = this.currentCharacter;
 
-    const imageBlob = this.currentImageUrl
-      ? await fetch(this.currentImageUrl).then(r => r.blob()).catch(() => null)
-      : null;
+    if (!this.currentImageUrl) {
+      throw new Error("A character image is required before pushing to SillyTavern. Generate or import an image first.");
+    }
+
+    // Sync editable fields from the DOM (same as download button does)
+    const nameInput = document.getElementById("character-generated-name");
+    const descriptionTextarea = document.getElementById("character-description");
+    const personalityTextarea = document.getElementById("character-personality");
+    const scenarioTextarea = document.getElementById("character-scenario");
+    const firstMessageTextarea = document.getElementById("character-first-message");
+    const exampleMessagesOutput = document.getElementById("example-messages-output");
+    if (nameInput) character.name = nameInput.value.trim();
+    if (descriptionTextarea) character.description = descriptionTextarea.value.trim();
+    if (personalityTextarea) character.personality = personalityTextarea.value.trim();
+    if (scenarioTextarea) character.scenario = scenarioTextarea.value.trim();
+    if (firstMessageTextarea) character.firstMessage = firstMessageTextarea.value.trim();
+    if (exampleMessagesOutput) {
+      if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
+        character.mesExample = exampleMessagesOutput.value.trim();
+      }
+    }
+
+    let imageBlob = await this.imageGenerator.convertToBlob(this.currentImageUrl);
+    imageBlob = await this.imageGenerator.optimizeImageForCard(imageBlob);
 
     // Build a character object with all current state (lorebook, alt greetings, tags)
     const charWithExtras = Object.assign({}, character, {
       alternateGreetings: this.altGreetings.map(g => g.content),
-      character_book: this.lorebookData || (this.lorebookEntries.length > 0 ? {
-        name: `${character.name || "Character"} Lorebook`,
-        entries: this.lorebookEntries,
-      } : undefined),
+      character_book: this.buildCharacterBook ? this.buildCharacterBook() : (this.lorebookData || undefined),
     });
 
     // Use the same spec builder as the Download button
