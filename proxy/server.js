@@ -608,44 +608,45 @@ app.post("/api/st/push", async (req, res) => {
   try {
     const pngBuffer = Buffer.from(pngBase64, "base64");
 
-    // Build a raw multipart/form-data body manually (no extra deps needed)
-    const boundary = `----CardGenBoundary${Date.now()}`;
-    const CRLF = "\r\n";
+    // Build multipart/form-data body manually.
+    // Boundary must NOT start with '--' (those are added as delimiters).
+    const boundary = `CardGenBoundary${Date.now()}`;
+    const CRLF = Buffer.from("\r\n");
+    const DASHDASH = Buffer.from("--");
 
-    const fileHeader = [
-      `--${boundary}`,
-      `Content-Disposition: form-data; name="file"; filename="character.png"`,
-      `Content-Type: image/png`,
-      ``,
-      ``,
-    ].join(CRLF);
+    function part(headers, body) {
+      const headerBuf = Buffer.from(
+        headers.map(h => h + "\r\n").join("") + "\r\n",
+        "utf8"
+      );
+      return Buffer.concat([DASHDASH, Buffer.from(boundary), CRLF, headerBuf, body, CRLF]);
+    }
 
-    const fileTypePart = [
-      `--${boundary}`,
-      `Content-Disposition: form-data; name="file_type"`,
-      ``,
-      `png`,
-    ].join(CRLF);
-
-    let bodyParts = [
-      Buffer.from(fileHeader, "binary"),
-      pngBuffer,
-      Buffer.from(CRLF + fileTypePart, "binary"),
+    const parts = [
+      part(
+        [
+          'Content-Disposition: form-data; name="file"; filename="character.png"',
+          "Content-Type: image/png",
+        ],
+        pngBuffer
+      ),
+      part(
+        ['Content-Disposition: form-data; name="file_type"'],
+        Buffer.from("png")
+      ),
     ];
 
     if (preservedName) {
-      const preservedPart = [
-        ``,
-        `--${boundary}`,
-        `Content-Disposition: form-data; name="preserved_name"`,
-        ``,
-        preservedName,
-      ].join(CRLF);
-      bodyParts.push(Buffer.from(preservedPart, "binary"));
+      parts.push(
+        part(
+          ['Content-Disposition: form-data; name="preserved_name"'],
+          Buffer.from(String(preservedName))
+        )
+      );
     }
 
-    bodyParts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`, "binary"));
-    const body = Buffer.concat(bodyParts);
+    const closing = Buffer.from(`--${boundary}--\r\n`);
+    const body = Buffer.concat([...parts, closing]);
 
     const csrfHeaders = await getStCsrfHeaders(stUrl);
     let response = await fetch(`${stUrl}/api/characters/import`, {

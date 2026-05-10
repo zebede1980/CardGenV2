@@ -222,7 +222,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${res.status}`);
+        const detail = errData.detail ? ` — ${errData.detail}` : "";
+        console.error("ST push response:", errData);
+        throw new Error((errData.error || `HTTP ${res.status}`) + detail);
       }
       const data = await res.json();
 
