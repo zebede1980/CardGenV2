@@ -249,32 +249,23 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // ── Encode helper ──────────────────────────────────────────────────────────
 
   async _encodeCurrentCharacterAsPng() {
-    // Build the same character object the Download button uses
     const character = this.currentCharacter;
 
     const imageBlob = this.currentImageUrl
       ? await fetch(this.currentImageUrl).then(r => r.blob()).catch(() => null)
       : null;
 
-    const charData = {
-      name: character.name || "",
-      description: character.description || "",
-      personality: character.personality || "",
-      scenario: character.scenario || "",
-      first_mes: character.firstMessage || "",
-      mes_example: character.mesExample || "",
-      creator_notes: character.creatorNotes || "",
-      system_prompt: character.systemPrompt || "",
-      post_history_instructions: character.postHistoryInstructions || "",
-      alternate_greetings: this.altGreetings.map(g => g.content),
-      tags: character.tags || [],
-      creator: character.creator || "",
-      character_version: character.characterVersion || "",
+    // Build a character object with all current state (lorebook, alt greetings, tags)
+    const charWithExtras = Object.assign({}, character, {
+      alternateGreetings: this.altGreetings.map(g => g.content),
       character_book: this.lorebookData || (this.lorebookEntries.length > 0 ? {
         name: `${character.name || "Character"} Lorebook`,
         entries: this.lorebookEntries,
       } : undefined),
-    };
+    });
+
+    // Use the same spec builder as the Download button
+    const charData = window.characterGenerator.toSpecV3Format(charWithExtras);
 
     return await window.pngEncoder.createCharacterCard(imageBlob, charData);
   },
