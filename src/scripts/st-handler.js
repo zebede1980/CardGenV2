@@ -276,7 +276,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       } : undefined),
     };
 
-    return await this.pngEncoder.encodeCharacterCard(imageBlob, charData);
+    return await window.pngEncoder.createCharacterCard(imageBlob, charData);
   },
 
   _arrayBufferToBase64(buffer) {

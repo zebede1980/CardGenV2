@@ -445,11 +445,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
           }
           this.currentImageUrl = URL.createObjectURL(card.imageBlob);
           const imageContainer = document.getElementById("image-content");
-          imageContainer.innerHTML = `
-            <div class="image-container">
-              <img src="${this.currentImageUrl}" alt="${card.character.name || "Character"}" class="generated-image">
-            </div>
-          `;
+          if (imageContainer) {
+            imageContainer.innerHTML = `
+              <div class="image-container">
+                <img src="${this.currentImageUrl}" alt="${card.character.name || "Character"}" class="generated-image">
+              </div>
+            `;
+          }
         }
         this.showNotification("Card loaded", "success");
       } else if (action === "delete-card") {
