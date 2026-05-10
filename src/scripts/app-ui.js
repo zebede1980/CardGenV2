@@ -107,6 +107,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const resultSection = document.querySelector(".result-section");
     const downloadBtn = document.getElementById("download-btn");
     const saveCardBtn = document.getElementById("save-card-btn");
+    const snapshotHistoryBtn = document.getElementById("snapshot-history-btn");
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
 
     resultSection.style.display = "block";
@@ -114,6 +115,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     if (saveCardBtn && this.currentCharacter) {
       saveCardBtn.style.display = "inline-flex";
+    }
+    if (snapshotHistoryBtn && this.currentCharacter) {
+      snapshotHistoryBtn.style.display = "inline-flex";
     }
     if (checkConsistencyBtn && this.currentCharacter) {
       checkConsistencyBtn.style.display = "inline-flex";

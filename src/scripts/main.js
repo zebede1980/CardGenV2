@@ -69,6 +69,8 @@ class CharacterGeneratorApp {
 
     const saveCardBtn = document.getElementById("save-card-btn");
     if (saveCardBtn) saveCardBtn.addEventListener("click", () => this.handleSaveCardManual());
+    const snapshotHistoryBtn = document.getElementById("snapshot-history-btn");
+    if (snapshotHistoryBtn) snapshotHistoryBtn.addEventListener("click", () => this.handleSnapshotToHistory());
 
     // Import card buttons
     const importCardBtn = document.getElementById("import-card-btn");

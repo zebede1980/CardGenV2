@@ -175,6 +175,24 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleSnapshotToHistory() {
+    if (!this.currentCharacter) {
+      this.showNotification("No character to snapshot", "warning");
+      return;
+    }
+    const btn = document.getElementById("snapshot-history-btn");
+    if (btn) btn.disabled = true;
+    try {
+      await this.saveCardToLibrary(false);
+      await this.refreshLibraryViews();
+      this.showNotification("Snapshot saved to history!", "success");
+    } catch (error) {
+      this.showNotification(`Snapshot failed: ${error.message}`, "error");
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
   async handleSaveCardManual() {
     if (!this.currentCharacter) {
       this.showNotification("No character to save", "warning");
