@@ -488,16 +488,43 @@ function getStUrl(req, res) {
   return url;
 }
 
+// ST requires a paired session cookie + CSRF token on every API request.
+// Cache per base URL for up to 10 minutes; auto-invalidate on 403.
+const stCsrfCache = {};
+
+async function getStCsrfHeaders(stUrl) {
+  const cached = stCsrfCache[stUrl];
+  if (cached && Date.now() - cached.fetchedAt < 10 * 60 * 1000) {
+    return { "X-CSRF-Token": cached.token, "Cookie": cached.cookie };
+  }
+  const res = await fetch(`${stUrl}/csrf-token`, { method: "GET" });
+  if (!res.ok) throw new Error(`Failed to fetch ST CSRF token: ${res.status}`);
+  const setCookie = res.headers.get("set-cookie") || "";
+  const data = await res.json();
+  stCsrfCache[stUrl] = { token: data.token, cookie: setCookie, fetchedAt: Date.now() };
+  return { "X-CSRF-Token": data.token, "Cookie": setCookie };
+}
+
 // List all characters from ST
 app.get("/api/st/characters", async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
   try {
-    const response = await fetch(`${stUrl}/api/characters/all`, {
+    const csrfHeaders = await getStCsrfHeaders(stUrl);
+    let response = await fetch(`${stUrl}/api/characters/all`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeaders },
       body: "{}",
     });
+    if (response.status === 403) {
+      delete stCsrfCache[stUrl];
+      const retryHeaders = await getStCsrfHeaders(stUrl);
+      response = await fetch(`${stUrl}/api/characters/all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...retryHeaders },
+        body: "{}",
+      });
+    }
     if (!response.ok) {
       return res.status(response.status).json({ error: `ST returned ${response.status}` });
     }
@@ -519,11 +546,21 @@ app.post("/api/st/export", async (req, res) => {
     return res.status(400).json({ error: "avatar_url is required" });
   }
   try {
-    const response = await fetch(`${stUrl}/api/characters/export`, {
+    const csrfHeaders = await getStCsrfHeaders(stUrl);
+    let response = await fetch(`${stUrl}/api/characters/export`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeaders },
       body: JSON.stringify({ format: "png", avatar_url }),
     });
+    if (response.status === 403) {
+      delete stCsrfCache[stUrl];
+      const retryHeaders = await getStCsrfHeaders(stUrl);
+      response = await fetch(`${stUrl}/api/characters/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...retryHeaders },
+        body: JSON.stringify({ format: "png", avatar_url }),
+      });
+    }
     if (!response.ok) {
       return res.status(response.status).json({ error: `ST export returned ${response.status}` });
     }
@@ -589,14 +626,29 @@ app.post("/api/st/push", async (req, res) => {
     bodyParts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`, "binary"));
     const body = Buffer.concat(bodyParts);
 
-    const response = await fetch(`${stUrl}/api/characters/import`, {
+    const csrfHeaders = await getStCsrfHeaders(stUrl);
+    let response = await fetch(`${stUrl}/api/characters/import`, {
       method: "POST",
       headers: {
         "Content-Type": `multipart/form-data; boundary=${boundary}`,
         "Content-Length": body.length,
+        ...csrfHeaders,
       },
       body,
     });
+    if (response.status === 403) {
+      delete stCsrfCache[stUrl];
+      const retryHeaders = await getStCsrfHeaders(stUrl);
+      response = await fetch(`${stUrl}/api/characters/import`, {
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          "Content-Length": body.length,
+          ...retryHeaders,
+        },
+        body,
+      });
+    }
 
     if (!response.ok) {
       const errText = await response.text();
@@ -616,9 +668,10 @@ app.get("/api/st/ping", async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
   try {
+    const csrfHeaders = await getStCsrfHeaders(stUrl);
     const response = await fetch(`${stUrl}/api/characters/all`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeaders },
       body: "{}",
       timeout: 5000,
     });
