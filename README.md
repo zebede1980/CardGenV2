@@ -16,15 +16,17 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Optional fixed character name, or let the AI generate one grounded in the character's background and time period.
 - **First-person** (`I am...`) or **third-person** (`She is...`) POV templates.
 - Optional lorebook (SillyTavern World Info JSON) uploaded as grounding context at generation time.
-- Optional reference image upload — auto-described by a vision model if configured, or manually described.
-- Streaming generation with stop support.
+- Optional reference image upload — auto-described by a vision model if configured, or manually entered as text.
+- Streaming generation with **Stop** support at any point.
 - Generated cards use short prose for backstory/scenario and direct bullet points for traits and behaviours — not padded narrative.
+- Tag field: add comma-separated tags that are preserved in the exported card and shown in the SillyTavern library.
 
 ### Import & Edit
 - Import existing cards (`.png` with embedded `chara_card_v2` data, or `.json`) and edit them in-place.
 - **Import & Remaster** — import a card and immediately run an AI rewrite pass that fixes inconsistencies, tightens language, and brings the card in line with the conciseness standard.
 - Per-field **Redo** buttons regenerate any single section with AI; an optional instruction box lets you guide the rewrite.
 - Per-field **Reset** buttons revert a section back to the last generated or imported baseline, discarding manual edits.
+- All fields (name, description, personality, scenario, first message, example messages, tags) are directly editable in the text areas at any time.
 
 ### AI Revision Tools
 - **Revise Card with AI** — apply a free-text instruction to rewrite the whole card (e.g. "make her more guarded and less verbose").
@@ -32,8 +34,8 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
   1. Scans the card with AI and presents a checklist of world-building content (locations, NPCs, factions, historical events) that belongs in the lorebook rather than the card body. You choose what to move.
   2. Strips all flowery prose and repetition from what remains, leaving only direct AI-guidance.
 - **📚 Scan for Lorebook Content** — runs only the lorebook-elevation scan without the bloat-reduction pass. Useful when a card is already concise but you want to clean up embedded lore.
-- **🔍 Check Consistency** — AI reviews the card for logical contradictions, tonal mismatches, or continuity errors and produces a written report.
-- **✨ Auto-Fix** — automatically applies the fixes suggested by the last consistency report.
+- **🔍 Check Consistency** — AI reviews the card for logical contradictions, tonal mismatches, or continuity errors and produces a written report in a modal.
+- **✨ Auto-Fix** — automatically applies the fixes suggested by the last consistency report without requiring manual editing.
 
 ### Lorebook Manager
 - Add, edit, and delete lorebook entries (keyword/trigger → content pairs).
@@ -57,33 +59,45 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Works with both generated and imported cards.
 
 ### Image Handling
-- AI generates an image prompt from the character description (up to ~1000 characters), displayed in an editable box.
+- AI generates an image prompt from the character description (up to ~1000 characters), displayed in an editable text box.
 - Regenerate the prompt or the image independently.
-- **Generate 4 (Models)** — generates one image per saved model simultaneously for a style comparison.
+- **Generate 4 (Models)** — generates one image per saved model simultaneously for a side-by-side style comparison.
 - **Generate 4 (Variations)** — generates four prompt variations from the active model.
+- **Free image generation via Pollinations.ai** — generates images without any API key or account; uses the Flux model by default with configurable width, height, and random seed.
 - Upload your own image instead of AI-generating one.
-- CORS-bypass proxy for fetching remote image URLs.
+- CORS-bypass proxy routes all image requests through the backend to avoid browser restrictions.
+- Image prompt character count is displayed live to help you stay within model limits.
 
-### Library (Server-Side Storage)
-- Prompts and cards are auto-saved to the proxy server's `data/` directory after generation and revision.
-- Manual **Save to Library** button also available.
-- Load or delete saved prompts and cards from the UI.
+### SillyTavern Bridge
+- Configure a SillyTavern base URL in API Settings to connect directly to a running ST instance.
+- **Test Connection** — verifies connectivity and reports how many characters are in ST.
+- **Browse ST Library** — lists all characters in your ST instance with thumbnails, tags, date added, and a short description snippet. Sorted most-recent-first.
+- **Load from ST** — pull any ST character card directly into the editor using the same import pipeline as a file drop. The source slot is remembered for push-back.
+- **Push to ST** — send the current card to SillyTavern as a new character or as an update to the card it was loaded from. If the character name changed, a modal prompts you to choose between updating the original slot or creating a new one.
+- CSRF token negotiation is handled automatically and cached per session (10-minute TTL with auto-invalidation on 403).
+
+### Library & History
+- **Server-side library** — prompts and cards are auto-saved to `proxy/data/` after every generation and revision. A manual **Save to Library** button is also available.
+- **Snapshot to History** — save the current card state as a named history entry at any point (visible while a card is loaded); useful for tracking incremental changes.
+- Load or delete any saved prompt or card from the Library tab in the UI.
+- Concurrent writes are serialised with a per-file mutex to prevent data corruption.
 - Data persists across restarts when using Docker volumes.
 
 ### Export
-- **Download Character Card (PNG)** — SillyTavern-compatible PNG with embedded `chara_card_v2` metadata. Lorebook and alternate greetings are included.
-- **Download as JSON** — raw `chara_card_v2` structure.
+- **Download Character Card (PNG)** — SillyTavern-compatible PNG with embedded `chara_card_v2` metadata. Lorebook, alternate greetings, example messages, and tags are all included.
+- **Download as JSON** — raw `chara_card_v2` structure without image embedding.
 
 ### Token Counter
-- Live token-count display per field and a running total for the full card, helping you keep the card lean.
+- Live token-count estimate displayed per field (name, description, personality, scenario, first message, example messages).
+- Lorebook and alternate greetings are included in the running **total** shown at the bottom of the card, helping you keep the full card lean.
 
 ---
 
 ## Requirements
 
-- Node.js 18+ (for local dev)
+- Node.js 18+ (for local dev; the proxy Dockerfile uses Node 18 Alpine)
 - OpenAI-compatible text API endpoint (required)
-- OpenAI-compatible image API endpoint (optional)
+- OpenAI-compatible image API endpoint (optional — or use the built-in Pollinations.ai free tier)
 - Vision-capable text model (optional — only needed for reference-image auto-description)
 
 ---
@@ -98,12 +112,13 @@ cd proxy && npm install && cd ..
 npm run dev
 ```
 
-- Frontend: `http://localhost:2427`
+- Frontend: `http://localhost:2427` (opens automatically)
 - Proxy API: `http://localhost:2426`
 
-### Local (Non-dev)
+### Local (Non-dev / production-like)
 
 ```bash
+npm install
 npm start
 ```
 
@@ -111,14 +126,14 @@ npm start
 
 ```bash
 cp docker-compose.example.yml docker-compose.yml
-# Edit docker-compose.yml or create a .env file with your port preferences
+# Edit docker-compose.yml, or create a .env file to override ports
 docker compose up -d --build
 ```
 
 - Frontend: `http://localhost:2427` (or the port set by `FRONTEND_PORT`)
 - Proxy health: `http://localhost:2426/health` (or the port set by `PROXY_PORT`)
 
-> **Library persistence:** The Docker Compose configuration maps `./proxy/data` to `/app/data` inside the proxy container, so saved cards and prompts survive container restarts.
+> **Library persistence:** `./proxy/data` on your host is mounted to `/app/data` inside the proxy container. Saved cards, prompts, and API settings survive container restarts. Back up this directory to preserve your library.
 
 ---
 
@@ -126,28 +141,56 @@ docker compose up -d --build
 
 ### Environment Variables (`.env` / Docker)
 
+Create a `.env` file in the project root (next to `docker-compose.yml`) to override defaults without editing the compose file.
+
 | Variable | Default | Description |
 |---|---|---|
-| `FRONTEND_PORT` | `2427` | Host port mapped to the frontend container |
-| `PROXY_PORT` | `2426` | Host port for the proxy server |
-| `FRONTEND_URL` | `http://localhost:2427` | Used by the proxy for CORS and OpenRouter headers |
+| `FRONTEND_PORT` | `2427` | Host port mapped to the Nginx frontend container |
+| `PROXY_PORT` | `2426` | Host port for the Node.js proxy server |
+| `FRONTEND_URL` | `http://localhost:2427` | Origin sent in CORS headers and OpenRouter `HTTP-Referer` |
+
+**Example `.env`:**
+```env
+FRONTEND_PORT=3000
+PROXY_PORT=3001
+FRONTEND_URL=http://192.168.1.50:3000
+```
 
 ### In-App API Settings
 
+All settings are saved server-side to `proxy/data/config.json` via `POST /api/config` and also mirrored to `localStorage`. They persist across page reloads and container restarts.
+
+#### Text API
+
 | Setting | Notes |
 |---|---|
-| Text API Base URL | OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1`) |
-| Text API Key | Passed as `Authorization: Bearer` or `X-API-Key` header |
-| Text Model | Model name for all generation and revision calls |
-| Vision Model | Optional — used to auto-describe reference images |
-| Image API Base URL | Optional — enables image generation |
-| Image API Key | Optional |
-| Image Model | Optional |
-| Image Size | Optional (e.g. `1024x1024`) |
-| Persist API keys | Off by default — keys are session-only unless toggled |
-| Enable image generation | Toggle to show/hide image controls |
+| Text API Base URL | OpenAI-compatible endpoint root (e.g. `https://api.openai.com/v1`, `https://openrouter.ai/api/v1`, or a local Ollama/LM Studio URL) |
+| Text API Key | Sent as `Authorization: Bearer <key>`; falls back to `X-API-Key` on 401 |
+| Text Model | Model identifier used for all generation, revision, and analysis calls |
+| Vision Model | Optional separate model for auto-describing reference images; falls back to Text Model if blank |
 
-Settings are saved server-side (via `POST /api/config`) so they persist across page reloads.
+#### Image API
+
+| Setting | Notes |
+|---|---|
+| Image API Base URL | OpenAI-compatible images endpoint root. Leave blank to use the free Pollinations.ai tier |
+| Image API Key | Optional; required if your image provider needs authentication |
+| Image Models | Multi-select checklist — tick one or more models. All ticked models are used when you click **Generate 4 (Models)** |
+| Image Size | e.g. `1024x1024`, `768x1024` — passed to the upstream API |
+| Image Style | Optional style hint forwarded to the API (e.g. `vivid`, `natural`) |
+| Enable Image Generation | Toggle to show/hide all image controls |
+
+#### SillyTavern Bridge
+
+| Setting | Notes |
+|---|---|
+| SillyTavern Base URL | Internal URL of your ST instance (e.g. `http://sillytavern:8000` for Docker-to-Docker, or `http://localhost:8000` for local). Must be reachable from the **proxy container**, not the browser |
+
+#### Advanced / Debug
+
+| Setting | Notes |
+|---|---|
+| Debug Mode | Toggles verbose `console.log` output in the browser and proxy. Off by default |
 
 ---
 
@@ -159,17 +202,26 @@ Settings are saved server-side (via `POST /api/config`) so they persist across p
 4. Choose **POV** — first-person or third-person.
 5. Optionally upload a **Lorebook JSON** (World Info) as grounding context for generation.
 6. Optionally upload a **Reference Image** — it will be auto-described if a vision model is set.
-7. Click **Generate Character** and watch the card stream in.
-8. Edit any field directly in the text areas. Use **Redo** to regenerate a single section, or **Reset** to revert to the last generated version.
+7. Click **Generate Character** and watch the card stream in. Click **Stop** at any time to halt generation.
+8. Edit any field directly in the text areas. Use **Redo** to regenerate a single section with optional instruction, or **Reset** to revert to the last generated/imported baseline.
 9. Use the **Revision Tools** to refine the card:
    - **Reduce Bloat** to move lore to the lorebook and strip prose padding.
    - **Scan for Lorebook Content** to elevate lore without the bloat pass.
-   - **Revise Card** for any specific change.
+   - **Revise Card** for any specific free-text change instruction.
    - **Check Consistency** + **Auto-Fix** for logic and continuity issues.
 10. Open the **Lorebook Manager** to add world-building entries, or let the AI suggest and generate them.
 11. Open **Alternate Greetings** to add alternative opening scenes.
 12. Generate **Example Messages** — they are embedded in the exported card automatically.
-13. Click **Download Character Card (PNG)** to export.
+13. Optionally click **Snapshot to History** to save the current state as a named checkpoint.
+14. Click **Download Character Card (PNG)** to export, or use **Download as JSON** if you don't need an image.
+
+### SillyTavern Bridge Workflow
+
+1. In **API Settings**, enter your SillyTavern instance URL and click **Test Connection**.
+2. Open the **SillyTavern** tab in the Library panel to browse your ST character list.
+3. Click **Load** on any card to pull it into the editor (it passes through the full import pipeline).
+4. Edit, revise, or remaster the card as needed.
+5. Click **Push to SillyTavern** to send it back — it will update the original slot (or create a new character if you choose).
 
 ---
 
@@ -177,7 +229,7 @@ Settings are saved server-side (via `POST /api/config`) so they persist across p
 
 Character cards in SillyTavern are loaded into the AI's context on every message. Long, flowery cards inflate token costs and can reduce coherence. This tool generates cards that follow a clear standard:
 
-- **Short prose** for backstory and scenario (factual, 2-3 paragraphs max).
+- **Short prose** for backstory and scenario (factual, 2–3 paragraphs max).
 - **Bullet points** for personality traits, behavioural patterns, speech style, goals, fears, and limits.
 - **No padding** — every sentence must serve a direct descriptive or behavioural function.
 - **Lorebook for lore** — world-building detail (locations, factions, history) should live in lorebook entries that inject only when triggered, not in the card body.
@@ -188,46 +240,84 @@ The **Reduce Bloat** and **Scan for Lorebook Content** tools help you bring impo
 
 ## API Compatibility Notes
 
-- The frontend calls only the local proxy (`/api/...`).
-- The proxy forwards requests to your configured upstream API URL.
-- Authentication: the proxy tries `Authorization: Bearer <key>` first, then retries with `X-API-Key` on a 401.
-- OpenRouter is detected automatically and the required `HTTP-Referer` / `X-Title` headers are added.
-- The proxy accepts payloads up to 50 MB to support base64-encoded vision requests.
+- The browser talks only to the local proxy (`/api/...`). Your API keys are never sent from the browser directly to external services.
+- The proxy forwards requests to your configured upstream URL, handles auth, and streams responses back.
+- **Authentication:** the proxy tries `Authorization: Bearer <key>` first, then retries with `X-API-Key` on a 401.
+- **OpenRouter:** detected automatically via the URL; required `HTTP-Referer` and `X-Title` headers are added.
+- **Image APIs:** the full request body is forwarded as-is, so provider-specific fields (e.g. `n`, `response_format`, `steps`) work without any proxy changes.
+- **Payload limit:** the proxy accepts up to 50 MB per request to accommodate base64-encoded vision payloads.
+- **Free images:** the Pollinations.ai route (`/api/image/free`) requires no API key — the proxy fetches the image server-side and pipes it to the browser.
+
+---
+
+## Docker Notes
+
+### Networking with SillyTavern
+
+If you run SillyTavern and this app in the same Docker Compose project or on the same Docker network, you can use the container name as the hostname in the ST Base URL field (e.g. `http://sillytavern:8000`). The proxy container makes the request — the browser never needs to reach ST directly.
+
+To connect to an externally-managed ST container, add a shared external network to your `docker-compose.yml`:
+
+```yaml
+networks:
+  app-network:
+    external: true
+    name: sillytavern_default   # replace with your ST network name
+```
+
+Then ensure the `app-network` entry is listed under both the `frontend` and `proxy` services.
+
+### Data Persistence
+
+The `./proxy/data` host directory contains three auto-created JSON files:
+
+| File | Contents |
+|---|---|
+| `config.json` | API keys, model names, and all in-app settings |
+| `cards.json` | Saved card library |
+| `prompts.json` | Saved prompt library |
+
+Back up this directory before upgrading or rebuilding containers.
+
+### Nginx Logs
+
+The frontend container writes Nginx access and error logs to `./logs/` on the host (mapped via the volume in `docker-compose.yml`). This directory is created automatically on first run.
 
 ---
 
 ## Project Structure
 
 ```
-index.html                  — UI shell
+index.html                   — UI shell
 src/
   scripts/
-    main.js                 — App controller and event binding
-    app-ui.js               — UI helpers (notifications, streaming, state buttons)
-    character-generator.js  — Character prompt templates and response parsing
-    character-display.js    — Field display, edit, reset, import, remaster
-    revision-handler.js     — AI revision, reduce bloat, consistency check/auto-fix
+    main.js                  — App controller and event binding
+    app-ui.js                — UI helpers (notifications, streaming, state buttons)
+    character-generator.js   — Character prompt templates and response parsing
+    character-display.js     — Field display, edit, reset, import, remaster, tags
+    revision-handler.js      — AI revision, reduce bloat, consistency check/auto-fix
     alt-greetings-handler.js — Alternate greetings CRUD and AI generation
-    lorebook-handler.js     — Lorebook CRUD, AI topic/entry generation, lore elevation modal
-    library-handler.js      — Save/load/delete prompts & cards from the library
-    image-handler.js        — Image generate/upload, reference image, model fetch
-    image-generator.js      — Image prompt generation logic
-    lorebook-generator.js   — Lorebook AI generation (standalone module)
-    png-encoder.js          — Embed chara_card_v2 metadata into PNG files
-    api.js                  — APIHandler base (request, streaming, retry, abort)
-    api-character.js        — Character generation, revision, and field-regeneration prompts
-    api-image.js            — Image generation methods
-    api-lorebook.js         — Lorebook/alt-greeting/consistency/card-scan API methods
-    config.js               — Config management (localStorage + server sync)
-    storage.js              — Server-side library storage (cards and prompts)
+    lorebook-handler.js      — Lorebook CRUD, AI topic/entry generation, lore elevation modal
+    library-handler.js       — Save/load/delete prompts & cards; snapshot to history
+    image-handler.js         — Image generate/upload, reference image, model fetch
+    image-generator.js       — Image prompt generation logic
+    lorebook-generator.js    — Lorebook AI generation (standalone module)
+    st-handler.js            — SillyTavern bridge (browse, load, push characters)
+    png-encoder.js           — Embed chara_card_v2 metadata into PNG files
+    api.js                   — APIHandler base (request, streaming, retry, abort)
+    api-character.js         — Character generation, revision, and field-regeneration prompts
+    api-image.js             — Image generation methods
+    api-lorebook.js          — Lorebook/alt-greeting/consistency/card-scan API methods
+    config.js                — Config management (localStorage + server sync)
+    storage.js               — Server-side library storage (cards and prompts)
   styles/
-    main.css                — Application styles
+    main.css                 — Application styles
 proxy/
-  server.js                 — Express proxy (text, image, config, library, CORS)
-  data/                     — Runtime data directory (gitignored)
-    cards.json              — Saved card library (auto-created)
-    prompts.json            — Saved prompt library (auto-created)
-    config.json             — Persisted API settings (auto-created)
+  server.js                  — Express proxy (text, image, config, library, ST bridge, CORS)
+  data/                      — Runtime data directory (gitignored)
+    cards.json               — Saved card library (auto-created)
+    prompts.json             — Saved prompt library (auto-created)
+    config.json              — Persisted API settings (auto-created)
 ```
 
 ---
