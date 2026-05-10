@@ -168,6 +168,71 @@ Output only the lorebook entry content.`;
     }
   },
 
+  /**
+   * Enrichment pass — takes a scanned candidate (topic, keys, seed content) and
+   * produces a full, standalone lorebook entry grounded in the character context.
+   * The seed content from the scan is used as a factual anchor so no information
+   * is lost, but the AI expands, structures, and formats it to proper lorebook standard.
+   */
+  async enrichLorebookEntry(character, candidate) {
+    if (!character || !candidate) throw new Error("Character and candidate are required");
+
+    const model = this.config.get("api.text.model");
+    const charName = character.name || "{{char}}";
+    const keywordStr = candidate.keys.join(", ");
+
+    const systemPrompt = `You are an expert in writing lorebook entries for AI roleplay models. Your task is to take a seed extract from a character card and produce a complete, well-structured lorebook entry for the given topic.
+
+LOREBOOK WRITING RULES — follow these strictly:
+- Write in clear, direct declarative statements that tell the AI facts and behaviours.
+- Use bullet points for lists of rules, customs, relationships, or behaviours.
+- State what the AI needs to KNOW and DO when these keywords appear. Be specific and concrete.
+- No purple prose, no atmosphere-building, no story narration. Pure functional information.
+- 4-10 concise sentences or bullet points. No padding, no repetition.
+- Present tense throughout. ("The guild charges..." not "The guild charged...")
+- If the topic has rules, power structures, or behaviours, state them explicitly.
+- Do NOT use the character's actual name — use the macro \`{{char}}\` instead wherever the character is referenced.
+- Do NOT repeat the keywords themselves as headings or labels in the output.
+
+Output ONLY the lorebook entry text. No titles, no explanations, no markdown headers.`;
+
+    const userPrompt = `Character Context:
+Name: ${charName}
+Description: ${character.description}
+Scenario: ${character.scenario}
+
+Topic to write a lorebook entry for: "${candidate.topic}"
+Trigger keywords: ${keywordStr}
+
+Seed information extracted from the card (use this as your factual foundation — do not contradict it, but expand and structure it properly):
+${candidate.content}
+
+Now write the complete lorebook entry.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.5,
+      max_tokens: 1200,
+      stream: false,
+    };
+
+    try {
+      console.log(`=== ENRICHING LOREBOOK ENTRY: ${candidate.topic} ===`);
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      const output = this.processNormalResponse(response);
+      console.log(`Lorebook entry for "${candidate.topic}" enriched successfully.`);
+      return output.trim();
+    } catch (error) {
+      console.error(`=== LOREBOOK ENTRY ENRICHMENT FAILED: ${candidate.topic} ===`, error);
+      // Fall back to the scanned seed content rather than failing completely
+      return candidate.content;
+    }
+  },
+
   async checkConsistency(character, lorebookEntries = [], onStream = null) {
     if (!character) throw new Error("Character is required");
 
@@ -218,27 +283,39 @@ Please analyze this character and lorebook for consistency.`;
 
     const model = this.config.get("api.text.model");
 
-    const systemPrompt = `You are an expert in AI roleplay character card design. Your task is to analyse a character card and identify content that is world-building lore rather than character guidance.
+    const systemPrompt = `You are an expert in AI roleplay character card design and lorebook writing. Your task has two parts:
 
-World-building lore includes: specific locations, named NPCs (other than the main character), factions, organisations, historical events, unique items, or significant concepts that are described in detail within the card itself.
+PART 1 — IDENTIFY: Scan the character card for world-building lore that would be better served as a lorebook entry than living inside the card itself.
 
-Character guidance that MUST stay in the card includes: the character's personality traits, behavioural patterns, speech style, emotional state, goals, fears, quirks, limits, and direct physical description.
+World-building lore includes: specific locations, named NPCs (other than the main character), factions, organisations, historical events, unique items, or significant concepts described in enough detail within the card.
 
-For each lore item you identify, produce a lorebook entry: a concise factual summary of what the AI needs to know about that topic.
+Character guidance that MUST stay in the card: personality traits, behavioural patterns, speech style, emotional state, goals, fears, quirks, limits, and direct physical description of the main character.
+
+PART 2 — WRITE: For each lore item identified, write a properly formatted lorebook entry. Lorebook entries are instructions read by an AI roleplay model — write them accordingly:
+
+LOREBOOK WRITING RULES:
+- Write in clear, direct declarative statements. ("The Merchant Guild controls all trade licences in the city.")
+- Use bullet points for lists of facts, rules, or behaviours. Avoid flowing narrative prose.
+- State only what the AI needs to KNOW and DO when these keywords appear in conversation.
+- Be specific and concrete. Vague generalities are useless to the AI.
+- No purple prose, no atmosphere-building, no story-telling. Pure information.
+- Keep each entry to 3-8 concise sentences or bullet points. Do not pad.
+- Use present tense. ("The guild charges a 10% cut." not "The guild charged...")
+- If the topic has rules, customs, or behaviours the AI must respect, state them explicitly.
 
 Return ONLY a strict JSON array. Each element must have:
 - "topic": short display name (e.g. "The Red Keep")
-- "keys": array of trigger keywords (2-4 strings)
-- "content": 1-3 short paragraphs — factual, neutral, no purple prose
+- "keys": array of 2-4 trigger keywords (the words that will cause this entry to load)
+- "content": the lorebook entry text following the writing rules above
 
 If you find no lore content suitable for elevation, return an empty array: []
 
-Example:
+Example of GOOD lorebook content:
 [
   {
     "topic": "The Merchant Guild",
     "keys": ["Merchant Guild", "the Guild", "Guild"],
-    "content": "The Merchant Guild controls trade across the four city-states. Membership requires a steep buy-in and annual dues. The Guild enforces a strict code: no undercutting, no private deals with nobility without a cut going to the Guild coffers."
+    "content": "The Merchant Guild controls all trade licences across the four city-states. No merchant may operate without a Guild charter.\\n\\n- Membership requires a 500 gold buy-in and 50 gold annual dues.\\n- The Guild enforces a strict no-undercutting code; violations result in charter revocation.\\n- Private deals with nobility must include a 10% cut to the Guild coffers or they are considered illegal.\\n- Guild enforcers (called Ledgers) have authority to seize goods from unlicensed traders."
   }
 ]`;
 

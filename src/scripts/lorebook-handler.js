@@ -469,13 +469,24 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async executeLoreElevation(selectedCandidates, alsoReduceBloat = false) {
     const pov = document.getElementById("pov-select")?.value || "third";
 
-    // 1. Create lorebook entries for selected candidates
+    // 1. Create lorebook entries for selected candidates — with enrichment pass
     if (selectedCandidates.length > 0) {
-      for (const candidate of selectedCandidates) {
+      this.showNotification(`Enriching ${selectedCandidates.length} lorebook entr${selectedCandidates.length === 1 ? 'y' : 'ies'}…`, "info");
+      for (let i = 0; i < selectedCandidates.length; i++) {
+        const candidate = selectedCandidates[i];
+        if (selectedCandidates.length > 1) {
+          this.showNotification(`Enriching lorebook entries (${i + 1}/${selectedCandidates.length}): ${candidate.topic}…`, "info");
+        }
+        let enrichedContent = candidate.content;
+        try {
+          enrichedContent = await this.apiHandler.enrichLorebookEntry(this.currentCharacter, candidate);
+        } catch (enrichErr) {
+          console.warn(`Enrichment failed for "${candidate.topic}", using scan content:`, enrichErr);
+        }
         this.lorebookEntries.push({
           id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
           keys: candidate.keys,
-          content: candidate.content,
+          content: enrichedContent,
           enabled: true,
         });
       }
