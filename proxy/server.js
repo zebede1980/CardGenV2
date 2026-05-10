@@ -52,6 +52,21 @@ async function writeJsonStore(filename, data) {
   await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2));
 }
 
+// Per-file mutex — ensures concurrent writes to the same JSON file are
+// serialised rather than racing. Uses a promise chain per filename.
+const writeLocks = new Map();
+
+function withFileLock(filename, fn) {
+  const current = writeLocks.get(filename) || Promise.resolve();
+  const next = current.then(fn).catch((err) => {
+    console.error(`Error in locked write for ${filename}:`, err);
+    throw err;
+  });
+  // Store only a never-rejecting tail so the chain doesn't stall on error.
+  writeLocks.set(filename, next.catch(() => {}));
+  return next;
+}
+
 // Data Endpoints for Settings & Configurations
 app.get("/api/config", async (req, res) => {
   try {
@@ -89,25 +104,31 @@ app.get("/api/storage/:type/:id", async (req, res) => {
 
 app.post("/api/storage/:type", async (req, res) => {
   const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  const items = await readJsonStore(storeName);
   const record = req.body;
-  
   if (!record.id) record.id = Date.now();
-  
-  const index = items.findIndex(i => i.id == record.id);
-  if (index >= 0) items[index] = record;
-  else items.push(record);
-  
-  await writeJsonStore(storeName, items);
-  res.json(record);
+  try {
+    const result = await withFileLock(storeName, async () => {
+      const items = await readJsonStore(storeName);
+      const index = items.findIndex(i => i.id == record.id);
+      if (index >= 0) items[index] = record;
+      else items.push(record);
+      await writeJsonStore(storeName, items);
+      return record;
+    });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete("/api/storage/:type/:id", async (req, res) => {
   const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  let items = await readJsonStore(storeName);
-  items = items.filter(i => i.id != req.params.id);
-  await writeJsonStore(storeName, items);
-  res.json({ success: true });
+  try {
+    await withFileLock(storeName, async () => {
+      let items = await readJsonStore(storeName);
+      items = items.filter(i => i.id != req.params.id);
+      await writeJsonStore(storeName, items);
+    });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Health check endpoint
