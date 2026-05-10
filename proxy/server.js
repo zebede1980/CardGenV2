@@ -625,7 +625,7 @@ app.post("/api/st/push", async (req, res) => {
     const parts = [
       part(
         [
-          'Content-Disposition: form-data; name="file"; filename="character.png"',
+          'Content-Disposition: form-data; name="avatar"; filename="character.png"',
           "Content-Type: image/png",
         ],
         pngBuffer
