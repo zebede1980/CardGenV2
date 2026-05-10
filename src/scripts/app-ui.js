@@ -123,6 +123,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       checkConsistencyBtn.style.display = "inline-flex";
     }
 
+    // Show push-to-ST button if ST URL is configured
+    const pushToSTBtn = document.getElementById("push-to-st-btn");
+    if (pushToSTBtn) this._updatePushButton();
+
     resultSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
   },
 

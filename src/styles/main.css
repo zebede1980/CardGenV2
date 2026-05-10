@@ -525,6 +525,14 @@ textarea.content-box {
     color: var(--accent);
 }
 
+/* SillyTavern connection status */
+.st-status {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+.st-status-ok { color: #28a745; }
+.st-status-err { color: var(--error, #c93d4a); }
+
 .actions {
     border-top: 1px solid var(--border);
     padding-top: 0.85rem;

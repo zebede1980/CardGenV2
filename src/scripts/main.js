@@ -222,6 +222,19 @@ class CharacterGeneratorApp {
     const clearPromptsBtn = document.getElementById("clear-prompts-btn");
     if (clearPromptsBtn) clearPromptsBtn.addEventListener("click", () => this.handleClearPrompts());
 
+    // SillyTavern bridge
+    const refreshSTBtn = document.getElementById("refresh-st-library-btn");
+    if (refreshSTBtn) refreshSTBtn.addEventListener("click", () => this.handleRefreshSTLibrary());
+    const stList = document.getElementById("st-characters-list");
+    if (stList) stList.addEventListener("click", (e) => this.handleSTLibraryClick(e));
+    const pushToSTBtn = document.getElementById("push-to-st-btn");
+    if (pushToSTBtn) pushToSTBtn.addEventListener("click", () => this.handlePushToST());
+    const testSTBtn = document.getElementById("test-st-btn");
+    if (testSTBtn) testSTBtn.addEventListener("click", () => this.handleTestSTConnection());
+    // Save ST URL whenever it changes
+    const stBaseUrlInput = document.getElementById("st-base-url");
+    if (stBaseUrlInput) stBaseUrlInput.addEventListener("change", () => { this.config.loadFromForm(); this.config.saveConfig(); this._updatePushButton(); });
+
     // Example messages
     const exampleMessagesCount = document.getElementById("example-messages-count");
     const regenerateExamplesBtn = document.getElementById("regenerate-examples-btn");
@@ -501,6 +514,10 @@ class CharacterGeneratorApp {
 
     this.isGenerating = true;
     this.setGeneratingState(true);
+
+    // Generating a fresh character — clear any ST source link
+    this.stSourceAvatar = null;
+    this._updatePushButton();
 
     this.hideResultSection();
     this.currentImageUrl = null;

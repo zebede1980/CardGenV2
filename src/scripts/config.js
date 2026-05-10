@@ -34,6 +34,9 @@ class Config {
         debugMode: false,
         enableImageGeneration: true,
       },
+      st: {
+        baseUrl: "",
+      },
     };
   }
 
@@ -126,6 +129,13 @@ class Config {
     )?.checked;
     if (enableImageGeneration !== undefined)
       this.config.app.enableImageGeneration = enableImageGeneration;
+
+    // Load SillyTavern settings
+    const stBaseUrl = document.getElementById("st-base-url")?.value?.trim();
+    if (stBaseUrl !== undefined) {
+      if (!this.config.st) this.config.st = {};
+      this.config.st.baseUrl = stBaseUrl;
+    }
   }
 
   get(path) {
@@ -180,6 +190,10 @@ class Config {
       if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
       if (imageSize) imageSize.value = this.config.api.image.size || "";
       if (imageStyle) imageStyle.value = this.config.api.image.style || "";
+
+      // Save SillyTavern URL to form
+      const stBaseUrl = document.getElementById("st-base-url");
+      if (stBaseUrl) stBaseUrl.value = this.config.st?.baseUrl || "";
       
       const imageModelsContainer = document.getElementById("image-models-container");
       if (imageModelsContainer) {

@@ -971,6 +971,9 @@
                         <button id="check-consistency-btn" class="btn-outline" style="display: none" title="Ask the AI to review the card for logical contradictions, tonal mismatches, or continuity errors and produce a written report. An Auto-Fix button appears after the report to apply the suggested corrections.">
                             🔍 Check Consistency
                         </button>
+                        <button id="push-to-st-btn" class="btn-outline" style="display: none" title="Push this character card to your SillyTavern instance. If loaded from ST it will update in place; otherwise it creates a new card.">
+                            📤 Push to SillyTavern
+                        </button>
                         <button id="import-card-btn" class="btn-outline" title="Load an existing SillyTavern character card (.png or .json) into the editor for viewing and manual editing">
                             Import Card for Editing
                         </button>
@@ -1031,6 +1034,23 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- SillyTavern Library -->
+                <section class="result-section" style="margin-top: 1.5rem; display: block;">
+                    <details>
+                        <summary class="section-title" style="cursor: pointer; padding: 0.5rem 0; user-select: none;">🔗 SillyTavern Library</summary>
+                        <div style="margin-top: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                                <button id="refresh-st-library-btn" class="btn-small">🔄 Refresh</button>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary);">Browse characters directly from your SillyTavern instance. Configure the URL in API Settings.</span>
+                            </div>
+                            <div id="st-characters-list" class="content-box library-list">
+                                <p class="library-empty">Click Refresh to load characters from SillyTavern.</p>
+                            </div>
+                        </div>
+                    </details>
+                </section>
+
             </main>
 
             <footer class="footer">
@@ -1078,7 +1098,25 @@
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/library-handler.js?v=20260218-ex1"></script>
-        <script src="src/scripts/revision-handler.js?v=20260218-ex1"></script>        <!-- API Settings Modal -->
+        <script src="src/scripts/revision-handler.js?v=20260218-ex1"></script>
+        <script src="src/scripts/st-handler.js?v=20260510"></script>        <!-- API Settings Modal -->
+
+        <!-- ST push-choice modal (name changed) -->
+        <div id="st-push-choice-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 460px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">📤 Push to SillyTavern</h2>
+                </div>
+                <div class="modal-body">
+                    <p id="st-push-choice-msg" style="margin-bottom: 1.5rem; line-height: 1.6;"></p>
+                    <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                        <button id="st-push-update-btn" class="btn-primary">Update original slot</button>
+                        <button id="st-push-new-btn" class="btn-outline">Add as new character</button>
+                        <button id="st-push-cancel-btn" class="btn-outline" style="color: var(--text-secondary);">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div id="api-settings-modal" class="modal-overlay">
             <div class="api-settings-modal">
                 <div class="modal-header">
@@ -1233,6 +1271,21 @@
                         <button id="clear-config-btn" class="btn-outline">
                             Clear Saved Configuration
                         </button>
+                    </div>
+
+                    <hr style="border-color: var(--border); margin: 1.5rem 0;" />
+
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">🔗 SillyTavern Integration</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Internal container URL used server-to-server (bypasses nginx). Example: <code>http://sillytavern:8000</code>
+                    </p>
+                    <div class="form-group">
+                        <label for="st-base-url" class="label">SillyTavern Internal URL</label>
+                        <input type="text" id="st-base-url" class="input" placeholder="http://sillytavern:8000" />
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
+                        <button id="test-st-btn" class="btn-small" type="button">Test Connection</button>
+                        <span id="st-connection-status" class="st-status"></span>
                     </div>
                 </div>
             </div>

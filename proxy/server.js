@@ -259,8 +259,7 @@ app.post("/api/text/chat/completions", async (req, res) => {
 });
 
 // Free image generation via Pollinations.ai (no API key required)
-app.post("/api/image/free", async (req, res) => {
-  try {
+app.post("/api/image/free", async (req, res) => {  try {
     const { prompt, service, model, width, height, seed } = req.body;
 
     if (!prompt) {
@@ -470,6 +469,170 @@ app.get("/api/proxy-image", async (req, res) => {
     });
   }
 });
+
+// ── SillyTavern Bridge ────────────────────────────────────────────────────────
+// All ST endpoints expect the X-ST-URL header pointing to the ST container's
+// internal URL (e.g. http://sillytavern:8000 — bypasses nginx entirely).
+
+function getStUrl(req, res) {
+  const url = req.headers["x-st-url"];
+  if (!url) {
+    res.status(400).json({ error: "X-ST-URL header is required" });
+    return null;
+  }
+  // Basic sanity — must start with http:// or https://
+  if (!/^https?:\/\//i.test(url)) {
+    res.status(400).json({ error: "X-ST-URL must be a valid HTTP(S) URL" });
+    return null;
+  }
+  return url;
+}
+
+// List all characters from ST
+app.get("/api/st/characters", async (req, res) => {
+  const stUrl = getStUrl(req, res);
+  if (!stUrl) return;
+  try {
+    const response = await fetch(`${stUrl}/api/characters/all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `ST returned ${response.status}` });
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("ST list characters error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export (download) a single character PNG from ST
+// Pipes the PNG binary directly back — client can treat it like a file drop
+app.post("/api/st/export", async (req, res) => {
+  const stUrl = getStUrl(req, res);
+  if (!stUrl) return;
+  const { avatar_url } = req.body;
+  if (!avatar_url || typeof avatar_url !== "string") {
+    return res.status(400).json({ error: "avatar_url is required" });
+  }
+  try {
+    const response = await fetch(`${stUrl}/api/characters/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ format: "png", avatar_url }),
+    });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `ST export returned ${response.status}` });
+    }
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Disposition", `attachment; filename="${avatar_url}"`);
+    response.body.pipe(res);
+  } catch (error) {
+    console.error("ST export error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Push a character PNG to ST (create new or update existing)
+// Body: { pngBase64: string, preservedName?: string }
+//   preservedName — set to the original avatar filename (without .png) to
+//   overwrite an existing card; omit to create a new one.
+app.post("/api/st/push", async (req, res) => {
+  const stUrl = getStUrl(req, res);
+  if (!stUrl) return;
+  const { pngBase64, preservedName } = req.body;
+  if (!pngBase64 || typeof pngBase64 !== "string") {
+    return res.status(400).json({ error: "pngBase64 is required" });
+  }
+  try {
+    const pngBuffer = Buffer.from(pngBase64, "base64");
+
+    // Build a raw multipart/form-data body manually (no extra deps needed)
+    const boundary = `----CardGenBoundary${Date.now()}`;
+    const CRLF = "\r\n";
+
+    const fileHeader = [
+      `--${boundary}`,
+      `Content-Disposition: form-data; name="file"; filename="character.png"`,
+      `Content-Type: image/png`,
+      ``,
+      ``,
+    ].join(CRLF);
+
+    const fileTypePart = [
+      `--${boundary}`,
+      `Content-Disposition: form-data; name="file_type"`,
+      ``,
+      `png`,
+    ].join(CRLF);
+
+    let bodyParts = [
+      Buffer.from(fileHeader, "binary"),
+      pngBuffer,
+      Buffer.from(CRLF + fileTypePart, "binary"),
+    ];
+
+    if (preservedName) {
+      const preservedPart = [
+        ``,
+        `--${boundary}`,
+        `Content-Disposition: form-data; name="preserved_name"`,
+        ``,
+        preservedName,
+      ].join(CRLF);
+      bodyParts.push(Buffer.from(preservedPart, "binary"));
+    }
+
+    bodyParts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`, "binary"));
+    const body = Buffer.concat(bodyParts);
+
+    const response = await fetch(`${stUrl}/api/characters/import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": body.length,
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("ST import error:", response.status, errText);
+      return res.status(response.status).json({ error: `ST import returned ${response.status}`, detail: errText });
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("ST push error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test ST connection
+app.get("/api/st/ping", async (req, res) => {
+  const stUrl = getStUrl(req, res);
+  if (!stUrl) return;
+  try {
+    const response = await fetch(`${stUrl}/api/characters/all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      timeout: 5000,
+    });
+    if (response.ok) {
+      const data = await response.json();
+      res.json({ ok: true, characterCount: Array.isArray(data) ? data.length : 0 });
+    } else {
+      res.json({ ok: false, status: response.status });
+    }
+  } catch (error) {
+    res.json({ ok: false, error: error.message });
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`🚀 Proxy server running on http://localhost:${PORT}`);
