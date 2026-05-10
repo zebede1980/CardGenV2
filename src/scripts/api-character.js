@@ -48,7 +48,49 @@ Object.assign(APIHandler.prototype, {
     }
   },
 
+  /**
+   * Randomly picks a cultural naming tradition on each call.
+   * Injected into name prompts so every generation is pushed into a different
+   * cultural space, breaking the AI's tendency to default to Anglo surnames.
+   */
+  _pickNameStyle() {
+    const styles = [
+      "Eastern European — Polish, Czech, Slovak, or Romanian",
+      "Slavic — Russian, Ukrainian, Bulgarian, or Serbian",
+      "Scandinavian — Norwegian, Swedish, Danish, or Icelandic",
+      "Celtic — Welsh, Scottish Gaelic, Irish Gaelic, or Breton",
+      "Iberian — Spanish, Portuguese, Catalan, or Basque",
+      "Italian or Sicilian",
+      "Greek — modern or classical",
+      "Turkish, Azerbaijani, or Uzbek",
+      "Arabic — Levantine, Gulf, or North African",
+      "Persian or Dari",
+      "South Asian — Hindi, Bengali, Tamil, Punjabi, or Urdu",
+      "Japanese",
+      "Korean",
+      "Chinese — Mandarin or Cantonese romanisation",
+      "Vietnamese or Thai",
+      "Filipino or Tagalog",
+      "West African — Yoruba, Igbo, Akan, or Hausa",
+      "East African — Swahili, Amharic, or Somali",
+      "Southern African — Zulu, Xhosa, or Shona",
+      "Hebrew or Yiddish",
+      "Armenian or Georgian",
+      "Finnish, Estonian, or Sami",
+      "Baltic — Lithuanian or Latvian",
+      "Hungarian or Magyar",
+      "Dutch or Flemish",
+      "German or Austrian",
+      "French or Occitan",
+      "Albanian or Macedonian",
+      "Mongolian, Kazakh, or Kyrgyz",
+      "Indigenous Mesoamerican — Nahuatl or Maya inspired",
+    ];
+    return styles[Math.floor(Math.random() * styles.length)];
+  },
+
   buildCharacterPrompt(concept, characterName, pov = "third", lorebook = null) {
+    const nameStyle = this._pickNameStyle();
     let povInstruction = "";
     let templateInstruction = "";
     let templateContent = "";
@@ -182,7 +224,15 @@ You may assume the character you create will be used in a private, local rolepla
 
 ${povInstruction}
 
-**IMPORTANT:** You MUST create a character name that is realistically grounded in the character's specific time period, nationality, and background. Do NOT use clichéd fantasy or monster tropes for names (e.g., avoid names like "Vespera" or "Dracula" for a modern vampire) unless the concept explicitly demands it. Avoid extremely common AI-generated names (like Lily, Seraphine, Luna, Elara, Aria, etc.). Use this actual name ONLY in the "# [Character Name]'s Profile" header and the first introduction sentence. 
+**NAME — CULTURAL DIVERSITY REQUIRED:** For this character's name, draw from a **${nameStyle}** naming tradition. Use authentic first names and surnames (or single names where culturally appropriate) from that tradition. Exception: if the player's concept explicitly places the character in a clearly different culture or time period, use whatever is most historically and geographically accurate for that context — but in either case do NOT fall back to generic Anglo-American defaults.
+
+**BANNED — do NOT use any of the following overused AI-generated names:**
+- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
+- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
+- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
+- Any two-syllable name ending in "-ael", "-iel", or "-yn" unless the concept is explicitly high fantasy
+
+Use this actual name ONLY in the "# [Character Name]'s Profile" header and the first introduction sentence.
 
 **CRITICAL MACRO RULE:** Everywhere else in the generated text (Appearance, Story, Personality, Scenario, First Message), you are STRICTLY FORBIDDEN from writing the character's actual name. You MUST use the exact macro string \`{{char}}\` instead. Example: "When {{char}} gets angry..." NOT "When John gets angry...". This is required for the roleplay engine to function correctly. Do NOT output a "Name:" field in Appearance.
 
@@ -339,10 +389,19 @@ ${lorebookContent}`;
     if (!character) throw new Error("Character is required to generate a name");
 
     const model = this.config.get("api.text.model");
+    const nameStyle = this._pickNameStyle();
 
-    const systemPrompt = `You are an expert character creator. Based on the provided character description and personality, generate a fitting name for them.
-**CRITICAL:** Ground the name in the character's specific time period, nationality, and background. Do NOT use clichéd fantasy or monster names (like "Vespera" for vampires, or "Luna" for werewolves) unless it truly makes sense for their origin. Avoid extremely common AI defaults.
-Output ONLY the new name, nothing else.`;
+    const systemPrompt = `You are an expert at creating character names with genuine cultural variety. Generate a single name for the described character.
+
+**CULTURAL STYLE FOR THIS NAME:** Draw from a ${nameStyle} naming tradition. Use an authentic first name and surname (or single name where culturally appropriate) from that tradition — UNLESS the character's description clearly places them in a different culture, in which case use whatever is most historically and geographically accurate. Either way, do NOT fall back to generic Anglo-American defaults.
+
+**BANNED — do NOT use any of these overused AI defaults:**
+- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
+- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
+- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
+- Any two-syllable name ending in "-ael", "-iel", or "-yn" unless the concept is explicitly high fantasy
+
+Output ONLY the name — nothing else, no explanation, no punctuation around it.`;
 
     const currentNameInfo = character.name && character.name !== "{{char}}" && character.name !== "Unknown Character"
       ? `\nCurrent Name: "${character.name}" (DO NOT generate this name again)`
@@ -354,8 +413,8 @@ ${character.description || "No description provided"}
 Personality:
 ${character.personality || "No personality provided"}${currentNameInfo}
 
-Please generate a single, highly creative, and unique name.
-[Randomization Seed: ${Math.floor(Math.random() * 100000)}]`;
+Generate a single name. Remember: draw from a ${nameStyle} tradition unless the character's background demands otherwise.
+[Entropy: ${Math.floor(Math.random() * 1000000)}]`;
 
     const data = {
       model,
@@ -363,7 +422,7 @@ Please generate a single, highly creative, and unique name.
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.95,
+      temperature: 1.0,
       max_tokens: 50,
       stream: false,
     };
