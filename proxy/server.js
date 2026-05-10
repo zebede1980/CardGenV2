@@ -630,10 +630,6 @@ app.post("/api/st/push", async (req, res) => {
         ],
         pngBuffer
       ),
-      part(
-        ['Content-Disposition: form-data; name="file_type"'],
-        Buffer.from("png")
-      ),
     ];
 
     if (preservedName) {
@@ -649,6 +645,9 @@ app.post("/api/st/push", async (req, res) => {
     const body = Buffer.concat([...parts, closing]);
 
     const csrfHeaders = await getStCsrfHeaders(stUrl);
+    console.log("ST push: boundary =", boundary, "body size =", body.length, "bytes");
+    console.log("ST push: CSRF token present =", !!csrfHeaders["X-CSRF-Token"]);
+    console.log("ST push: Cookie present =", !!csrfHeaders["Cookie"]);
     let response = await fetch(`${stUrl}/api/characters/import`, {
       method: "POST",
       headers: {
