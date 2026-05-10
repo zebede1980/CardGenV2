@@ -197,6 +197,11 @@ class CharacterGeneratorApp {
     if (cardList) cardList.addEventListener("click", (event) => this.handleLibraryCardClick(event));
     if (historyList) historyList.addEventListener("click", (event) => this.handleLibraryCardClick(event));
 
+    const clearHistoryBtn = document.getElementById("clear-history-btn");
+    if (clearHistoryBtn) clearHistoryBtn.addEventListener("click", () => this.handleClearHistory());
+    const clearPromptsBtn = document.getElementById("clear-prompts-btn");
+    if (clearPromptsBtn) clearPromptsBtn.addEventListener("click", () => this.handleClearPrompts());
+
     // Example messages
     const exampleMessagesCount = document.getElementById("example-messages-count");
     const regenerateExamplesBtn = document.getElementById("regenerate-examples-btn");

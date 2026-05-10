@@ -986,7 +986,10 @@
                     </p>
                     <div class="result-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
                         <div>
-                            <h3 class="library-title">Saved Prompts</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h3 class="library-title" style="margin: 0;">Saved Prompts</h3>
+                            <button id="clear-prompts-btn" class="btn-small" style="font-size: 0.75rem; color: var(--error, #c93d4a);" title="Delete all saved prompts from the library. This cannot be undone.">🗑 Clear All</button>
+                        </div>
                             <div
                                 id="stored-prompts-list"
                                 class="content-box library-list"
@@ -1000,7 +1003,10 @@
                             ></div>
                         </div>
                         <div>
-                            <h3 class="library-title">History (Last 30)</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h3 class="library-title" style="margin: 0;">History (Last 30)</h3>
+                            <button id="clear-history-btn" class="btn-small" style="font-size: 0.75rem; color: var(--error, #c93d4a);" title="Delete all history snapshots. Permanent saves are not affected.">🗑 Clear All</button>
+                        </div>
                             <div
                                 id="history-cards-list"
                                 class="content-box library-list"

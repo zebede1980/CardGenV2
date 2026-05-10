@@ -463,4 +463,33 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleClearHistory() {
+    if (!this.storageReady || !this.storage) return;
+    if (!confirm("Delete all history snapshots? This cannot be undone. Permanent saves are not affected.")) return;
+    try {
+      const cards = await this.storage.listCards();
+      const tempCards = cards.filter(c => !c.isPermanent);
+      await Promise.all(tempCards.map(c => this.storage.deleteCard(c.id)));
+      await this.refreshLibraryViews();
+      this.showNotification(`Cleared ${tempCards.length} history item(s)`, "info");
+    } catch (error) {
+      console.error("Clear history failed:", error);
+      this.showNotification("Failed to clear history", "error");
+    }
+  },
+
+  async handleClearPrompts() {
+    if (!this.storageReady || !this.storage) return;
+    if (!confirm("Delete all saved prompts? This cannot be undone.")) return;
+    try {
+      const prompts = await this.storage.listPrompts();
+      await Promise.all(prompts.map(p => this.storage.deletePrompt(p.id)));
+      await this.refreshLibraryViews();
+      this.showNotification(`Cleared ${prompts.length} prompt(s)`, "info");
+    } catch (error) {
+      console.error("Clear prompts failed:", error);
+      this.showNotification("Failed to clear prompts", "error");
+    }
+  },
+
 });
