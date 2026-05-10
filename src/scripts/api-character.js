@@ -452,12 +452,17 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
 
     const model = this.config.get("api.text.model");
 
-    // Base cultural traditions pool
+    // Base cultural traditions pool — now includes English/Western options
     const basePool = [
+      "English or British (including classic English surnames and given names)",
+      "Irish (Gaelic and anglicised Irish names)",
+      "Scottish (Highland and Lowland traditions)",
+      "North American (classic American or Canadian names)",
+      "Australian or New Zealand",
       "Eastern European (Polish, Czech, Slovak, or Romanian)",
       "Slavic (Russian, Ukrainian, Bulgarian, or Serbian)",
       "Scandinavian (Norwegian, Swedish, Danish, or Icelandic)",
-      "Celtic (Welsh, Scottish Gaelic, Irish Gaelic, or Breton)",
+      "Celtic (Welsh, Cornish, or Breton)",
       "Iberian (Spanish, Portuguese, Catalan, or Basque)",
       "Italian or Sicilian",
       "Greek (modern or classical)",
@@ -569,30 +574,35 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
       : "";
 
     const guidanceInstruction = guidance
-      ? `\n\nAdditional guidance from user: "${guidance}" — apply this to all names while still maintaining cultural variety.`
+      ? `\n\nAdditional guidance from user: "${guidance}" — this is your PRIMARY instruction. If it specifies a cultural style, use that style for all 10 names.`
       : "";
 
-    const systemPrompt = `You are an expert in names from cultures around the world. Generate exactly 10 character names with maximum variety.${typeInstruction}${periodInstruction}
+    const systemPrompt = `You are an expert in names from cultures around the world. Generate exactly 10 character names.${typeInstruction}${periodInstruction}
 
 ${genderInstruction}
 
-You will be given 10 cultural traditions — each name MUST authentically come from its assigned tradition. If a tradition truly cannot produce an appropriate name for this character type, invent a name inspired by that tradition's phonetics that still fits the type.
+**GUIDANCE IS YOUR PRIMARY INSTRUCTION.** If the user's guidance specifies a cultural origin, nationality, style, or feel (e.g. "Classic English Names", "French nobility", "Japanese", "Viking"), ALL 10 names must follow that direction. In this case, use the cultural tradition list only as inspiration for variety within the requested culture — do not override the user's guidance with unrelated traditions.
 
-**BANNED overused AI defaults — do NOT use:**
-- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
-- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
-- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
-- Names ending in -ael, -iel, or -yn UNLESS the character type explicitly permits it${previousBan}
+If no cultural guidance is given, use the tradition list to produce maximum variety: each name must authentically come from its assigned tradition.
+
+**Banned overused AI defaults — only apply this ban when NO specific cultural guidance is given. If the user has requested a style that includes these names, authentic examples from that tradition are fine:**
+- Edgy Anglo surnames to avoid by default: Voss, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Storm, Dusk, Mace, Blair
+- Overused female fantasy defaults: Aria, Elara, Lyra, Luna, Seraphine, Nova, Aurora, Celeste, Ember, Selene, Nyx, Raven
+- Overused male fantasy defaults: Cael, Rael, Zael, Theron, Oryn, Brayden
+- Names ending in -ael, -iel, or -yn UNLESS the character type explicitly permits it${previousNames.length > 0 ? `\n\n**PREVIOUSLY SHOWN — do NOT repeat any of these:**\n${previousNames.map(n => `"${n}"`).join(", ")}` : ""}
 
 Return ONLY a strict JSON array of exactly 10 strings. No objects, no explanations.
 Example: ["Yuki Tanaka", "Kofi Mensah", "Ingrid Halvorsen", "Mirela Petrović", ...]`;
+
+    const traditionNote = guidance
+      ? `Cultural traditions (use as variety guide within the user's requested style, not as overrides):\n${styleList}`
+      : `Cultural traditions to draw from (one per name, in order):\n${styleList}`;
 
     const userPrompt = `Character context:
 ${character.description ? `Description: ${character.description.substring(0, 300)}` : "No description provided"}
 ${character.name && character.name !== "{{char}}" && character.name !== "Unknown Character" ? `Current name: "${character.name}" (do NOT use this again)` : ""}${guidanceInstruction}
 
-Cultural traditions to draw from (one per name, in order):
-${styleList}
+${traditionNote}
 
 Generate exactly 10 names as a JSON array. Make each name as different from the others as possible.
 [Entropy: ${Math.floor(Math.random() * 2000000)}]`;
