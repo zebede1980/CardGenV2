@@ -351,6 +351,42 @@ class CharacterGeneratorApp {
     if (consistencyModalCloseBtn) consistencyModalCloseBtn.addEventListener("click", () => this.closeConsistencyModal());
     if (consistencyModal) consistencyModal.addEventListener("click", (e) => { if (e.target === consistencyModal) this.closeConsistencyModal(); });
     if (consistencyAutoFixBtn) consistencyAutoFixBtn.addEventListener("click", () => this.handleConsistencyAutoFix());
+
+    // Drag-and-drop import anywhere on the page
+    let dragCounter = 0;
+    const dropOverlay = document.getElementById("drop-overlay");
+
+    document.addEventListener("dragenter", (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes("Files")) return;
+      dragCounter++;
+      if (dragCounter === 1) dropOverlay.classList.add("show");
+    });
+
+    document.addEventListener("dragleave", () => {
+      dragCounter = Math.max(0, dragCounter - 1);
+      if (dragCounter === 0) dropOverlay.classList.remove("show");
+    });
+
+    document.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes("Files")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+
+    document.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.classList.remove("show");
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      const isPng = file.type === "image/png" || file.name.toLowerCase().endsWith(".png");
+      const isJson = file.type === "application/json" || file.name.toLowerCase().endsWith(".json");
+      if (!isPng && !isJson) {
+        this.showNotification("Only .png or .json character cards can be dropped here", "error");
+        return;
+      }
+      this.showDropImportModal(file);
+    });
   }
 
   async checkAPIStatus() {

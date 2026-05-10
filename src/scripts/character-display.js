@@ -389,15 +389,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async handleImportCard(event, autoRemaster = false) {
     const file = event.target.files?.[0];
     if (!file) return;
+    try {
+      await this.handleImportCardFile(file, autoRemaster);
+    } finally {
+      event.target.value = "";
+    }
+  },
 
+  async handleImportCardFile(file, autoRemaster = false) {
     try {
       let characterData = null;
       let importedImageUrl = "";
 
-      if (
-        file.type === "image/png" ||
-        file.name.toLowerCase().endsWith(".png")
-      ) {
+      if (file.type === "image/png" || file.name.toLowerCase().endsWith(".png")) {
         const extracted = await this.pngEncoder.extractCharacterData(file);
         characterData = this.normalizeCharacterFromSpec(extracted);
         importedImageUrl = URL.createObjectURL(file);
@@ -407,9 +411,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         characterData = this.normalizeCharacterFromSpec(parsed);
       }
 
-      if (!characterData) {
-        throw new Error("Unable to parse card content");
-      }
+      if (!characterData) throw new Error("Unable to parse card content");
 
       this.currentCharacter = characterData;
       this.originalCharacter = JSON.parse(JSON.stringify(characterData));
@@ -430,9 +432,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       if (characterData.character_book && characterData.character_book.entries) {
         this.lorebookEntries = characterData.character_book.entries.map((e) => ({
-          id:
-            e.id ||
-            Date.now().toString() + Math.random().toString().slice(2, 5),
+          id: e.id || Date.now().toString() + Math.random().toString().slice(2, 5),
           keys: e.keys || [],
           content: e.content || "",
           enabled: e.enabled !== false,
@@ -443,12 +443,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.updateLorebookEntryCount();
 
       if (characterData.alternateGreetings) {
-        this.altGreetings = characterData.alternateGreetings.map(
-          (content, i) => ({
-            id: Date.now().toString() + i,
-            content,
-          }),
-        );
+        this.altGreetings = characterData.alternateGreetings.map((content, i) => ({
+          id: Date.now().toString() + i,
+          content,
+        }));
       } else {
         this.altGreetings = [];
       }
@@ -466,9 +464,40 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } catch (error) {
       console.error("Card import failed:", error);
       this.showNotification(`Card import failed: ${error.message}`, "error");
-    } finally {
-      event.target.value = "";
     }
+  },
+
+  showDropImportModal(file) {
+    const modal = document.getElementById("drop-import-modal");
+    const filenameEl = document.getElementById("drop-import-filename");
+    const editBtn = document.getElementById("drop-import-edit-btn");
+    const remasterBtn = document.getElementById("drop-import-remaster-btn");
+    const cancelBtn = document.getElementById("drop-import-cancel-btn");
+
+    filenameEl.textContent = file.name;
+    modal.classList.add("show");
+    document.body.style.overflow = "hidden";
+
+    const close = () => {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+      editBtn.removeEventListener("click", onEdit);
+      remasterBtn.removeEventListener("click", onRemaster);
+      cancelBtn.removeEventListener("click", close);
+      modal.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onEscape);
+    };
+
+    const onEdit = () => { close(); this.handleImportCardFile(file, false); };
+    const onRemaster = () => { close(); this.handleImportCardFile(file, true); };
+    const onBackdrop = (e) => { if (e.target === modal) close(); };
+    const onEscape = (e) => { if (e.key === "Escape") close(); };
+
+    editBtn.addEventListener("click", onEdit);
+    remasterBtn.addEventListener("click", onRemaster);
+    cancelBtn.addEventListener("click", close);
+    modal.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onEscape);
   },
 
   async handleAutoRemaster() {

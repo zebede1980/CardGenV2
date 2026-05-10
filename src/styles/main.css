@@ -909,3 +909,40 @@ textarea.content-box {
         scroll-behavior: auto !important;
     }
 }
+
+/* ── Drag-and-drop overlay ─────────────────────────────────────────── */
+#drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(14, 23, 37, 0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+#drop-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#drop-overlay-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    border: 3px dashed rgba(255, 255, 255, 0.55);
+    border-radius: 1.5rem;
+    padding: 3rem 4.5rem;
+    color: #fff;
+    text-align: center;
+}
+
+#drop-overlay-icon { font-size: 3.5rem; line-height: 1; }
+#drop-overlay-text { font-size: 1.5rem; font-weight: 600; }
+#drop-overlay-sub  { font-size: 0.875rem; opacity: 0.65; }
+
+#drop-import-modal { z-index: 2100; }

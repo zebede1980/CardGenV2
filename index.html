@@ -1392,5 +1392,31 @@
             </div>
         </div>
 
+        <!-- Drag-and-drop overlay -->
+        <div id="drop-overlay">
+            <div id="drop-overlay-inner">
+                <div id="drop-overlay-icon">📋</div>
+                <div id="drop-overlay-text">Drop to import card</div>
+                <div id="drop-overlay-sub">.png or .json</div>
+            </div>
+        </div>
+
+        <!-- Drop import action modal -->
+        <div id="drop-import-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 480px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">📋 Import Character Card</h2>
+                    <button id="drop-import-cancel-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="padding: 1.5rem;">
+                    <p id="drop-import-filename" style="font-size: 0.875rem; color: var(--text-secondary); margin: 0 0 1.5rem; text-align: center; word-break: break-all;"></p>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <button id="drop-import-edit-btn" class="btn-primary" style="width: 100%; padding: 0.875rem; font-size: 1rem;" title="Load the card into the editor for viewing and manual editing">Import for Editing</button>
+                        <button id="drop-import-remaster-btn" class="btn-outline" style="width: 100%; padding: 0.875rem; font-size: 1rem;" title="Import the card and immediately run a full AI rewrite to improve consistency and conciseness">✨ Import &amp; Remaster</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </body>
 </html>
