@@ -638,6 +638,10 @@ app.post("/api/st/push", async (req, res) => {
         ],
         pngBuffer
       ),
+      part(
+        ['Content-Disposition: form-data; name="file_type"'],
+        Buffer.from("png")
+      ),
     ];
 
     if (preservedName) {
