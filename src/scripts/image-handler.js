@@ -440,6 +440,83 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleFreeImage(service, model) {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate a character first", "warning");
+      return;
+    }
+
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = `🆓 Free Image — ${model}`;
+
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    const loadingText = loading.querySelector("p");
+    if (loadingText) loadingText.textContent = `Generating via Pollinations.ai (${model})… this may take up to a minute.`;
+
+    grid.innerHTML = "";
+    loading.style.display = "block";
+
+    try {
+      // Reuse the existing prompt if one is in the textarea, otherwise generate via text API
+      const customPromptTextarea = document.getElementById("custom-image-prompt");
+      let imagePrompt = customPromptTextarea?.value?.trim();
+
+      if (!imagePrompt) {
+        this.showNotification("Building image prompt…", "info");
+        try {
+          imagePrompt = await window.apiHandler.generateImagePrompt(
+            this.currentCharacter.description,
+            this.currentCharacter.name,
+          );
+          if (customPromptTextarea) {
+            customPromptTextarea.value = imagePrompt;
+            window.updatePromptCharCount();
+          }
+        } catch (e) {
+          imagePrompt = window.apiHandler.buildDirectImagePrompt(
+            this.currentCharacter.description,
+            this.currentCharacter.name,
+          );
+        }
+      }
+
+      const blobUrl = await window.apiHandler.generateFreeImage(imagePrompt, service, model);
+
+      loading.style.display = "none";
+
+      const wrapper = document.createElement("div");
+      wrapper.style.cursor = "pointer";
+      wrapper.style.border = "2px solid transparent";
+      wrapper.style.borderRadius = "0.5rem";
+      wrapper.style.overflow = "hidden";
+      wrapper.style.transition = "border-color 0.2s";
+      wrapper.style.backgroundColor = "var(--surface-color)";
+      wrapper.style.width = "100%";
+
+      wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
+      wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
+      wrapper.onclick = () => this.selectImageOption(blobUrl, imagePrompt, `pollinations/${model}`, [{ url: blobUrl }]);
+
+      wrapper.innerHTML = `
+        <img src="${blobUrl}" style="width: 100%; height: auto; display: block;" alt="Free generated image">
+        <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
+          <button class="btn-primary" style="width: 100%;">Accept Image</button>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">Pollinations.ai · ${model}</div>
+        </div>
+      `;
+      grid.appendChild(wrapper);
+
+      this.showNotification("Free image generated! Review and accept.", "success");
+    } catch (error) {
+      console.error("Free image error:", error);
+      loading.style.display = "none";
+      this.closeImageOptionsModal();
+      this.showNotification(`Free image failed: ${error.message}`, "error");
+    }
+  },
+
   openImageOptionsModal() {
     const modal = document.getElementById("image-options-modal");
     if (modal) {

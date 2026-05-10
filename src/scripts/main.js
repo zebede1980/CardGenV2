@@ -113,6 +113,26 @@ class CharacterGeneratorApp {
     const generateFourPromptsBtn = document.getElementById("generate-four-prompts-btn");
     if (generateFourPromptsBtn) generateFourPromptsBtn.addEventListener("click", () => this.handleGenerateFourPrompts());
 
+    // Free image dropdown
+    const freeImageBtn = document.getElementById("free-image-btn");
+    const freeImageMenu = document.getElementById("free-image-menu");
+    if (freeImageBtn && freeImageMenu) {
+      freeImageBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = freeImageMenu.style.display !== "none";
+        freeImageMenu.style.display = isOpen ? "none" : "flex";
+      });
+      freeImageMenu.addEventListener("click", (e) => {
+        const option = e.target.closest(".free-image-option");
+        if (!option) return;
+        freeImageMenu.style.display = "none";
+        this.handleFreeImage(option.dataset.service, option.dataset.model);
+      });
+      document.addEventListener("click", () => {
+        if (freeImageMenu.style.display !== "none") freeImageMenu.style.display = "none";
+      });
+    }
+
     const imgOptModalClose = document.getElementById("image-options-modal-close-btn");
     const imgOptModal = document.getElementById("image-options-modal");
     if (imgOptModalClose) imgOptModalClose.addEventListener("click", () => this.closeImageOptionsModal());

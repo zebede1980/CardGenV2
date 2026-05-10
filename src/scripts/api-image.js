@@ -343,4 +343,22 @@ BEGIN PROMPT:`;
     return this.processNormalResponse(response).trim();
   },
 
+  // Free image generation via Pollinations.ai — no API key required.
+  // Returns a blob URL pointing to the generated image.
+  async generateFreeImage(prompt, service, model) {
+    const seed = Math.floor(Math.random() * 2147483647);
+    const response = await fetch("/api/image/free", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, service, model, width: 768, height: 1024, seed }),
+    });
+    if (!response.ok) {
+      let detail = response.statusText;
+      try { const j = await response.json(); detail = j.error?.message || detail; } catch (_) {}
+      throw new Error(`Free image error (${response.status}): ${detail}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  },
+
 });

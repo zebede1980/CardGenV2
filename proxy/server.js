@@ -258,6 +258,45 @@ app.post("/api/text/chat/completions", async (req, res) => {
   }
 });
 
+// Free image generation via Pollinations.ai (no API key required)
+app.post("/api/image/free", async (req, res) => {
+  try {
+    const { prompt, service, model, width, height, seed } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ error: { code: "400", message: "prompt is required" } });
+    }
+
+    if (service !== "pollinations") {
+      return res.status(400).json({ error: { code: "400", message: `Unknown free image service: ${service}` } });
+    }
+
+    const w = width || 768;
+    const h = height || 1024;
+    const s = seed !== undefined ? seed : Math.floor(Math.random() * 2147483647);
+    const encodedPrompt = encodeURIComponent(prompt);
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${encodeURIComponent(model || "flux")}&width=${w}&height=${h}&nologo=true&seed=${s}`;
+
+    console.log("Free image (Pollinations):", pollinationsUrl.substring(0, 120) + "...");
+
+    const response = await fetch(pollinationsUrl, { timeout: 120000 });
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: { code: response.status.toString(), message: `Pollinations returned ${response.status}: ${response.statusText}` },
+      });
+    }
+
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    response.body.pipe(res);
+  } catch (error) {
+    console.error("Free image proxy error:", error);
+    res.status(500).json({ error: { code: "500", message: "Free image proxy error", details: error.message } });
+  }
+});
+
 // Proxy endpoint for image API
 app.post("/api/image/generations", async (req, res) => {
   try {
