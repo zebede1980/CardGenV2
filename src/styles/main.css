@@ -533,7 +533,62 @@ textarea.content-box {
 .st-status-ok { color: #28a745; }
 .st-status-err { color: var(--error, #c93d4a); }
 
-.actions {
+/* ST character card (rich browser view) */
+.st-card {
+    display: flex;
+    flex-direction: row;
+    gap: 0.6rem;
+    align-items: flex-start;
+    padding: 0.5rem 0.62rem;
+}
+.st-card-thumb {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+    background: var(--border);
+}
+.st-card-thumb-placeholder {
+    background: var(--surface-secondary, #e8e8e8);
+}
+.st-card-body {
+    flex: 1;
+    min-width: 0;
+}
+.st-card-snippet {
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    margin: 0.15rem 0 0.3rem;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.st-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-bottom: 0.3rem;
+}
+.st-card-tag {
+    font-size: 0.68rem;
+    background: var(--surface-secondary, #eef);
+    color: var(--text-secondary);
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+}
+.st-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.1rem;
+}
+.st-card-footer .library-item-date { margin-bottom: 0; }
+
+
     border-top: 1px solid var(--border);
     padding-top: 0.85rem;
     display: flex;

@@ -76,16 +76,34 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Sort by date_added descending (most recent first)
       characters.sort((a, b) => (b.date_added || 0) - (a.date_added || 0));
 
+      const stUrl = (this.config.get("st.baseUrl") || "").replace(/\/$/, "");
       list.innerHTML = characters.map(c => {
-        const name = c.name || c.data?.name || "Unnamed";
+        const name = this._escHtml(c.name || c.data?.name || "Unnamed");
         const avatar = c.avatar || "";
         const date = c.date_added ? new Date(c.date_added).toLocaleDateString() : "";
+        const description = c.data?.description || c.description || "";
+        const firstMes = c.data?.first_mes || c.first_mes || "";
+        const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.data?.tags) ? c.data.tags : []);
+        const snippet = this._escHtml((description || firstMes).replace(/\n+/g, " ").trim().slice(0, 120));
+        const tagHtml = tags.slice(0, 5).map(t => `<span class="st-card-tag">${this._escHtml(String(t))}</span>`).join("");
+        // Avatar thumbnail: ST serves PNG thumbnails at /thumbnail?type=avatar&file=<avatar>
+        const thumbUrl = avatar ? `${stUrl}/thumbnail?type=avatar&file=${encodeURIComponent(avatar)}` : "";
+        const thumbHtml = thumbUrl
+          ? `<img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
+          : `<div class="st-card-thumb st-card-thumb-placeholder"></div>`;
         return `
-          <div class="library-item">
-            <div class="library-item-title">${this._escHtml(name)}</div>
-            <div class="library-item-date">${date}</div>
-            <div class="library-item-actions">
-              <button class="btn-small" data-action="load-st-card" data-avatar="${this._escHtml(avatar)}" data-name="${this._escHtml(name)}">Load</button>
+          <div class="library-item st-card">
+            ${thumbHtml}
+            <div class="st-card-body">
+              <div class="library-item-title">${name}</div>
+              ${snippet ? `<div class="st-card-snippet">${snippet}…</div>` : ""}
+              ${tagHtml ? `<div class="st-card-tags">${tagHtml}</div>` : ""}
+              <div class="st-card-footer">
+                <span class="library-item-date">${date}</span>
+                <div class="library-item-actions">
+                  <button class="btn-small" data-action="load-st-card" data-avatar="${this._escHtml(avatar)}" data-name="${this._escHtml(c.name || c.data?.name || "Unnamed")}">Load</button>
+                </div>
+              </div>
             </div>
           </div>`;
       }).join("");
