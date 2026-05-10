@@ -33,6 +33,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
       countEl.textContent = `${count} ${count === 1 ? "entry" : "entries"}`;
     }
     this.updateTokenCounts();
+    this.renderLorebookSummary();
+  },
+
+  renderLorebookSummary() {
+    const summaryEl = document.getElementById("lorebook-summary");
+    if (!summaryEl) return;
+
+    if (this.lorebookEntries.length === 0) {
+      summaryEl.innerHTML = "";
+      summaryEl.style.display = "none";
+      return;
+    }
+
+    summaryEl.style.display = "block";
+    summaryEl.innerHTML = this.lorebookEntries
+      .map(
+        (entry) => `
+        <div style="display: flex; align-items: flex-start; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); gap: 0.5rem;">
+          <div style="flex: 1; min-width: 0;">
+            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">${entry.keys.join(", ")}:</span>
+            <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 5rem); vertical-align: bottom;">&nbsp;${entry.content.substring(0, 80).replace(/\n/g, " ")}${entry.content.length > 80 ? "\u2026" : ""}</span>
+          </div>
+        </div>`,
+      )
+      .join("");
   },
 
   renderLorebookEntries() {
@@ -241,6 +266,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         enabled: entry.enabled,
         insertion_order: 50,
         case_sensitive: false,
+        use_regex: false,
         name: entry.keys[0] || "",
         priority: 10,
         id: parseInt(entry.id) || Date.now() + index,

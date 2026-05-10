@@ -34,21 +34,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       countEl.textContent = `${count} ${count === 1 ? "entry" : "entries"}`;
     }
     if (limitText) {
-      limitText.textContent = `(${this.altGreetings.length}/5)`;
-    }
-
-    const editor = document.getElementById("alt-greeting-editor");
-    const id = document.getElementById("alt-greeting-id")?.value;
-    if (editor) {
-      if (this.altGreetings.length >= 5 && !id) {
-        editor.style.opacity = "0.5";
-        editor.style.pointerEvents = "none";
-      } else {
-        editor.style.opacity = "1";
-        editor.style.pointerEvents = "auto";
-      }
+      limitText.textContent = `(${this.altGreetings.length})`;
     }
     this.updateTokenCounts();
+    this.renderAltGreetingsSummary();
   },
 
   renderAltGreetings() {
@@ -144,13 +133,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.altGreetings[index].content = content;
       }
     } else {
-      if (this.altGreetings.length >= 5) {
-        this.showNotification(
-          "You can only have up to 5 alternate greetings.",
-          "warning",
-        );
-        return;
-      }
       this.altGreetings.push({
         id: Date.now().toString() + Math.random().toString().slice(2, 5),
         content,
@@ -200,6 +182,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.currentCharacter.alternateGreetings = this.altGreetings.map(
       (g) => g.content,
     );
+  },
+
+  renderAltGreetingsSummary() {
+    const summaryEl = document.getElementById("alt-greetings-summary");
+    if (!summaryEl) return;
+
+    if (this.altGreetings.length === 0) {
+      summaryEl.innerHTML = "";
+      summaryEl.style.display = "none";
+      return;
+    }
+
+    summaryEl.style.display = "block";
+    summaryEl.innerHTML = this.altGreetings
+      .map(
+        (greeting, index) => `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); gap: 0.5rem;">
+          <div style="flex: 1; min-width: 0;">
+            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">Greeting ${index + 1}:</span>
+            <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 5rem); vertical-align: bottom;">&nbsp;${greeting.content.substring(0, 80).replace(/\n/g, " ")}${greeting.content.length > 80 ? "\u2026" : ""}</span>
+          </div>
+        </div>`,
+      )
+      .join("");
   },
 
 });

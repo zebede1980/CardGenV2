@@ -674,6 +674,7 @@
                                         </button>
                                         <span id="lorebook-entry-count" style="font-size: 0.875rem; color: var(--text-secondary);">0 entries</span>
                                     </div>
+                                    <div id="lorebook-summary" style="display: none; margin-top: 0.6rem; border: 1px solid var(--border); border-radius: 0.375rem; overflow: hidden; background: var(--surface-color);"></div>
                                 </div>
 
                                 <!-- Alternate Greetings Section -->
@@ -684,7 +685,7 @@
                                         </h3>
                                     </div>
                                     <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                                        💡 Add up to 5 alternative starting messages for completely different or continued roleplay scenarios.
+                                        💡 Add alternative starting messages for completely different or continued roleplay scenarios.
                                     </p>
                                     <div style="display: flex; gap: 0.75rem; align-items: center;">
                                         <button id="manage-alt-greetings-btn" class="btn-outline" title="Open the Alternate Greetings Manager to add or generate alternative opening messages — useful for different starting scenarios or moods without changing the core character.">
@@ -692,6 +693,7 @@
                                         </button>
                                         <span id="alt-greetings-count" style="font-size: 0.875rem; color: var(--text-secondary);">0 entries</span>
                                     </div>
+                                    <div id="alt-greetings-summary" style="display: none; margin-top: 0.6rem; border: 1px solid var(--border); border-radius: 0.375rem; overflow: hidden; background: var(--surface-color);"></div>
                                 </div>
                             </div>
 
@@ -939,7 +941,7 @@
                             id="download-btn"
                             class="btn-secondary"
                             style="display: none"
-                            title="Export the character card as a SillyTavern-compatible PNG file with the full chara_card_v2 metadata embedded in the image. Lorebook and alternate greetings are included."
+                            title="Export the character card as a SillyTavern-compatible PNG file with the full chara_card_v3 metadata embedded in the image. Lorebook and alternate greetings are included."
                         >
                             Download Character Card (PNG)
                         </button>
@@ -1295,7 +1297,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="form-group" style="margin-bottom: 2rem;">
-                        <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Current Greetings <span id="alt-greetings-limit-text" style="font-size: 0.875rem; font-weight: 400; color: var(--text-secondary);">(0/5)</span></h3>
+                        <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Current Greetings <span id="alt-greetings-limit-text" style="font-size: 0.875rem; font-weight: 400; color: var(--text-secondary);">(0)</span></h3>
                         <div id="alt-greetings-list">
                             <!-- Entries will be dynamically inserted here -->
                             <p class="library-empty">No alternate greetings yet.</p>

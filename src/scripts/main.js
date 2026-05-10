@@ -620,8 +620,8 @@ class CharacterGeneratorApp {
       let imageBlob = await this.imageGenerator.convertToBlob(this.currentImageUrl);
       imageBlob = await this.imageGenerator.optimizeImageForCard(imageBlob);
 
-      const specV2Data = this.characterGenerator.toSpecV2Format(this.currentCharacter);
-      const cardBlob = await this.pngEncoder.createCharacterCard(imageBlob, specV2Data);
+      const specV3Data = this.characterGenerator.toSpecV3Format(this.currentCharacter);
+      const cardBlob = await this.pngEncoder.createCharacterCard(imageBlob, specV3Data);
       this.pngEncoder.downloadCharacterCard(cardBlob, this.currentCharacter.name);
 
       const finalSize = this.imageGenerator.formatFileSize(cardBlob.size);

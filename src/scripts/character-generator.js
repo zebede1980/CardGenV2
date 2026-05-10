@@ -203,11 +203,12 @@ class CharacterGenerator {
         `;
   }
 
-  // Convert to SillyTavern Spec V2 format
-  toSpecV2Format(character) {
+  // Convert to SillyTavern Spec V3 format
+  toSpecV3Format(character) {
+    const now = Math.floor(Date.now() / 1000);
     const spec = {
-      spec: "chara_card_v2",
-      spec_version: "2.0",
+      spec: "chara_card_v3",
+      spec_version: "3.0",
       data: {
         name: character.name || "Unnamed Character",
         description: character.description || "",
@@ -217,6 +218,11 @@ class CharacterGenerator {
         mes_example: character.mesExample || "",
         alternate_greetings: character.alternateGreetings || [],
         tags: [],
+        // V3 required fields
+        group_only_greetings: character.groupOnlyGreetings || [],
+        assets: [{ type: "icon", uri: "ccdefault:", name: "main", ext: "png" }],
+        creation_date: now,
+        modification_date: now,
       },
     };
     if (character.character_book) {

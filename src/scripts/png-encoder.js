@@ -6,18 +6,31 @@ class PNGEncoder {
   }
 
   // Create a PNG file from image blob and embed character data
+  // Writes both a ccv3 chunk (V3 primary) and a chara chunk (V2 backward-compat)
   async createCharacterCard(imageBlob, characterData) {
     try {
-      // Create character card JSON (compact format, no spaces like Python version)
-      const characterJson = JSON.stringify(characterData);
+      // Build V3 JSON for the ccv3 chunk (primary)
+      const v3Json = JSON.stringify(characterData);
+      const v3Bytes = new TextEncoder().encode(v3Json);
+      const base64V3 = btoa(String.fromCharCode(...v3Bytes));
 
-      // Convert to base64 like Python version
-      const characterJsonBytes = new TextEncoder().encode(characterJson);
-      const base64Json = btoa(String.fromCharCode(...characterJsonBytes));
+      // Build V2-compat JSON for the chara chunk (backward compatibility)
+      const v2Data = JSON.parse(v3Json);
+      v2Data.spec = "chara_card_v2";
+      v2Data.spec_version = "2.0";
+      delete v2Data.data.group_only_greetings;
+      delete v2Data.data.assets;
+      delete v2Data.data.creation_date;
+      delete v2Data.data.modification_date;
+      delete v2Data.data.nickname;
+      if (v2Data.data.character_book && Array.isArray(v2Data.data.character_book.entries)) {
+        v2Data.data.character_book.entries.forEach((e) => delete e.use_regex);
+      }
+      const v2Json = JSON.stringify(v2Data);
+      const v2Bytes = new TextEncoder().encode(v2Json);
+      const base64V2 = btoa(String.fromCharCode(...v2Bytes));
 
-      // Inject metadata into existing PNG instead of recreating from scratch
-      // This is much more efficient and preserves the original compression
-      const pngBlob = await this.injectMetadataIntoPNG(imageBlob, base64Json);
+      const pngBlob = await this.injectMetadataIntoPNG(imageBlob, base64V2, base64V3);
       return pngBlob;
     } catch (error) {
       console.error("Error creating character card:", error);
@@ -26,11 +39,11 @@ class PNGEncoder {
   }
 
   // Inject metadata into existing PNG (more efficient than recreating)
-  async injectMetadataIntoPNG(pngBlob, base64Json) {
+  // Writes a chara chunk (V2 compat) and a ccv3 chunk (V3 primary) before IEND
+  async injectMetadataIntoPNG(pngBlob, base64V2, base64V3) {
     try {
       console.log("🔍 Starting PNG metadata injection");
       console.log("📏 Input blob size:", pngBlob.size, "bytes");
-      console.log("📝 Base64 JSON size:", base64Json.length, "characters");
 
       // Validate blob before attempting to read
       if (!pngBlob || !(pngBlob instanceof Blob)) {
@@ -51,41 +64,34 @@ class PNGEncoder {
         throw new Error("Invalid PNG file - using full recreation");
       }
 
-      // Check for existing chara chunks and remove them to prevent duplicates
+      // Remove any existing chara/ccv3 chunks to prevent duplicates
       const cleanedData = this.removeExistingCharaChunks(data);
 
-      // Find the position to insert the tEXt chunk (before IEND)
-      let iendPosition = this.findIENDPosition(cleanedData);
+      // Find the position to insert the tEXt chunks (before IEND)
+      const iendPosition = this.findIENDPosition(cleanedData);
       if (iendPosition === -1) {
         throw new Error(
           "Could not find IEND chunk in PNG - using full recreation",
         );
       }
 
-      // Create the character data chunk
-      const charaChunk = this.createtEXtChunk("chara", base64Json);
+      // Create both metadata chunks
+      const charaChunk = this.createtEXtChunk("chara", base64V2); // V2 backward compat
+      const ccv3Chunk = this.createtEXtChunk("ccv3", base64V3);   // V3 primary
+      const extraLen = charaChunk.length + ccv3Chunk.length;
 
-      // Create new PNG with the metadata chunk inserted before IEND
-      const newPngData = new Uint8Array(cleanedData.length + charaChunk.length);
-
-      // Copy data up to IEND
+      // Build new PNG: [existing data up to IEND] + [chara chunk] + [ccv3 chunk] + [IEND]
+      const newPngData = new Uint8Array(cleanedData.length + extraLen);
       newPngData.set(cleanedData.slice(0, iendPosition), 0);
-
-      // Insert tEXt chunk
       newPngData.set(charaChunk, iendPosition);
-
-      // Copy IEND chunk
-      newPngData.set(
-        cleanedData.slice(iendPosition),
-        iendPosition + charaChunk.length,
-      );
+      newPngData.set(ccv3Chunk, iendPosition + charaChunk.length);
+      newPngData.set(cleanedData.slice(iendPosition), iendPosition + extraLen);
 
       return new Blob([newPngData], { type: "image/png" });
     } catch (error) {
-      // Fallback to the old method if injection fails
-      // This is normal for images converted from JPEG or created from canvas
+      // Fallback: recreate PNG from canvas data
       const imageData = await this.blobToImageData(pngBlob);
-      return await this.createPNGWithMetadata(imageData, base64Json);
+      return await this.createPNGWithMetadata(imageData, base64V2, base64V3);
     }
   }
 
@@ -129,11 +135,22 @@ class PNGEncoder {
 
       const chunkSize = 4 + 4 + length + 4; // length + type + data + CRC
 
-      // Skip ALL tEXt chunks (which includes chara) to prevent any metadata conflicts
-      if (type !== "tEXt" && type !== "chara") {
+      // Skip ALL tEXt chunks that carry character metadata (chara, ccv3) to prevent duplicates
+      const isTExt = type === "tEXt";
+      let isCharaMeta = type === "chara";
+      if (isTExt && !isCharaMeta) {
+        // Peek at the keyword to see if it's ccv3
+        if (offset + 8 + 4 <= data.length) {
+          const kw = String.fromCharCode(
+            data[offset + 8], data[offset + 9], data[offset + 10], data[offset + 11]
+          );
+          if (kw === "ccv3") isCharaMeta = true;
+        }
+      }
+      if (!isTExt && type !== "chara") {
         newData.push(...data.slice(offset, offset + chunkSize));
       } else {
-        if (type === "chara") {
+        if (type === "chara" || isCharaMeta) {
           charaChunksFound++;
         } else if (type === "tEXt") {
           textChunksFound++;
@@ -219,8 +236,8 @@ class PNGEncoder {
     });
   }
 
-  // Create PNG with metadata chunks
-  async createPNGWithMetadata(imageData, base64Json) {
+  // Create PNG with metadata chunks (fallback path)
+  async createPNGWithMetadata(imageData, base64V2, base64V3) {
     const chunks = [];
 
     // IHDR chunk (image header)
@@ -231,13 +248,13 @@ class PNGEncoder {
     const idatChunks = await this.createIDATChunks(imageData);
     chunks.push(...idatChunks);
 
-    // Character data chunk (SillyTavern standard) - lowercase 'chara' like Python version
-    const charaData = this.createtEXtChunk("chara", base64Json);
-    chunks.push(charaData);
+    // V2 backward-compat chunk
+    chunks.push(this.createtEXtChunk("chara", base64V2));
+    // V3 primary chunk
+    chunks.push(this.createtEXtChunk("ccv3", base64V3));
 
     // IEND chunk (image end)
-    const iendData = this.createIENDChunk();
-    chunks.push(iendData);
+    chunks.push(this.createIENDChunk());
 
     // Combine all chunks
     const pngData = this.combinePNGChunks(chunks);
@@ -532,6 +549,7 @@ class PNGEncoder {
   }
 
   // Extract character data from existing PNG
+  // Prefers the ccv3 chunk (V3) over the chara chunk (V2)
   async extractCharacterData(pngBlob) {
     try {
       const arrayBuffer = await pngBlob.arrayBuffer();
@@ -545,31 +563,28 @@ class PNGEncoder {
       // Parse chunks
       const chunks = this.parsePNGChunks(data);
 
-      // Find text chunks
+      // Collect all tEXt chunks, keyed by keyword
+      const textChunks = {};
       for (const chunk of chunks) {
         if (chunk.type === "tEXt") {
           const textData = this.parsetEXtChunk(chunk.data);
-          // Check for both lowercase and uppercase variants
-          if (textData.keyword === "chara" || textData.keyword === "Chara") {
-            try {
-              // Decode base64 if needed
-              let jsonText = textData.text;
-              try {
-                // Try to decode as base64
-                jsonText = this.decodeBase64Utf8(textData.text);
-              } catch (e) {
-                // If base64 decode fails, assume it's already plain text
-                console.log("Not base64 encoded, using as-is");
-              }
-              return JSON.parse(jsonText);
-            } catch (error) {
-              console.warn("Failed to parse character JSON:", error);
-            }
-          }
+          textChunks[textData.keyword.toLowerCase()] = textData.text;
         }
       }
 
-      throw new Error("No character data found in PNG");
+      // Prefer ccv3 (V3), fall back to chara (V2)
+      const raw = textChunks["ccv3"] || textChunks["chara"];
+      if (!raw) {
+        throw new Error("No character data found in PNG");
+      }
+
+      try {
+        const jsonText = this.decodeBase64Utf8(raw);
+        return JSON.parse(jsonText);
+      } catch (e) {
+        // Not base64 — try plain text
+        return JSON.parse(raw);
+      }
     } catch (error) {
       console.error("Error extracting character data:", error);
       throw error;
