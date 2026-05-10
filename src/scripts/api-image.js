@@ -56,6 +56,7 @@ Object.assign(APIHandler.prototype, {
       prompt: finalApiPrompt,
       n: 1,
       response_format: "url",
+      seed: Math.floor(Math.random() * 2147483647),
     };
 
     const imageSize = this.config.get("api.image.size");

@@ -148,8 +148,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       wrapper.style.overflow = "hidden";
       wrapper.style.transition = "border-color 0.2s";
       wrapper.style.backgroundColor = "var(--surface-color)";
-      wrapper.style.maxWidth = "400px";
-      wrapper.style.margin = "0 auto";
+      wrapper.style.width = "100%";
 
       wrapper.onmouseenter = () =>
         (wrapper.style.border = "2px solid var(--accent)");

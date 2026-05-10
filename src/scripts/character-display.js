@@ -210,6 +210,90 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification(`${fieldName} reset to original`, "success");
   },
 
+  async handleOpenNamePicker() {
+    if (!this.currentCharacter) return;
+    this.showNamePickerModal();
+  },
+
+  showNamePickerModal() {
+    const modal = document.getElementById("name-picker-modal");
+    const genderSelect = document.getElementById("name-picker-gender");
+    const guidanceInput = document.getElementById("name-picker-guidance");
+    const generateBtn = document.getElementById("name-picker-generate-btn");
+    const cancelBtn = document.getElementById("name-picker-cancel-btn");
+    const grid = document.getElementById("name-picker-grid");
+    const statusEl = document.getElementById("name-picker-status");
+
+    if (!modal) return;
+
+    // Reset state
+    grid.innerHTML = "";
+    statusEl.textContent = "";
+    guidanceInput.value = "";
+    genderSelect.value = "any";
+
+    modal.classList.add("show");
+    document.body.style.overflow = "hidden";
+
+    const close = () => {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+      generateBtn.removeEventListener("click", onGenerate);
+      cancelBtn.removeEventListener("click", close);
+      modal.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onEscape);
+    };
+
+    const onBackdrop = (e) => { if (e.target === modal) close(); };
+    const onEscape = (e) => { if (e.key === "Escape") close(); };
+
+    const onGenerate = async () => {
+      const gender = genderSelect.value;
+      const guidance = guidanceInput.value.trim();
+
+      grid.innerHTML = "";
+      statusEl.textContent = "Generating names…";
+      generateBtn.disabled = true;
+      generateBtn.textContent = "Generating…";
+
+      try {
+        const names = await window.apiHandler.generateNameOptions(this.currentCharacter, gender, guidance);
+        statusEl.textContent = "Click a name to use it:";
+        grid.innerHTML = names.map((name) =>
+          `<button class="name-picker-option" data-name="${name.replace(/"/g, "&quot;")}">${name}</button>`
+        ).join("");
+
+        grid.querySelectorAll(".name-picker-option").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const chosen = btn.dataset.name;
+            const nameInput = document.getElementById("character-generated-name");
+            if (nameInput) {
+              nameInput.value = chosen;
+              this.currentCharacter.name = chosen;
+              this.handleCharacterEdit("name");
+            }
+            this.showNotification(`Name set to "${chosen}"`, "success");
+            close();
+          });
+        });
+      } catch (error) {
+        statusEl.textContent = `Failed: ${error.message}`;
+        console.error("Name picker generation failed:", error);
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = "🎲 Generate Names";
+      }
+    };
+
+    generateBtn.addEventListener("click", onGenerate);
+    cancelBtn.addEventListener("click", close);
+    modal.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onEscape);
+
+    // Auto-generate on open so the user sees names immediately
+    onGenerate();
+  },
+
   async handleRegenerateName() {
     if (!this.currentCharacter) return;
 

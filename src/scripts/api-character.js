@@ -442,6 +442,127 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
     }
   },
 
+  /**
+   * Generates 10 varied name options for the character picker modal.
+   * Each call picks multiple cultural styles to ensure real variety across all 10.
+   */
+  async generateNameOptions(character, gender = "any", guidance = "") {
+    if (!character) throw new Error("Character is required to generate name options");
+
+    const model = this.config.get("api.text.model");
+
+    // Pick 10 distinct cultural styles so every name comes from a different tradition
+    const allStyles = [
+      "Eastern European (Polish, Czech, Slovak, or Romanian)",
+      "Slavic (Russian, Ukrainian, Bulgarian, or Serbian)",
+      "Scandinavian (Norwegian, Swedish, Danish, or Icelandic)",
+      "Celtic (Welsh, Scottish Gaelic, Irish Gaelic, or Breton)",
+      "Iberian (Spanish, Portuguese, Catalan, or Basque)",
+      "Italian or Sicilian",
+      "Greek (modern or classical)",
+      "Turkish, Azerbaijani, or Uzbek",
+      "Arabic (Levantine, Gulf, or North African)",
+      "Persian or Dari",
+      "South Asian (Hindi, Bengali, Tamil, Punjabi, or Urdu)",
+      "Japanese",
+      "Korean",
+      "Chinese (Mandarin or Cantonese romanisation)",
+      "Vietnamese or Thai",
+      "Filipino or Tagalog",
+      "West African (Yoruba, Igbo, Akan, or Hausa)",
+      "East African (Swahili, Amharic, or Somali)",
+      "Southern African (Zulu, Xhosa, or Shona)",
+      "Hebrew or Yiddish",
+      "Armenian or Georgian",
+      "Finnish, Estonian, or Sami",
+      "Baltic (Lithuanian or Latvian)",
+      "Hungarian or Magyar",
+      "Dutch or Flemish",
+      "German or Austrian",
+      "French or Occitan",
+      "Albanian or Macedonian",
+      "Mongolian, Kazakh, or Kyrgyz",
+      "Indigenous Mesoamerican (Nahuatl or Maya inspired)",
+    ];
+    // Shuffle and take 10
+    const shuffled = allStyles.slice().sort(() => Math.random() - 0.5);
+    const chosenStyles = shuffled.slice(0, 10);
+    const styleList = chosenStyles.map((s, i) => `${i + 1}. ${s}`).join("\n");
+
+    const genderInstruction = gender === "male"
+      ? "All names must be masculine."
+      : gender === "female"
+        ? "All names must be feminine."
+        : "Gender can be anything — vary it across the 10 names.";
+
+    const guidanceInstruction = guidance
+      ? `\n\nAdditional guidance from the user: "${guidance}"\nApply this guidance to all names, but still maintain cultural diversity.`
+      : "";
+
+    const systemPrompt = `You are an expert in names from cultures around the world. Generate exactly 10 character names with maximum cultural variety.
+
+You will be given 10 cultural traditions (one per name). Each name MUST authentically come from its assigned tradition — use real first names and surnames (or single names where culturally appropriate) from that culture.
+
+${genderInstruction}
+
+**BANNED — do NOT use any of these overused AI defaults:**
+- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
+- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
+- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
+- Any name ending in "-ael", "-iel", or "-yn" unless tradition demands it
+
+Return ONLY a strict JSON array of exactly 10 strings. No objects, no explanations, no extra text.
+Example: ["Yuki Tanaka", "Kofi Mensah", "Ingrid Halvorsen", "Mirela Petrović", ...]`;
+
+    const userPrompt = `Character context:
+Description: ${character.description || "No description provided"}
+Personality: ${character.personality || "No personality provided"}
+${character.name && character.name !== "{{char}}" && character.name !== "Unknown Character" ? `Current name: "${character.name}" (do NOT repeat this)` : ""}${guidanceInstruction}
+
+Cultural traditions to use (one per name, in order):
+${styleList}
+
+Generate exactly 10 names as a JSON array.
+[Entropy: ${Math.floor(Math.random() * 1000000)}]`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 1.0,
+      max_tokens: 300,
+      stream: false,
+    };
+
+    try {
+      console.log("=== STARTING NAME OPTIONS GENERATION ===");
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      const output = this.processNormalResponse(response);
+
+      let parsed;
+      try {
+        parsed = JSON.parse(output);
+      } catch (e) {
+        const arrayMatch = output.match(/\[[\s\S]*\]/);
+        if (arrayMatch) parsed = JSON.parse(arrayMatch[0]);
+        else throw new Error("Could not parse name list from response");
+      }
+
+      if (!Array.isArray(parsed)) throw new Error("Response was not an array");
+
+      // Sanitise: strip quotes if AI wrapped individual names
+      return parsed
+        .slice(0, 10)
+        .map((n) => String(n).trim().replace(/^["']|["']$/g, ""))
+        .filter(Boolean);
+    } catch (error) {
+      console.error("=== NAME OPTIONS GENERATION FAILED ===", error);
+      throw error;
+    }
+  },
+
   formatLorebookContext(lorebookEntries) {
     if (!lorebookEntries || !Array.isArray(lorebookEntries) || lorebookEntries.length === 0) return "";
     let context = "\n\nAvailable World Info / Lorebook Context (Use this to inform your generation. Try to naturally include some of the exact 'Keys' below in your text so they trigger during the roleplay):\n";

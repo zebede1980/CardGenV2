@@ -283,9 +283,9 @@
                                             id="regenerate-name-btn"
                                             class="btn-small"
                                             style="padding: 0.3rem 0.8rem; font-size: 0.75rem;"
-                                            title="Ask the AI to generate a different name for this character, grounded in their background and time period"
+                                            title="Open the name picker — choose gender and add guidance, then get 10 culturally varied name suggestions to click and apply"
                                         >
-                                            🔄 Gen Name
+                                            🎲 Pick Name
                                         </button>
                                         <button
                                             id="reset-name-btn"
@@ -1375,7 +1375,7 @@
 
         <!-- Image Options Modal -->
         <div id="image-options-modal" class="modal-overlay">
-            <div class="api-settings-modal" style="max-width: 800px; width: 90%;">
+            <div class="api-settings-modal" style="max-width: min(92vw, 1100px); width: 92%; max-height: 92vh;">
                 <div class="modal-header">
                     <h2 class="modal-title">🖼️ Choose an Image Option</h2>
                     <button id="image-options-modal-close-btn" class="modal-close">×</button>
@@ -1388,6 +1388,37 @@
                     <div id="image-options-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
                         <!-- Images injected here -->
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Name Picker Modal -->
+        <div id="name-picker-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 560px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">🎲 Pick a Name</h2>
+                    <button id="name-picker-cancel-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="padding: 1.25rem 1.5rem 1.5rem;">
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                        <div style="flex: 0 0 auto;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Gender</label>
+                            <select id="name-picker-gender" class="content-box" style="padding: 0.45rem 0.75rem; font-size: 0.875rem; width: auto;">
+                                <option value="any">Any</option>
+                                <option value="female">Female</option>
+                                <option value="male">Male</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 160px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Guidance <span style="font-weight:400;">(optional)</span></label>
+                            <input id="name-picker-guidance" type="text" class="content-box" placeholder="e.g. medieval, noble family, short name…" style="width: 100%; padding: 0.45rem 0.75rem; font-size: 0.875rem;">
+                        </div>
+                        <div style="flex: 0 0 auto; align-self: flex-end;">
+                            <button id="name-picker-generate-btn" class="btn-primary" style="padding: 0.45rem 1rem; font-size: 0.875rem;">🎲 Generate Names</button>
+                        </div>
+                    </div>
+                    <p id="name-picker-status" style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem; min-height: 1.2em;"></p>
+                    <div id="name-picker-grid" class="name-picker-grid"></div>
                 </div>
             </div>
         </div>

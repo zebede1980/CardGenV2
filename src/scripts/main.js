@@ -201,7 +201,7 @@ class CharacterGeneratorApp {
     const regenerateNameBtn = document.getElementById("regenerate-name-btn");
     if (exampleMessagesCount) exampleMessagesCount.addEventListener("change", () => this.handleGenerateExampleMessages());
     if (regenerateExamplesBtn) regenerateExamplesBtn.addEventListener("click", () => this.handleGenerateExampleMessages());
-    if (regenerateNameBtn) regenerateNameBtn.addEventListener("click", () => this.handleRegenerateName());
+    if (regenerateNameBtn) regenerateNameBtn.addEventListener("click", () => this.handleOpenNamePicker());
 
     const regenDescBtn = document.getElementById("regenerate-description-btn");
     const regenPersBtn = document.getElementById("regenerate-personality-btn");
