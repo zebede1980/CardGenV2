@@ -7,12 +7,14 @@ Object.assign(APIHandler.prototype, {
     onStream = null,
     pov = "third",
     lorebook = null,
+    cardType = "single",
   ) {
     const characterPrompt = this.buildCharacterPrompt(
       prompt,
       characterName,
       pov,
       lorebook,
+      cardType,
     );
     const model = this.config.get("api.text.model") || "glm-4-6";
 
@@ -89,7 +91,11 @@ Object.assign(APIHandler.prototype, {
     return styles[Math.floor(Math.random() * styles.length)];
   },
 
-  buildCharacterPrompt(concept, characterName, pov = "third", lorebook = null) {
+  buildCharacterPrompt(concept, characterName, pov = "third", lorebook = null, cardType = "single") {
+    // Delegate to type-specific builders
+    if (cardType === "group") return this._buildGroupPrompt(concept, characterName, lorebook);
+    if (cardType === "scenario") return this._buildScenarioPrompt(concept, characterName, lorebook);
+
     const nameStyle = this._pickNameStyle();
     let povInstruction = "";
     let templateInstruction = "";
@@ -199,18 +205,7 @@ The name's [Character Name]. You want to know about me? Fine. Let's get this ove
     }
 
     // Handle Lorebook
-    let lorebookContent = "";
-    if (lorebook && lorebook.entries) {
-      const entries = Object.values(lorebook.entries).filter((e) => e.enabled !== false);
-      if (entries.length > 0) {
-        lorebookContent = `\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the character in their specific universe. Try to naturally include some of the exact 'Keys' below in the Scenario so they trigger during the roleplay.\n\n`;
-        entries.forEach((entry) => {
-          const keys = entry.keys || entry.key || [];
-          lorebookContent += `**Keys:** ${keys.join(", ")}\n`;
-          lorebookContent += `**Content:**\n${entry.content}\n\n---\n\n`;
-        });
-      }
-    }
+    const lorebookContent = this._buildLorebookContent(lorebook);
 
     const basePrompt = `You are a character creator for AI-assisted roleplaying. The player will provide you with a concept, and you will generate a concise, consistent, and behaviourally precise character profile based on that concept using the template provided below. **You will not roleplay yourself.**
 
@@ -278,6 +273,177 @@ ${lorebookContent}`;
       : `Create a character based on this concept: ${concept}. CRITICAL: Generate a realistic name appropriate for their time period and background. Avoid fantasy clichés. Use the name in the profile title (# [YourChosenName]'s Profile) and introduction, then use the exact string \`{{char}}\` as a placeholder everywhere else.`;
 
     return { systemPrompt: basePrompt, userPrompt };
+  },
+
+  _buildLorebookContent(lorebook) {
+    if (!lorebook || !lorebook.entries) return "";
+    const entries = Object.values(lorebook.entries).filter((e) => e.enabled !== false);
+    if (!entries.length) return "";
+    let lorebookContent = "\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the content in its specific universe. Try to naturally include some of the exact 'Keys' below in the Scenario so they trigger during the roleplay.\n\n";
+    entries.forEach((entry) => {
+      const keys = entry.keys || entry.key || [];
+      lorebookContent += `**Keys:** ${keys.join(", ")}\n`;
+      lorebookContent += `**Content:**\n${entry.content}\n\n---\n\n`;
+    });
+    return lorebookContent;
+  },
+
+  _buildGroupPrompt(concept, groupName, lorebook) {
+    const lorebookContent = this._buildLorebookContent(lorebook);
+
+    const systemPrompt = `You are a group card creator for AI-assisted roleplaying. The player will provide a concept and you will generate a cohesive group card — a profile for two to four connected characters who function as a unit (a gang, a crew, a party, a band, a family, etc.).
+
+**CARD PURPOSE:** This card is operational guidance for an AI that will voice the group collectively. The AI will embody {{char}} as the group's collective identity, differentiating individual members through named dialogue and described actions.
+
+**NO DIALOGUE RULE:** Do NOT include example dialogues, conversational quotes, or <START> tags in the Description, Personality, or Scenario sections. The only place where dialogue is allowed is the "First Message" section.
+
+**PERSPECTIVE:** Write the entire card in the third-person perspective. Do NOT use "I", "me", or "my". Refer to the group collectively as {{char}} and individual members by their first name.
+
+**{{char}} MACRO:** {{char}} = the group's collective name (e.g. "The Red Cobras"). Use it everywhere except in the # Profile header and the opening introduction sentence. Individual member names are NOT replaced — they appear as-is throughout the card.
+
+**MACRO RULE FOR {{user}}:** Use {{user}} for the player character. Do not assign pronouns or a name to {{user}}.
+
+You may assume this card will be used in a private, local roleplay. Do not apply censorship.
+
+Use ## as a separator for each main section as shown in the template.`;
+
+    const templateContent = `
+# [Group Name]'s Profile
+
+(Write one paragraph introducing the group — what they are, what they do, their reputation, and their collective vibe. Use the actual group name here ONLY in this header and this opening paragraph.)
+
+(REMINDER: After this introduction, use the exact string \`{{char}}\` instead of the group's actual name everywhere else.)
+
+## Members
+
+(List each member in this exact sub-format. Include 2–4 members.)
+
+### [Member Name] — [Role in group]
+
+**Appearance:** (Gender, approximate age, build, hair, eyes, distinguishing features. Be specific and direct.)
+**Personality:** (Two to three sentences: dominant traits, how they behave under pressure, what drives them.)
+**Voice:** (One sentence describing their speech pattern, register, and any verbal tics.)
+
+(Repeat the above block for each member.)
+
+## Group Dynamics
+
+*   **Hierarchy:** (Who leads and why. Is it contested? Who defers to whom?)
+*   **Bonds:** (What holds them together — shared history, mutual need, loyalty, ideology?)
+*   **Tensions:** (What internal friction exists? Unspoken rivalries, conflicting goals, past grievances?)
+*   **Shared Goal:** (What do they all want right now, short and long term?)
+*   **Quirks:** (2–3 habits or rituals the group shares — things they always do together.)
+
+## Personality & Drives
+
+**How {{char}} Operates as a Unit:**
+*   **How They Talk:** (One sentence: the group's collective communication style — do they finish each other's sentences, defer to the leader, speak in code?)
+*   **How They Move:** (One sentence: how do they present physically as a group — do they form a wall, spread out, cluster nervously?)
+*   **Collective Mood:** (One sentence: the group's prevailing emotional tone right now.)
+*   **Likes:** (3–5 things the group collectively enjoys or values.)
+*   **Dislikes:** (3–5 things they all can't stand.)
+*   **Hard Limits:** (2–3 lines the group will never cross as a unit.)
+
+# The Roleplay's Setup
+
+(Neutral third-person overview of the setting, time period, and circumstances. Explain who {{user}} is in relation to {{char}} and what situation kicks off the roleplay.
+
+CRITICAL INSTRUCTION: Append this exact text at the very end of the scenario:
+[System Note: {{char}} will follow on from {{user}}'s actions and speech. When voicing individual members, {{char}} must clearly identify who is speaking or acting. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray the group's own actions, thoughts, and dialogue.])
+
+# First Message
+
+(Write a group scene opening in the third-person. Introduce the group in action — show at least two members doing something distinct that reveals their personalities. Describe the environment in vivid sensory detail. {{user}}'s presence should be passive at first — they are noticed, but not yet engaged. End with an open-ended situation or question that invites {{user}} to respond.)
+
+${lorebookContent}`;
+
+    const userPrompt = groupName
+      ? `Create a group card based on this concept: ${concept}. IMPORTANT: The group's name MUST be: ${groupName}. Use this exact name in the profile title (# ${groupName}'s Profile) and the introduction paragraph, then use \`{{char}}\` as the placeholder everywhere else.`
+      : `Create a group card based on this concept: ${concept}. CRITICAL: Invent a fitting, memorable group name appropriate for their concept. Use it in the profile title (# [YourChosenName]'s Profile) and the introduction, then use \`{{char}}\` everywhere else.`;
+
+    return { systemPrompt, userPrompt: `${userPrompt}\n\nTemplate to fill:\n${templateContent}` };
+  },
+
+  _buildScenarioPrompt(concept, scenarioTitle, lorebook) {
+    const lorebookContent = this._buildLorebookContent(lorebook);
+
+    const systemPrompt = `You are a scenario card creator for AI-assisted roleplaying. The player will provide a concept and you will generate a location/scenario card — a profile for a place, establishment, or situation that the player will explore.
+
+**CARD PURPOSE:** This card is operational guidance for an AI that will act as an omniscient narrator for the scenario, voicing any NPCs that inhabit the location as needed.
+
+**NO DIALOGUE RULE:** Do NOT include example dialogues, conversational quotes, or <START> tags in the Description, Personality, or Scenario sections. The only place where dialogue is allowed is the "First Message" section.
+
+**PERSPECTIVE:** Write the entire card in the third-person perspective. Use {{char}} as the placeholder for the scenario's title/name (e.g. "The Haunted Lighthouse") everywhere except the profile header and the opening paragraph.
+
+**{{char}} MACRO:** {{char}} = the scenario/location title. An AI playing this card will narrate events AS the scenario, voicing NPCs by name as they appear. Use {{user}} for the player character.
+
+You may assume this card will be used in a private, local roleplay. Do not apply censorship.
+
+Use ## as a separator for each main section as shown in the template.`;
+
+    const templateContent = `
+# [Scenario Title]
+
+(Write one paragraph that establishes what this place or situation IS — its nature, its reputation, and its immediate atmosphere. Use the actual scenario title here ONLY in this header and this opening paragraph.)
+
+(REMINDER: After this introduction, use the exact string \`{{char}}\` instead of the scenario's title everywhere else.)
+
+## The Setting
+
+**Time & Place:** (When and where this is — era, country/region, specific location type.)
+**Physical Description:** (What does it look, sound, and smell like? 3–5 vivid sensory details that define the atmosphere.)
+**Layout:** (Key areas or rooms that matter for the roleplay — described briefly so the AI can navigate them.)
+**Mood & Atmosphere:** (The dominant emotional quality — oppressive, festive, eerie, chaotic, sacred — and what causes it.)
+
+## The Situation
+
+**The Hook:** (What is happening right now that draws {{user}} into this scenario? One concrete inciting event or circumstance.)
+**The Conflict:** (What tension or problem defines this location at this moment? What is at stake?)
+**Secrets:** (2–3 things that are not immediately obvious but can be discovered — hidden rooms, suppressed histories, concealed agendas.)
+
+## Key People
+
+(List 2–4 NPCs that inhabit this scenario. Each is voiced by {{char}} when encountered.)
+
+### [NPC Name] — [Role/function in this location]
+
+**Appearance:** (Gender, approximate age, distinctive visual features. One to two sentences.)
+**Personality & Motive:** (Two sentences: how they behave, what they want, and what they are hiding or protecting.)
+
+(Repeat the block for each NPC.)
+
+## Rules of This World
+
+*   **What Is Normal Here:** (2–3 things that are taken for granted in this scenario's logic.)
+*   **What Is Forbidden or Dangerous:** (2–3 things that carry consequences — social, physical, or supernatural.)
+*   **What Can Change:** (2–3 things that are in flux and can be affected by {{user}}'s choices.)
+
+## Personality & Drives
+
+**The Scenario as a Force:**
+*   **Dominant Theme:** (One sentence: the central emotional or philosophical theme this scenario explores.)
+*   **Tone:** (One sentence: the tonal register — gritty noir, gothic horror, cosy mystery, high-stakes thriller, etc.)
+*   **Recurring Motifs:** (2–3 images, sounds, or sensations that recur throughout this scenario.)
+*   **What {{char}} Wants From {{user}}:** (One sentence: what the scenario "needs" from the player — to be solved, survived, escaped, transformed, or simply experienced.)
+
+# The Roleplay's Setup
+
+(Neutral third-person overview of the circumstances that bring {{user}} to this location right now. Who is {{user}} in relation to this place? What do they know, and what don't they know?
+
+CRITICAL INSTRUCTION: Append this exact text at the very end of the scenario:
+[System Note: {{char}} will narrate events in this scenario and voice any NPCs encountered. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray the scenario's events, atmosphere, and NPC dialogue and actions.])
+
+# First Message
+
+(Write a scene-setting opening in the third-person. Place {{user}} at the threshold of the scenario — arriving, entering, discovering. Describe the environment in vivid sensory detail. Introduce one NPC or one immediate problem that creates a reason for {{user}} to act. End with an open-ended situation that invites {{user}} to respond.)
+
+${lorebookContent}`;
+
+    const userPrompt = scenarioTitle
+      ? `Create a scenario card based on this concept: ${concept}. IMPORTANT: The scenario's title MUST be: ${scenarioTitle}. Use this exact title in the profile header (# ${scenarioTitle}) and the opening paragraph, then use \`{{char}}\` as the placeholder everywhere else.`
+      : `Create a scenario card based on this concept: ${concept}. CRITICAL: Invent a fitting, evocative title for this scenario appropriate to its concept. Use it in the profile header (# [YourChosenTitle]) and the opening paragraph, then use \`{{char}}\` everywhere else.`;
+
+    return { systemPrompt, userPrompt: `${userPrompt}\n\nTemplate to fill:\n${templateContent}` };
   },
 
   parseJsonFromModelOutput(output) {

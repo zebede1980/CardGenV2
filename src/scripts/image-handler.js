@@ -21,12 +21,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       ? `${this.currentCharacter.description}\n\nReference image details:\n${referenceImageDescription}`
       : this.currentCharacter.description;
     const effectivePrompt = customPrompt || null;
+    const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
 
     const imageResult = await this.imageGenerator.generateAndDisplayImage(
       imageDescriptionInput,
       this.currentCharacter.name,
       imageContainer,
       effectivePrompt,
+      cardType,
     );
 
     this.currentImageUrl = imageResult.url || imageResult;
@@ -66,6 +68,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const descriptionForPrompt = refDescForPrompt
       ? `${this.currentCharacter.description}\n\nReference image details:\n${refDescForPrompt}`
       : this.currentCharacter.description;
+    const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
 
     if (promptEditor && customPromptTextarea) {
       if (!customPromptTextarea.value.trim()) {
@@ -74,6 +77,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           const defaultPrompt = await window.apiHandler.generateImagePrompt(
             descriptionForPrompt,
             this.currentCharacter.name,
+            cardType,
           );
           customPromptTextarea.value = defaultPrompt;
           window.updatePromptCharCount();
@@ -123,6 +127,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.currentCharacter.name,
         effectivePrompt,
         model,
+        cardType,
       );
 
       let displayUrl = imageUrl;
@@ -218,12 +223,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     try {
       const customPromptTextarea = document.getElementById("custom-image-prompt");
       let basePrompt = customPromptTextarea?.value?.trim();
+      const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
 
       if (!basePrompt) {
         try {
           basePrompt = await window.apiHandler.generateImagePrompt(
             this.currentCharacter.description,
             this.currentCharacter.name,
+            cardType,
           );
           if (customPromptTextarea) {
             customPromptTextarea.value = basePrompt;
@@ -252,6 +259,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             this.currentCharacter.name,
             basePrompt,
             modelName,
+            cardType,
           )
           .then(async (imageUrl) => {
             let displayUrl = imageUrl;
@@ -356,11 +364,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Get or generate the base prompt
       const customPromptTextarea = document.getElementById("custom-image-prompt");
       let basePrompt = customPromptTextarea?.value?.trim();
+      const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
       if (!basePrompt) {
         try {
           basePrompt = await window.apiHandler.generateImagePrompt(
             this.currentCharacter.description,
             this.currentCharacter.name,
+            cardType,
           );
           if (customPromptTextarea) {
             customPromptTextarea.value = basePrompt;
@@ -390,6 +400,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             this.currentCharacter.name,
             prompt,
             model,
+            cardType,
           )
           .then(async (imageUrl) => {
             let displayUrl = imageUrl;
@@ -462,13 +473,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Reuse the existing prompt if one is in the textarea, otherwise generate via text API
       const customPromptTextarea = document.getElementById("custom-image-prompt");
       let imagePrompt = customPromptTextarea?.value?.trim();
-
+      const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";\n
       if (!imagePrompt) {
         this.showNotification("Building image prompt…", "info");
         try {
           imagePrompt = await window.apiHandler.generateImagePrompt(
             this.currentCharacter.description,
             this.currentCharacter.name,
+            cardType,
           );
           if (customPromptTextarea) {
             customPromptTextarea.value = imagePrompt;

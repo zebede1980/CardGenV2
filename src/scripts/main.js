@@ -184,6 +184,25 @@ class CharacterGeneratorApp {
     document.getElementById("clear-config-btn").addEventListener("click", () => this.handleClearConfig());
     document.getElementById("test-connection-btn").addEventListener("click", () => this.handleTestConnection());
 
+    // Card type: force POV to third-person and disable it for group/scenario
+    const cardTypeSelect = document.getElementById("card-type-select");
+    const povSelect = document.getElementById("pov-select");
+    const applyCardTypeConstraints = () => {
+      const cardType = cardTypeSelect?.value;
+      const nameLabel = document.querySelector('label[for="character-name"]');
+      const nameInput = document.getElementById("character-name");
+      if (cardType === "group" || cardType === "scenario") {
+        if (povSelect) { povSelect.value = "third"; povSelect.disabled = true; }
+        if (nameLabel) nameLabel.textContent = cardType === "group" ? "Group Name (optional)" : "Scenario Title (optional)";
+        if (nameInput) nameInput.placeholder = cardType === "group" ? "e.g. The Red Cobras" : "e.g. The Haunted Lighthouse";
+      } else {
+        if (povSelect) povSelect.disabled = false;
+        if (nameLabel) nameLabel.textContent = "Character Name (optional)";
+        if (nameInput) nameInput.placeholder = "";
+      }
+    };
+    if (cardTypeSelect) cardTypeSelect.addEventListener("change", applyCardTypeConstraints);
+
     // Ctrl+Enter to generate
     document.getElementById("character-concept").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); this.handleGenerate(); }
@@ -551,11 +570,12 @@ class CharacterGeneratorApp {
 
     try {
       const pov = document.getElementById("pov-select").value;
+      const cardType = document.getElementById("card-type-select")?.value || "single";
       let effectiveConcept = concept;
       if (referenceImageDescription) effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
 
       const promptSaved = await this.savePromptToLibrary({
-        concept, characterName, pov,
+        concept, characterName, pov, cardType,
         lorebookData: this.lorebookData,
         referenceImageDescription: referenceImageDescription || "",
         referenceImageDataUrl: this.referenceImageDataUrl || "",
@@ -567,8 +587,15 @@ class CharacterGeneratorApp {
       this.currentCharacter = await this.characterGenerator.generateCharacter(
         effectiveConcept, characterName,
         (token, fullContent) => this.handleCharacterStream(token, fullContent),
-        pov, this.lorebookData,
+        pov, this.lorebookData, cardType,
       );
+
+      // Stamp cardType on the character and auto-tag non-single types
+      this.currentCharacter.cardType = cardType;
+      if (cardType === "group" || cardType === "scenario") {
+        if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
+        if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
+      }
 
       this.showStreamMessage("\n\n💬 Generating example messages...\n");
       await this.handleGenerateExampleMessages();

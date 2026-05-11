@@ -14,14 +14,15 @@ class CharacterGenerator {
     return this.apiHandler;
   }
 
-  async generateCharacter(concept, characterName, onStream = null, pov = "third", lorebook = null) {
+  async generateCharacter(concept, characterName, onStream = null, pov = "third", lorebook = null, cardType = "single") {
     try {
       this.rawCharacterData = await this.apiHandlerInstance.generateCharacter(
         concept,
         characterName,
         onStream,
         pov,
-        lorebook
+        lorebook,
+        cardType,
       );
       this.parsedCharacter = this.parseCharacterData(this.rawCharacterData);
       return this.parsedCharacter;
@@ -218,6 +219,7 @@ class CharacterGenerator {
         mes_example: character.mesExample || "",
         alternate_greetings: character.alternateGreetings || [],
         tags: Array.isArray(character.tags) ? character.tags : [],
+        cardType: character.cardType || "single",
         // V3 required fields
         group_only_greetings: character.groupOnlyGreetings || [],
         assets: [{ type: "icon", uri: "ccdefault:", name: "main", ext: "png" }],

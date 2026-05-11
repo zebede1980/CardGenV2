@@ -86,6 +86,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       concept: promptData?.concept || "",
       characterName: promptData?.characterName || "",
       pov: promptData?.pov || "third",
+      cardType: promptData?.cardType || "single",
       referenceImageDescription: promptData?.referenceImageDescription || "",
       referenceImageDataUrl: "",
       lorebookData: null,
@@ -365,6 +366,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
         document.getElementById("character-name").value =
           prompt.characterName || "";
         document.getElementById("pov-select").value = prompt.pov || "third";
+        const cardTypeSelect = document.getElementById("card-type-select");
+        if (cardTypeSelect) {
+          cardTypeSelect.value = prompt.cardType || "single";
+          cardTypeSelect.dispatchEvent(new Event("change"));
+        }
         const refDescription = document.getElementById(
           "reference-image-description",
         );

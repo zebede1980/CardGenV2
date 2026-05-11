@@ -6,6 +6,7 @@ Object.assign(APIHandler.prototype, {
     characterName,
     customPrompt = null,
     modelOverride = null,
+    cardType = "single",
   ) {
     let imagePrompt;
     if (customPrompt) {
@@ -15,7 +16,7 @@ Object.assign(APIHandler.prototype, {
       console.log("Character name:", characterName);
       console.log("Character description length:", characterDescription?.length || 0);
       try {
-        imagePrompt = await this.generateImagePrompt(characterDescription, characterName);
+        imagePrompt = await this.generateImagePrompt(characterDescription, characterName, cardType);
       } catch (error) {
         console.error("Failed to generate image prompt:", error);
         throw new Error(`Failed to generate image prompt: ${error.message}`);
@@ -90,12 +91,12 @@ Object.assign(APIHandler.prototype, {
     throw new Error("Unexpected image API response format: " + JSON.stringify(result));
   },
 
-  async generateImagePrompt(characterDescription, characterName) {
+  async generateImagePrompt(characterDescription, characterName, cardType = "single") {
     if (!characterDescription || !characterName) {
       throw new Error("Character description and name are required to generate an image prompt");
     }
 
-    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName);
+    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType);
     const model = this.config.get("api.text.model");
 
     const data = {
@@ -209,13 +210,20 @@ Shortened prompt:`,
     return prompt;
   },
 
-  buildImagePromptInstruction(characterDescription, characterName) {
+  buildImagePromptInstruction(characterDescription, characterName, cardType = "single") {
     const personalityTraits = this.extractPersonalityTraits(characterDescription);
+
+    let taskInstruction = "";
+    if (cardType === "group") {
+      taskInstruction = `\n\nIMPORTANT: This is a GROUP card. Generate a group portrait or ensemble scene showing multiple characters together. Focus on the group dynamic — show at least two or three figures in a shared environment that reflects their collective identity. Do not focus on just one person.`;
+    } else if (cardType === "scenario") {
+      taskInstruction = `\n\nIMPORTANT: This is a SCENARIO / LOCATION card. Generate a scene or environment illustration — focus on the atmosphere, setting, and sense of place rather than on a single character portrait. Any figures present should feel like part of the environment, not the subject. Prioritise mood, lighting, and environmental detail.`;
+    }
 
     return `You are an expert at extracting visual details from character profiles to write image generation prompts.
 
 Character Name: ${characterName || "Unknown"}
-Personality Traits Detected: ${personalityTraits}
+Personality Traits Detected: ${personalityTraits}${taskInstruction}
 
 Full Character Profile:
 ${characterDescription}
@@ -237,7 +245,6 @@ Format rules:
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
 BEGIN PROMPT:`;
-  },
 
   extractPersonalityTraits(text) {
     const traits = [];

@@ -476,6 +476,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         mesExample: specData.data.mes_example || "",
         character_book: specData.data.character_book || undefined,
         alternateGreetings: specData.data.alternate_greetings || [],
+        tags: specData.data.tags || [],
+        cardType: specData.data.cardType || "single",
       };
     }
 
@@ -489,6 +491,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       character_book: specData.character_book || undefined,
       alternateGreetings:
         specData.alternateGreetings || specData.alternate_greetings || [],
+      tags: specData.tags || [],
+      cardType: specData.cardType || "single",
     };
   },
 
@@ -535,6 +539,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       document.getElementById("image-controls").style.display = "block";
+
+      // Restore card type dropdown
+      const cardTypeSelect = document.getElementById("card-type-select");
+      if (cardTypeSelect) {
+        cardTypeSelect.value = characterData.cardType || "single";
+        cardTypeSelect.dispatchEvent(new Event("change"));
+      }
 
       if (characterData.character_book && characterData.character_book.entries) {
         this.lorebookEntries = characterData.character_book.entries.map((e) => ({

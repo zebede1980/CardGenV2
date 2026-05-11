@@ -18,12 +18,15 @@ class ImageGenerator {
     characterDescription,
     characterName,
     customPrompt = null,
+    cardType = "single",
   ) {
     try {
       this.generatedImageUrl = await this.apiHandlerInstance.generateImage(
         characterDescription,
         characterName,
         customPrompt,
+        null,
+        cardType,
       );
       return this.generatedImageUrl;
     } catch (error) {
@@ -199,6 +202,7 @@ class ImageGenerator {
     characterName,
     container,
     customPrompt = null,
+    cardType = "single",
   ) {
     this.displayLoadingState(container);
 
@@ -207,6 +211,7 @@ class ImageGenerator {
         characterDescription,
         characterName,
         customPrompt,
+        cardType,
       );
 
       // Convert remote URL to blob URL immediately to avoid CORS issues later
