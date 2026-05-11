@@ -20,10 +20,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const imageDescriptionInput = referenceImageDescription
       ? `${this.currentCharacter.description}\n\nReference image details:\n${referenceImageDescription}`
       : this.currentCharacter.description;
-    const promptFromReference = referenceImageDescription
-      ? `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceImageDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`
-      : "";
-    const effectivePrompt = customPrompt || promptFromReference || null;
+    const effectivePrompt = customPrompt || null;
 
     const imageResult = await this.imageGenerator.generateAndDisplayImage(
       imageDescriptionInput,
@@ -63,12 +60,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const promptEditor = document.getElementById("image-prompt-editor");
     const customPromptTextarea = document.getElementById("custom-image-prompt");
 
+    const refDescForPrompt = document
+      .getElementById("reference-image-description")
+      ?.value?.trim();
+    const descriptionForPrompt = refDescForPrompt
+      ? `${this.currentCharacter.description}\n\nReference image details:\n${refDescForPrompt}`
+      : this.currentCharacter.description;
+
     if (promptEditor && customPromptTextarea) {
       if (!customPromptTextarea.value.trim()) {
         try {
           this.showNotification("Generating image prompt...", "info");
           const defaultPrompt = await window.apiHandler.generateImagePrompt(
-            this.currentCharacter.description,
+            descriptionForPrompt,
             this.currentCharacter.name,
           );
           customPromptTextarea.value = defaultPrompt;
@@ -76,7 +80,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         } catch (error) {
           console.error("Failed to generate image prompt:", error);
           const fallbackPrompt = window.apiHandler.buildDirectImagePrompt(
-            this.currentCharacter.description,
+            descriptionForPrompt,
             this.currentCharacter.name,
           );
           customPromptTextarea.value = fallbackPrompt;
@@ -110,11 +114,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         ? `${this.currentCharacter.description}\n\nReference image details:\n${referenceImageDescription}`
         : this.currentCharacter.description;
 
-      const promptFromReference = referenceImageDescription
-        ? `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceImageDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`
-        : "";
-
-      const effectivePrompt = customPrompt || promptFromReference || null;
+      const effectivePrompt = customPrompt || null;
 
       const model = this.config.get("api.image.model") || "";
 
