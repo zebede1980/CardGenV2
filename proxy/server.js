@@ -489,8 +489,23 @@ function getStUrl(req, res) {
 }
 
 // ST requires a paired session cookie + CSRF token on every API request.
-// Cache per base URL for up to 10 minutes; auto-invalidate on 403.
+// Cache per base URL (+ optional basic-auth identity) for up to 10 minutes;
+// auto-invalidate on 403.
 const stCsrfCache = {};
+
+// Per-URL store of the last basic-auth value used.  Allows the thumbnail
+// endpoint (which receives stUrl via query param, not a header) to reuse the
+// credentials that were established by the most recent non-thumbnail call.
+const stBasicAuthStore = {};
+
+// Build an HTTP Basic Authorization header value from the X-ST-USERNAME /
+// X-ST-PASSWORD request headers.  Returns null when no username is set.
+function getStBasicAuth(req) {
+  const username = req.headers["x-st-username"] || "";
+  const password = req.headers["x-st-password"] || "";
+  if (!username) return null;
+  return "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
+}
 
 // Extract only the name=value pairs from Set-Cookie headers (strip Path, HttpOnly, etc.)
 function parseCookieHeaders(rawHeaders) {
@@ -499,20 +514,27 @@ function parseCookieHeaders(rawHeaders) {
   return list.map(c => c.split(";")[0].trim()).filter(Boolean).join("; ");
 }
 
-async function getStCsrfHeaders(stUrl) {
-  const cached = stCsrfCache[stUrl];
+// basicAuth — "Basic <base64>" string or null.  When provided it is sent on
+// every request to ST and is included in the cache key so different users
+// do not share CSRF tokens.
+async function getStCsrfHeaders(stUrl, basicAuth) {
+  const cacheKey = stUrl + "\0" + (basicAuth || "");
+  const cached = stCsrfCache[cacheKey];
   if (cached && Date.now() - cached.fetchedAt < 10 * 60 * 1000) {
     return { "X-CSRF-Token": cached.token, "Cookie": cached.cookie };
   }
+
+  const authHeader = basicAuth ? { "Authorization": basicAuth } : {};
+
   // Step 1: hit the root to establish a session cookie
-  const sessionRes = await fetch(`${stUrl}/`, { method: "GET" });
+  const sessionRes = await fetch(`${stUrl}/`, { method: "GET", headers: { ...authHeader } });
   const sessionCookieRaw = sessionRes.headers.raw()["set-cookie"];
   const sessionCookie = parseCookieHeaders(sessionCookieRaw);
 
   // Step 2: fetch the CSRF token using that session cookie
   const csrfRes = await fetch(`${stUrl}/csrf-token`, {
     method: "GET",
-    headers: sessionCookie ? { "Cookie": sessionCookie } : {},
+    headers: { ...(sessionCookie ? { "Cookie": sessionCookie } : {}), ...authHeader },
   });
   if (!csrfRes.ok) throw new Error(`Failed to fetch ST CSRF token: ${csrfRes.status}`);
 
@@ -522,7 +544,7 @@ async function getStCsrfHeaders(stUrl) {
   const cookie = [sessionCookie, csrfCookie].filter(Boolean).join("; ");
 
   const data = await csrfRes.json();
-  stCsrfCache[stUrl] = { token: data.token, cookie, fetchedAt: Date.now() };
+  stCsrfCache[cacheKey] = { token: data.token, cookie, fetchedAt: Date.now() };
   return { "X-CSRF-Token": data.token, "Cookie": cookie };
 }
 
@@ -530,19 +552,22 @@ async function getStCsrfHeaders(stUrl) {
 app.get("/api/st/characters", async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
+  const basicAuth = getStBasicAuth(req);
+  stBasicAuthStore[stUrl] = basicAuth;
   try {
-    const csrfHeaders = await getStCsrfHeaders(stUrl);
+    const authHeader = basicAuth ? { "Authorization": basicAuth } : {};
+    const csrfHeaders = await getStCsrfHeaders(stUrl, basicAuth);
     let response = await fetch(`${stUrl}/api/characters/all`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
+      headers: { "Content-Type": "application/json", ...csrfHeaders, ...authHeader },
       body: "{}",
     });
     if (response.status === 403) {
-      delete stCsrfCache[stUrl];
-      const retryHeaders = await getStCsrfHeaders(stUrl);
+      delete stCsrfCache[stUrl + "\0" + (basicAuth || "")];
+      const retryHeaders = await getStCsrfHeaders(stUrl, basicAuth);
       response = await fetch(`${stUrl}/api/characters/all`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...retryHeaders },
+        headers: { "Content-Type": "application/json", ...retryHeaders, ...authHeader },
         body: "{}",
       });
     }
@@ -566,19 +591,22 @@ app.post("/api/st/export", async (req, res) => {
   if (!avatar_url || typeof avatar_url !== "string") {
     return res.status(400).json({ error: "avatar_url is required" });
   }
+  const basicAuth = getStBasicAuth(req);
+  stBasicAuthStore[stUrl] = basicAuth;
   try {
-    const csrfHeaders = await getStCsrfHeaders(stUrl);
+    const authHeader = basicAuth ? { "Authorization": basicAuth } : {};
+    const csrfHeaders = await getStCsrfHeaders(stUrl, basicAuth);
     let response = await fetch(`${stUrl}/api/characters/export`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
+      headers: { "Content-Type": "application/json", ...csrfHeaders, ...authHeader },
       body: JSON.stringify({ format: "png", avatar_url }),
     });
     if (response.status === 403) {
-      delete stCsrfCache[stUrl];
-      const retryHeaders = await getStCsrfHeaders(stUrl);
+      delete stCsrfCache[stUrl + "\0" + (basicAuth || "")];
+      const retryHeaders = await getStCsrfHeaders(stUrl, basicAuth);
       response = await fetch(`${stUrl}/api/characters/export`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...retryHeaders },
+        headers: { "Content-Type": "application/json", ...retryHeaders, ...authHeader },
         body: JSON.stringify({ format: "png", avatar_url }),
       });
     }
@@ -648,7 +676,10 @@ app.post("/api/st/push", async (req, res) => {
     const closing = Buffer.from(`--${boundary}--\r\n`);
     const body = Buffer.concat([...parts, closing]);
 
-    const csrfHeaders = await getStCsrfHeaders(stUrl);
+    const basicAuth = getStBasicAuth(req);
+    stBasicAuthStore[stUrl] = basicAuth;
+    const authHeader = basicAuth ? { "Authorization": basicAuth } : {};
+    const csrfHeaders = await getStCsrfHeaders(stUrl, basicAuth);
     console.log("ST push: boundary =", boundary, "body size =", body.length, "bytes");
     console.log("ST push: CSRF token present =", !!csrfHeaders["X-CSRF-Token"]);
     console.log("ST push: Cookie present =", !!csrfHeaders["Cookie"]);
@@ -658,18 +689,20 @@ app.post("/api/st/push", async (req, res) => {
         "Content-Type": `multipart/form-data; boundary=${boundary}`,
         "Content-Length": body.length,
         ...csrfHeaders,
+        ...authHeader,
       },
       body,
     });
     if (response.status === 403) {
-      delete stCsrfCache[stUrl];
-      const retryHeaders = await getStCsrfHeaders(stUrl);
+      delete stCsrfCache[stUrl + "\0" + (basicAuth || "")];
+      const retryHeaders = await getStCsrfHeaders(stUrl, basicAuth);
       response = await fetch(`${stUrl}/api/characters/import`, {
         method: "POST",
         headers: {
           "Content-Type": `multipart/form-data; boundary=${boundary}`,
           "Content-Length": body.length,
           ...retryHeaders,
+          ...authHeader,
         },
         body,
       });
@@ -692,11 +725,14 @@ app.post("/api/st/push", async (req, res) => {
 app.get("/api/st/ping", async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
+  const basicAuth = getStBasicAuth(req);
+  stBasicAuthStore[stUrl] = basicAuth;
   try {
-    const csrfHeaders = await getStCsrfHeaders(stUrl);
+    const authHeader = basicAuth ? { "Authorization": basicAuth } : {};
+    const csrfHeaders = await getStCsrfHeaders(stUrl, basicAuth);
     const response = await fetch(`${stUrl}/api/characters/all`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
+      headers: { "Content-Type": "application/json", ...csrfHeaders, ...authHeader },
       body: "{}",
       timeout: 5000,
     });
@@ -723,11 +759,15 @@ app.get("/api/st/thumbnail", async (req, res) => {
     return res.status(400).end();
   }
   const cleanStUrl = stUrl.replace(/\/$/, "");
+  // Reuse the basic-auth credentials that were last set for this ST URL
+  // (established by a prior characters/ping/export/push call).
+  const basicAuth = stBasicAuthStore[cleanStUrl] || null;
   try {
-    const csrfHeaders = await getStCsrfHeaders(cleanStUrl);
+    const authHeader = basicAuth ? { "Authorization": basicAuth } : {};
+    const csrfHeaders = await getStCsrfHeaders(cleanStUrl, basicAuth);
     const response = await fetch(
       `${cleanStUrl}/thumbnail?type=avatar&file=${encodeURIComponent(file)}`,
-      { method: "GET", headers: { ...csrfHeaders } }
+      { method: "GET", headers: { ...csrfHeaders, ...authHeader } }
     );
     if (!response.ok) {
       return res.status(response.status).end();

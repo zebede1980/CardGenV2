@@ -36,6 +36,8 @@ class Config {
       },
       st: {
         baseUrl: "",
+        username: "",
+        password: "",
       },
     };
   }
@@ -132,9 +134,13 @@ class Config {
 
     // Load SillyTavern settings
     const stBaseUrl = document.getElementById("st-base-url")?.value?.trim();
-    if (stBaseUrl !== undefined) {
+    const stUsername = document.getElementById("st-username")?.value?.trim();
+    const stPassword = document.getElementById("st-password")?.value;
+    if (stBaseUrl !== undefined || stUsername !== undefined || stPassword !== undefined) {
       if (!this.config.st) this.config.st = {};
-      this.config.st.baseUrl = stBaseUrl;
+      if (stBaseUrl !== undefined) this.config.st.baseUrl = stBaseUrl;
+      if (stUsername !== undefined) this.config.st.username = stUsername;
+      if (stPassword !== undefined) this.config.st.password = stPassword;
     }
   }
 
@@ -191,9 +197,13 @@ class Config {
       if (imageSize) imageSize.value = this.config.api.image.size || "";
       if (imageStyle) imageStyle.value = this.config.api.image.style || "";
 
-      // Save SillyTavern URL to form
+      // Save SillyTavern settings to form
       const stBaseUrl = document.getElementById("st-base-url");
       if (stBaseUrl) stBaseUrl.value = this.config.st?.baseUrl || "";
+      const stUsername = document.getElementById("st-username");
+      if (stUsername) stUsername.value = this.config.st?.username || "";
+      const stPassword = document.getElementById("st-password");
+      if (stPassword) stPassword.value = this.config.st?.password || "";
       
       const imageModelsContainer = document.getElementById("image-models-container");
       if (imageModelsContainer) {

@@ -1293,6 +1293,16 @@
                     <div class="form-group">
                         <label for="st-base-url" class="label">SillyTavern Internal URL</label>
                         <input type="text" id="st-base-url" class="input" placeholder="http://sillytavern:8000" />
+                        <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+                            <div style="flex: 1;">
+                                <label for="st-username" class="label" style="margin-bottom: 0.3rem; display: block; font-size: 0.8rem;">Username (optional)</label>
+                                <input type="text" id="st-username" class="input" placeholder="Leave blank if no auth" autocomplete="username" />
+                            </div>
+                            <div style="flex: 1;">
+                                <label for="st-password" class="label" style="margin-bottom: 0.3rem; display: block; font-size: 0.8rem;">Password (optional)</label>
+                                <input type="password" id="st-password" class="input" placeholder="Leave blank if no auth" autocomplete="current-password" />
+                            </div>
+                        </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
                         <button id="test-st-btn" class="btn-small" type="button">Test Connection</button>

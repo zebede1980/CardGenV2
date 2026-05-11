@@ -8,7 +8,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
   _stHeaders() {
     const url = this.config.get("st.baseUrl") || "";
     if (!url) return null;
-    return { "Content-Type": "application/json", "X-ST-URL": url.replace(/\/$/, "") };
+    const headers = { "Content-Type": "application/json", "X-ST-URL": url.replace(/\/$/, "") };
+    const username = this.config.get("st.username") || "";
+    const password = this.config.get("st.password") || "";
+    if (username) {
+      headers["X-ST-USERNAME"] = username;
+      headers["X-ST-PASSWORD"] = password;
+    }
+    return headers;
   },
 
   // ── Connection test ────────────────────────────────────────────────────────

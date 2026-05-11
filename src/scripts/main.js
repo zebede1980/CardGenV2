@@ -234,6 +234,10 @@ class CharacterGeneratorApp {
     // Save ST URL whenever it changes
     const stBaseUrlInput = document.getElementById("st-base-url");
     if (stBaseUrlInput) stBaseUrlInput.addEventListener("change", () => { this.config.loadFromForm(); this.config.saveConfig(); this._updatePushButton(); });
+    const stUsernameInput = document.getElementById("st-username");
+    if (stUsernameInput) stUsernameInput.addEventListener("change", () => { this.config.loadFromForm(); this.config.saveConfig(); });
+    const stPasswordInput = document.getElementById("st-password");
+    if (stPasswordInput) stPasswordInput.addEventListener("change", () => { this.config.loadFromForm(); this.config.saveConfig(); });
 
     // Tags
     const autoTagBtn = document.getElementById("auto-tag-btn");
