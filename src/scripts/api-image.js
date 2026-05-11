@@ -245,6 +245,7 @@ Format rules:
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
 BEGIN PROMPT:`;
+  },
 
   extractPersonalityTraits(text) {
     const traits = [];
