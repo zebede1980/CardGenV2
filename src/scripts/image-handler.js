@@ -473,7 +473,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Reuse the existing prompt if one is in the textarea, otherwise generate via text API
       const customPromptTextarea = document.getElementById("custom-image-prompt");
       let imagePrompt = customPromptTextarea?.value?.trim();
-      const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";\n
+      const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
       if (!imagePrompt) {
         this.showNotification("Building image prompt…", "info");
         try {
