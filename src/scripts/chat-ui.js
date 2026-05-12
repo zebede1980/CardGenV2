@@ -38,8 +38,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     this.renderChatMessages();
     this.updateChatTokenCount();
-    modal.style.display = "flex";
+    modal.classList.add("show");
     modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
 
     // Focus input
     const input = document.getElementById("chat-input");
@@ -49,8 +50,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
   closeChatTester() {
     const modal = document.getElementById("chat-tester-modal");
     if (!modal) return;
-    modal.style.display = "none";
+    modal.classList.remove("show");
     modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
   },
 
   renderChatMessages() {
@@ -180,6 +182,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   async handleChatSend() {
     if (!this.chatTester) return;
+    if (this.chatTester.isGenerating) return;
 
     const input = document.getElementById("chat-input");
     if (!input) return;
@@ -193,7 +196,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const stopBtn = document.getElementById("chat-stop-btn");
     if (stopBtn) stopBtn.style.display = "inline-flex";
 
-    // Render user message immediately
+    // Push user message first, then render
+    this.chatTester.messages.push({
+      role: "user",
+      content: text,
+      id: Date.now(),
+    });
     this.renderChatMessages();
     this.updateChatTokenCount();
     this.showChatTypingIndicator();
@@ -304,7 +312,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const messages = this.chatTester.getMessages();
     const lastMsg = messages[messages.length - 1];
     if (lastMsg && lastMsg.id === id && lastMsg.role === "user") {
-      this.handleChatSend();
+      this.handleChatRegenerate();
     }
   },
 

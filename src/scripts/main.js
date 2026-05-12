@@ -535,7 +535,11 @@ class CharacterGeneratorApp {
     document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
     localStorage.setItem("cardgen-theme", isDark ? "dark" : "light");
     const btn = document.getElementById("theme-toggle-btn");
-    if (btn) btn.textContent = isDark ? "☀️ Light" : "🌙 Dark";
+    if (btn) {
+      btn.textContent = isDark ? "☀️ Light" : "🌙 Dark";
+      btn.setAttribute("aria-pressed", String(isDark));
+      btn.setAttribute("aria-label", isDark ? "Toggle light mode" : "Toggle dark mode");
+    }
   }
 
   async handleAPIConfig() {

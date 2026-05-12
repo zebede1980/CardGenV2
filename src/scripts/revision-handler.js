@@ -210,7 +210,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       description: c.description || "",
       personality: c.personality || "",
       scenario: c.scenario || "",
-      first_mes: c.first_mes || "",
+      firstMessage: c.firstMessage || "",
       mesExample: c.mesExample || "",
     };
   },
@@ -267,7 +267,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       { key: "description", label: "Description" },
       { key: "personality", label: "Personality" },
       { key: "scenario", label: "Scenario" },
-      { key: "first_mes", label: "First Message" },
+      { key: "firstMessage", label: "First Message" },
       { key: "mesExample", label: "Example Messages" },
     ];
 

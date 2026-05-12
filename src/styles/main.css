@@ -1256,13 +1256,13 @@ textarea.content-box {
 }
 
 .chat-message-user .chat-message-content {
-    background: var(--primary);
+    background: var(--accent);
     color: #fff;
     border-bottom-right-radius: 0.25rem;
 }
 
 .chat-message-character .chat-message-content {
-    background: var(--surface-color);
+    background: var(--surface-strong);
     color: var(--text-primary);
     border: 1px solid var(--border);
     border-bottom-left-radius: 0.25rem;
@@ -1285,21 +1285,21 @@ textarea.content-box {
     padding: 0.15rem 0.4rem;
     border: 1px solid var(--border);
     border-radius: 0.25rem;
-    background: var(--surface-color);
+    background: var(--surface-strong);
     color: var(--text-secondary);
     cursor: pointer;
     transition: background 120ms, color 120ms;
 }
 
 .chat-action-btn:hover {
-    background: var(--primary);
+    background: var(--accent);
     color: #fff;
-    border-color: var(--primary);
+    border-color: var(--accent);
 }
 
 .chat-input-area {
     border-top: 1px solid var(--border);
-    background: var(--surface-color);
+    background: var(--surface-strong);
     padding: 0.75rem 1.2rem;
     display: flex;
     flex-direction: column;
@@ -1317,7 +1317,7 @@ textarea.content-box {
     resize: none;
     padding: 0.55rem 0.75rem;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     background: var(--bg-page);
     color: var(--text-primary);
     font-family: inherit;
@@ -1328,14 +1328,14 @@ textarea.content-box {
 
 .chat-input:focus {
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(14, 122, 138, 0.15);
 }
 
 .chat-send-btn {
     padding: 0.55rem 0.9rem;
     font-size: 1rem;
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     flex-shrink: 0;
 }
 
@@ -1363,7 +1363,7 @@ textarea.content-box {
     width: 100px;
     padding: 0.3rem 0.5rem;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     background: var(--bg-page);
     color: var(--text-primary);
     font-family: inherit;
@@ -1432,6 +1432,6 @@ textarea.content-box {
 }
 
 [data-theme="dark"] .chat-action-btn:hover {
-    background: var(--primary);
-    border-color: var(--primary);
+    background: var(--accent);
+    border-color: var(--accent);
 }
