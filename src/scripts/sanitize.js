@@ -16,18 +16,3 @@ function escapeHtml(raw) {
     .replace(/'/g, "&#39;");
 }
 
-/**
- * Escape for safe use inside a `style` attribute value.
- * Blocks `expression()`, `url()`, `javascript:`, and closes parens.
- */
-function escapeStyleValue(raw) {
-  return String(raw ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/expression\s*\(/gi, "")
-    .replace(/url\s*\(/gi, "")
-    .replace(/javascript\s*:/gi, "");
-}

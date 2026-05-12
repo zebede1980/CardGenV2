@@ -91,21 +91,24 @@ class ChatTester {
     const matched = [];
     const seen = new Set();
 
-    for (const entry of entries) {
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
       if (entry.disable === true) continue;
       if (!entry.keys || entry.keys.length === 0) continue;
+      // Use index as fallback dedup key when entry.id is absent/undefined
+      const dedupeKey = entry.id ?? i;
 
       for (const key of entry.keys) {
         if (!key) continue;
         const keyLower = key.toLowerCase();
         for (const msg of recentMessages) {
-          if (msg.includes(keyLower) && !seen.has(entry.id)) {
+          if (msg.includes(keyLower) && !seen.has(dedupeKey)) {
             matched.push(entry);
-            seen.add(entry.id);
+            seen.add(dedupeKey);
             break;
           }
         }
-        if (seen.has(entry.id)) break;
+        if (seen.has(dedupeKey)) break;
       }
     }
 
@@ -117,10 +120,7 @@ class ChatTester {
   async sendMessage(content) {
     if (this.isGenerating) return;
     if (!content.trim()) return;
-
-    const userMsg = { role: "user", content: content.trim(), id: Date.now() };
-    this.messages.push(userMsg);
-
+    // Message must already be pushed into this.messages by the caller before invoking this.
     await this._generateResponse();
   }
 
