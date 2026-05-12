@@ -52,8 +52,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         (entry) => `
         <div style="display: flex; align-items: flex-start; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); gap: 0.5rem;">
           <div style="flex: 1; min-width: 0;">
-            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">${entry.keys.join(", ")}:</span>
-            <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 5rem); vertical-align: bottom;">&nbsp;${entry.content.substring(0, 80).replace(/\n/g, " ")}${entry.content.length > 80 ? "\u2026" : ""}</span>
+            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(entry.keys.join(", "))}:</span>
+            <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 5rem); vertical-align: bottom;">&nbsp;${escapeHtml(entry.content.substring(0, 80).replace(/\n/g, " "))}${entry.content.length > 80 ? "\u2026" : ""}</span>
           </div>
         </div>`,
       )
@@ -75,8 +75,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         (entry) => `
       <div class="library-item" style="align-items: flex-start;">
         <div style="flex: 1;">
-          <div class="library-item-title" style="margin-bottom: 0.5rem;">${entry.keys.join(", ")}</div>
-          <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0; white-space: pre-wrap; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">${entry.content}</p>
+          <div class="library-item-title" style="margin-bottom: 0.5rem;">${escapeHtml(entry.keys.join(", "))}</div>
+          <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0; white-space: pre-wrap; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(entry.content)}</p>
         </div>
         <div class="library-item-actions">
           <button class="btn-small" data-action="edit-lorebook-entry" data-id="${entry.id}">Edit</button>
@@ -118,7 +118,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         suggestionsContainer.innerHTML = topics
           .map(
             (topic) =>
-              `<button class="btn-small topic-suggestion" style="background: var(--surface-color);">${topic}</button>`,
+              `<button class="btn-small topic-suggestion" style="background: var(--surface-color);">${escapeHtml(topic)}</button>`,
           )
           .join("");
       } else {
@@ -387,16 +387,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
           : null;
         const conflictBadge = hasConflict
           ? `<div style="font-size: 0.75rem; color: var(--warning, #f59e0b); margin-top: 0.3rem; padding: 0.2rem 0.4rem; background: rgba(245,158,11,0.1); border-radius: 0.25rem; border: 1px solid rgba(245,158,11,0.3);">
-               ⚠️ Existing entry already covers: <strong>${conflictingEntry ? conflictingEntry.keys.join(", ") : conflictingKeys.join(", ")}</strong> — unchecked by default, tick to add anyway
+               ⚠️ Existing entry already covers: <strong>${escapeHtml(conflictingEntry ? conflictingEntry.keys.join(", ") : conflictingKeys.join(", "))}</strong> — unchecked by default, tick to add anyway
              </div>`
           : "";
         return `
         <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; padding: 0.75rem; background: var(--surface-color); border-radius: 0.375rem; border: 1px solid ${hasConflict ? "rgba(245,158,11,0.4)" : "var(--border)"};">
           <input type="checkbox" data-index="${i}" ${hasConflict ? "" : "checked"} style="margin-top: 0.2rem; flex-shrink: 0;">
           <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 600; margin-bottom: 0.25rem;">${c.topic}</div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Keys: ${c.keys.join(", ")}</div>
-            <div style="font-size: 0.8rem; color: var(--text-secondary); white-space: pre-wrap; max-height: 80px; overflow: hidden;">${c.content.substring(0, 200)}${c.content.length > 200 ? "\u2026" : ""}</div>
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">${escapeHtml(c.topic)}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Keys: ${escapeHtml(c.keys.join(", "))}</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); white-space: pre-wrap; max-height: 80px; overflow: hidden;">${escapeHtml(c.content.substring(0, 200))}${c.content.length > 200 ? "\u2026" : ""}</div>
             ${conflictBadge}
           </div>
         </label>

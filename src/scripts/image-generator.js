@@ -165,7 +165,7 @@ class ImageGenerator {
   formatImageForDisplay(imageUrl) {
     return `
             <div class="image-container">
-                <img src="${imageUrl}" alt="${this.characterName || "Generated character"}" class="generated-image">
+                <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(this.characterName || "Generated character")}" class="generated-image">
             </div>
         `;
   }
@@ -189,7 +189,7 @@ class ImageGenerator {
             <div class="image-error" style="text-align: center; padding: 2rem;">
                 <div style="color: var(--error); font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
                 <h3 style="color: var(--error); margin-bottom: 0.5rem;">Image Generation Failed</h3>
-                <p style="color: var(--text-secondary);">${error.message}</p>
+                <p style="color: var(--text-secondary);">${escapeHtml(error.message)}</p>
                 <button onclick="this.parentElement.parentElement.innerHTML = ''" class="btn-outline" style="margin-top: 1rem;">
                     Clear
                 </button>

@@ -85,14 +85,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       const stUrl = (this.config.get("st.baseUrl") || "").replace(/\/$/, "");
       list.innerHTML = characters.map(c => {
-        const name = this._escHtml(c.name || c.data?.name || "Unnamed");
+        const name = escapeHtml(c.name || c.data?.name || "Unnamed");
         const avatar = c.avatar || "";
         const date = c.date_added ? new Date(c.date_added).toLocaleDateString() : "";
         const description = c.data?.description || c.description || "";
         const firstMes = c.data?.first_mes || c.first_mes || "";
         const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.data?.tags) ? c.data.tags : []);
-        const snippet = this._escHtml((description || firstMes).replace(/\n+/g, " ").trim().slice(0, 120));
-        const tagHtml = tags.slice(0, 5).map(t => `<span class="st-card-tag">${this._escHtml(String(t))}</span>`).join("");
+        const snippet = escapeHtml((description || firstMes).replace(/\n+/g, " ").trim().slice(0, 120));
+        const tagHtml = tags.slice(0, 5).map(t => `<span class="st-card-tag">${escapeHtml(String(t))}</span>`).join("");
         // Route thumbnail through our proxy — the browser can't reach ST directly
         const thumbUrl = avatar
           ? `/api/st/thumbnail?file=${encodeURIComponent(avatar)}&stUrl=${encodeURIComponent(stUrl)}`
@@ -110,7 +110,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
               <div class="st-card-footer">
                 <span class="library-item-date">${date}</span>
                 <div class="library-item-actions">
-                  <button class="btn-small" data-action="load-st-card" data-avatar="${this._escHtml(avatar)}" data-name="${this._escHtml(c.name || c.data?.name || "Unnamed")}">Load</button>
+                  <button class="btn-small" data-action="load-st-card" data-avatar="${escapeHtml(avatar)}" data-name="${escapeHtml(c.name || c.data?.name || "Unnamed")}">Load</button>
                 </div>
               </div>
             </div>
@@ -118,7 +118,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }).join("");
     } catch (err) {
       console.error("ST library refresh error:", err);
-      list.innerHTML = `<p class="library-empty" style="color:var(--error);">Error: ${err.message}</p>`;
+      list.innerHTML = `<p class="library-empty" style="color:var(--error);">Error: ${escapeHtml(err.message)}</p>`;
     }
   },
 
@@ -319,6 +319,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return btoa(binary);
   },
 
+  /* _escHtml replaced by shared escapeHtml() in sanitize.js */
   _escHtml(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   },
@@ -332,7 +333,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (!modal) { resolve("cancel"); return; }
 
       if (msg) msg.innerHTML =
-        `The character name changed from <strong>${this._escHtml(sourceAvatar.replace(".png",""))}</strong> to <strong>${this._escHtml(newName)}</strong>.<br>What would you like to do?`;
+        `The character name changed from <strong>${escapeHtml(sourceAvatar.replace(".png",""))}</strong> to <strong>${escapeHtml(newName)}</strong>.<br>What would you like to do?`;
 
       const close = (choice) => {
         modal.classList.remove("show");

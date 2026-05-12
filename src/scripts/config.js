@@ -211,10 +211,10 @@ class Config {
               imageModelsContainer.innerHTML = this.config.api.image.models.map(model => `
                   <div class="image-model-row" style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;">
                     <label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;">
-                      <input type="checkbox" class="image-model-checkbox" value="${model}" checked>
-                      ${model}
+                      <input type="checkbox" class="image-model-checkbox" value="${escapeHtml(model)}" checked>
+                      ${escapeHtml(model)}
                     </label>
-                    <button type="button" class="image-model-delete-btn" data-model="${model}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
+                    <button type="button" class="image-model-delete-btn" data-model="${escapeHtml(model)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
                   </div>
               `).join('');
           } else {

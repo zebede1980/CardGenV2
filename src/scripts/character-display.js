@@ -669,7 +669,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const pill = document.createElement("span");
       pill.className = "tag-pill";
       pill.dataset.tag = tag;
-      pill.innerHTML = `${this._escapeHtml(tag)}<span class="tag-pill-remove" aria-label="Remove tag">×</span>`;
+      pill.innerHTML = `${escapeHtml(tag)}<span class="tag-pill-remove" aria-label="Remove tag">×</span>`;
       pill.addEventListener("click", () => this._removeTag(tag));
       container.insertBefore(pill, input);
     });

@@ -17,10 +17,17 @@
     <body>
         <div class="container">
             <header class="header">
-                <h1 class="title">🎭 SillyTavern Character Generator</h1>
-                <p class="subtitle">
-                    Create SillyTavern characters cards with AI
-                </p>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+                    <div>
+                        <h1 class="title">🎭 SillyTavern Character Generator</h1>
+                        <p class="subtitle">
+                            Create SillyTavern characters cards with AI
+                        </p>
+                    </div>
+                    <button id="theme-toggle-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;" title="Toggle light/dark theme">
+                        🌙 Dark
+                    </button>
+                </div>
             </header>
 
             <main class="main">
@@ -281,8 +288,8 @@
                             </h2>
                             <div
                                 style="
-                                    background: rgba(59, 130, 246, 0.1);
-                                    border-left: 3px solid #3b82f6;
+                                    background: var(--accent-soft);
+                                    border-left: 3px solid var(--accent);
                                     padding: 0.75rem;
                                     margin-bottom: 1rem;
                                     border-radius: 0.375rem;
@@ -340,7 +347,7 @@
                                         font-family: inherit;
                                         font-size: 0.9375rem;
                                         padding: 1rem;
-                                        border: 1px solid rgba(139, 92, 246, 0.2);
+                                        border: 1px solid var(--border);
                                         border-radius: 0.5rem;
                                         background: var(--surface-color);
                                         color: var(--text-color);
@@ -394,8 +401,7 @@
                                         line-height: 1.6;
                                         resize: vertical;
                                         padding: 1rem;
-                                        border: 1px solid
-                                            rgba(139, 92, 246, 0.2);
+                                        border: 1px solid var(--border);
                                         border-radius: 0.5rem;
                                         background: var(--surface-color);
                                         color: var(--text-color);
@@ -451,8 +457,7 @@
                                         line-height: 1.6;
                                         resize: vertical;
                                         padding: 1rem;
-                                        border: 1px solid
-                                            rgba(139, 92, 246, 0.2);
+                                        border: 1px solid var(--border);
                                         border-radius: 0.5rem;
                                         background: var(--surface-color);
                                         color: var(--text-color);
@@ -508,8 +513,7 @@
                                         line-height: 1.6;
                                         resize: vertical;
                                         padding: 1rem;
-                                        border: 1px solid
-                                            rgba(139, 92, 246, 0.2);
+                                        border: 1px solid var(--border);
                                         border-radius: 0.5rem;
                                         background: var(--surface-color);
                                         color: var(--text-color);
@@ -565,8 +569,7 @@
                                         line-height: 1.6;
                                         resize: vertical;
                                         padding: 1rem;
-                                        border: 1px solid
-                                            rgba(139, 92, 246, 0.2);
+                                        border: 1px solid var(--border);
                                         border-radius: 0.5rem;
                                         background: var(--surface-color);
                                         color: var(--text-color);
@@ -742,7 +745,7 @@
                                 </div>
                             </div>
 
-                            <div style="text-align: right; margin-bottom: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(139, 92, 246, 0.2);">
+                            <div style="text-align: right; margin-bottom: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
                                 <span id="total-token-count" style="font-size: 0.95rem; font-weight: 500; color: var(--text-secondary);"></span>
                             </div>
                         </div>
@@ -814,13 +817,8 @@
                                                     bottom: 0.5rem;
                                                     right: 0.5rem;
                                                     font-size: 0.75rem;
-                                                    color: #9ca3af;
-                                                    background: rgba(
-                                                        255,
-                                                        255,
-                                                        255,
-                                                        0.9
-                                                    );
+                                                    color: var(--text-soft);
+                                                    background: var(--surface-strong);
                                                     padding: 0.125rem 0.25rem;
                                                     border-radius: 0.25rem;
                                                     pointer-events: none;
@@ -832,7 +830,7 @@
                                         <p
                                             style="
                                                 font-size: 0.75rem;
-                                                color: #9ca3af;
+                                                color: var(--text-soft);
                                                 margin-top: 0.5rem;
                                             "
                                         >
@@ -1019,6 +1017,9 @@
                         <button id="push-to-st-btn" class="btn-outline" style="display: none" title="Push this character card to your SillyTavern instance. If loaded from ST it will update in place; otherwise it creates a new card.">
                             📤 Push to SillyTavern
                         </button>
+                        <button id="test-chat-btn" class="btn-outline" style="display: none" title="Test the character in a live chat conversation using the current card data and lorebook.">
+                            💬 Test Chat
+                        </button>
                         <button id="import-card-btn" class="btn-outline" title="Load an existing SillyTavern character card (.png or .json) into the editor for viewing and manual editing">
                             Import Card for Editing
                         </button>
@@ -1126,6 +1127,7 @@
             </footer>
         </div>
 
+        <script src="src/scripts/sanitize.js?v=20260512"></script>
         <script src="src/scripts/config.js?v=20260218"></script>
         <script src="src/scripts/api.js?v=20260218"></script>
         <script src="src/scripts/api-character.js?v=20260218-ex1"></script>
@@ -1144,6 +1146,8 @@
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/library-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/revision-handler.js?v=20260218-ex1"></script>
+        <script src="src/scripts/chat-tester.js?v=20260512"></script>
+        <script src="src/scripts/chat-ui.js?v=20260512"></script>
         <script src="src/scripts/st-handler.js?v=20260510f"></script>        <!-- API Settings Modal -->
 
         <!-- ST push-choice modal (name changed) -->
@@ -1502,6 +1506,53 @@
                         <button id="lore-elevation-select-all-btn" class="btn-small" title="Toggle selection of all candidates on or off">Select All</button>
                         <button id="lore-elevation-cancel-btn" class="btn-outline">Cancel</button>
                         <button id="lore-elevation-confirm-btn" class="btn-primary" title="Create lorebook entries for all checked items and remove their detailed descriptions from the card body, replacing them with brief references.">✨ Elevate Selected</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Diff Modal -->
+        <div id="card-diff-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 900px; width: 92%; max-height: 92vh;">
+                <div class="modal-header">
+                    <h2 class="modal-title">📊 Card Revision Diff</h2>
+                    <button id="card-diff-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="max-height: calc(92vh - 80px); overflow-y: auto;">
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Changes made by the AI revision. <span style="color: var(--error);">Red</span> = removed, <span style="color: var(--success);">green</span> = added.
+                    </p>
+                    <div id="card-diff-content" style="display: flex; flex-direction: column; gap: 1rem;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Tester Modal -->
+        <div id="chat-tester-modal" class="modal-overlay" aria-hidden="true">
+            <div class="api-settings-modal" style="max-width: 800px; width: 92%; max-height: 92vh; display: flex; flex-direction: column;">
+                <div class="modal-header">
+                    <h2 class="modal-title">💬 Test Chat: <span id="chat-tester-char-name">Character</span></h2>
+                    <button id="chat-tester-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="display: flex; flex-direction: column; flex: 1; padding: 0; overflow: hidden;">
+                    <div id="chat-messages" class="chat-messages"></div>
+                    <div class="chat-input-area">
+                        <div class="chat-input-row">
+                            <textarea id="chat-input" class="chat-input" rows="2" placeholder="Type your message..."></textarea>
+                            <button id="chat-send-btn" class="btn-primary chat-send-btn" title="Send message">➤</button>
+                        </div>
+                        <div class="chat-toolbar">
+                            <div class="chat-toolbar-left">
+                                <input id="chat-persona-name" class="chat-persona-input" type="text" value="User" placeholder="Your name" title="Your persona name" />
+                                <span id="chat-token-count" class="chat-token-count">~0 tokens</span>
+                            </div>
+                            <div class="chat-toolbar-right">
+                                <button id="chat-stop-btn" class="btn-outline btn-small" style="display: none;" title="Stop generation">⏹ Stop</button>
+                                <button id="chat-regenerate-btn" class="btn-outline btn-small" title="Regenerate last response">🔄 Regenerate</button>
+                                <button id="chat-clear-btn" class="btn-outline btn-small" title="Clear chat history">🗑 Clear</button>
+                                <button id="chat-export-btn" class="btn-outline btn-small" title="Export chat as markdown">📥 Export</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

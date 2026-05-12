@@ -16,6 +16,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     this.setRevisionState(true, "revise-character-btn");
+    const before = this._captureCardSnapshot();
 
     try {
       const pov = document.getElementById("pov-select")?.value || "third";
@@ -33,6 +34,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       await this.saveCardToLibrary();
       await this.refreshLibraryViews();
       this.showNotification("Character revised successfully", "success");
+      this.showCardDiff(before, this._captureCardSnapshot());
     } catch (error) {
       console.error("Revision failed:", error);
       const wasStoppedByUser = error.message.includes(
@@ -61,6 +63,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     this.setRevisionState(true, "reduce-tokens-btn");
+    const before = this._captureCardSnapshot();
 
     try {
       this.currentCharacter.character_book = this.buildCharacterBook();
@@ -84,6 +87,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       await this.executeLoreElevation(selectedCandidates, true);
       this.showNotification("Card bloat reduced successfully!", "success");
+      this.showCardDiff(before, this._captureCardSnapshot());
     } catch (error) {
       console.error("Reduction failed:", error);
       const wasStoppedByUser = error.message?.includes("Generation stopped by user");
@@ -132,7 +136,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.lastConsistencyReport = content.textContent;
         if (autoFixBtn) autoFixBtn.style.display = "inline-flex";
       } catch (error) {
-        content.innerHTML = `<div style="color: var(--error); padding: 1rem;">Failed to check consistency: ${error.message}</div>`;
+        content.innerHTML = `<div style="color: var(--error); padding: 1rem;">Failed to check consistency: ${escapeHtml(error.message)}</div>`;
       }
     }
   },
@@ -158,6 +162,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     this.closeConsistencyModal();
     this.setRevisionState(true, "revise-character-btn");
+    const before = this._captureCardSnapshot();
 
     try {
       const pov = document.getElementById("pov-select")?.value || "third";
@@ -181,6 +186,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         "Character consistency issues fixed successfully!",
         "success",
       );
+      this.showCardDiff(before, this._captureCardSnapshot());
     } catch (error) {
       console.error("Auto-fix failed:", error);
       const wasStoppedByUser = error.message.includes(
@@ -192,6 +198,108 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } finally {
       this.setRevisionState(false);
     }
+  },
+
+  /* ── Card Diff View ─────────────────────────────────────────────────────── */
+
+  _captureCardSnapshot() {
+    if (!this.currentCharacter) return null;
+    const c = this.currentCharacter;
+    return {
+      name: c.name || "",
+      description: c.description || "",
+      personality: c.personality || "",
+      scenario: c.scenario || "",
+      first_mes: c.first_mes || "",
+      mesExample: c.mesExample || "",
+    };
+  },
+
+  _computeDiffWords(oldText, newText) {
+    // Simple word-level diff using LCS-like approach
+    const oldWords = (oldText || "").split(/(\s+)/);
+    const newWords = (newText || "").split(/(\s+)/);
+    const result = [];
+    let i = 0, j = 0;
+
+    while (i < oldWords.length || j < newWords.length) {
+      if (i >= oldWords.length) {
+        result.push({ type: "add", text: newWords[j++] });
+      } else if (j >= newWords.length) {
+        result.push({ type: "del", text: oldWords[i++] });
+      } else if (oldWords[i] === newWords[j]) {
+        result.push({ type: "same", text: oldWords[i++] });
+        j++;
+      } else {
+        // Greedy: look ahead for next match
+        const nextMatchInNew = newWords.indexOf(oldWords[i], j);
+        const nextMatchInOld = oldWords.indexOf(newWords[j], i);
+        if (nextMatchInNew !== -1 && (nextMatchInOld === -1 || nextMatchInNew - j <= nextMatchInOld - i)) {
+          while (j < nextMatchInNew) result.push({ type: "add", text: newWords[j++] });
+        } else if (nextMatchInOld !== -1) {
+          while (i < nextMatchInOld) result.push({ type: "del", text: oldWords[i++] });
+        } else {
+          result.push({ type: "del", text: oldWords[i++] });
+          result.push({ type: "add", text: newWords[j++] });
+        }
+      }
+    }
+    return result;
+  },
+
+  _renderDiffHtml(diffParts) {
+    return diffParts.map((p) => {
+      const text = escapeHtml(p.text);
+      if (p.type === "del") return `<span class="diff-del">${text}</span>`;
+      if (p.type === "add") return `<span class="diff-add">${text}</span>`;
+      return text;
+    }).join("");
+  },
+
+  showCardDiff(before, after) {
+    const modal = document.getElementById("card-diff-modal");
+    const content = document.getElementById("card-diff-content");
+    const closeBtn = document.getElementById("card-diff-modal-close-btn");
+    if (!modal || !content) return;
+
+    const fields = [
+      { key: "name", label: "Name" },
+      { key: "description", label: "Description" },
+      { key: "personality", label: "Personality" },
+      { key: "scenario", label: "Scenario" },
+      { key: "first_mes", label: "First Message" },
+      { key: "mesExample", label: "Example Messages" },
+    ];
+
+    const changedFields = fields.filter((f) => (before[f.key] || "") !== (after[f.key] || ""));
+
+    if (changedFields.length === 0) {
+      content.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No textual changes were made.</p>`;
+    } else {
+      content.innerHTML = changedFields.map((f) => {
+        const diff = this._computeDiffWords(before[f.key], after[f.key]);
+        return `
+          <div class="diff-field">
+            <div class="diff-field-title">${escapeHtml(f.label)}</div>
+            <div class="diff-content">${this._renderDiffHtml(diff)}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    modal.classList.add("show");
+    document.body.style.overflow = "hidden";
+
+    const close = () => {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+      closeBtn?.removeEventListener("click", close);
+      modal.removeEventListener("click", onBackdrop);
+    };
+    const onBackdrop = (e) => { if (e.target === modal) close(); };
+
+    closeBtn?.addEventListener("click", close);
+    modal.addEventListener("click", onBackdrop);
   },
 
 });

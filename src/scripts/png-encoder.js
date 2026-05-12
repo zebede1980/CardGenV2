@@ -12,7 +12,7 @@ class PNGEncoder {
       // Build V3 JSON for the ccv3 chunk (primary)
       const v3Json = JSON.stringify(characterData);
       const v3Bytes = new TextEncoder().encode(v3Json);
-      const base64V3 = btoa(String.fromCharCode(...v3Bytes));
+      const base64V3 = this._bytesToBase64(v3Bytes);
 
       // Build V2-compat JSON for the chara chunk (backward compatibility)
       const v2Data = JSON.parse(v3Json);
@@ -28,7 +28,7 @@ class PNGEncoder {
       }
       const v2Json = JSON.stringify(v2Data);
       const v2Bytes = new TextEncoder().encode(v2Json);
-      const base64V2 = btoa(String.fromCharCode(...v2Bytes));
+      const base64V2 = this._bytesToBase64(v2Bytes);
 
       const pngBlob = await this.injectMetadataIntoPNG(imageBlob, base64V2, base64V3);
       return pngBlob;
@@ -653,6 +653,19 @@ class PNGEncoder {
       bytes[i] = binary.charCodeAt(i);
     }
     return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  /**
+   * Convert a Uint8Array to base64 without using spread operator,
+   * avoiding call-stack overflow on large payloads (>100KB).
+   */
+  _bytesToBase64(bytes) {
+    const CHUNK_SIZE = 0x8000; // 32KB chunks
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK_SIZE));
+    }
+    return btoa(binary);
   }
 }
 

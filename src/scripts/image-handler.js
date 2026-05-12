@@ -773,10 +773,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
             (m) => `
               <div class="image-model-row" style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;">
                 <label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;">
-                  <input type="checkbox" class="image-model-checkbox" value="${m.id}" ${currentSelected.has(m.id) ? "checked" : ""}>
-                  ${m.id}
+                  <input type="checkbox" class="image-model-checkbox" value="${escapeHtml(m.id)}" ${currentSelected.has(m.id) ? "checked" : ""}>
+                  ${escapeHtml(m.id)}
                 </label>
-                <button type="button" class="image-model-delete-btn" data-model="${m.id}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
+                <button type="button" class="image-model-delete-btn" data-model="${escapeHtml(m.id)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
               </div>
           `,
           )
@@ -797,7 +797,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } catch (error) {
       statusEl.textContent = "Failed to fetch";
       statusEl.style.color = "var(--error)";
-      container.innerHTML = `<p style="font-size: 0.8rem; color: var(--error); margin: 0;">Error: ${error.message}</p>`;
+      container.innerHTML = `<p style="font-size: 0.8rem; color: var(--error); margin: 0;">Error: ${escapeHtml(error.message)}</p>`;
     }
   },
 
@@ -817,7 +817,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       select.innerHTML = models
         .map(
           (model) =>
-            `<option value="${model}" ${model === currentModel ? "selected" : ""}>${model}</option>`,
+            `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(model)}</option>`,
         )
         .join("");
 

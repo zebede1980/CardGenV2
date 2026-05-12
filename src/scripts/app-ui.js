@@ -109,6 +109,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const saveCardBtn = document.getElementById("save-card-btn");
     const snapshotHistoryBtn = document.getElementById("snapshot-history-btn");
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
+    const testChatBtn = document.getElementById("test-chat-btn");
 
     resultSection.style.display = "block";
     downloadBtn.style.display = "inline-flex";
@@ -121,6 +122,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     if (checkConsistencyBtn && this.currentCharacter) {
       checkConsistencyBtn.style.display = "inline-flex";
+    }
+    if (testChatBtn && this.currentCharacter) {
+      testChatBtn.style.display = "inline-flex";
     }
 
     // Show push-to-ST button if ST URL is configured
@@ -135,11 +139,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const downloadBtn = document.getElementById("download-btn");
     const saveCardBtn = document.getElementById("save-card-btn");
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
+    const testChatBtn = document.getElementById("test-chat-btn");
 
     resultSection.style.display = "none";
     downloadBtn.style.display = "none";
     if (saveCardBtn) saveCardBtn.style.display = "none";
     if (checkConsistencyBtn) checkConsistencyBtn.style.display = "none";
+    if (testChatBtn) testChatBtn.style.display = "none";
   },
 
   clearStream() {

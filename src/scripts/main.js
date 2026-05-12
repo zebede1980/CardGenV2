@@ -40,6 +40,7 @@ class CharacterGeneratorApp {
     await this.config.waitForConfig();
     await this.ensureStorageReady();
     this.config.saveToForm();
+    this.initTheme();
     this.bindEvents();
     this.checkAPIStatus();
     this.refreshLibraryViews();
@@ -340,7 +341,7 @@ class CharacterGeneratorApp {
         const row = document.createElement("div");
         row.className = "image-model-row";
         row.style.cssText = "display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;";
-        row.innerHTML = `<label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;"><input type="checkbox" class="image-model-checkbox" value="${modelId}" checked> ${modelId}</label><button type="button" class="image-model-delete-btn" data-model="${modelId}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>`;
+        row.innerHTML = `<label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;"><input type="checkbox" class="image-model-checkbox" value="${escapeHtml(modelId)}" checked> ${escapeHtml(modelId)}</label><button type="button" class="image-model-delete-btn" data-model="${escapeHtml(modelId)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>`;
         container.appendChild(row);
         manualImageModelInput.value = "";
         this.saveAPISettings();
@@ -420,6 +421,36 @@ class CharacterGeneratorApp {
     if (consistencyModal) consistencyModal.addEventListener("click", (e) => { if (e.target === consistencyModal) this.closeConsistencyModal(); });
     if (consistencyAutoFixBtn) consistencyAutoFixBtn.addEventListener("click", () => this.handleConsistencyAutoFix());
 
+    // Chat Tester
+    const testChatBtn = document.getElementById("test-chat-btn");
+    const chatTesterModal = document.getElementById("chat-tester-modal");
+    const chatTesterModalCloseBtn = document.getElementById("chat-tester-modal-close-btn");
+    const chatSendBtn = document.getElementById("chat-send-btn");
+    const chatInput = document.getElementById("chat-input");
+    const chatRegenerateBtn = document.getElementById("chat-regenerate-btn");
+    const chatClearBtn = document.getElementById("chat-clear-btn");
+    const chatStopBtn = document.getElementById("chat-stop-btn");
+    const chatExportBtn = document.getElementById("chat-export-btn");
+    const chatPersonaInput = document.getElementById("chat-persona-name");
+
+    if (testChatBtn) testChatBtn.addEventListener("click", () => this.openChatTester());
+    if (chatTesterModalCloseBtn) chatTesterModalCloseBtn.addEventListener("click", () => this.closeChatTester());
+    if (chatTesterModal) chatTesterModal.addEventListener("click", (e) => { if (e.target === chatTesterModal) this.closeChatTester(); });
+    if (chatSendBtn) chatSendBtn.addEventListener("click", () => this.handleChatSend());
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          this.handleChatSend();
+        }
+      });
+    }
+    if (chatRegenerateBtn) chatRegenerateBtn.addEventListener("click", () => this.handleChatRegenerate());
+    if (chatClearBtn) chatClearBtn.addEventListener("click", () => this.handleChatClear());
+    if (chatStopBtn) chatStopBtn.addEventListener("click", () => this.handleChatStop());
+    if (chatExportBtn) chatExportBtn.addEventListener("click", () => this.handleChatExport());
+    if (chatPersonaInput) chatPersonaInput.addEventListener("change", () => this.handleChatPersonaChange());
+
     // Drag-and-drop import anywhere on the page
     let dragCounter = 0;
     const dropOverlay = document.getElementById("drop-overlay");
@@ -481,6 +512,30 @@ class CharacterGeneratorApp {
     this.config.saveConfig();
     this.updateActiveModelsDropdown();
     this.checkAPIStatus();
+  }
+
+  /* ── Theme Toggle ─────────────────────────────────────────────────────── */
+
+  initTheme() {
+    const saved = localStorage.getItem("cardgen-theme");
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const isDark = saved ? saved === "dark" : prefersDark;
+    this._applyTheme(isDark);
+
+    const btn = document.getElementById("theme-toggle-btn");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        const currentlyDark = document.documentElement.getAttribute("data-theme") === "dark";
+        this._applyTheme(!currentlyDark);
+      });
+    }
+  }
+
+  _applyTheme(isDark) {
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+    localStorage.setItem("cardgen-theme", isDark ? "dark" : "light");
+    const btn = document.getElementById("theme-toggle-btn");
+    if (btn) btn.textContent = isDark ? "☀️ Light" : "🌙 Dark";
   }
 
   async handleAPIConfig() {

@@ -258,12 +258,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
           promptList.innerHTML = prompts
             .map((prompt) => {
               const promptPreview = prompt.concept
-                ? `"${prompt.concept.substring(0, 30).replace(/\n/g, " ")}${prompt.concept.length > 30 ? "..." : ""}"`
+                ? `"${escapeHtml(prompt.concept.substring(0, 30).replace(/\n/g, " "))}${prompt.concept.length > 30 ? "..." : ""}"`
                 : "(No concept)";
-              const titleName = prompt.characterName || promptPreview;
+              const titleName = escapeHtml(prompt.characterName || promptPreview);
               return `
                 <div class="library-item">
-                  <div class="library-item-title">${titleName} - ${prompt.pov || "third"} POV</div>
+                  <div class="library-item-title">${titleName} - ${escapeHtml(prompt.pov || "third")} POV</div>
                   <div class="library-item-date">${this.formatLibraryTime(prompt.updatedAt)}</div>
                   <div class="library-item-actions">
                     <button class="btn-small" data-action="load-prompt" data-id="${prompt.id}">Load</button>
@@ -288,7 +288,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             .map(
               (card) => `
                 <div class="library-item">
-                  <div class="library-item-title">${card.characterName || "Unnamed Character"}</div>
+                  <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
                   <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
                   <div class="library-item-actions">
                     <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>
@@ -310,7 +310,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             .map(
               (card) => `
                 <div class="library-item">
-                  <div class="library-item-title">${card.characterName || "Unnamed Character"}</div>
+                  <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
                   <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
                   <div class="library-item-actions">
                     <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>

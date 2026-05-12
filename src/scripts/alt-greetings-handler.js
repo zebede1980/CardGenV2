@@ -56,7 +56,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         <div class="library-item" style="align-items: flex-start;">
             <div style="flex: 1;">
                 <div class="library-item-title" style="margin-bottom: 0.5rem;">Greeting ${index + 1}</div>
-                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0; white-space: pre-wrap; max-height: 80px; overflow: hidden; text-overflow: ellipsis;">${greeting.content}</p>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0; white-space: pre-wrap; max-height: 80px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(greeting.content)}</p>
             </div>
             <div class="library-item-actions">
                 <button class="btn-small" data-action="edit-alt-greeting" data-id="${greeting.id}">Edit</button>
@@ -201,7 +201,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); gap: 0.5rem;">
           <div style="flex: 1; min-width: 0;">
             <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">Greeting ${index + 1}:</span>
-            <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 5rem); vertical-align: bottom;">&nbsp;${greeting.content.substring(0, 80).replace(/\n/g, " ")}${greeting.content.length > 80 ? "\u2026" : ""}</span>
+            <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 5rem); vertical-align: bottom;">&nbsp;${escapeHtml(greeting.content.substring(0, 80).replace(/\n/g, " "))}${greeting.content.length > 80 ? "\u2026" : ""}</span>
           </div>
         </div>`,
       )
