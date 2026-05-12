@@ -333,7 +333,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (!modal) { resolve("cancel"); return; }
 
       if (msg) msg.innerHTML =
-        `The character name changed from <strong>${escapeHtml(sourceAvatar.replace(".png",""))}</strong> to <strong>${escapeHtml(newName)}</strong>.<br>What would you like to do?`;
+        `The character name changed from <strong>${escapeHtml(sourceAvatar.replace(".png", ""))}</strong> to <strong>${escapeHtml(newName)}</strong>.<br>What would you like to do?`;
 
       const close = (choice) => {
         modal.classList.remove("show");
