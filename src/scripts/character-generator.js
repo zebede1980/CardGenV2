@@ -217,6 +217,8 @@ class CharacterGenerator {
         scenario: character.scenario || "",
         first_mes: character.firstMessage || "Hello!",
         mes_example: character.mesExample || "",
+        creator_notes: character.creatorNotes || "",
+        creator: character.creator || "",
         alternate_greetings: character.alternateGreetings || [],
         tags: Array.isArray(character.tags) ? character.tags : [],
         cardType: character.cardType || "single",

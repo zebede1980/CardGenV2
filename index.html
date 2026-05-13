@@ -694,6 +694,54 @@
                                 ></textarea>
                             </div>
 
+                            <!-- Creator's Notes Field -->
+                            <div
+                                class="character-field"
+                                style="margin-bottom: 1.5rem"
+                            >
+                                <div
+                                    style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        margin-bottom: 0.5rem;
+                                        flex-wrap: wrap;
+                                        gap: 0.5rem;
+                                    "
+                                >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
+                                        Creator's Notes
+                                    </h3>
+                                </div>
+                                <p
+                                    style="
+                                        font-size: 0.8rem;
+                                        color: var(--text-secondary);
+                                        margin-bottom: 0.75rem;
+                                    "
+                                >
+                                    💡 A brief, enticing synopsis of the character and scenario — written to sell the card to potential users. Use the character's actual name here (not {{char}}), as this is the field displayed on card-sharing websites.
+                                </p>
+                                <textarea
+                                    id="creator-notes"
+                                    class="content-box"
+                                    style="
+                                        width: 100%;
+                                        min-height: 120px;
+                                        font-family: inherit;
+                                        font-size: 0.9375rem;
+                                        line-height: 1.6;
+                                        resize: vertical;
+                                        padding: 1rem;
+                                        border: 1px solid var(--border);
+                                        border-radius: 0.5rem;
+                                        background: var(--surface-color);
+                                        color: var(--text-color);
+                                    "
+                                    placeholder="e.g. Meet Kira, a rogue archivist hiding a stolen library beneath a crumbling city. She's witty, paranoid, and sitting on secrets that could topple three governments. Will you help her, exploit her, or find yourself dragged into her chaos?"
+                                ></textarea>
+                            </div>
+
                             <!-- Tags row -->
                             <div class="character-field" style="margin-bottom: 1.5rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
@@ -1128,19 +1176,19 @@
         </div>
 
         <script src="src/scripts/sanitize.js?v=20260512"></script>
-        <script src="src/scripts/config.js?v=20260218"></script>
+        <script src="src/scripts/config.js?v=20260513"></script>
         <script src="src/scripts/api.js?v=20260218"></script>
         <script src="src/scripts/api-character.js?v=20260218-ex1"></script>
         <script src="src/scripts/api-image.js?v=20260218-ex1"></script>
         <script src="src/scripts/api-lorebook.js?v=20260218-ex1"></script>
-        <script src="src/scripts/character-generator.js?v=20260218"></script>
+        <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260218"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260215-fix1"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
-        <script src="src/scripts/main.js?v=20260218-ex1"></script>
+        <script src="src/scripts/main.js?v=20260513"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
-        <script src="src/scripts/character-display.js?v=20260218-ex1"></script>
+        <script src="src/scripts/character-display.js?v=20260513"></script>
         <script src="src/scripts/image-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
@@ -1148,7 +1196,7 @@
         <script src="src/scripts/revision-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/chat-tester.js?v=20260512"></script>
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
-        <script src="src/scripts/st-handler.js?v=20260510f"></script>        <!-- API Settings Modal -->
+        <script src="src/scripts/st-handler.js?v=20260513"></script>        <!-- API Settings Modal -->
 
         <!-- ST push-choice modal (name changed) -->
         <div id="st-push-choice-modal" class="modal-overlay">
@@ -1313,6 +1361,22 @@
                             💡 When disabled, images won't be generated
                             automatically (saves API costs). You can still
                             upload your own images and regenerate prompts.
+                        </p>
+                    </div>
+
+                    <hr style="border-color: var(--border); margin: 1.5rem 0;" />
+
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">🪪 Card Metadata</h3>
+                    <div class="form-group">
+                        <label for="creator-name" class="label">Creator Name</label>
+                        <input
+                            type="text"
+                            id="creator-name"
+                            class="input"
+                            placeholder="Your name or handle (embedded in every exported card)"
+                        />
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">
+                            💡 This is stored in every card you export, save, or push to SillyTavern.
                         </p>
                     </div>
 

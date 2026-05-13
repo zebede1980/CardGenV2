@@ -167,6 +167,12 @@ class CharacterGeneratorApp {
     const referenceImageInput = document.getElementById("reference-image-file");
     if (referenceImageInput) referenceImageInput.addEventListener("change", (e) => this.handleReferenceImageUpload(e));
 
+    // Creator's Notes edit tracking
+    const creatorNotesTextarea = document.getElementById("creator-notes");
+    if (creatorNotesTextarea) creatorNotesTextarea.addEventListener("input", () => {
+      if (this.currentCharacter) this.currentCharacter.creatorNotes = creatorNotesTextarea.value;
+    });
+
     // Debug mode
     const debugModeCheckbox = document.getElementById("debug-mode");
     if (debugModeCheckbox) {
@@ -179,7 +185,7 @@ class CharacterGeneratorApp {
     apiStatus.addEventListener("click", () => this.handleAPIConfig());
     apiStatus.style.cursor = "pointer";
 
-    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-style")
+    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-style, #creator-name")
       .forEach((input) => input.addEventListener("change", () => this.saveAPISettings()));
 
     document.getElementById("clear-config-btn").addEventListener("click", () => this.handleClearConfig());
@@ -780,6 +786,10 @@ class CharacterGeneratorApp {
       this.currentCharacter.personality = personalityTextarea.value.trim();
       this.currentCharacter.scenario = scenarioTextarea.value.trim();
       this.currentCharacter.firstMessage = firstMessageTextarea.value.trim();
+
+      const creatorNotesTextarea = document.getElementById("creator-notes");
+      if (creatorNotesTextarea) this.currentCharacter.creatorNotes = creatorNotesTextarea.value.trim();
+      this.currentCharacter.creator = this.config.get("app.creator") || "";
 
       if (exampleMessagesOutput) {
         if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {

@@ -65,6 +65,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     scenarioTextarea.value = this.currentCharacter.scenario || "";
     firstMessageTextarea.value = this.currentCharacter.firstMessage || "";
 
+    const creatorNotesTextarea = document.getElementById("creator-notes");
+    if (creatorNotesTextarea) creatorNotesTextarea.value = this.currentCharacter.creatorNotes || "";
+
     this._renderTags(this.currentCharacter.tags || []);
 
     const resetNameBtn = document.getElementById("reset-name-btn");
@@ -474,6 +477,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         scenario: specData.data.scenario || "",
         firstMessage: specData.data.first_mes || "",
         mesExample: specData.data.mes_example || "",
+        creatorNotes: specData.data.creator_notes || "",
         character_book: specData.data.character_book || undefined,
         alternateGreetings: specData.data.alternate_greetings || [],
         tags: specData.data.tags || [],
@@ -488,6 +492,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       scenario: specData.scenario || "",
       firstMessage: specData.firstMessage || specData.first_mes || "",
       mesExample: specData.mesExample || specData.mes_example || "",
+      creatorNotes: specData.creatorNotes || specData.creator_notes || "",
       character_book: specData.character_book || undefined,
       alternateGreetings:
         specData.alternateGreetings || specData.alternate_greetings || [],

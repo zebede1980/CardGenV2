@@ -278,6 +278,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (personalityTextarea) character.personality = personalityTextarea.value.trim();
     if (scenarioTextarea) character.scenario = scenarioTextarea.value.trim();
     if (firstMessageTextarea) character.firstMessage = firstMessageTextarea.value.trim();
+    const creatorNotesTextarea = document.getElementById("creator-notes");
+    if (creatorNotesTextarea) character.creatorNotes = creatorNotesTextarea.value.trim();
+    character.creator = window.config?.get("app.creator") || "";
     if (exampleMessagesOutput) {
       if (exampleMessagesOutput.tagName === "TEXTAREA" || exampleMessagesOutput.tagName === "INPUT") {
         character.mesExample = exampleMessagesOutput.value.trim();

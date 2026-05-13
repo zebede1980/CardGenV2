@@ -33,6 +33,7 @@ class Config {
         retryDelay: 1000,
         debugMode: false,
         enableImageGeneration: true,
+        creator: "",
       },
       st: {
         baseUrl: "",
@@ -132,6 +133,10 @@ class Config {
     if (enableImageGeneration !== undefined)
       this.config.app.enableImageGeneration = enableImageGeneration;
 
+    // Load creator setting
+    const creator = document.getElementById("creator-name")?.value?.trim();
+    if (creator !== undefined) this.config.app.creator = creator;
+
     // Load SillyTavern settings
     const stBaseUrl = document.getElementById("st-base-url")?.value?.trim();
     const stUsername = document.getElementById("st-username")?.value?.trim();
@@ -196,6 +201,10 @@ class Config {
       if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
       if (imageSize) imageSize.value = this.config.api.image.size || "";
       if (imageStyle) imageStyle.value = this.config.api.image.style || "";
+
+      // Save creator to form
+      const creatorName = document.getElementById("creator-name");
+      if (creatorName) creatorName.value = this.config.app.creator || "";
 
       // Save SillyTavern settings to form
       const stBaseUrl = document.getElementById("st-base-url");
