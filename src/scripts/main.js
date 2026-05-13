@@ -665,6 +665,16 @@ class CharacterGeneratorApp {
       this.showStreamMessage("\n\n💬 Generating example messages...\n");
       await this.handleGenerateExampleMessages();
 
+      this.showStreamMessage("✍️ Generating creator's notes...\n");
+      try {
+        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter);
+        if (notes) {
+          this.currentCharacter.creatorNotes = notes;
+        }
+      } catch (notesError) {
+        console.warn("Creator notes generation failed (non-fatal):", notesError);
+      }
+
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
       await this.saveCardToLibrary();
       await this.refreshLibraryViews();

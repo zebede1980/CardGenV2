@@ -1014,4 +1014,57 @@ Output a JSON array of tags only.`;
     }
   },
 
+  async generateCreatorNotes(character) {
+    if (!character) throw new Error("Character is required to generate creator notes");
+    const model = this.config.get("api.text.model");
+    const charName = character.name || "the character";
+
+    const systemPrompt = `You write short, punchy "Creator's Notes" blurbs for SillyTavern character cards. These appear on card-sharing websites and must instantly hook a reader.
+
+Rules:
+- 2–4 sentences max. No more.
+- Use the character's ACTUAL name (not {{char}} or {{user}}).
+- Open with who the character is — make it intriguing, not bland.
+- Mention the core scenario or hook.
+- End with a light tease of what interacting with them offers (tension, romance, mystery, humour, etc.).
+- Write in present tense, third person, active voice.
+- No hashtags, no lists, no headers — just plain compelling prose.
+- Do NOT start with "Meet" or "Introducing". Be more creative.`;
+
+    const userPrompt = `Character name: ${charName}
+
+Description (excerpt):
+${(character.description || "").slice(0, 600)}
+
+Personality (excerpt):
+${(character.personality || "").slice(0, 400)}
+
+Scenario:
+${(character.scenario || "").slice(0, 500)}
+
+First message (for tone reference):
+${(character.firstMessage || "").slice(0, 300)}
+
+Write the Creator's Notes blurb now. Plain text only, no formatting.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.85,
+      max_tokens: 256,
+      stream: false,
+    };
+
+    try {
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      return this.processNormalResponse(response).trim();
+    } catch (error) {
+      console.error("=== CREATOR NOTES GENERATION FAILED ===", error);
+      throw error;
+    }
+  },
+
 });
