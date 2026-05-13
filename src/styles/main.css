@@ -305,6 +305,25 @@ textarea.content-box {
     border-color: var(--border-strong);
 }
 
+[data-theme="dark"] .header {
+    background: linear-gradient(
+        120deg,
+        rgba(22, 27, 34, 0.92),
+        rgba(22, 27, 34, 0.75)
+    );
+    border-color: var(--border-strong);
+}
+
+[data-theme="dark"] .footer {
+    background: rgba(22, 27, 34, 0.85);
+    border-color: var(--border);
+}
+
+[data-theme="dark"] .api-status {
+    background: var(--surface-strong);
+    border-color: var(--border-strong);
+}
+
 .btn-outline:hover,
 .btn-small:hover {
     border-color: var(--accent);
