@@ -72,8 +72,8 @@ class ChatTester {
     if (!text) return text;
     const charName = this.app.currentCharacter?.name || "{{char}}";
     return text
-      .replace(/\{\{char\}\}/g, charName)
-      .replace(/\{\{user\}\}/g, this.personaName);
+      .replace(/\{\{char\}\}/gi, charName)
+      .replace(/\{\{user\}\}/gi, this.personaName);
   }
 
   _getRelevantLorebookEntries() {

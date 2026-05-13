@@ -864,6 +864,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         .generated-image { max-width: 100%; height: auto; border-radius: var(--radius); box-shadow: var(--shadow-sm); }
         .form-section { background: var(--bg-tertiary); padding: 1rem; border-radius: calc(var(--radius) / 2); margin-bottom: 1rem; }
         .form-section-title { font-weight: 600; margin-bottom: 1rem; color: var(--text-primary); }
+
+        /* Dark mode button fixes */
+        [data-theme="dark"] button:not(.btn-primary):not([style*="background: none"]):not([style*="background:none"]) {
+            background-color: var(--bg-tertiary, #374151);
+            color: var(--text-primary, #f9fafb);
+            border: 1px solid var(--border, #4b5563);
+        }
+        [data-theme="dark"] button:not(.btn-primary):not([style*="background: none"]):not([style*="background:none"]):hover {
+            background-color: var(--border, #4b5563);
+        }
     `;
   document.head.appendChild(style);
 

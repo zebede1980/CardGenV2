@@ -111,6 +111,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   _formatChatContent(text) {
     if (!text) return "";
+
+    if (this.chatTester) {
+      text = this.chatTester._replaceMacros(text);
+    }
+
     // Escape HTML, then convert markdown-like formatting
     let html = escapeHtml(text);
     // Convert *italics* to <em>
