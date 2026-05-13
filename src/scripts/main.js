@@ -866,13 +866,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         .form-section-title { font-weight: 600; margin-bottom: 1rem; color: var(--text-primary); }
 
         /* Dark mode button fixes */
-        [data-theme="dark"] button:not(.btn-primary):not([style*="background: none"]):not([style*="background:none"]) {
-            background-color: var(--bg-tertiary, #374151);
-            color: var(--text-primary, #f9fafb);
-            border: 1px solid var(--border, #4b5563);
+        [data-theme="dark"] button:not(.btn-primary):not(.btn-secondary):not(.btn-stop):not([style*="background: none"]):not([style*="background:none"]) {
+            background: var(--surface, #1c2128);
+            color: var(--text-primary, #c9d1d9);
+            border: 1px solid var(--border-strong, #4b5563);
         }
-        [data-theme="dark"] button:not(.btn-primary):not([style*="background: none"]):not([style*="background:none"]):hover {
-            background-color: var(--border, #4b5563);
+        [data-theme="dark"] button:not(.btn-primary):not(.btn-secondary):not(.btn-stop):not([style*="background: none"]):not([style*="background:none"]):hover {
+            background: var(--surface-muted, #111820);
         }
     `;
   document.head.appendChild(style);
