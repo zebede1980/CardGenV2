@@ -146,6 +146,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       loading.style.display = "none";
 
+      // Show current image first so user can compare
+      this._insertCurrentImageCard(grid, [displayUrl]);
+      if (this.currentImageUrl) {
+        const mt = document.querySelector("#image-options-modal .modal-title");
+        if (mt) mt.innerHTML = "🖼️ Compare & Choose";
+      }
+
       const wrapper = document.createElement("div");
       wrapper.style.cursor = "pointer";
       wrapper.style.border = "2px solid transparent";
@@ -169,14 +176,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
         ]);
 
       wrapper.innerHTML = `
+        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--accent);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">NEW</div>
         <img src="${displayUrl}" style="width: 100%; height: auto; display: block;" alt="Generated Image">
         <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
-            <button class="btn-primary" style="width: 100%;">Accept Image</button>
+            <button class="btn-primary" style="width: 100%;">Use New Image</button>
         </div>
       `;
+      wrapper.style.position = "relative";
       grid.appendChild(wrapper);
 
-      this.showNotification(`Image generated! Review and accept.`, "success");
+      this.showNotification(`Image generated! Compare and choose.`, "success");
     } catch (error) {
       console.error("Image regeneration error:", error);
       loading.style.display = "none";
@@ -290,6 +299,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (validResults.length === 0) {
         throw new Error("All image generations failed.");
       }
+
+      // Prepend current image for comparison
+      const newBlobUrls = validResults.map(r => r.url);
+      this._insertCurrentImageCard(grid, newBlobUrls);
 
       validResults.forEach((res) => {
         const wrapper = document.createElement("div");
@@ -426,6 +439,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const validResults = results.filter((r) => r !== null);
       if (validResults.length === 0) throw new Error("All image generations failed.");
 
+      // Prepend current image for comparison
+      const newBlobUrls4p = validResults.map(r => r.url);
+      this._insertCurrentImageCard(grid, newBlobUrls4p);
+
       validResults.forEach((res) => {
         const wrapper = document.createElement("div");
         wrapper.style.cursor = "pointer";
@@ -498,35 +515,61 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       loading.style.display = "none";
 
-      const wrapper = document.createElement("div");
-      wrapper.style.cursor = "pointer";
-      wrapper.style.border = "2px solid transparent";
-      wrapper.style.borderRadius = "0.5rem";
-      wrapper.style.overflow = "hidden";
-      wrapper.style.transition = "border-color 0.2s";
-      wrapper.style.backgroundColor = "var(--surface-color)";
-      wrapper.style.width = "100%";
+      // Show current image for comparison
+      this._insertCurrentImageCard(grid, [blobUrl]);
+      if (this.currentImageUrl) {
+        const mt = document.querySelector("#image-options-modal .modal-title");
+        if (mt) mt.innerHTML = `🆓 Compare & Choose — ${model}`;
+      }
 
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText = "cursor:pointer;border:2px solid transparent;border-radius:0.5rem;overflow:hidden;transition:border-color 0.2s;background:var(--surface-color);width:100%;position:relative;";
       wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
       wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
       wrapper.onclick = () => this.selectImageOption(blobUrl, imagePrompt, `pollinations/${model}`, [{ url: blobUrl }]);
 
       wrapper.innerHTML = `
+        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--accent);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">NEW</div>
         <img src="${blobUrl}" style="width: 100%; height: auto; display: block;" alt="Free generated image">
         <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
-          <button class="btn-primary" style="width: 100%;">Accept Image</button>
+          <button class="btn-primary" style="width: 100%;">Use New Image</button>
           <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">Pollinations.ai · ${model}</div>
         </div>
       `;
       grid.appendChild(wrapper);
 
-      this.showNotification("Free image generated! Review and accept.", "success");
+      this.showNotification("Free image generated! Compare and choose.", "success");
     } catch (error) {
       console.error("Free image error:", error);
       loading.style.display = "none";
       this.closeImageOptionsModal();
       this.showNotification(`Free image failed: ${error.message}`, "error");
     }
+  },
+
+  // Prepends a "Current Image" keep-card into the grid so the user can compare
+  // newBlobUrls — blob URLs of the freshly generated images to revoke if user keeps current
+  _insertCurrentImageCard(grid, newBlobUrls = []) {
+    if (!this.currentImageUrl) return;
+    const currentUrl = this.currentImageUrl;
+
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "cursor:pointer;border:2px solid var(--success);border-radius:0.5rem;overflow:hidden;transition:box-shadow 0.2s;background:var(--surface-color);position:relative;";
+    wrapper.onmouseenter = () => { wrapper.style.boxShadow = "0 0 0 4px rgba(31,157,102,0.22)"; };
+    wrapper.onmouseleave = () => { wrapper.style.boxShadow = ""; };
+    wrapper.onclick = () => {
+      newBlobUrls.forEach(url => { if (url && url !== currentUrl && url.startsWith("blob:")) URL.revokeObjectURL(url); });
+      this.closeImageOptionsModal();
+      this.showNotification("Keeping current image.", "info");
+    };
+    wrapper.innerHTML = `
+      <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--success);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">CURRENT</div>
+      <img src="${currentUrl}" style="width:100%;height:auto;display:block;" alt="Current image">
+      <div style="padding:0.75rem;text-align:center;background:rgba(31,157,102,0.08);border-top:1px solid var(--border);">
+        <button class="btn-outline" style="width:100%;border-color:var(--success);color:var(--success);">✓ Keep This</button>
+      </div>
+    `;
+    grid.insertBefore(wrapper, grid.firstChild);
   },
 
   openImageOptionsModal() {
