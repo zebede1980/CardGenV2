@@ -405,6 +405,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (action === "load-card") {
         const card = await this.storage.getCard(id);
         if (!card?.character) return;
+        // Loading from local library — this is not an ST card, clear the ST slot link
+        this.stSourceAvatar = null;
+        this._updatePushButton();
         this.currentCharacter = card.character;
         this.originalCharacter = JSON.parse(JSON.stringify(card.character));
         this.displayCharacter();

@@ -516,6 +516,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       let characterData = null;
       let importedImageUrl = "";
 
+      // Clear any ST slot link — if this import is from ST, loadCardFromST will
+      // re-set stSourceAvatar after this function returns
+      this.stSourceAvatar = null;
+      this._updatePushButton();
+
       if (file.type === "image/png" || file.name.toLowerCase().endsWith(".png")) {
         const extracted = await this.pngEncoder.extractCharacterData(file);
         characterData = this.normalizeCharacterFromSpec(extracted);

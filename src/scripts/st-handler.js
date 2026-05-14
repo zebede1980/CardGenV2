@@ -148,12 +148,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const blob = await res.blob();
       const file = new File([blob], avatarUrl, { type: "image/png" });
 
-      // Remember the source avatar so "Push" knows to update not create
+      // Remember the source avatar so "Push" knows to update not create.
+      // Set AFTER handleImportCardFile so it overwrites the null set inside it.
+      await this.handleImportCardFile(file, false);
       this.stSourceAvatar = avatarUrl;
       this._updatePushButton();
-
-      // Reuse existing PNG import pipeline — handles all normalisation
-      await this.handleImportCardFile(file, false);
       this.showNotification(`"${name}" loaded from SillyTavern`, "success");
     } catch (err) {
       console.error("ST load error:", err);
