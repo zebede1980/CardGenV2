@@ -324,6 +324,27 @@ textarea.content-box {
     border-color: var(--border-strong);
 }
 
+[data-theme="dark"] .api-settings-modal {
+    background: linear-gradient(180deg, #161b22, #111820);
+    border-color: var(--border-strong);
+}
+
+[data-theme="dark"] .modal-header {
+    background: rgba(22, 27, 34, 0.96);
+    border-color: var(--border);
+}
+
+[data-theme="dark"] .modal-close {
+    background: var(--surface-strong);
+    border-color: var(--border-strong);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .modal-close:hover {
+    background: var(--surface-muted);
+    color: var(--text-primary);
+}
+
 .btn-outline:hover,
 .btn-small:hover {
     border-color: var(--accent);
