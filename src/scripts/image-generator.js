@@ -95,7 +95,7 @@ class ImageGenerator {
       // Use relative path - proxy handles redirection
       const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(actualUrl)}`;
 
-      const response = await fetch(proxyUrl);
+      const response = await (window.authFetch || fetch)(proxyUrl);
       if (response.ok) {
         const blob = await response.blob();
         console.log("✅ Successfully fetched remote URL via proxy");
@@ -230,7 +230,7 @@ class ImageGenerator {
           // Use relative path - proxy handles redirection
           const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 
-          const response = await fetch(proxyUrl);
+          const response = await (window.authFetch || fetch)(proxyUrl);
           if (!response.ok) {
             throw new Error(`Failed to fetch image: ${response.statusText}`);
           }

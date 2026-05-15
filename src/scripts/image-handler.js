@@ -137,7 +137,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         !imageUrl.startsWith("data:")
       ) {
         const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-        const response = await fetch(proxyUrl);
+        const response = await (window.authFetch || fetch)(proxyUrl);
         if (response.ok) {
           const blob = await response.blob();
           displayUrl = URL.createObjectURL(blob);
@@ -278,7 +278,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
               !imageUrl.startsWith("data:")
             ) {
               const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-              const response = await fetch(proxyUrl);
+              const response = await (window.authFetch || fetch)(proxyUrl);
               if (response.ok) {
                 const blob = await response.blob();
                 displayUrl = URL.createObjectURL(blob);
@@ -419,7 +419,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             let displayUrl = imageUrl;
             if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
               const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-              const response = await fetch(proxyUrl);
+              const response = await (window.authFetch || fetch)(proxyUrl);
               if (response.ok) {
                 const blob = await response.blob();
                 displayUrl = URL.createObjectURL(blob);
