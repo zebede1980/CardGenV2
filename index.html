@@ -6,6 +6,16 @@
         <title>SillyTavern Character Generator</title>
         <link rel="icon" type="image/png" href="favicon.png" />
         <link rel="stylesheet" href="src/styles/main.css?v=20260513" />
+        <script>
+            // Apply saved theme before first paint so the login overlay
+            // never flashes with the wrong colour scheme.
+            (function () {
+                var saved = localStorage.getItem("cardgen-theme");
+                var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+                var isDark = saved ? saved === "dark" : prefersDark;
+                document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+            })();
+        </script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
@@ -22,7 +32,7 @@
             justify-content: center;
             position: fixed;
             inset: 0;
-            background: var(--bg-color, #0f0f0f);
+            background: var(--bg-page);
             z-index: 9999;
         ">
             <div style="
@@ -30,30 +40,30 @@
                 max-width: 400px;
                 margin: 1rem;
                 padding: 2rem;
-                background: var(--surface-color, #1a1a1a);
-                border: 1px solid var(--border, #333);
+                background: var(--surface-strong);
+                border: 1px solid var(--border-strong);
                 border-radius: 0.75rem;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                box-shadow: var(--shadow-md);
             ">
-                <h2 id="auth-title" style="margin: 0 0 1.5rem; font-size: 1.4rem; text-align: center;">Sign In</h2>
+                <h2 id="auth-title" style="margin: 0 0 1.5rem; font-size: 1.4rem; text-align: center; color: var(--text-primary);">Sign In</h2>
                 <form id="auth-form" novalidate>
                     <div style="margin-bottom: 1rem;">
-                        <label for="auth-username" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Username</label>
+                        <label for="auth-username" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-primary);">Username</label>
                         <input id="auth-username" type="text" autocomplete="username" required
-                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border, #444); background: var(--input-bg, #111); color: inherit; font-size: 1rem;"
+                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border-strong); background: var(--surface-muted); color: var(--text-primary); font-size: 1rem;"
                         />
                     </div>
                     <div style="margin-bottom: 1rem;">
-                        <label for="auth-password" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Password</label>
+                        <label for="auth-password" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-primary);">Password</label>
                         <input id="auth-password" type="password" autocomplete="current-password" required
-                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border, #444); background: var(--input-bg, #111); color: inherit; font-size: 1rem;"
+                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border-strong); background: var(--surface-muted); color: var(--text-primary); font-size: 1rem;"
                         />
                     </div>
                     <!-- Register-only fields -->
                     <div id="auth-register-fields" style="display: none; margin-bottom: 1rem;">
-                        <label for="auth-confirm-password" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Confirm Password</label>
+                        <label for="auth-confirm-password" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-primary);">Confirm Password</label>
                         <input id="auth-confirm-password" type="password" autocomplete="new-password"
-                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border, #444); background: var(--input-bg, #111); color: inherit; font-size: 1rem;"
+                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border-strong); background: var(--surface-muted); color: var(--text-primary); font-size: 1rem;"
                         />
                     </div>
                     <div id="auth-error" style="display: none; color: #e55; font-size: 0.875rem; margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(220,50,50,0.1); border-radius: 0.35rem;"></div>
@@ -63,7 +73,7 @@
                         Sign In
                     </button>
                 </form>
-                <div id="auth-toggle-row" style="text-align: center; margin-top: 1.25rem; font-size: 0.875rem; color: var(--text-secondary, #888);">
+                <div id="auth-toggle-row" style="text-align: center; margin-top: 1.25rem; font-size: 0.875rem; color: var(--text-secondary);">
                     Don't have an account? <a href="#" id="auth-toggle-link">Sign Up</a>
                 </div>
             </div>
