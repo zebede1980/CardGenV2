@@ -355,7 +355,7 @@ BEGIN PROMPT:`;
   // Returns a blob URL pointing to the generated image.
   async generateFreeImage(prompt, service, model) {
     const seed = Math.floor(Math.random() * 2147483647);
-    const response = await fetch("/api/image/free", {
+    const response = await authFetch("/api/image/free", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, service, model, width: 768, height: 1024, seed }),

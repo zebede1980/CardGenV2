@@ -34,6 +34,8 @@ services:
       - NODE_ENV=production
       - PORT=${PROXY_PORT:-2426}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-2427}}
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
     volumes:
       - ./proxy/data:/app/data
     networks:

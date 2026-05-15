@@ -6,6 +6,17 @@ require("dotenv").config({ path: "../.env" });
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
+// ── Auth configuration ────────────────────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET || "cardgen-default-secret-change-me";
+const JWT_EXPIRES_IN = "30d";
+const BCRYPT_ROUNDS = 12;
+
+if (!process.env.JWT_SECRET) {
+  console.warn("⚠️  JWT_SECRET not set — using insecure default. Set JWT_SECRET in your environment.");
+}
 const app = express();
 const PORT = process.env.PORT || 2426;
 
@@ -34,21 +45,19 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-async function readJsonStore(filename) {
+async function readJsonStore(filePath) {
   try {
-    const filePath = path.join(DATA_DIR, filename);
     if (fs.existsSync(filePath)) {
       const data = await fsPromises.readFile(filePath, "utf8");
       return JSON.parse(data);
     }
   } catch (e) {
-    console.error(`Error reading ${filename}:`, e);
+    console.error(`Error reading ${filePath}:`, e);
   }
   return [];
 }
 
-async function writeJsonStore(filename, data) {
-  const filePath = path.join(DATA_DIR, filename);
+async function writeJsonStore(filePath, data) {
   await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2));
 }
 
@@ -67,8 +76,143 @@ function withFileLock(filename, fn) {
   return next;
 }
 
-// Data Endpoints for Settings & Configurations
-app.get("/api/config", async (req, res) => {
+// ── User account helpers ──────────────────────────────────────────────────────
+
+const USERS_FILE = path.join(DATA_DIR, "users.json");
+
+async function readUsers() {
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const data = await fsPromises.readFile(USERS_FILE, "utf8");
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error("Error reading users.json:", e);
+  }
+  return [];
+}
+
+async function writeUsers(users) {
+  await fsPromises.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+function getUserDataDir(userId) {
+  const dir = path.join(DATA_DIR, "users", String(userId));
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+// ── JWT middleware ────────────────────────────────────────────────────────────
+
+function requireAuth(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  const token = authHeader.slice(7);
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload; // { userId, username }
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+// ── Auth endpoints ────────────────────────────────────────────────────────────
+
+// Whether registration is currently open (used by the frontend to show/hide the link)
+app.get("/api/auth/registration-open", (req, res) => {
+  res.json({ open: process.env.ALLOW_REGISTRATION === "true" });
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  if (process.env.ALLOW_REGISTRATION !== "true") {
+    return res.status(403).json({ error: "Registration is currently closed" });
+  }
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required" });
+  }
+  if (typeof username !== "string" || username.length < 3 || username.length > 50) {
+    return res.status(400).json({ error: "Username must be 3–50 characters" });
+  }
+  if (typeof password !== "string" || password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
+  // Sanitise username — alphanumeric + _ - only
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+    return res.status(400).json({ error: "Username may only contain letters, numbers, _ and -" });
+  }
+
+  try {
+    const result = await withFileLock("users.json", async () => {
+      const users = await readUsers();
+      if (users.find((u) => u.username.toLowerCase() === username.toLowerCase())) {
+        return { conflict: true };
+      }
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const user = {
+        id: Date.now().toString(),
+        username,
+        passwordHash,
+        createdAt: new Date().toISOString(),
+      };
+      users.push(user);
+      await writeUsers(users);
+      return { user };
+    });
+
+    if (result.conflict) {
+      return res.status(409).json({ error: "Username already taken" });
+    }
+
+    const { user } = result;
+    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN,
+    });
+    res.json({ token, username: user.username });
+  } catch (e) {
+    console.error("Register error:", e);
+    res.status(500).json({ error: "Registration failed" });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required" });
+  }
+  try {
+    const users = await readUsers();
+    const user = users.find((u) => u.username.toLowerCase() === username.toLowerCase());
+    // Use a constant-time comparison path even on missing user to avoid timing attacks
+    const dummyHash = "$2a$12$invalidhashtopreventtimingattacks00000000000000000000000";
+    const valid = user
+      ? await bcrypt.compare(password, user.passwordHash)
+      : await bcrypt.compare(password, dummyHash).then(() => false);
+    if (!user || !valid) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN,
+    });
+    res.json({ token, username: user.username });
+  } catch (e) {
+    console.error("Login error:", e);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  res.json({ userId: req.user.userId, username: req.user.username });
+});
+
+// ── Data Endpoints for Settings & Configurations ─────────────────────────────
+// Config is global (shared across all users) — API keys & endpoints set once by admin
+app.get("/api/config", requireAuth, async (req, res) => {
   try {
     const configPath = path.join(DATA_DIR, "config.json");
     if (fs.existsSync(configPath)) {
@@ -80,52 +224,58 @@ app.get("/api/config", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/config", async (req, res) => {
+app.post("/api/config", requireAuth, async (req, res) => {
   try {
     await fsPromises.writeFile(path.join(DATA_DIR, "config.json"), JSON.stringify(req.body, null, 2));
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Data Endpoints for Characters/Cards/Prompts
-app.get("/api/storage/:type", async (req, res) => {
+// ── Per-user Data Endpoints for Characters/Cards/Prompts ─────────────────────
+app.get("/api/storage/:type", requireAuth, async (req, res) => {
   const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  const items = await readJsonStore(storeName);
+  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
+  const items = await readJsonStore(storeFile);
   res.json(items);
 });
 
-app.get("/api/storage/:type/:id", async (req, res) => {
+app.get("/api/storage/:type/:id", requireAuth, async (req, res) => {
   const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  const items = await readJsonStore(storeName);
+  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
+  const items = await readJsonStore(storeFile);
   const item = items.find(i => i.id == req.params.id);
   if (item) res.json(item);
   else res.status(404).json({ error: "Not found" });
 });
 
-app.post("/api/storage/:type", async (req, res) => {
+app.post("/api/storage/:type", requireAuth, async (req, res) => {
   const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
+  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
+  const lockKey = `user-${req.user.userId}-${storeName}`;
   const record = req.body;
   if (!record.id) record.id = Date.now();
   try {
-    const result = await withFileLock(storeName, async () => {
-      const items = await readJsonStore(storeName);
+    const result = await withFileLock(lockKey, async () => {
+      const items = await readJsonStore(storeFile);
       const index = items.findIndex(i => i.id == record.id);
       if (index >= 0) items[index] = record;
       else items.push(record);
-      await writeJsonStore(storeName, items);
+      await writeJsonStore(storeFile, items);
       return record;
     });
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete("/api/storage/:type/:id", async (req, res) => {
+app.delete("/api/storage/:type/:id", requireAuth, async (req, res) => {
   const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
+  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
+  const lockKey = `user-${req.user.userId}-${storeName}`;
   try {
-    await withFileLock(storeName, async () => {
-      let items = await readJsonStore(storeName);
+    await withFileLock(lockKey, async () => {
+      let items = await readJsonStore(storeFile);
       items = items.filter(i => i.id != req.params.id);
-      await writeJsonStore(storeName, items);
+      await writeJsonStore(storeFile, items);
     });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -137,7 +287,7 @@ app.get("/health", (req, res) => {
 });
 
 // Proxy endpoint for text API
-app.post("/api/text/chat/completions", async (req, res) => {
+app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
   try {
     const { model, messages, max_tokens, temperature, stream } = req.body;
 
@@ -259,7 +409,7 @@ app.post("/api/text/chat/completions", async (req, res) => {
 });
 
 // Free image generation via Pollinations.ai (no API key required)
-app.post("/api/image/free", async (req, res) => {  try {
+app.post("/api/image/free", requireAuth, async (req, res) => {  try {
     const { prompt, service, model, width, height, seed } = req.body;
 
     if (!prompt) {
@@ -297,7 +447,7 @@ app.post("/api/image/free", async (req, res) => {  try {
 });
 
 // Proxy endpoint for image API
-app.post("/api/image/generations", async (req, res) => {
+app.post("/api/image/generations", requireAuth, async (req, res) => {
   try {
     const { model, prompt, size } = req.body;
 
@@ -414,7 +564,7 @@ app.post("/api/image/generations", async (req, res) => {
 });
 
 // Proxy endpoint for fetching images (CORS bypass)
-app.get("/api/proxy-image", async (req, res) => {
+app.get("/api/proxy-image", requireAuth, async (req, res) => {
   try {
     const imageUrl = req.query.url;
 
@@ -549,7 +699,7 @@ async function getStCsrfHeaders(stUrl, basicAuth) {
 }
 
 // List all characters from ST
-app.get("/api/st/characters", async (req, res) => {
+app.get("/api/st/characters", requireAuth, async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
   const basicAuth = getStBasicAuth(req);
@@ -584,7 +734,7 @@ app.get("/api/st/characters", async (req, res) => {
 
 // Export (download) a single character PNG from ST
 // Pipes the PNG binary directly back — client can treat it like a file drop
-app.post("/api/st/export", async (req, res) => {
+app.post("/api/st/export", requireAuth, async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
   const { avatar_url } = req.body;
@@ -626,7 +776,7 @@ app.post("/api/st/export", async (req, res) => {
 // Body: { pngBase64: string, preservedName?: string }
 //   preservedName — set to the original avatar filename (without .png) to
 //   overwrite an existing card; omit to create a new one.
-app.post("/api/st/push", async (req, res) => {
+app.post("/api/st/push", requireAuth, async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
   const { pngBase64, preservedName } = req.body;
@@ -722,7 +872,7 @@ app.post("/api/st/push", async (req, res) => {
 });
 
 // Test ST connection
-app.get("/api/st/ping", async (req, res) => {
+app.get("/api/st/ping", requireAuth, async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
   const basicAuth = getStBasicAuth(req);
@@ -749,7 +899,7 @@ app.get("/api/st/ping", async (req, res) => {
 
 // Proxy ST avatar thumbnails so the browser doesn't need direct access to ST
 // GET /api/st/thumbnail?file=CharacterName.png&stUrl=http://sillytavern:8000
-app.get("/api/st/thumbnail", async (req, res) => {
+app.get("/api/st/thumbnail", requireAuth, async (req, res) => {
   const file = req.query.file;
   const stUrl = req.query.stUrl;
   if (!file || typeof file !== "string") {

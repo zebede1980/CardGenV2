@@ -872,7 +872,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  window.app = new CharacterGeneratorApp();
+  // Initialise auth — if already authenticated this resolves immediately
+  // and shows the app; otherwise the login overlay stays visible and
+  // onAuthSuccess is called after a successful login.
+  async function startApp() {
+    if (!window.app) {
+      // Reload server config now that we have a valid token so the
+      // shared API keys/settings are available to this user.
+      if (window.config) {
+        await window.config.loadConfig().catch(() => {});
+        window.config.saveToForm();
+      }
+      window.app = new CharacterGeneratorApp();
+    }
+  }
+
+  window.onAuthSuccess = startApp;
+
+  const authenticated = await window.cardgenAuth.initAuth();
+  if (authenticated) {
+    startApp();
+  }
 
   const style = document.createElement("style");
   style.textContent = `

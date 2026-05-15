@@ -111,9 +111,13 @@ class APIHandler {
     });
 
     try {
+      const authToken = window.cardgenAuth?.getToken() || "";
       const response = await fetch(url, {
         method: "POST",
-        headers: { ...headers, Authorization: "[REDACTED]" },
+        headers: {
+          ...headers,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify(data),
         signal: controller.signal,
       });

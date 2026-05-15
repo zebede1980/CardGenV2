@@ -76,7 +76,7 @@ class Config {
 
     // Then sync/override with server config if available
     try {
-      const res = await fetch("/api/config");
+      const res = await (window.authFetch || fetch)("/api/config");
       if (res.ok) {
         const serverConfig = await res.json();
         if (Object.keys(serverConfig).length > 0) {
@@ -168,7 +168,7 @@ class Config {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.config));
 
     // Also save to server for persistence across devices/sessions
-    fetch("/api/config", {
+    (window.authFetch || fetch)("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(this.config)

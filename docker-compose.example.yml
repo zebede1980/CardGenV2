@@ -44,6 +44,11 @@ services:
       - NODE_ENV=production
       - PORT=${PROXY_PORT:-2426}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-2427}}
+      # REQUIRED: Set a strong random secret for signing JWT tokens.
+      # Generate one with: openssl rand -hex 32
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      # Set to 'true' to allow new users to register accounts
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
     volumes:
       # IMPORTANT: This volume persists your local library (cards/prompts)
       # and API settings (keys, models) across container restarts.

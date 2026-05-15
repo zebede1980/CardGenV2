@@ -15,6 +15,62 @@
     </head>
 
     <body>
+        <!-- ── Auth overlay ── shown when not logged in ─────────────────────────── -->
+        <div id="auth-overlay" style="
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            inset: 0;
+            background: var(--bg-color, #0f0f0f);
+            z-index: 9999;
+        ">
+            <div style="
+                width: 100%;
+                max-width: 400px;
+                margin: 1rem;
+                padding: 2rem;
+                background: var(--surface-color, #1a1a1a);
+                border: 1px solid var(--border, #333);
+                border-radius: 0.75rem;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            ">
+                <h2 id="auth-title" style="margin: 0 0 1.5rem; font-size: 1.4rem; text-align: center;">Sign In</h2>
+                <form id="auth-form" novalidate>
+                    <div style="margin-bottom: 1rem;">
+                        <label for="auth-username" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Username</label>
+                        <input id="auth-username" type="text" autocomplete="username" required
+                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border, #444); background: var(--input-bg, #111); color: inherit; font-size: 1rem;"
+                        />
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label for="auth-password" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Password</label>
+                        <input id="auth-password" type="password" autocomplete="current-password" required
+                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border, #444); background: var(--input-bg, #111); color: inherit; font-size: 1rem;"
+                        />
+                    </div>
+                    <!-- Register-only fields -->
+                    <div id="auth-register-fields" style="display: none; margin-bottom: 1rem;">
+                        <label for="auth-confirm-password" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Confirm Password</label>
+                        <input id="auth-confirm-password" type="password" autocomplete="new-password"
+                            style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border, #444); background: var(--input-bg, #111); color: inherit; font-size: 1rem;"
+                        />
+                    </div>
+                    <div id="auth-error" style="display: none; color: #e55; font-size: 0.875rem; margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(220,50,50,0.1); border-radius: 0.35rem;"></div>
+                    <button id="auth-submit-btn" type="submit" data-mode="login" data-label="Sign In"
+                        class="btn-primary"
+                        style="width: 100%; padding: 0.7rem; font-size: 1rem;">
+                        Sign In
+                    </button>
+                </form>
+                <div id="auth-toggle-row" style="text-align: center; margin-top: 1.25rem; font-size: 0.875rem; color: var(--text-secondary, #888);">
+                    Don't have an account? <a href="#" id="auth-toggle-link">Sign Up</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Application root ── hidden until authenticated ──────────────────── -->
+        <div id="app-root">
         <div class="container">
             <header class="header">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
@@ -24,9 +80,15 @@
                             Create SillyTavern characters cards with AI
                         </p>
                     </div>
-                    <button id="theme-toggle-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;" title="Toggle light/dark theme" aria-pressed="false" aria-label="Toggle dark mode">
-                        🌙 Dark
-                    </button>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <div id="user-bar" style="display: none; align-items: center; gap: 0.5rem;">
+                            <span id="user-bar-name" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                            <button id="logout-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;">Sign Out</button>
+                        </div>
+                        <button id="theme-toggle-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;" title="Toggle light/dark theme" aria-pressed="false" aria-label="Toggle dark mode">
+                            🌙 Dark
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -1174,7 +1236,9 @@
                 </div>
             </footer>
         </div>
+        </div><!-- end #app-root -->
 
+        <script src="src/scripts/auth.js?v=20260515"></script>
         <script src="src/scripts/sanitize.js?v=20260512"></script>
         <script src="src/scripts/config.js?v=20260513"></script>
         <script src="src/scripts/api.js?v=20260218"></script>

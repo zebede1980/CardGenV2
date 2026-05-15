@@ -41,7 +41,7 @@ class CharacterStorage {
 
   async savePrompt(promptRecord) {
     const record = this.withTimestamps(promptRecord);
-    const res = await fetch(`${this.baseUrl}/api/storage/prompts`, {
+    const res = await authFetch(`${this.baseUrl}/api/storage/prompts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(record)
@@ -52,7 +52,7 @@ class CharacterStorage {
 
   async listPrompts() {
     try {
-      const res = await fetch(`${this.baseUrl}/api/storage/prompts`);
+      const res = await authFetch(`${this.baseUrl}/api/storage/prompts`);
       if (!res.ok) return [];
       const rows = await res.json();
       return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -63,13 +63,13 @@ class CharacterStorage {
   }
 
   async getPrompt(id) {
-    const res = await fetch(`${this.baseUrl}/api/storage/prompts/${id}`);
+    const res = await authFetch(`${this.baseUrl}/api/storage/prompts/${id}`);
     if (!res.ok) return null;
     return await res.json();
   }
 
   async deletePrompt(id) {
-    await fetch(`${this.baseUrl}/api/storage/prompts/${id}`, { method: "DELETE" });
+    await authFetch(`${this.baseUrl}/api/storage/prompts/${id}`, { method: "DELETE" });
   }
 
   async saveCard(cardRecord) {
@@ -81,7 +81,7 @@ class CharacterStorage {
       delete recordToSave.imageBlob;
     }
 
-    const res = await fetch(`${this.baseUrl}/api/storage/cards`, {
+    const res = await authFetch(`${this.baseUrl}/api/storage/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(recordToSave)
@@ -92,7 +92,7 @@ class CharacterStorage {
 
   async listCards() {
     try {
-      const res = await fetch(`${this.baseUrl}/api/storage/cards`);
+      const res = await authFetch(`${this.baseUrl}/api/storage/cards`);
       if (!res.ok) return [];
       const rows = await res.json();
       return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -103,7 +103,7 @@ class CharacterStorage {
   }
 
   async getCard(id) {
-    const res = await fetch(`${this.baseUrl}/api/storage/cards/${id}`);
+    const res = await authFetch(`${this.baseUrl}/api/storage/cards/${id}`);
     if (!res.ok) return null;
     const card = await res.json();
     
@@ -115,7 +115,7 @@ class CharacterStorage {
   }
 
   async deleteCard(id) {
-    await fetch(`${this.baseUrl}/api/storage/cards/${id}`, { method: "DELETE" });
+    await authFetch(`${this.baseUrl}/api/storage/cards/${id}`, { method: "DELETE" });
   }
 }
 

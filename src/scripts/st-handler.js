@@ -31,7 +31,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (btn) { btn.disabled = true; btn.textContent = "Testing…"; }
     if (status) { status.textContent = ""; status.className = "st-status"; }
     try {
-      const res = await fetch("/api/st/ping", { headers });
+      const res = await authFetch("/api/st/ping", { headers });
       const data = await res.json();
       if (data.ok) {
         if (status) {
@@ -71,7 +71,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     list.innerHTML = '<p class="library-empty">Loading…</p>';
     try {
-      const res = await fetch("/api/st/characters", { headers });
+      const res = await authFetch("/api/st/characters", { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const characters = await res.json();
 
@@ -138,7 +138,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     this.showNotification(`Loading "${name}" from SillyTavern…`, "info");
     try {
-      const res = await fetch("/api/st/export", {
+      const res = await authFetch("/api/st/export", {
         method: "POST",
         headers,
         body: JSON.stringify({ avatar_url: avatarUrl }),
@@ -221,7 +221,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const body = { pngBase64 };
       if (preservedName) body.preservedName = preservedName;
 
-      const res = await fetch("/api/st/push", {
+      const res = await authFetch("/api/st/push", {
         method: "POST",
         headers,
         body: JSON.stringify(body),
