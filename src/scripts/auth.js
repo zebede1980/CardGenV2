@@ -159,6 +159,25 @@ function setAuthMode(mode) {
   if (link) link.addEventListener("click", (e) => { e.preventDefault(); setAuthMode(mode === "login" ? "register" : "login"); });
 }
 
+// ── Story Writer tab detection ─────────────────────────────────────────────
+
+async function checkStoryApp() {
+  try {
+    const res = await authFetch("/api/story-app/status");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.available && data.url) {
+      const tab = document.getElementById("story-writer-tab");
+      if (tab) {
+        tab.href = data.url;
+        tab.style.display = "inline-flex";
+      }
+    }
+  } catch (_) {
+    // Story Writer not reachable — tab stays hidden, no error shown
+  }
+}
+
 // ── Initialisation ────────────────────────────────────────────────────────────
 
 async function initAuth() {
@@ -208,6 +227,7 @@ async function initAuth() {
         setStoredUser({ username: result.username });
         updateUserBar(result.username);
         hideAuthOverlay();
+        checkStoryApp();
         // Trigger app initialisation if it hasn't started yet
         if (typeof window.onAuthSuccess === "function") {
           window.onAuthSuccess();
@@ -243,6 +263,7 @@ async function initAuth() {
     setStoredUser(user);
     updateUserBar(user.username);
     hideAuthOverlay();
+    checkStoryApp();
     return true; // already authenticated
   } else {
     clearToken();

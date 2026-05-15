@@ -36,10 +36,15 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-2427}}
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
+      # Optional: URL of the Story Writer backend (container name on shared network)
+      - STORY_APP_URL=${STORY_APP_URL:-http://storywriter-backend:8000}
+      # Public URL shown to the browser for the Story Writer tab
+      - STORY_APP_PUBLIC_URL=${STORY_APP_PUBLIC_URL:-}
     volumes:
       - ./proxy/data:/app/data
     networks:
       - app-network
+      - nginx-proxy-nw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:2426/health"]
       interval: 30s
@@ -51,3 +56,5 @@ networks:
   app-network:
     driver: bridge
     name: character-generator-network
+  nginx-proxy-nw:
+    external: true

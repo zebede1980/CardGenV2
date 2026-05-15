@@ -286,6 +286,32 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// ── Story Writer availability check ──────────────────────────────────────────
+// Probes the JoeAnory backend container-to-container over the shared Docker
+// network.  Returns the public URL for the browser tab if reachable.
+app.get("/api/story-app/status", requireAuth, async (req, res) => {
+  const internalUrl = (process.env.STORY_APP_URL || "").replace(/\/$/, "");
+  const publicUrl = (process.env.STORY_APP_PUBLIC_URL || "").replace(/\/$/, "");
+
+  if (!internalUrl) {
+    return res.json({ available: false });
+  }
+
+  try {
+    const response = await fetch(`${internalUrl}/health`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      timeout: 3000,
+    });
+    if (response.ok) {
+      return res.json({ available: true, url: publicUrl || internalUrl });
+    }
+    return res.json({ available: false });
+  } catch (_) {
+    return res.json({ available: false });
+  }
+});
+
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
   try {
