@@ -76,6 +76,11 @@ class Config {
 
     // Then sync/override with server config if available
     try {
+      // Skip if no auth token yet — authFetch would get a 401 and
+      // could disrupt the login flow. Config is reloaded after login.
+      if (!(window.cardgenAuth && window.cardgenAuth.getToken())) {
+        return;
+      }
       const res = await (window.authFetch || fetch)("/api/config");
       if (res.ok) {
         const serverConfig = await res.json();

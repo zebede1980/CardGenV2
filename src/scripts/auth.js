@@ -42,8 +42,10 @@ window.authFetch = async function authFetch(url, options = {}) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   const res = await fetch(url, { ...options, headers });
-  if (res.status === 401) {
-    // Token expired or invalid — force re-login
+  if (res.status === 401 && token && getToken() === token) {
+    // Only clear + redirect if the token we sent is still the current one.
+    // This prevents an in-flight request (made with an old/expired token)
+    // from wiping a freshly-issued token after a successful re-login.
     clearToken();
     window.location.reload();
   }
