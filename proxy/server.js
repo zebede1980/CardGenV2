@@ -319,6 +319,41 @@ app.get("/api/story-app/status", async (req, res) => {
   }
 });
 
+// ── Story Writer Backend Proxy ───────────────────────────────────────────────
+app.all("/api/sw/*", requireAuth, async (req, res) => {
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const targetPath = req.originalUrl.replace("/api/sw", "");
+  const targetUrl = internalUrl + targetPath;
+
+  try {
+    const fetchOptions = {
+      method: req.method,
+      headers: { 
+        "Content-Type": req.headers["content-type"] || "application/json",
+        "X-User-Id": String(req.user.userId),
+        "X-User-Name": String(req.user.username)
+      }
+    };
+    
+    // Only pass bodies for methods that allow them
+    if (["POST", "PUT", "PATCH"].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+
+    const response = await fetch(targetUrl, fetchOptions);
+    
+    if (response.headers.get("content-type")?.includes("text/event-stream")) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      return response.body.pipe(res);
+    }
+
+    const text = await response.text();
+    res.status(response.status).send(text);
+  } catch (error) { res.status(500).json({ error: "StoryWriter backend unreachable: " + error.message }); }
+});
+
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
   try {

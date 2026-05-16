@@ -91,10 +91,6 @@
                         </p>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                        <a id="story-writer-tab" href="#" target="_blank" rel="noopener"
-                            style="display: none; font-size: 0.85rem; padding: 0.4rem 0.75rem;"
-                            class="btn-outline"
-                            title="Open AI Story Writer">📖 Story Writer</a>
                         <div id="user-bar" style="display: none; align-items: center; gap: 0.5rem;">
                             <span id="user-bar-name" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
                             <button id="logout-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;">Sign Out</button>
@@ -107,6 +103,14 @@
             </header>
 
             <main class="main">
+                <!-- Integrated Application Tabs -->
+                <div id="view-tabs" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                    <button id="tab-cardgen" class="btn-primary" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎭 Character Generator</button>
+                    <button id="tab-storywriter" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">✍️ Story Writer</button>
+                </div>
+
+                <!-- Character Generator View -->
+                <div id="view-cardgen">
                 <section class="input-section" style="margin-bottom: 2rem;">
                     <details id="input-section-details" open>
                         <summary class="section-title" style="cursor: pointer; padding: 0.5rem 0; margin-bottom: 1rem; user-select: none;">
@@ -1220,6 +1224,47 @@
                         </div>
                     </details>
                 </section>
+                </div>
+
+                <!-- Story Writer View -->
+                <div id="view-storywriter" style="display: none;">
+                    <section class="input-section" id="sw-list-view" style="margin-bottom: 2rem;">
+                        <h2 class="section-title">Your Stories</h2>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+                            <input type="text" id="sw-new-title" class="input" placeholder="New Story Title" style="flex: 1; max-width: 400px;">
+                            <button id="sw-create-btn" class="btn-primary">Create Story</button>
+                        </div>
+                        <div id="sw-story-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+                            <!-- Story cards dynamically generated -->
+                        </div>
+                    </section>
+
+                    <section class="result-section" id="sw-workspace-view" style="display: none; flex-direction: column; height: 75vh;">
+                        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <button id="sw-back-btn" class="btn-outline" style="padding: 0.4rem 0.8rem;">← Back</button>
+                            <input type="text" id="sw-title" class="input" style="flex: 1; min-width: 250px; font-weight: bold; font-size: 1.1rem; background: var(--surface-color);">
+                            
+                            <div id="sw-attached-cards" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;"></div>
+                            <select id="sw-add-card-select" class="input" style="width: auto; background: var(--surface-color);">
+                                <option value="">+ Add Character</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom: 1rem;">
+                            <label class="label">Synopsis / Memo</label>
+                            <textarea id="sw-synopsis" class="textarea" rows="3" placeholder="Map out your story premise, plot points, worldbuilding notes..." style="background: var(--surface-color);"></textarea>
+                        </div>
+
+                        <div id="sw-story-area" class="content-box" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; padding: 1.5rem; background: var(--surface-color);">
+                            <!-- Story Segments injected here -->
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <input type="text" id="sw-steering" class="input" placeholder="Steer the story (e.g. 'Make the villain reveal their motive')..." style="flex: 1; min-width: 250px; background: var(--surface-color);">
+                            <button id="sw-generate-btn" class="btn-primary" style="padding: 0.8rem 1.5rem;">Generate Next</button>
+                        </div>
+                    </section>
+                </div>
 
             </main>
 
@@ -1274,9 +1319,12 @@
         <script src="src/scripts/revision-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/chat-tester.js?v=20260512"></script>
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
-        <script src="src/scripts/st-handler.js?v=20260514"></script>        <!-- API Settings Modal -->
+        <script src="src/scripts/st-handler.js?v=20260514"></script>
+        <script src="src/scripts/storywriter.js?v=1"></script>
+        <!-- API Settings Modal -->
 
         <!-- ST push-choice modal (name changed) -->
+
         <div id="st-push-choice-modal" class="modal-overlay">
             <div class="api-settings-modal" style="max-width: 460px; width: 90%;">
                 <div class="modal-header">

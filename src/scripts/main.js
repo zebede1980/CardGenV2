@@ -43,7 +43,6 @@ class CharacterGeneratorApp {
     this.initTheme();
     this.bindEvents();
     this.checkAPIStatus();
-    this.checkStoryWriterStatus();
     this.refreshLibraryViews();
   }
 
@@ -511,48 +510,6 @@ class CharacterGeneratorApp {
     } catch (error) {
       indicator.className = "status-indicator status-offline";
       text.textContent = `API Status: ${error.message}`;
-    }
-  }
-
-  async checkStoryWriterStatus() {
-    console.log("Frontend: Checking if Story Writer is available...");
-    try {
-      // We use a direct fetch. The endpoint no longer requires auth.
-      const response = await fetch("/api/story-app/status");
-      if (!response.ok) {
-        console.error("Frontend: Failed to fetch Story Writer status. Status:", response.status);
-        return;
-      }
-      const data = await response.json();
-      console.log("Frontend: Story Writer status response:", data);
-      
-      if (data.available && data.url) {
-        this.addStoryWriterButton(data.url);
-      }
-    } catch (error) {
-      console.error("Frontend: Error checking Story Writer status:", error);
-    }
-  }
-
-  addStoryWriterButton(url) {
-    if (document.getElementById("story-writer-btn")) return;
-    
-    console.log("Frontend: Adding Story Writer button to UI pointing to", url);
-    const apiStatus = document.getElementById("api-status");
-    if (apiStatus && apiStatus.parentNode) {
-      const btn = document.createElement("a");
-      btn.id = "story-writer-btn";
-      btn.href = url;
-      btn.target = "_blank";
-      btn.className = "btn-secondary";
-      btn.style.textDecoration = "none";
-      btn.style.marginLeft = "10px";
-      btn.style.display = "inline-flex";
-      btn.style.alignItems = "center";
-      btn.style.gap = "5px";
-      btn.innerHTML = "<span>✍️</span><span>Story Writer</span>";
-      
-      apiStatus.parentNode.insertBefore(btn, apiStatus.nextSibling);
     }
   }
 
