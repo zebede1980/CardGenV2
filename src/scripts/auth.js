@@ -45,7 +45,7 @@ window.authFetch = async function authFetch(url, options = {}) {
   if (res.status === 401) {
     // Token expired or invalid — force re-login
     clearToken();
-    showAuthOverlay();
+    window.location.reload();
   }
   return res;
 };
@@ -245,12 +245,8 @@ async function initAuth() {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
       clearToken();
-      updateUserBar(null);
-      // Reset confirm password field if present
-      const cp = document.getElementById("auth-confirm-password");
-      if (cp) cp.value = "";
-      setAuthMode("login");
-      showAuthOverlay();
+      // Reload the page to ensure all application state is wiped from memory
+      window.location.reload();
     });
   }
 

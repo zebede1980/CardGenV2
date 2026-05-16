@@ -289,7 +289,7 @@ app.get("/health", (req, res) => {
 // ── Story Writer availability check ──────────────────────────────────────────
 // Probes the JoeAnory backend container-to-container over the shared Docker
 // network.  Returns the public URL for the browser tab if reachable.
-app.get("/api/story-app/status", requireAuth, async (req, res) => {
+app.get("/api/story-app/status", async (req, res) => {
   const internalUrl = (process.env.STORY_APP_URL || "").replace(/\/$/, "");
   const publicUrl = (process.env.STORY_APP_PUBLIC_URL || "").replace(/\/$/, "");
 
