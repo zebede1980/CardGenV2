@@ -409,6 +409,122 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Migrate cards from legacy cards.json to PostgreSQL ───────────────────────
+app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
+  const storeFile = path.join(getUserDataDir(req.user.userId), "cards.json");
+
+  if (!fs.existsSync(storeFile)) {
+    return res.json({ total: 0, migrated: 0, skipped: 0, errors: [], message: "No cards.json found — nothing to migrate." });
+  }
+
+  let cards;
+  try {
+    cards = await readJsonStore(storeFile);
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to read cards.json: " + e.message });
+  }
+
+  if (!Array.isArray(cards) || cards.length === 0) {
+    return res.json({ total: 0, migrated: 0, skipped: 0, errors: [], message: "cards.json is empty." });
+  }
+
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const internalHeaders = {
+    "X-User-Id": String(req.user.userId),
+    "X-User-Name": String(req.user.username),
+    "X-Internal-Secret": INTERNAL_API_SECRET,
+  };
+
+  let migrated = 0, skipped = 0;
+  const errors = [];
+
+  for (const card of cards) {
+    const cardName = card.name || card.characterName || "Unnamed";
+    try {
+      let saved = false;
+
+      // Path A: card has an embedded PNG — upload it so the backend re-parses the embedded spec
+      const imageBase64 = card.imageBase64 || card.image_base64 || "";
+      if (imageBase64 && imageBase64.startsWith("data:")) {
+        const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
+        if (match) {
+          const mimeType = match[1];
+          const imageBuffer = Buffer.from(match[2], "base64");
+          const filename = `${cardName.replace(/[^a-zA-Z0-9_-]/g, "_")}.png`;
+          const boundary = `----CardMigration${Date.now()}${Math.random().toString(36).slice(2)}`;
+          const partHeader = Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`
+          );
+          const partFooter = Buffer.from(`\r\n--${boundary}--\r\n`);
+          const body = Buffer.concat([partHeader, imageBuffer, partFooter]);
+
+          const uploadRes = await fetch(`${internalUrl}/api/cards/upload`, {
+            method: "POST",
+            headers: {
+              ...internalHeaders,
+              "Content-Type": `multipart/form-data; boundary=${boundary}`,
+              "Content-Length": String(body.length),
+            },
+            body,
+          });
+
+          if (uploadRes.ok) {
+            migrated++;
+            saved = true;
+          } else {
+            const errText = await uploadRes.text();
+            console.warn(`[Migration] PNG upload failed for "${cardName}" (${uploadRes.status}): ${errText} — falling back to text-only`);
+          }
+        }
+      }
+
+      // Path B: no image or upload failed — create from JSON text fields
+      if (!saved) {
+        const dbPayload = {
+          name: cardName,
+          description: card.description || "",
+          personality: card.personality || "",
+          scenario: card.scenario || "",
+          first_mes: card.firstMessage || card.first_mes || "",
+          mes_example: card.mesExample || card.mes_example || "",
+          creatorcomment: card.creatorNotes || card.creatorcomment || "",
+          tags: Array.isArray(card.tags) ? card.tags.join(",") : (card.tags || ""),
+          creator: card.creator || "",
+          character_version: card.character_version || "",
+          alternate_greetings: Array.isArray(card.alternateGreetings)
+            ? JSON.stringify(card.alternateGreetings)
+            : (card.alternateGreetings || "[]"),
+          system_prompt: card.system_prompt || "",
+          post_history_instructions: card.post_history_instructions || "",
+          character_book: typeof card.character_book === "object" && card.character_book
+            ? JSON.stringify(card.character_book)
+            : (card.character_book || ""),
+          image_path: "",
+        };
+
+        const createRes = await fetch(`${internalUrl}/api/cards/`, {
+          method: "POST",
+          headers: { ...internalHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify(dbPayload),
+        });
+
+        if (createRes.ok) {
+          migrated++;
+        } else {
+          skipped++;
+          errors.push(`"${cardName}": ${await createRes.text()}`);
+        }
+      }
+    } catch (e) {
+      skipped++;
+      errors.push(`"${cardName}": ${e.message}`);
+    }
+  }
+
+  console.log(`[Migration] User ${req.user.userId}: ${migrated}/${cards.length} migrated, ${skipped} failed`);
+  res.json({ total: cards.length, migrated, skipped, errors });
+});
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -450,7 +566,8 @@ app.get("/api/story-app/status", async (req, res) => {
 // ── Story Writer Backend Proxy ───────────────────────────────────────────────
 app.all("/api/sw/*", requireAuth, async (req, res) => {
   const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-  const targetPath = req.originalUrl.replace("/api/sw", "");
+  // Strip /api/sw from the browser path, then prepend /api since FastAPI mounts all routers under /api
+  const targetPath = "/api" + req.originalUrl.replace("/api/sw", "");
   const targetUrl = internalUrl + targetPath;
 
   try {

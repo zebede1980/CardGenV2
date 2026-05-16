@@ -503,4 +503,27 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleMigrateCards() {
+    const btn = document.getElementById("migrate-cards-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Migrating…"; }
+    try {
+      const res = await authFetch("/api/storage/migrate-cards", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Migration failed");
+
+      if (data.total === 0) {
+        this.showNotification(data.message || "No old cards found to migrate.", "info");
+      } else {
+        const msg = `Migrated ${data.migrated} of ${data.total} card(s).${data.skipped ? ` ${data.skipped} failed — see browser console for details.` : ""}`;
+        this.showNotification(msg, data.skipped ? "warning" : "success");
+        if (data.errors?.length) console.warn("[Migration] Per-card errors:", data.errors);
+        await this.refreshLibraryViews();
+      }
+    } catch (e) {
+      this.showNotification("Migration error: " + e.message, "error");
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "📦 Migrate from old storage"; }
+    }
+  },
+
 });
