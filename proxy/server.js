@@ -280,6 +280,57 @@ app.delete("/api/storage/prompts/:id", requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Shared helper: translate a flat DB card row into the shape the UI expects ─
+function translateDbCard(c) {
+  let altGreetings = [];
+  let charBook = undefined;
+
+  try {
+    if (c.alternate_greetings && String(c.alternate_greetings).trim() !== "") {
+      const parsed = JSON.parse(c.alternate_greetings);
+      if (Array.isArray(parsed)) altGreetings = parsed;
+    }
+  } catch (e) { console.warn(`[Card Storage] Failed to parse alternate_greetings for card ${c.id}`); }
+
+  try {
+    if (c.character_book && String(c.character_book).trim() !== "") {
+      charBook = JSON.parse(c.character_book);
+    }
+  } catch (e) { console.warn(`[Card Storage] Failed to parse character_book for card ${c.id}`); }
+
+  // The nested `character` object is what handleLibraryCardClick expects (card.character.name etc.)
+  const character = {
+    name: c.name || "Unnamed",
+    description: c.description || "",
+    personality: c.personality || "",
+    scenario: c.scenario || "",
+    firstMessage: c.first_mes || "",
+    mesExample: c.mes_example || "",
+    creatorNotes: c.creatorcomment || "",
+    tags: c.tags ? String(c.tags).split(",").map(t => t.trim()).filter(Boolean) : [],
+    creator: c.creator || "",
+    character_version: c.character_version || "",
+    alternateGreetings: altGreetings,
+    system_prompt: c.system_prompt || "",
+    post_history_instructions: c.post_history_instructions || "",
+    character_book: charBook,
+  };
+
+  return {
+    id: c.id,
+    // Library list renderer uses characterName and isPermanent
+    characterName: c.name || "Unnamed Character",
+    isPermanent: true,
+    updatedAt: c.created_at || new Date().toISOString(),
+    createdAt: c.created_at || new Date().toISOString(),
+    // Nested object for the load handler
+    character,
+    // Also spread flat fields so the StoryWriter card picker can read them directly
+    ...character,
+    image_path: c.image_path || "",
+  };
+}
+
 // ── Per-user Data Endpoints for Cards (PostgreSQL Database Bridge) ───────────
 app.get("/api/storage/cards", requireAuth, async (req, res) => {
   try {
@@ -287,56 +338,39 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
     const response = await fetch(`${internalUrl}/api/cards/`, {
       headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
     });
-    
+
     if (!response.ok) {
       const errText = await response.text();
       console.error(`[Card Storage] GET Database returned ${response.status}: ${errText}`);
       throw new Error(`Database returned ${response.status}`);
     }
-    
-    const dbCards = await response.json();
-    
-    const translated = dbCards.map(c => {
-      let altGreetings = [];
-      let charBook = undefined;
-      
-      try {
-        if (c.alternate_greetings && String(c.alternate_greetings).trim() !== "") {
-          const parsed = JSON.parse(c.alternate_greetings);
-          if (Array.isArray(parsed)) altGreetings = parsed;
-        }
-      } catch (e) { console.warn(`[Card Storage] Failed to parse alternate_greetings for card ${c.id}`); }
-      
-      try {
-        if (c.character_book && String(c.character_book).trim() !== "") {
-          charBook = JSON.parse(c.character_book);
-        }
-      } catch (e) { console.warn(`[Card Storage] Failed to parse character_book for card ${c.id}`); }
 
-      return {
-        id: c.id,
-        name: c.name || "Unnamed",
-        description: c.description || "",
-        personality: c.personality || "",
-        scenario: c.scenario || "",
-        firstMessage: c.first_mes || "",
-        mesExample: c.mes_example || "",
-        creatorNotes: c.creatorcomment || "",
-        tags: c.tags ? String(c.tags).split(",").map(t => t.trim()).filter(Boolean) : [],
-        creator: c.creator || "",
-        character_version: c.character_version || "",
-        alternateGreetings: altGreetings,
-        system_prompt: c.system_prompt || "",
-        post_history_instructions: c.post_history_instructions || "",
-        character_book: charBook,
-        image_path: c.image_path || ""
-      };
-    });
-    
-    res.json(translated);
-  } catch (e) { 
+    const dbCards = await response.json();
+    res.json(dbCards.map(translateDbCard));
+  } catch (e) {
     console.error("[Card Storage] GET /api/storage/cards Error:", e.message);
-    res.status(500).json({ error: e.message }); 
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Individual card fetch — used by storage.getCard(id) when Load is clicked
+app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
+  try {
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    const response = await fetch(`${internalUrl}/api/cards/${req.params.id}`, {
+      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Card Storage] GET /:id Database returned ${response.status}: ${errText}`);
+      return res.status(response.status).json({ error: errText });
+    }
+
+    res.json(translateDbCard(await response.json()));
+  } catch (e) {
+    console.error("[Card Storage] GET /api/storage/cards/:id Error:", e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
