@@ -468,6 +468,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
    */
   async executeLoreElevation(selectedCandidates, alsoReduceBloat = false) {
     const pov = document.getElementById("pov-select")?.value || "third";
+    const before = this._captureCardSnapshot();
+    const oldLorebookEntries = JSON.parse(JSON.stringify(this.lorebookEntries));
 
     // 1. Create lorebook entries for selected candidates — with enrichment pass
     if (selectedCandidates.length > 0) {
@@ -513,7 +515,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       instruction += "Additionally, rewrite the entire card to be extremely concise and token-efficient. Remove all flowery prose, purple language, and repetition. Every sentence must serve a direct behavioural or descriptive purpose. Bullet points for traits and behaviours; short factual prose only for backstory and scenario. Keep only the absolute core facts that an AI needs to portray this character — make every word count.";
     }
 
-    if (!instruction) return; // Nothing to do
+    if (!instruction) return true; // Nothing to do
 
     this.syncAltGreetingsToCharacter();
     this.showNotification("Applying changes to card...", "info");
@@ -523,11 +525,23 @@ Object.assign(CharacterGeneratorApp.prototype, {
       instruction,
       pov,
     );
-    this.currentCharacter = revised;
-    this.originalCharacter = JSON.parse(JSON.stringify(revised));
-    this.displayCharacter();
-    await this.saveCardToLibrary();
-    await this.refreshLibraryViews();
+
+    const approved = await this.promptCardDiffApproval(before, revised);
+
+    if (approved) {
+      this.currentCharacter = revised;
+      this.originalCharacter = JSON.parse(JSON.stringify(revised));
+      this.displayCharacter();
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+      return true;
+    } else {
+      this.lorebookEntries = oldLorebookEntries;
+      this.renderLorebookEntries();
+      this.updateLorebookEntryCount();
+      this.currentCharacter.character_book = this.buildCharacterBook();
+      return false;
+    }
   },
 
   /**
@@ -569,8 +583,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       this.setRevisionState(true, "scan-for-lorebook-btn");
-      await this.executeLoreElevation(selected, false);
-      this.showNotification(`${selected.length} item(s) moved to lorebook and card updated!`, "success");
+      const approved = await this.executeLoreElevation(selected, false);
+      if (approved) {
+        this.showNotification(`${selected.length} item(s) moved to lorebook and card updated!`, "success");
+      } else {
+        this.showNotification("Scan changes discarded.", "info");
+      }
     } catch (error) {
       console.error("Scan for lorebook failed:", error);
       const wasStoppedByUser = error.message?.includes("Generation stopped by user");

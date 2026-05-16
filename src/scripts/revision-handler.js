@@ -28,13 +28,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
         revisionInstruction,
         pov,
       );
-      this.currentCharacter = revised;
-      this.originalCharacter = JSON.parse(JSON.stringify(revised));
-      this.displayCharacter();
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
-      this.showNotification("Character revised successfully", "success");
-      this.showCardDiff(before, this._captureCardSnapshot());
+
+      const approved = await this.promptCardDiffApproval(before, revised);
+
+      if (approved) {
+        this.currentCharacter = revised;
+        this.originalCharacter = JSON.parse(JSON.stringify(revised));
+        this.displayCharacter();
+        await this.saveCardToLibrary();
+        await this.refreshLibraryViews();
+        this.showNotification("Character revised successfully", "success");
+      } else {
+        this.showNotification("Revision discarded", "info");
+      }
     } catch (error) {
       console.error("Revision failed:", error);
       const wasStoppedByUser = error.message.includes(
@@ -85,9 +91,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
         console.warn("Lorebook scan failed (continuing with bloat reduction only):", scanError);
       }
 
-      await this.executeLoreElevation(selectedCandidates, true);
-      this.showNotification("Card bloat reduced successfully!", "success");
-      this.showCardDiff(before, this._captureCardSnapshot());
+      const approved = await this.executeLoreElevation(selectedCandidates, true);
+      if (approved) {
+        this.showNotification("Card bloat reduced successfully!", "success");
+      } else {
+        this.showNotification("Card reduction discarded.", "info");
+      }
     } catch (error) {
       console.error("Reduction failed:", error);
       const wasStoppedByUser = error.message?.includes("Generation stopped by user");
@@ -177,16 +186,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
         revisionInstruction,
         pov,
       );
-      this.currentCharacter = revised;
-      this.originalCharacter = JSON.parse(JSON.stringify(revised));
-      this.displayCharacter();
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
-      this.showNotification(
-        "Character consistency issues fixed successfully!",
-        "success",
-      );
-      this.showCardDiff(before, this._captureCardSnapshot());
+
+      const approved = await this.promptCardDiffApproval(before, revised);
+
+      if (approved) {
+        this.currentCharacter = revised;
+        this.originalCharacter = JSON.parse(JSON.stringify(revised));
+        this.displayCharacter();
+        await this.saveCardToLibrary();
+        await this.refreshLibraryViews();
+        this.showNotification(
+          "Character consistency issues fixed successfully!",
+          "success",
+        );
+      } else {
+        this.showNotification("Auto-fix discarded", "info");
+      }
     } catch (error) {
       console.error("Auto-fix failed:", error);
       const wasStoppedByUser = error.message.includes(
@@ -256,11 +271,33 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }).join("");
   },
 
-  showCardDiff(before, after) {
-    const modal = document.getElementById("card-diff-modal");
-    const content = document.getElementById("card-diff-content");
-    const closeBtn = document.getElementById("card-diff-modal-close-btn");
-    if (!modal || !content) return;
+  promptCardDiffApproval(before, after) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("card-diff-modal");
+      const content = document.getElementById("card-diff-content");
+      let closeBtn = document.getElementById("card-diff-modal-close-btn");
+      
+      if (!modal || !content) {
+        resolve(true);
+        return;
+      }
+
+      let acceptBtn = document.getElementById("card-diff-accept-btn");
+      let rejectBtn = document.getElementById("card-diff-reject-btn");
+      
+      // Dynamically morph the Close button into Accept/Discard if no UI changes were made
+      if (!acceptBtn || !rejectBtn) {
+        const footer = closeBtn?.parentElement;
+        if (footer) {
+          footer.innerHTML = `
+            <button id="card-diff-reject-btn" class="btn-secondary" style="margin-right: 0.5rem;">Discard Changes</button>
+            <button id="card-diff-accept-btn" class="btn-primary">Accept Changes</button>
+          `;
+          acceptBtn = document.getElementById("card-diff-accept-btn");
+          rejectBtn = document.getElementById("card-diff-reject-btn");
+          closeBtn = null;
+        }
+      }
 
     const fields = [
       { key: "name", label: "Name" },
@@ -290,16 +327,24 @@ Object.assign(CharacterGeneratorApp.prototype, {
     modal.classList.add("show");
     document.body.style.overflow = "hidden";
 
-    const close = () => {
-      modal.classList.remove("show");
-      document.body.style.overflow = "";
-      closeBtn?.removeEventListener("click", close);
-      modal.removeEventListener("click", onBackdrop);
-    };
-    const onBackdrop = (e) => { if (e.target === modal) close(); };
+      const cleanup = () => {
+        modal.classList.remove("show");
+        document.body.style.overflow = "";
+        acceptBtn?.removeEventListener("click", onAccept);
+        rejectBtn?.removeEventListener("click", onReject);
+        closeBtn?.removeEventListener("click", onReject);
+        modal.removeEventListener("click", onBackdrop);
+      };
 
-    closeBtn?.addEventListener("click", close);
-    modal.addEventListener("click", onBackdrop);
+      const onAccept = () => { cleanup(); resolve(true); };
+      const onReject = () => { cleanup(); resolve(false); };
+      const onBackdrop = (e) => { if (e.target === modal) onReject(); };
+
+      acceptBtn?.addEventListener("click", onAccept);
+      rejectBtn?.addEventListener("click", onReject);
+      closeBtn?.addEventListener("click", onReject);
+      modal.addEventListener("click", onBackdrop);
+    });
   },
 
 });
