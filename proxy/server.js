@@ -367,7 +367,20 @@ app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
       return res.status(response.status).json({ error: errText });
     }
 
-    res.json(translateDbCard(await response.json()));
+    const translated = translateDbCard(await response.json());
+
+    // Attach locally-stored portrait image if present
+    const imgFile = path.join(getUserDataDir(req.user.userId), "card-images", `${req.params.id}.img`);
+    const mimeFile = path.join(getUserDataDir(req.user.userId), "card-images", `${req.params.id}.mime`);
+    if (fs.existsSync(imgFile) && fs.existsSync(mimeFile)) {
+      const [imgBuf, mime] = await Promise.all([
+        fsPromises.readFile(imgFile),
+        fsPromises.readFile(mimeFile, "utf8"),
+      ]);
+      translated.imageBase64 = `data:${mime};base64,${imgBuf.toString("base64")}`;
+    }
+
+    res.json(translated);
   } catch (e) {
     console.error("[Card Storage] GET /api/storage/cards/:id Error:", e.message);
     res.status(500).json({ error: e.message });
@@ -377,22 +390,28 @@ app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
 app.post("/api/storage/cards", requireAuth, async (req, res) => {
   try {
     const record = req.body;
+    // saveCardToLibrary wraps all data in a nested `character` object — unwrap it
+    const char = record.character || record;
+    const name = record.characterName || char.name || "Unnamed";
+
     const dbPayload = {
-      name: record.name || "Unnamed",
-      description: record.description || "",
-      personality: record.personality || "",
-      scenario: record.scenario || "",
-      first_mes: record.firstMessage || "",
-      mes_example: record.mesExample || record.mes_example || "",
-      creatorcomment: record.creatorNotes || "",
-      tags: Array.isArray(record.tags) ? record.tags.join(",") : (record.tags || ""),
-      creator: record.creator || "",
-      character_version: record.character_version || "",
-      alternate_greetings: Array.isArray(record.alternateGreetings) ? JSON.stringify(record.alternateGreetings) : (record.alternateGreetings || "[]"),
-      system_prompt: record.system_prompt || "",
-      post_history_instructions: record.post_history_instructions || "",
-      character_book: typeof record.character_book === 'object' ? JSON.stringify(record.character_book) : (record.character_book || ""),
-      image_path: record.image_path || ""
+      name,
+      description: char.description || "",
+      personality: char.personality || "",
+      scenario: char.scenario || "",
+      first_mes: char.firstMessage || char.first_mes || "",
+      mes_example: char.mesExample || char.mes_example || "",
+      creatorcomment: char.creatorNotes || char.creatorcomment || "",
+      tags: Array.isArray(char.tags) ? char.tags.join(",") : (char.tags || ""),
+      creator: char.creator || "",
+      character_version: char.character_version || "",
+      alternate_greetings: Array.isArray(char.alternateGreetings) ? JSON.stringify(char.alternateGreetings) : (char.alternateGreetings || "[]"),
+      system_prompt: char.system_prompt || "",
+      post_history_instructions: char.post_history_instructions || "",
+      character_book: typeof char.character_book === "object" && char.character_book
+        ? JSON.stringify(char.character_book)
+        : (char.character_book || ""),
+      image_path: "",
     };
 
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
@@ -424,10 +443,25 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     }
     
     const dbCard = await response.json();
+
+    // Save portrait image to proxy filesystem keyed by card DB id
+    const imageBase64 = record.imageBase64 || "";
+    if (imageBase64.startsWith("data:")) {
+      const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
+      if (match) {
+        const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+        if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+        await Promise.all([
+          fsPromises.writeFile(path.join(imgDir, `${dbCard.id}.img`), Buffer.from(match[2], "base64")),
+          fsPromises.writeFile(path.join(imgDir, `${dbCard.id}.mime`), match[1]),
+        ]);
+      }
+    }
+
     res.json({ ...record, id: dbCard.id });
-  } catch (e) { 
+  } catch (e) {
     console.error("[Card Storage] POST /api/storage/cards Error:", e.message);
-    res.status(500).json({ error: e.message }); 
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -439,6 +473,12 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
       headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
     });
     if (!response.ok) throw new Error("Failed to delete card from database");
+    // Clean up locally-stored image if present
+    const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+    for (const ext of [".img", ".mime"]) {
+      const f = path.join(imgDir, `${req.params.id}${ext}`);
+      if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+    }
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
