@@ -111,11 +111,14 @@ function getUserDataDir(userId) {
 // ── JWT middleware ────────────────────────────────────────────────────────────
 
 function requireAuth(req, res, next) {
+  // Accept Bearer header OR ?token= query param (needed for <img src> which can't send headers)
   const authHeader = req.headers["authorization"];
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  const tokenFromHeader = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const tokenFromQuery = typeof req.query.token === "string" ? req.query.token : null;
+  const token = tokenFromHeader || tokenFromQuery;
+  if (!token) {
     return res.status(401).json({ error: "Authentication required" });
   }
-  const token = authHeader.slice(7);
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload; // { userId, username }
@@ -1245,7 +1248,17 @@ app.post("/api/st/export", requireAuth, async (req, res) => {
       return res.status(response.status).json({ error: `ST export returned ${response.status}` });
     }
     res.setHeader("Content-Type", "image/png");
-    res.setHeader("Content-Disposition", `attachment; filename="${avatar_url}"`);
+    // Sanitise the filename — old card names may contain characters that are
+    // illegal in HTTP header values (commas, non-ASCII, quotes, etc.)
+    const safeFilename = (avatar_url || "character.png")
+      .replace(/[^\x20-\x7E]/g, "_")   // strip non-printable / non-ASCII
+      .replace(/[",\\\r\n]/g, "_")      // strip quotes, commas, backslashes
+      .trim() || "character.png";
+    try {
+      res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
+    } catch (_) {
+      res.setHeader("Content-Disposition", "attachment; filename=\"character.png\"");
+    }
     response.body.pipe(res);
   } catch (error) {
     console.error("ST export error:", error);

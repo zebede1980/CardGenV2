@@ -94,8 +94,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const snippet = escapeHtml((description || firstMes).replace(/\n+/g, " ").trim().slice(0, 120));
         const tagHtml = tags.slice(0, 5).map(t => `<span class="st-card-tag">${escapeHtml(String(t))}</span>`).join("");
         // Route thumbnail through our proxy — the browser can't reach ST directly
+        // Append the JWT token as a query param since <img src> can't send headers
+        const authToken = window.cardgenAuth?.getToken() || "";
         const thumbUrl = avatar
-          ? `/api/st/thumbnail?file=${encodeURIComponent(avatar)}&stUrl=${encodeURIComponent(stUrl)}`
+          ? `/api/st/thumbnail?file=${encodeURIComponent(avatar)}&stUrl=${encodeURIComponent(stUrl)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`
           : "";
         const thumbHtml = thumbUrl
           ? `<img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
