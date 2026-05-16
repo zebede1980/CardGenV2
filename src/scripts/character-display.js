@@ -392,6 +392,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       regenBtn.textContent = "⏳...";
 
       const pov = document.getElementById("pov-select")?.value || "third";
+      const before = this._captureCardSnapshot();
       const newValue = await window.apiHandler.regenerateField(
         this.currentCharacter,
         field,
@@ -401,10 +402,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
       );
 
       if (newValue) {
-        textArea.value = newValue;
-        this.currentCharacter[field] = newValue;
-        this.handleCharacterEdit(field);
-        this.showNotification(`${field} regenerated!`, "success");
+        const revised = JSON.parse(JSON.stringify(this.currentCharacter));
+        revised[field] = newValue;
+        const approved = await this.promptCardDiffApproval(before, revised);
+
+        if (approved) {
+          textArea.value = newValue;
+          this.currentCharacter[field] = newValue;
+          this.handleCharacterEdit(field);
+          this.showNotification(`${field} regenerated!`, "success");
+        } else {
+          this.showNotification(`${field} regeneration discarded.`, "info");
+        }
       }
 
       regenBtn.textContent = originalText;
@@ -437,6 +446,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const pov = document.getElementById("pov-select")?.value || "third";
       const customPrompt =
         document.getElementById("example-messages-prompt")?.value?.trim() || "";
+      const before = this._captureCardSnapshot();
       const examples = await this.apiHandler.generateExampleMessages(
         this.currentCharacter,
         count,
@@ -445,19 +455,33 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.lorebookEntries,
       );
 
-      this.currentCharacter.mesExample = examples;
+      const revised = JSON.parse(JSON.stringify(this.currentCharacter));
+      revised.mesExample = examples;
+      const approved = await this.promptCardDiffApproval(before, revised);
 
-      if (this.originalCharacter) {
-        this.originalCharacter.mesExample = this.currentCharacter.mesExample;
-      }
+      if (approved) {
+        this.currentCharacter.mesExample = examples;
 
-      if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
-        outputDiv.value = this.currentCharacter.mesExample;
+        if (this.originalCharacter) {
+          this.originalCharacter.mesExample = this.currentCharacter.mesExample;
+        }
+
+        if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
+          outputDiv.value = this.currentCharacter.mesExample;
+        } else {
+          outputDiv.textContent = this.currentCharacter.mesExample;
+        }
+        outputDiv.style.display = "block";
+        this.updateTokenCounts();
       } else {
-        outputDiv.textContent = this.currentCharacter.mesExample;
+        if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
+          outputDiv.value = this.currentCharacter.mesExample || "";
+        } else {
+          outputDiv.textContent = this.currentCharacter.mesExample || "";
+        }
+        if (!this.currentCharacter.mesExample) outputDiv.style.display = "none";
+        this.showNotification("Example messages discarded.", "info");
       }
-      outputDiv.style.display = "block";
-      this.updateTokenCounts();
     } catch (error) {
       console.error("Example generation failed:", error);
       if (outputDiv.tagName === "TEXTAREA" || outputDiv.tagName === "INPUT") {
