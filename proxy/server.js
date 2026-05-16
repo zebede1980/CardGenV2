@@ -13,9 +13,13 @@ const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "cardgen-default-secret-change-me";
 const JWT_EXPIRES_IN = "30d";
 const BCRYPT_ROUNDS = 12;
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET || "";
 
 if (!process.env.JWT_SECRET) {
   console.warn("⚠️  JWT_SECRET not set — using insecure default. Set JWT_SECRET in your environment.");
+}
+if (!process.env.INTERNAL_API_SECRET) {
+  console.warn("⚠️  INTERNAL_API_SECRET not set — backend calls will be rejected. Set INTERNAL_API_SECRET in your environment.");
 }
 const app = express();
 const PORT = process.env.PORT || 2426;
@@ -280,8 +284,8 @@ app.delete("/api/storage/prompts/:id", requireAuth, async (req, res) => {
 app.get("/api/storage/cards", requireAuth, async (req, res) => {
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-    const response = await fetch(`${internalUrl}/cards/`, {
-      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username) }
+    const response = await fetch(`${internalUrl}/api/cards/`, {
+      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
     });
     
     if (!response.ok) {
@@ -358,12 +362,13 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     };
 
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-    let url = `${internalUrl}/cards/`;
+    let url = `${internalUrl}/api/cards/`;
     let method = "POST";
     
-    // Small integers indicate DB IDs, large 13-digit numbers are Date.now() from old JSON storage
-    if (record.id && String(record.id).length < 10) { 
-      url = `${internalUrl}/cards/${record.id}`;
+    // Use PUT if the record has a numeric DB ID (not a legacy Date.now() string)
+    const recordId = record.id;
+    if (recordId !== undefined && recordId !== null && Number.isInteger(Number(recordId)) && !isNaN(Number(recordId)) && String(recordId).length < 13) {
+      url = `${internalUrl}/api/cards/${record.id}`;
       method = "PUT";
     }
 
@@ -372,7 +377,8 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
       headers: { 
         "Content-Type": "application/json",
         "X-User-Id": String(req.user.userId),
-        "X-User-Name": String(req.user.username) 
+        "X-User-Name": String(req.user.username),
+        "X-Internal-Secret": INTERNAL_API_SECRET
       },
       body: JSON.stringify(dbPayload)
     });
@@ -394,9 +400,9 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
 app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-    const response = await fetch(`${internalUrl}/cards/${req.params.id}`, {
+    const response = await fetch(`${internalUrl}/api/cards/${req.params.id}`, {
       method: "DELETE",
-      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username) }
+      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
     });
     if (!response.ok) throw new Error("Failed to delete card from database");
     res.json({ success: true });
@@ -453,7 +459,8 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
       headers: { 
         "Content-Type": req.headers["content-type"] || "application/json",
         "X-User-Id": String(req.user.userId),
-        "X-User-Name": String(req.user.username)
+        "X-User-Name": String(req.user.username),
+        "X-Internal-Secret": INTERNAL_API_SECRET
       }
     };
     
