@@ -231,27 +231,23 @@ app.post("/api/config", requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Per-user Data Endpoints for Characters/Cards/Prompts ─────────────────────
-app.get("/api/storage/:type", requireAuth, async (req, res) => {
-  const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
-  const items = await readJsonStore(storeFile);
-  res.json(items);
+// ── Per-user Data Endpoints for Prompts (Local JSON) ─────────────────────────
+app.get("/api/storage/prompts", requireAuth, async (req, res) => {
+  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
+  res.json(await readJsonStore(storeFile));
 });
 
-app.get("/api/storage/:type/:id", requireAuth, async (req, res) => {
-  const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
+app.get("/api/storage/prompts/:id", requireAuth, async (req, res) => {
+  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
   const items = await readJsonStore(storeFile);
   const item = items.find(i => i.id == req.params.id);
   if (item) res.json(item);
   else res.status(404).json({ error: "Not found" });
 });
 
-app.post("/api/storage/:type", requireAuth, async (req, res) => {
-  const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
-  const lockKey = `user-${req.user.userId}-${storeName}`;
+app.post("/api/storage/prompts", requireAuth, async (req, res) => {
+  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
+  const lockKey = `user-${req.user.userId}-prompts.json`;
   const record = req.body;
   if (!record.id) record.id = Date.now();
   try {
@@ -267,16 +263,105 @@ app.post("/api/storage/:type", requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete("/api/storage/:type/:id", requireAuth, async (req, res) => {
-  const storeName = req.params.type === "cards" ? "cards.json" : "prompts.json";
-  const storeFile = path.join(getUserDataDir(req.user.userId), storeName);
-  const lockKey = `user-${req.user.userId}-${storeName}`;
+app.delete("/api/storage/prompts/:id", requireAuth, async (req, res) => {
+  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
+  const lockKey = `user-${req.user.userId}-prompts.json`;
   try {
     await withFileLock(lockKey, async () => {
       let items = await readJsonStore(storeFile);
       items = items.filter(i => i.id != req.params.id);
       await writeJsonStore(storeFile, items);
     });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Per-user Data Endpoints for Cards (PostgreSQL Database Bridge) ───────────
+app.get("/api/storage/cards", requireAuth, async (req, res) => {
+  try {
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    const response = await fetch(`${internalUrl}/cards/`, {
+      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username) }
+    });
+    if (!response.ok) throw new Error("Failed to fetch cards from database");
+    const dbCards = await response.json();
+    
+    const translated = dbCards.map(c => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      personality: c.personality,
+      scenario: c.scenario,
+      firstMessage: c.first_mes,
+      mesExample: c.mes_example,
+      creatorNotes: c.creatorcomment,
+      tags: c.tags ? c.tags.split(",") : [],
+      creator: c.creator,
+      character_version: c.character_version,
+      alternateGreetings: c.alternate_greetings ? JSON.parse(c.alternate_greetings || "[]") : [],
+      system_prompt: c.system_prompt,
+      post_history_instructions: c.post_history_instructions,
+      character_book: c.character_book ? JSON.parse(c.character_book || "{}") : undefined
+    }));
+    res.json(translated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/storage/cards", requireAuth, async (req, res) => {
+  try {
+    const record = req.body;
+    const dbPayload = {
+      name: record.name || "Unnamed",
+      description: record.description || "",
+      personality: record.personality || "",
+      scenario: record.scenario || "",
+      first_mes: record.firstMessage || "",
+      mes_example: record.mesExample || record.mes_example || "",
+      creatorcomment: record.creatorNotes || "",
+      tags: Array.isArray(record.tags) ? record.tags.join(",") : (record.tags || ""),
+      creator: record.creator || "",
+      character_version: record.character_version || "",
+      alternate_greetings: Array.isArray(record.alternateGreetings) ? JSON.stringify(record.alternateGreetings) : (record.alternateGreetings || "[]"),
+      system_prompt: record.system_prompt || "",
+      post_history_instructions: record.post_history_instructions || "",
+      character_book: typeof record.character_book === 'object' ? JSON.stringify(record.character_book) : (record.character_book || ""),
+      image_path: record.image_path || ""
+    };
+
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    let url = `${internalUrl}/cards/`;
+    let method = "POST";
+    
+    // Small integers indicate DB IDs, large 13-digit numbers are Date.now() from old JSON storage
+    if (record.id && String(record.id).length < 10) { 
+      url = `${internalUrl}/cards/${record.id}`;
+      method = "PUT";
+    }
+
+    const response = await fetch(url, {
+      method: method,
+      headers: { 
+        "Content-Type": "application/json",
+        "X-User-Id": String(req.user.userId),
+        "X-User-Name": String(req.user.username) 
+      },
+      body: JSON.stringify(dbPayload)
+    });
+    
+    if (!response.ok) throw new Error(`Database returned ${response.status}`);
+    const dbCard = await response.json();
+    res.json({ ...record, id: dbCard.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
+  try {
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    const response = await fetch(`${internalUrl}/cards/${req.params.id}`, {
+      method: "DELETE",
+      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username) }
+    });
+    if (!response.ok) throw new Error("Failed to delete card from database");
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
