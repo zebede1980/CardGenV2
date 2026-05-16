@@ -211,10 +211,10 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
 });
 
 // ── Data Endpoints for Settings & Configurations ─────────────────────────────
-// Config is global (shared across all users) — API keys & endpoints set once by admin
+// Config is now stored per user, ensuring each user has their own API settings
 app.get("/api/config", requireAuth, async (req, res) => {
   try {
-    const configPath = path.join(DATA_DIR, "config.json");
+    const configPath = path.join(getUserDataDir(req.user.userId), "config.json");
     if (fs.existsSync(configPath)) {
       const data = await fsPromises.readFile(configPath, "utf8");
       res.json(JSON.parse(data));
@@ -226,7 +226,7 @@ app.get("/api/config", requireAuth, async (req, res) => {
 
 app.post("/api/config", requireAuth, async (req, res) => {
   try {
-    await fsPromises.writeFile(path.join(DATA_DIR, "config.json"), JSON.stringify(req.body, null, 2));
+    await fsPromises.writeFile(path.join(getUserDataDir(req.user.userId), "config.json"), JSON.stringify(req.body, null, 2));
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -294,20 +294,28 @@ app.get("/api/story-app/status", requireAuth, async (req, res) => {
   const publicUrl = (process.env.STORY_APP_PUBLIC_URL || "").replace(/\/$/, "");
 
   if (!internalUrl) {
+    console.log("Story Writer connection check skipped: STORY_APP_URL is not set.");
     return res.json({ available: false });
   }
 
   try {
+    console.log(`Story Writer connection check: Pinging ${internalUrl}/health`);
     const response = await fetch(`${internalUrl}/health`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
       timeout: 3000,
     });
+    
+    console.log(`Story Writer connection check: Received status ${response.status} ${response.statusText}`);
     if (response.ok) {
+      console.log(`Story Writer connection check: Success! Returning public URL: ${publicUrl || internalUrl}`);
       return res.json({ available: true, url: publicUrl || internalUrl });
     }
+    const errorText = await response.text();
+    console.log(`Story Writer connection check: Response not ok. Body: ${errorText}`);
     return res.json({ available: false });
-  } catch (_) {
+  } catch (err) {
+    console.error("Story Writer connection check: Network error or timeout:", err.message);
     return res.json({ available: false });
   }
 });
