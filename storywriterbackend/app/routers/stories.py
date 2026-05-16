@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.models import Story, StorySegment, StoryCard, CharacterCard, User
+from app.models import Story, StorySegment, StoryCard, CharacterCard, User, SteeringInstruction
 from app.schemas import StoryCreate, StoryOut, StoryDetailOut, StorySegmentOut, StoryCardOut, EditSegmentRequest
 from app.routers.auth import get_current_user
 
@@ -63,6 +63,8 @@ def delete_story(story_id: int, db: Session = Depends(get_db), current_user: Use
     story = db.query(Story).filter(Story.id == story_id, Story.user_id == current_user.id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    # Delete steering instructions manually (no cascade relationship defined on Story)
+    db.query(SteeringInstruction).filter(SteeringInstruction.story_id == story_id).delete()
     db.delete(story)
     db.commit()
     return {"detail": "Story deleted"}

@@ -166,9 +166,9 @@ class StoryWriterApp {
                 const delBtn = document.createElement('button');
                 delBtn.textContent = '🗑';
                 delBtn.title = 'Delete story';
-                delBtn.style.cssText = 'position:absolute; top:0.75rem; right:0.75rem; background:none; border:none; cursor:pointer; font-size:1.1rem; opacity:0.5; padding:0.2rem;';
-                delBtn.addEventListener('mouseenter', () => delBtn.style.opacity = '1');
-                delBtn.addEventListener('mouseleave', () => delBtn.style.opacity = '0.5');
+                delBtn.style.cssText = 'position:absolute; top:0.6rem; right:0.6rem; background:none; border:1px solid transparent; border-radius:4px; cursor:pointer; font-size:1rem; color:var(--error-color,#e55); opacity:0.55; padding:0.2rem 0.35rem; line-height:1;';
+                delBtn.addEventListener('mouseenter', () => { delBtn.style.opacity = '1'; delBtn.style.borderColor = 'var(--error-color,#e55)'; delBtn.style.background = 'rgba(220,50,50,0.1)'; });
+                delBtn.addEventListener('mouseleave', () => { delBtn.style.opacity = '0.55'; delBtn.style.borderColor = 'transparent'; delBtn.style.background = 'none'; });
                 delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     if (!confirm(`Delete "${story.title}"? This cannot be undone.`)) return;

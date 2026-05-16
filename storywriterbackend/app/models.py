@@ -46,8 +46,8 @@ class Story(Base):
     synopsis = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    segments = relationship("StorySegment", back_populates="story", order_by="StorySegment.order_index")
-    cards = relationship("StoryCard", back_populates="story")
+    segments = relationship("StorySegment", back_populates="story", order_by="StorySegment.order_index", cascade="all, delete-orphan")
+    cards = relationship("StoryCard", back_populates="story", cascade="all, delete-orphan")
 
 class StoryCard(Base):
     __tablename__ = "story_cards"
