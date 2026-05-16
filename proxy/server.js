@@ -283,28 +283,57 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
     const response = await fetch(`${internalUrl}/cards/`, {
       headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username) }
     });
-    if (!response.ok) throw new Error("Failed to fetch cards from database");
+    
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Card Storage] GET Database returned ${response.status}: ${errText}`);
+      throw new Error(`Database returned ${response.status}`);
+    }
+    
     const dbCards = await response.json();
     
-    const translated = dbCards.map(c => ({
-      id: c.id,
-      name: c.name,
-      description: c.description,
-      personality: c.personality,
-      scenario: c.scenario,
-      firstMessage: c.first_mes,
-      mesExample: c.mes_example,
-      creatorNotes: c.creatorcomment,
-      tags: c.tags ? c.tags.split(",") : [],
-      creator: c.creator,
-      character_version: c.character_version,
-      alternateGreetings: c.alternate_greetings ? JSON.parse(c.alternate_greetings || "[]") : [],
-      system_prompt: c.system_prompt,
-      post_history_instructions: c.post_history_instructions,
-      character_book: c.character_book ? JSON.parse(c.character_book || "{}") : undefined
-    }));
+    const translated = dbCards.map(c => {
+      let altGreetings = [];
+      let charBook = undefined;
+      
+      try {
+        if (c.alternate_greetings && String(c.alternate_greetings).trim() !== "") {
+          const parsed = JSON.parse(c.alternate_greetings);
+          if (Array.isArray(parsed)) altGreetings = parsed;
+        }
+      } catch (e) { console.warn(`[Card Storage] Failed to parse alternate_greetings for card ${c.id}`); }
+      
+      try {
+        if (c.character_book && String(c.character_book).trim() !== "") {
+          charBook = JSON.parse(c.character_book);
+        }
+      } catch (e) { console.warn(`[Card Storage] Failed to parse character_book for card ${c.id}`); }
+
+      return {
+        id: c.id,
+        name: c.name || "Unnamed",
+        description: c.description || "",
+        personality: c.personality || "",
+        scenario: c.scenario || "",
+        firstMessage: c.first_mes || "",
+        mesExample: c.mes_example || "",
+        creatorNotes: c.creatorcomment || "",
+        tags: c.tags ? String(c.tags).split(",").map(t => t.trim()).filter(Boolean) : [],
+        creator: c.creator || "",
+        character_version: c.character_version || "",
+        alternateGreetings: altGreetings,
+        system_prompt: c.system_prompt || "",
+        post_history_instructions: c.post_history_instructions || "",
+        character_book: charBook,
+        image_path: c.image_path || ""
+      };
+    });
+    
     res.json(translated);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error("[Card Storage] GET /api/storage/cards Error:", e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post("/api/storage/cards", requireAuth, async (req, res) => {
@@ -348,10 +377,18 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
       body: JSON.stringify(dbPayload)
     });
     
-    if (!response.ok) throw new Error(`Database returned ${response.status}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Card Storage] POST/PUT Database returned ${response.status}: ${errText}`);
+      throw new Error(`Database returned ${response.status}`);
+    }
+    
     const dbCard = await response.json();
     res.json({ ...record, id: dbCard.id });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error("[Card Storage] POST /api/storage/cards Error:", e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {

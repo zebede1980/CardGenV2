@@ -7,7 +7,7 @@ import uuid
 
 from app.database import get_db
 from app.models import CharacterCard, User
-from app.schemas import CharacterCardOut
+from app.schemas import CharacterCardOut, CharacterCardCreate
 from app.services.card_parser import parse_card
 from app.routers.auth import get_current_user
 
@@ -55,6 +55,30 @@ async def upload_card(file: UploadFile = File(...), db: Session = Depends(get_db
     db.commit()
     db.refresh(card)
     return card
+
+@router.post("/", response_model=CharacterCardOut)
+def create_card(card: CharacterCardCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_card = CharacterCard(
+        user_id=current_user.id,
+        **card.model_dump()
+    )
+    db.add(db_card)
+    db.commit()
+    db.refresh(db_card)
+    return db_card
+
+@router.put("/{card_id}", response_model=CharacterCardOut)
+def update_card(card_id: int, card: CharacterCardCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_card = db.query(CharacterCard).filter(CharacterCard.id == card_id, CharacterCard.user_id == current_user.id).first()
+    if not db_card:
+        raise HTTPException(status_code=404, detail="Card not found")
+    
+    for key, value in card.model_dump().items():
+        setattr(db_card, key, value)
+        
+    db.commit()
+    db.refresh(db_card)
+    return db_card
 
 @router.get("/", response_model=List[CharacterCardOut])
 def list_cards(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
