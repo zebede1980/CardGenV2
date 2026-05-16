@@ -757,7 +757,10 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
-      return response.body.pipe(res);
+      // response.body is a Web API ReadableStream — convert to Node stream before piping
+      const { Readable } = require("stream");
+      Readable.fromWeb(response.body).pipe(res);
+      return;
     }
 
     const text = await response.text();

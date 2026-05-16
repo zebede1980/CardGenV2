@@ -29,6 +29,7 @@ class StoryWriterApp {
                 viewStoryWriter.style.display = 'block';
                 tabCardGen.className = 'btn-outline';
                 tabStoryWriter.className = 'btn-primary';
+                this.loadSettings();
                 this.loadStories();
             });
         }
@@ -62,6 +63,7 @@ class StoryWriterApp {
         }
 
         document.getElementById('sw-generate-btn')?.addEventListener('click', () => this.generateNext());
+        document.getElementById('sw-save-settings-btn')?.addEventListener('click', () => this.saveSettings());
     }
 
     async apiCall(path, method = 'GET', body = null) {
@@ -74,6 +76,82 @@ class StoryWriterApp {
         const res = await window.authFetch(url, options);
         if (!res.ok) throw new Error(`API Error: ${res.status}`);
         return res.json();
+    }
+
+    async loadSettings() {
+        try {
+            const s = await this.apiCall('/settings/');
+            document.getElementById('sw-api-url').value = s.api_base_url || '';
+            document.getElementById('sw-model').value = s.model || '';
+            // Never pre-fill password field with the real key — show placeholder instead
+            document.getElementById('sw-api-key').placeholder = s.api_key ? '(key saved — enter new to replace)' : 'sk-...';
+            document.getElementById('sw-api-key').value = '';
+
+            // If no API key is configured yet, auto-sync from CardGenV2 config and save silently
+            if (!s.api_key) {
+                const cfg = window.configManager?.config?.api?.text;
+                if (cfg?.apiKey) {
+                    console.log('[StoryWriter] Auto-syncing API credentials from CardGenV2 config');
+                    const payload = {
+                        api_base_url: cfg.baseUrl || s.api_base_url,
+                        api_key: cfg.apiKey,
+                        model: cfg.model || s.model,
+                    };
+                    await window.authFetch('/api/sw/settings/', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    document.getElementById('sw-api-url').value = payload.api_base_url || '';
+                    document.getElementById('sw-model').value = payload.model || '';
+                    document.getElementById('sw-api-key').placeholder = '(key saved — enter new to replace)';
+                    document.getElementById('sw-settings-status').textContent = 'Auto-synced from CardGenV2 settings.';
+                } else {
+                    // Open the settings panel so user knows they need to configure
+                    document.getElementById('sw-settings-details').open = true;
+                    document.getElementById('sw-settings-status').textContent = 'Please enter your LLM API key to enable generation.';
+                }
+            }
+        } catch (e) {
+            console.error('[StoryWriter] Failed to load settings:', e);
+        }
+    }
+
+    async saveSettings() {
+        const btn = document.getElementById('sw-save-settings-btn');
+        const status = document.getElementById('sw-settings-status');
+        const apiUrl = document.getElementById('sw-api-url').value.trim();
+        const model = document.getElementById('sw-model').value.trim();
+        const apiKey = document.getElementById('sw-api-key').value.trim();
+
+        if (!apiUrl || !model) {
+            status.textContent = 'API Base URL and Model are required.';
+            status.style.color = 'var(--error-color, #e55)';
+            return;
+        }
+
+        const payload = { api_base_url: apiUrl, model };
+        if (apiKey) payload.api_key = apiKey;  // only update key if a new one was typed
+
+        btn.disabled = true;
+        status.textContent = 'Saving…';
+        status.style.color = 'var(--text-secondary)';
+        try {
+            await window.authFetch('/api/sw/settings/', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            status.textContent = 'Saved!';
+            status.style.color = 'var(--success-color, #5c5)';
+            document.getElementById('sw-api-key').value = '';
+            document.getElementById('sw-api-key').placeholder = '(key saved — enter new to replace)';
+        } catch (e) {
+            status.textContent = 'Save failed: ' + e.message;
+            status.style.color = 'var(--error-color, #e55)';
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     async loadStories() {
@@ -246,6 +324,20 @@ class StoryWriterApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ story_id: this.story.id, steering: steering || null })
             });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                let errMsg = `Generation failed (${res.status})`;
+                try { const j = JSON.parse(errText); errMsg = j.detail || j.error || errMsg; } catch(e) {}
+                streamDiv.remove();
+                if (errMsg.toLowerCase().includes('api key')) {
+                    document.getElementById('sw-settings-details').open = true;
+                    alert('\u26a0\ufe0f ' + errMsg + '\n\nPlease configure your API key in the \u2699\ufe0f Generation Settings panel above.');
+                } else {
+                    alert('Generation failed: ' + errMsg);
+                }
+                return;
+            }
 
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
