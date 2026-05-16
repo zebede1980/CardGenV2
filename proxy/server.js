@@ -299,10 +299,9 @@ app.get("/api/story-app/status", async (req, res) => {
   }
 
   try {
-    console.log(`Story Writer connection check: Pinging ${internalUrl}/health`);
-    const response = await fetch(`${internalUrl}/health`, {
+    console.log(`Story Writer connection check: Pinging ${internalUrl}/`);
+    const response = await fetch(`${internalUrl}/`, {
       method: "GET",
-      headers: { "Content-Type": "application/json" },
       timeout: 3000,
     });
     
