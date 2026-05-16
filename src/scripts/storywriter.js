@@ -272,13 +272,68 @@ class StoryWriterApp {
             content.style.lineHeight = '1.7';
             content.style.whiteSpace = 'pre-wrap';
             content.textContent = seg.content;
+
+            // Inline editor (hidden by default)
+            const editor = document.createElement('textarea');
+            editor.className = 'textarea';
+            editor.style.display = 'none';
+            editor.style.width = '100%';
+            editor.style.minHeight = '8rem';
+            editor.style.marginTop = '0.5rem';
+            editor.style.background = 'var(--surface-color)';
+            editor.value = seg.content;
             
             const actions = document.createElement('div');
             actions.style.marginTop = '0.75rem';
             actions.style.display = 'flex';
             actions.style.gap = '0.5rem';
             actions.style.justifyContent = 'flex-end';
-            
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn-small';
+            editBtn.textContent = 'Edit';
+            editBtn.addEventListener('click', () => {
+                const editing = editor.style.display !== 'none';
+                if (editing) {
+                    // Cancel — revert
+                    editor.value = seg.content;
+                    editor.style.display = 'none';
+                    content.style.display = '';
+                    editBtn.textContent = 'Edit';
+                    saveBtn.style.display = 'none';
+                } else {
+                    editor.style.display = 'block';
+                    content.style.display = 'none';
+                    editBtn.textContent = 'Cancel';
+                    saveBtn.style.display = '';
+                    editor.focus();
+                }
+            });
+
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'btn-small btn-primary';
+            saveBtn.textContent = 'Save';
+            saveBtn.style.display = 'none';
+            saveBtn.addEventListener('click', async () => {
+                const newText = editor.value;
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving…';
+                try {
+                    await this.apiCall(`/stories/${this.story.id}/segments/${seg.id}`, 'PUT', { content: newText });
+                    seg.content = newText;
+                    content.textContent = newText;
+                    editor.style.display = 'none';
+                    content.style.display = '';
+                    editBtn.textContent = 'Edit';
+                    saveBtn.style.display = 'none';
+                } catch(e) {
+                    alert('Failed to save: ' + e.message);
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save';
+                }
+            });
+
             const delBtn = document.createElement('button');
             delBtn.className = 'btn-small';
             delBtn.textContent = 'Delete';
@@ -289,8 +344,11 @@ class StoryWriterApp {
                 }
             });
             
+            actions.appendChild(editBtn);
+            actions.appendChild(saveBtn);
             actions.appendChild(delBtn);
             div.appendChild(content);
+            div.appendChild(editor);
             div.appendChild(actions);
             area.appendChild(div);
         });
