@@ -2,12 +2,16 @@ from sqlalchemy import text
 from app.models import Base, engine, SessionLocal
 
 def _column_exists(conn, table: str, column: str) -> bool:
-    result = conn.execute(text(f"PRAGMA table_info({table})"))
-    return any(row[1] == column for row in result)
+    result = conn.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = :t AND column_name = :c"
+    ), {"t": table, "c": column})
+    return result.fetchone() is not None
 
 def _table_exists(conn, table: str) -> bool:
     result = conn.execute(text(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=:t"
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name = :t"
     ), {"t": table})
     return result.fetchone() is not None
 
@@ -22,7 +26,7 @@ def run_migrations():
         if result.scalar() == 0:
             conn.execute(text(
                 "INSERT INTO users (username, password, created_at) "
-                "VALUES ('admin', 'CHANGE_PASSWORD', datetime('now'))"
+                "VALUES ('admin', 'CHANGE_PASSWORD', NOW())"
             ))
 
         default_user_id = conn.execute(text("SELECT id FROM users ORDER BY id LIMIT 1")).scalar()
