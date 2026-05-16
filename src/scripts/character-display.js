@@ -426,7 +426,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
-  async handleGenerateExampleMessages() {
+  async handleGenerateExampleMessages(skipDiff = false) {
     if (!this.currentCharacter) return;
 
     const count = parseInt(
@@ -457,7 +457,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       const revised = JSON.parse(JSON.stringify(this.currentCharacter));
       revised.mesExample = examples;
-      const approved = await this.promptCardDiffApproval(before, revised);
+      const approved = skipDiff ? true : await this.promptCardDiffApproval(before, revised);
 
       if (approved) {
         this.currentCharacter.mesExample = examples;

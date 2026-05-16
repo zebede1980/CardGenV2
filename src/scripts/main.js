@@ -681,7 +681,7 @@ class CharacterGeneratorApp {
       }
 
       this.showStreamMessage("\n\n💬 Generating example messages...\n");
-      await this.handleGenerateExampleMessages();
+      await this.handleGenerateExampleMessages(true);
 
       this.showStreamMessage("✍️ Generating creator's notes...\n");
       try {
