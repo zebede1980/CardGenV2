@@ -49,6 +49,18 @@ def run_migrations():
                 f"ALTER TABLE settings ADD COLUMN user_id INTEGER NOT NULL DEFAULT {default_user_id}"
             ))
 
+        # settings.system_prompt
+        if not _column_exists(conn, "settings", "system_prompt"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''"
+            ))
+
+        # settings.image_model
+        if not _column_exists(conn, "settings", "image_model"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN image_model TEXT NOT NULL DEFAULT ''"
+            ))
+
 def init_db():
     run_migrations()
 

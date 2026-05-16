@@ -1236,19 +1236,53 @@
                     <section class="input-section" id="sw-settings-panel" style="margin-bottom: 1.5rem;">
                         <details id="sw-settings-details">
                             <summary style="cursor: pointer; font-weight: bold; padding: 0.4rem 0; user-select: none;">⚙️ Generation Settings</summary>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                            <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0.75rem 0 1rem;">
+                                LLM credentials (API URL, key, model) are shared with CardGen and managed via
+                                <strong>⚙️ API Settings</strong> in the footer. Changes there are automatically applied here.
+                            </p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
                                 <div>
-                                    <label class="label">API Base URL</label>
-                                    <input type="text" id="sw-api-url" class="input" placeholder="https://api.openai.com/v1" style="background: var(--surface-color);">
+                                    <label class="label">Max Tokens</label>
+                                    <input type="number" id="sw-max-tokens" class="input" placeholder="2048" min="256" max="16384" step="256" style="background: var(--surface-color);">
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                                        Maximum length of each generated chunk. Higher = longer passages but costs more and risks hitting the model's context limit.
+                                        <br><em>256–4096 for most models. 2048 is a good default.</em>
+                                    </p>
                                 </div>
                                 <div>
-                                    <label class="label">Model</label>
-                                    <input type="text" id="sw-model" class="input" placeholder="gpt-4o" style="background: var(--surface-color);">
+                                    <label class="label">Temperature</label>
+                                    <input type="number" id="sw-temperature" class="input" placeholder="0.8" min="0" max="2" step="0.05" style="background: var(--surface-color);">
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                                        Controls how creative vs. predictable the output is. Lower = more focused and literal. Higher = more varied and imaginative (but can become incoherent).
+                                        <br><em>0.6–0.8 for structured prose. 0.9–1.1 for creative flair. Avoid &gt;1.4.</em>
+                                    </p>
                                 </div>
-                                <div style="grid-column: 1 / -1;">
-                                    <label class="label">API Key</label>
-                                    <input type="password" id="sw-api-key" class="input" placeholder="sk-..." style="background: var(--surface-color);">
+                                <div>
+                                    <label class="label">Context Window (tokens)</label>
+                                    <input type="number" id="sw-context-window" class="input" placeholder="8000" min="1000" max="128000" step="1000" style="background: var(--surface-color);">
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                                        How much of the story history to keep in memory when generating. Older segments beyond this limit get summarised automatically.
+                                        <br><em>Match your model's context limit. 8000 suits most; use 16000+ for larger models.</em>
+                                    </p>
                                 </div>
+                            </div>
+                            <div style="margin-top: 1rem;">
+                                <label class="label">Global System Prompt (optional)</label>
+                                <textarea id="sw-system-prompt" class="textarea" rows="4" placeholder="e.g. 'Write in a gothic horror tone with rich sensory detail.' or 'Use formal Victorian prose. Never break the fourth wall.'" style="background: var(--surface-color); width: 100%;"></textarea>
+                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                                    Injected at the top of every generation as author-level instructions. Use this for tone, style, language, or world rules that apply to all stories.
+                                    Leave blank to use default behaviour.
+                                </p>
+                            </div>
+                            <div style="margin-top: 1rem;">
+                                <label class="label">Image Model (for 🎨 Generate Image)</label>
+                                <select id="sw-image-model" class="input" style="background: var(--surface-color);">
+                                    <option value="">— Use CardGen active model —</option>
+                                </select>
+                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                                    Which image model to use when generating scene illustrations. Defaults to whichever model is currently active in <strong>⚙️ API Settings</strong>.
+                                    Set this to pin a specific model for story images independently of character card generation.
+                                </p>
                             </div>
                             <div style="margin-top: 1rem; display: flex; align-items: center; gap: 1rem;">
                                 <button id="sw-save-settings-btn" class="btn-primary" style="padding: 0.5rem 1.2rem;">Save Settings</button>
@@ -1338,7 +1372,7 @@
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260215-fix1"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
-        <script src="src/scripts/main.js?v=20260513"></script>
+        <script src="src/scripts/main.js?v=20260516"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-display.js?v=20260514"></script>
         <script src="src/scripts/image-handler.js?v=20260514"></script>
@@ -1349,7 +1383,7 @@
         <script src="src/scripts/chat-tester.js?v=20260512"></script>
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
-        <script src="src/scripts/storywriter.js?v=3"></script>
+        <script src="src/scripts/storywriter.js?v=8"></script>
         <!-- API Settings Modal -->
 
         <!-- ST push-choice modal (name changed) -->

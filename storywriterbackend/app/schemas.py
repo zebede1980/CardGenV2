@@ -87,6 +87,8 @@ class SettingsOut(BaseModel):
     context_window: int
     summary_threshold: int
     chunk_size: int
+    system_prompt: str
+    image_model: str
     class Config:
         from_attributes = True
 
@@ -99,10 +101,16 @@ class SettingsUpdate(BaseModel):
     context_window: Optional[int] = None
     summary_threshold: Optional[int] = None
     chunk_size: Optional[int] = None
+    system_prompt: Optional[str] = None
+    image_model: Optional[str] = None
 
 class GenerateRequest(BaseModel):
     story_id: int
     steering: Optional[str] = None
+
+class ImagePromptRequest(BaseModel):
+    story_id: int
+    segment_id: int
 
 class GenerateResponse(BaseModel):
     segment: StorySegmentOut

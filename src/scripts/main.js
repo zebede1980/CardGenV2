@@ -520,6 +520,22 @@ class CharacterGeneratorApp {
     this.config.saveConfig();
     this.updateActiveModelsDropdown();
     this.checkAPIStatus();
+    this._syncStoryWriterSettings();
+  }
+
+  _syncStoryWriterSettings() {
+    const text = this.config.config?.api?.text;
+    if (!text?.apiKey) return;
+    const payload = {
+      api_base_url: text.baseUrl || "https://api.openai.com/v1",
+      api_key: text.apiKey,
+      model: text.model || "",
+    };
+    (window.authFetch || fetch)("/api/sw/settings/", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(e => console.warn("[CardGen] Failed to sync API settings to StoryWriter:", e.message));
   }
 
   /* ── Theme Toggle ─────────────────────────────────────────────────────── */

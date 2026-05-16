@@ -10,6 +10,7 @@ class LLMService:
         self.model = settings.model
         self.max_tokens = settings.max_tokens
         self.temperature = settings.temperature
+        self.finish_reason: Optional[str] = None
         self.client = httpx.AsyncClient(timeout=120.0)
 
     async def generate(self, messages: list, stream: bool = False) -> AsyncGenerator[str, None]:
@@ -26,6 +27,7 @@ class LLMService:
             "stream": stream,
         }
         if stream:
+            self.finish_reason = None
             async with self.client.stream("POST", url, headers=headers, json=payload) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
@@ -35,7 +37,11 @@ class LLMService:
                             break
                         try:
                             chunk = json.loads(data)
-                            delta = chunk["choices"][0].get("delta", {})
+                            choice = chunk["choices"][0]
+                            fr = choice.get("finish_reason")
+                            if fr:
+                                self.finish_reason = fr
+                            delta = choice.get("delta", {})
                             content = delta.get("content", "")
                             if content:
                                 yield content

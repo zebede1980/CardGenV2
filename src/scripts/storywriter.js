@@ -81,36 +81,23 @@ class StoryWriterApp {
     async loadSettings() {
         try {
             const s = await this.apiCall('/settings/');
-            document.getElementById('sw-api-url').value = s.api_base_url || '';
-            document.getElementById('sw-model').value = s.model || '';
-            // Never pre-fill password field with the real key — show placeholder instead
-            document.getElementById('sw-api-key').placeholder = s.api_key ? '(key saved — enter new to replace)' : 'sk-...';
-            document.getElementById('sw-api-key').value = '';
+            document.getElementById('sw-max-tokens').value = s.max_tokens ?? 2048;
+            document.getElementById('sw-temperature').value = s.temperature ?? 0.8;
+            document.getElementById('sw-context-window').value = s.context_window ?? 8000;
+            document.getElementById('sw-system-prompt').value = s.system_prompt || '';
 
-            // If no API key is configured yet, auto-sync from CardGenV2 config and save silently
-            if (!s.api_key) {
-                const cfg = window.configManager?.config?.api?.text;
-                if (cfg?.apiKey) {
-                    console.log('[StoryWriter] Auto-syncing API credentials from CardGenV2 config');
-                    const payload = {
-                        api_base_url: cfg.baseUrl || s.api_base_url,
-                        api_key: cfg.apiKey,
-                        model: cfg.model || s.model,
-                    };
-                    await window.authFetch('/api/sw/settings/', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                    });
-                    document.getElementById('sw-api-url').value = payload.api_base_url || '';
-                    document.getElementById('sw-model').value = payload.model || '';
-                    document.getElementById('sw-api-key').placeholder = '(key saved — enter new to replace)';
-                    document.getElementById('sw-settings-status').textContent = 'Auto-synced from CardGenV2 settings.';
-                } else {
-                    // Open the settings panel so user knows they need to configure
-                    document.getElementById('sw-settings-details').open = true;
-                    document.getElementById('sw-settings-status').textContent = 'Please enter your LLM API key to enable generation.';
-                }
+            // Populate image model dropdown from CardGen config
+            const select = document.getElementById('sw-image-model');
+            if (select) {
+                const models = window.configManager?.config?.api?.image?.models || [];
+                select.innerHTML = '<option value="">\u2014 Use CardGen active model \u2014</option>';
+                models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m;
+                    select.appendChild(opt);
+                });
+                select.value = s.image_model || '';
             }
         } catch (e) {
             console.error('[StoryWriter] Failed to load settings:', e);
@@ -120,18 +107,20 @@ class StoryWriterApp {
     async saveSettings() {
         const btn = document.getElementById('sw-save-settings-btn');
         const status = document.getElementById('sw-settings-status');
-        const apiUrl = document.getElementById('sw-api-url').value.trim();
-        const model = document.getElementById('sw-model').value.trim();
-        const apiKey = document.getElementById('sw-api-key').value.trim();
 
-        if (!apiUrl || !model) {
-            status.textContent = 'API Base URL and Model are required.';
+        const maxTokens = parseInt(document.getElementById('sw-max-tokens').value, 10);
+        const temperature = parseFloat(document.getElementById('sw-temperature').value);
+        const contextWindow = parseInt(document.getElementById('sw-context-window').value, 10);
+        const systemPrompt = document.getElementById('sw-system-prompt').value.trim();
+        const imageModel = (document.getElementById('sw-image-model')?.value || '').trim();
+
+        if (isNaN(maxTokens) || isNaN(temperature) || isNaN(contextWindow)) {
+            status.textContent = 'Max Tokens, Temperature and Context Window must be valid numbers.';
             status.style.color = 'var(--error-color, #e55)';
             return;
         }
 
-        const payload = { api_base_url: apiUrl, model };
-        if (apiKey) payload.api_key = apiKey;  // only update key if a new one was typed
+        const payload = { max_tokens: maxTokens, temperature, context_window: contextWindow, system_prompt: systemPrompt, image_model: imageModel };
 
         btn.disabled = true;
         status.textContent = 'Saving…';
@@ -144,8 +133,7 @@ class StoryWriterApp {
             });
             status.textContent = 'Saved!';
             status.style.color = 'var(--success-color, #5c5)';
-            document.getElementById('sw-api-key').value = '';
-            document.getElementById('sw-api-key').placeholder = '(key saved — enter new to replace)';
+            setTimeout(() => { status.textContent = ''; }, 3000);
         } catch (e) {
             status.textContent = 'Save failed: ' + e.message;
             status.style.color = 'var(--error-color, #e55)';
@@ -169,11 +157,31 @@ class StoryWriterApp {
                 const card = document.createElement('div');
                 card.className = 'content-box';
                 card.style.cursor = 'pointer';
+                card.style.position = 'relative';
                 card.innerHTML = `
-                    <h3 style="margin-top: 0; margin-bottom: 0.5rem;">${story.title}</h3>
+                    <h3 style="margin-top: 0; margin-bottom: 0.5rem; padding-right: 2.5rem;">${story.title}</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Updated: ${new Date(story.updated_at).toLocaleDateString()}</p>
                 `;
+
+                const delBtn = document.createElement('button');
+                delBtn.textContent = '🗑';
+                delBtn.title = 'Delete story';
+                delBtn.style.cssText = 'position:absolute; top:0.75rem; right:0.75rem; background:none; border:none; cursor:pointer; font-size:1.1rem; opacity:0.5; padding:0.2rem;';
+                delBtn.addEventListener('mouseenter', () => delBtn.style.opacity = '1');
+                delBtn.addEventListener('mouseleave', () => delBtn.style.opacity = '0.5');
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Delete "${story.title}"? This cannot be undone.`)) return;
+                    try {
+                        await this.apiCall(`/stories/${story.id}`, 'DELETE');
+                        await this.loadStories();
+                    } catch (err) {
+                        alert('Failed to delete story: ' + err.message);
+                    }
+                });
+
                 card.addEventListener('click', () => this.openStory(story.id));
+                card.appendChild(delBtn);
                 list.appendChild(card);
             });
         } catch (e) { console.error("Failed to load stories", e); }
@@ -283,11 +291,17 @@ class StoryWriterApp {
             editor.style.background = 'var(--surface-color)';
             editor.value = seg.content;
             
+            // Image area (hidden until generated)
+            const imageArea = document.createElement('div');
+            imageArea.style.marginTop = '0.75rem';
+            imageArea.style.display = 'none';
+
             const actions = document.createElement('div');
             actions.style.marginTop = '0.75rem';
             actions.style.display = 'flex';
             actions.style.gap = '0.5rem';
             actions.style.justifyContent = 'flex-end';
+            actions.style.flexWrap = 'wrap';
 
             const editBtn = document.createElement('button');
             editBtn.className = 'btn-small';
@@ -334,6 +348,61 @@ class StoryWriterApp {
                 }
             });
 
+            const imgBtn = document.createElement('button');
+            imgBtn.className = 'btn-small';
+            imgBtn.textContent = '🎨 Generate Image';
+            imgBtn.addEventListener('click', async () => {
+                if (!window.apiHandler) {
+                    alert('Image API not available. Make sure your Image API is configured in ⚙️ API Settings.');
+                    return;
+                }
+                imgBtn.disabled = true;
+                imgBtn.textContent = '🎨 Generating…';
+                imageArea.style.display = 'block';
+                imageArea.innerHTML = '<span style="font-size:0.85rem; color:var(--text-secondary);">Creating scene prompt…</span>';
+                try {
+                    // Step 1: ask the backend to build an image prompt from the scene text + character cards
+                    const res = await window.authFetch('/api/sw/generate/image-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ story_id: this.story.id, segment_id: seg.id }),
+                    });
+                    if (!res.ok) {
+                        const j = await res.json().catch(() => ({}));
+                        throw new Error(j.detail || j.error || `Failed to generate prompt (${res.status})`);
+                    }
+                    const { prompt } = await res.json();
+
+                    imageArea.innerHTML = `<span style="font-size:0.75rem; color:var(--text-secondary); font-style:italic; display:block; margin-bottom:0.5rem;">Prompt: ${prompt}</span><span style="font-size:0.85rem; color:var(--text-secondary);">Generating image…</span>`;
+
+                    // Step 2: pass the prompt to the existing image API pipeline
+                    const swImageModel = (document.getElementById('sw-image-model')?.value || '') || null;
+                    const imageUrl = await window.apiHandler.generateImage(null, null, prompt, swImageModel);
+
+                    // Display the result
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.style.maxWidth = '100%';
+                    img.style.borderRadius = '0.5rem';
+                    img.style.marginTop = '0.25rem';
+                    img.style.display = 'block';
+                    const promptNote = document.createElement('span');
+                    promptNote.style.cssText = 'font-size:0.72rem; color:var(--text-secondary); font-style:italic; display:block; margin-bottom:0.4rem;';
+                    promptNote.textContent = `Prompt: ${prompt}`;
+                    imageArea.innerHTML = '';
+                    imageArea.appendChild(promptNote);
+                    imageArea.appendChild(img);
+
+                    imgBtn.textContent = '🎨 Regenerate Image';
+                } catch (e) {
+                    imageArea.innerHTML = `<span style="font-size:0.85rem; color:var(--error-color,#e55);">Image generation failed: ${e.message}</span>`;
+                    imgBtn.textContent = '🎨 Generate Image';
+                    console.error('[StoryWriter] Image generation error:', e);
+                } finally {
+                    imgBtn.disabled = false;
+                }
+            });
+
             const delBtn = document.createElement('button');
             delBtn.className = 'btn-small';
             delBtn.textContent = 'Delete';
@@ -344,11 +413,13 @@ class StoryWriterApp {
                 }
             });
             
+            actions.appendChild(imgBtn);
             actions.appendChild(editBtn);
             actions.appendChild(saveBtn);
             actions.appendChild(delBtn);
             div.appendChild(content);
             div.appendChild(editor);
+            div.appendChild(imageArea);
             div.appendChild(actions);
             area.appendChild(div);
         });
@@ -389,8 +460,7 @@ class StoryWriterApp {
                 try { const j = JSON.parse(errText); errMsg = j.detail || j.error || errMsg; } catch(e) {}
                 streamDiv.remove();
                 if (errMsg.toLowerCase().includes('api key')) {
-                    document.getElementById('sw-settings-details').open = true;
-                    alert('\u26a0\ufe0f ' + errMsg + '\n\nPlease configure your API key in the \u2699\ufe0f Generation Settings panel above.');
+                    alert('\u26a0\ufe0f ' + errMsg + '\n\nPlease configure your API credentials via \u2699\ufe0f API Settings in the footer.');
                 } else {
                     alert('Generation failed: ' + errMsg);
                 }
@@ -414,6 +484,10 @@ class StoryWriterApp {
                             const data = JSON.parse(line.slice(6));
                             if (data.type === 'chunk') {
                                 streamDiv.textContent += data.content;
+                                area.scrollTop = area.scrollHeight;
+                            } else if (data.type === 'trim') {
+                                // Backend trimmed to last sentence — update display to match
+                                streamDiv.textContent = data.content;
                                 area.scrollTop = area.scrollHeight;
                             } else if (data.type === 'error') {
                                 alert(data.message);

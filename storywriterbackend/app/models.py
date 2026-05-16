@@ -80,6 +80,8 @@ class Settings(Base):
     context_window = Column(Integer, default=8000)
     summary_threshold = Column(Integer, default=10)  # segments before summarizing
     chunk_size = Column(Integer, default=800)  # target tokens per generation chunk
+    system_prompt = Column(Text, default="")  # global author instructions injected into every generation
+    image_model = Column(Text, default="")  # override image model for story illustration (blank = use CardGen active)
 
 class SteeringInstruction(Base):
     __tablename__ = "steering_instructions"

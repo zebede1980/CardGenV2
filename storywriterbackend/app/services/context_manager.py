@@ -16,6 +16,10 @@ class ContextManager:
         messages = []
         system_parts = []
 
+        # Global author instructions (set by user in Generation Settings)
+        if self.settings.system_prompt and self.settings.system_prompt.strip():
+            system_parts.append(f"Author's Global Instructions:\n{self.settings.system_prompt.strip()}")
+
         # Add synopsis
         if story.synopsis:
             system_parts.append(f"Story Synopsis/Memo:\n{story.synopsis}")
@@ -79,6 +83,7 @@ class ContextManager:
             "Keep paragraphs dense and readable — avoid single-sentence paragraphs or excessive line breaks. "
             "Do not include meta-commentary, do not acknowledge the user or instructions, "
             "and do not include the steering notes in the story text. "
+            "Always finish your output at a natural sentence or paragraph boundary — never mid-sentence. "
             "Only output the next part of the narrative."
         )
 
