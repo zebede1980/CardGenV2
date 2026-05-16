@@ -61,6 +61,7 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://user:password@storywriterbackend-db:5432/joeanory
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     depends_on:
       - storywriterbackend-db
     networks:
