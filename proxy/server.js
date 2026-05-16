@@ -355,34 +355,68 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
 
 // Individual card fetch — used by storage.getCard(id) when Load is clicked
 app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
+  const cardId = req.params.id;
+  console.log(`[Card Storage] GET /:id → fetching card ${cardId} for user ${req.user.userId}`);
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-    const response = await fetch(`${internalUrl}/api/cards/${req.params.id}`, {
+    const response = await fetch(`${internalUrl}/api/cards/${cardId}`, {
       headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[Card Storage] GET /:id Database returned ${response.status}: ${errText}`);
+      console.error(`[Card Storage] GET /:id DB returned ${response.status}: ${errText}`);
       return res.status(response.status).json({ error: errText });
     }
 
     const translated = translateDbCard(await response.json());
+    console.log(`[Card Storage] GET /:id translated card: name="${translated.characterName}", image_path="${translated.image_path}"`);
 
-    // Attach locally-stored portrait image if present
-    const imgFile = path.join(getUserDataDir(req.user.userId), "card-images", `${req.params.id}.img`);
-    const mimeFile = path.join(getUserDataDir(req.user.userId), "card-images", `${req.params.id}.mime`);
+    // ── Image resolution: three-tier lookup ──────────────────────────────────
+    const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+    const imgFile = path.join(imgDir, `${cardId}.img`);
+    const mimeFile = path.join(imgDir, `${cardId}.mime`);
+
     if (fs.existsSync(imgFile) && fs.existsSync(mimeFile)) {
+      // Tier 1: proxy-local cached image (fastest, most common path)
       const [imgBuf, mime] = await Promise.all([
         fsPromises.readFile(imgFile),
         fsPromises.readFile(mimeFile, "utf8"),
       ]);
       translated.imageBase64 = `data:${mime};base64,${imgBuf.toString("base64")}`;
+      console.log(`[Card Storage] GET /:id image loaded from local cache (${imgBuf.length} bytes)`);
+
+    } else if (translated.image_path) {
+      // Tier 2: image stored on storywriterbackend (e.g. uploaded via migration Path A)
+      try {
+        const imgUrl = `${internalUrl}/${translated.image_path.replace(/^\//, "")}`;
+        console.log(`[Card Storage] GET /:id fetching image from backend: ${imgUrl}`);
+        const imgRes = await fetch(imgUrl);
+        if (imgRes.ok) {
+          const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+          const mime = imgRes.headers.get("content-type") || "image/png";
+          translated.imageBase64 = `data:${mime};base64,${imgBuf.toString("base64")}`;
+          // Cache locally so future loads are instant
+          if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+          await Promise.all([
+            fsPromises.writeFile(imgFile, imgBuf),
+            fsPromises.writeFile(mimeFile, mime),
+          ]);
+          console.log(`[Card Storage] GET /:id image fetched from backend and cached (${imgBuf.length} bytes)`);
+        } else {
+          console.warn(`[Card Storage] GET /:id backend image fetch failed: ${imgRes.status}`);
+        }
+      } catch (imgErr) {
+        console.warn(`[Card Storage] GET /:id image fetch error: ${imgErr.message}`);
+      }
+
+    } else {
+      console.log(`[Card Storage] GET /:id no image found for card ${cardId}`);
     }
 
     res.json(translated);
   } catch (e) {
-    console.error("[Card Storage] GET /api/storage/cards/:id Error:", e.message);
+    console.error(`[Card Storage] GET /api/storage/cards/:id Error: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
 });
@@ -484,6 +518,7 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
 });
 
 // ── Migrate cards from legacy cards.json to PostgreSQL ───────────────────────
+// ?purge=true  → delete all existing DB cards for this user before migrating
 app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
   const storeFile = path.join(getUserDataDir(req.user.userId), "cards.json");
 
@@ -509,17 +544,62 @@ app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
     "X-Internal-Secret": INTERNAL_API_SECRET,
   };
 
+  // ── Optional purge: wipe existing DB cards + local cached images first ──────
+  if (req.query.purge === "true") {
+    console.log(`[Migration] Purging existing cards for user ${req.user.userId}`);
+    try {
+      const listRes = await fetch(`${internalUrl}/api/cards/`, { headers: internalHeaders });
+      if (listRes.ok) {
+        const existing = await listRes.json();
+        for (const ec of existing) {
+          await fetch(`${internalUrl}/api/cards/${ec.id}`, { method: "DELETE", headers: internalHeaders }).catch(() => {});
+          const ecImgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+          for (const ext of [".img", ".mime"]) {
+            const f = path.join(ecImgDir, `${ec.id}${ext}`);
+            if (fs.existsSync(f)) await fsPromises.unlink(f).catch(() => {});
+          }
+        }
+        console.log(`[Migration] Purged ${existing.length} existing cards`);
+      }
+    } catch (e) {
+      console.error(`[Migration] Purge error: ${e.message}`);
+    }
+  }
+
   let migrated = 0, skipped = 0;
   const errors = [];
+  const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+
+  // Helper: write imageBase64 to proxy card-images keyed by DB card id
+  async function cacheImage(dbId, imageBase64) {
+    if (!imageBase64 || !imageBase64.startsWith("data:")) return;
+    const m = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!m) return;
+    try {
+      if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+      await Promise.all([
+        fsPromises.writeFile(path.join(imgDir, `${dbId}.img`), Buffer.from(m[2], "base64")),
+        fsPromises.writeFile(path.join(imgDir, `${dbId}.mime`), m[1]),
+      ]);
+      console.log(`[Migration] Cached image for DB card ${dbId}`);
+    } catch (e) {
+      console.warn(`[Migration] Image cache failed for DB card ${dbId}: ${e.message}`);
+    }
+  }
 
   for (const card of cards) {
-    const cardName = card.name || card.characterName || "Unnamed";
+    // Old cards.json format: { characterName, character: {name, description,...}, imageBase64, isPermanent }
+    // Fields live under card.character — unwrap it
+    const ch = card.character || card;
+    const cardName = card.characterName || ch.name || "Unnamed";
+    console.log(`[Migration] Processing: "${cardName}" (has image: ${!!(card.imageBase64 || card.image_base64)})`);
+
     try {
       let saved = false;
-
-      // Path A: card has an embedded PNG — upload it so the backend re-parses the embedded spec
       const imageBase64 = card.imageBase64 || card.image_base64 || "";
-      if (imageBase64 && imageBase64.startsWith("data:")) {
+
+      // ── Path A: PNG with embedded chara spec — let the backend parse it ─────
+      if (imageBase64.startsWith("data:")) {
         const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
         if (match) {
           const mimeType = match[1];
@@ -543,38 +623,43 @@ app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
           });
 
           if (uploadRes.ok) {
+            const created = await uploadRes.json();
+            await cacheImage(created.id, imageBase64);
             migrated++;
             saved = true;
+            console.log(`[Migration] Path A success: "${cardName}" → DB id ${created.id}`);
           } else {
             const errText = await uploadRes.text();
-            console.warn(`[Migration] PNG upload failed for "${cardName}" (${uploadRes.status}): ${errText} — falling back to text-only`);
+            console.warn(`[Migration] Path A failed for "${cardName}" (${uploadRes.status}): ${errText} — trying Path B`);
           }
         }
       }
 
-      // Path B: no image or upload failed — create from JSON text fields
+      // ── Path B: text fields create + separately cache image ─────────────────
       if (!saved) {
         const dbPayload = {
           name: cardName,
-          description: card.description || "",
-          personality: card.personality || "",
-          scenario: card.scenario || "",
-          first_mes: card.firstMessage || card.first_mes || "",
-          mes_example: card.mesExample || card.mes_example || "",
-          creatorcomment: card.creatorNotes || card.creatorcomment || "",
-          tags: Array.isArray(card.tags) ? card.tags.join(",") : (card.tags || ""),
-          creator: card.creator || "",
-          character_version: card.character_version || "",
-          alternate_greetings: Array.isArray(card.alternateGreetings)
-            ? JSON.stringify(card.alternateGreetings)
-            : (card.alternateGreetings || "[]"),
-          system_prompt: card.system_prompt || "",
-          post_history_instructions: card.post_history_instructions || "",
-          character_book: typeof card.character_book === "object" && card.character_book
-            ? JSON.stringify(card.character_book)
-            : (card.character_book || ""),
+          description: ch.description || "",
+          personality: ch.personality || "",
+          scenario: ch.scenario || "",
+          first_mes: ch.firstMessage || ch.first_mes || "",
+          mes_example: ch.mesExample || ch.mes_example || "",
+          creatorcomment: ch.creatorNotes || ch.creatorcomment || "",
+          tags: Array.isArray(ch.tags) ? ch.tags.join(",") : (ch.tags || ""),
+          creator: ch.creator || "",
+          character_version: ch.character_version || "",
+          alternate_greetings: Array.isArray(ch.alternateGreetings)
+            ? JSON.stringify(ch.alternateGreetings)
+            : (ch.alternateGreetings || "[]"),
+          system_prompt: ch.system_prompt || "",
+          post_history_instructions: ch.post_history_instructions || "",
+          character_book: typeof ch.character_book === "object" && ch.character_book
+            ? JSON.stringify(ch.character_book)
+            : (ch.character_book || ""),
           image_path: "",
         };
+
+        console.log(`[Migration] Path B: "${cardName}" description="${dbPayload.description.slice(0, 50)}"`);
 
         const createRes = await fetch(`${internalUrl}/api/cards/`, {
           method: "POST",
@@ -583,19 +668,25 @@ app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
         });
 
         if (createRes.ok) {
+          const created = await createRes.json();
+          await cacheImage(created.id, imageBase64);
           migrated++;
+          console.log(`[Migration] Path B success: "${cardName}" → DB id ${created.id}`);
         } else {
           skipped++;
-          errors.push(`"${cardName}": ${await createRes.text()}`);
+          const errText = await createRes.text();
+          errors.push(`"${cardName}": ${errText}`);
+          console.error(`[Migration] Path B failed for "${cardName}": ${errText}`);
         }
       }
     } catch (e) {
       skipped++;
       errors.push(`"${cardName}": ${e.message}`);
+      console.error(`[Migration] Exception for "${cardName}": ${e.message}`);
     }
   }
 
-  console.log(`[Migration] User ${req.user.userId}: ${migrated}/${cards.length} migrated, ${skipped} failed`);
+  console.log(`[Migration] Done — user ${req.user.userId}: ${migrated}/${cards.length} migrated, ${skipped} failed`);
   res.json({ total: cards.length, migrated, skipped, errors });
 });
 

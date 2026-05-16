@@ -505,9 +505,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   async handleMigrateCards() {
     const btn = document.getElementById("migrate-cards-btn");
+    const purge = confirm(
+      "Migrate cards from old storage?\n\n" +
+      "OK = clear all existing DB cards first, then migrate fresh (recommended — avoids duplicates from previous failed attempts).\n\n" +
+      "Cancel = append to existing cards without clearing."
+    );
+
     if (btn) { btn.disabled = true; btn.textContent = "Migrating…"; }
     try {
-      const res = await authFetch("/api/storage/migrate-cards", { method: "POST" });
+      const url = purge ? "/api/storage/migrate-cards?purge=true" : "/api/storage/migrate-cards";
+      const res = await authFetch(url, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Migration failed");
 
@@ -521,6 +528,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
     } catch (e) {
       this.showNotification("Migration error: " + e.message, "error");
+      console.error("[Migration] Error:", e);
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "📦 Migrate from old storage"; }
     }
