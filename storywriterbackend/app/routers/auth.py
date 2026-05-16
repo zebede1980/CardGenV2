@@ -14,7 +14,7 @@ def get_current_user(x_user_id: str = Header(None), x_user_name: str = Header(No
     username = f"cardgen_{x_user_id}"
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        user = User(username=username, email=f"{x_user_name or username}@integrated.local", hashed_password="xxx")
+        user = User(username=username, password="xxx")
         db.add(user)
         db.commit()
         db.refresh(user)
