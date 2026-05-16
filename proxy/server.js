@@ -108,6 +108,25 @@ function getUserDataDir(userId) {
   return dir;
 }
 
+// ── Per-user history (non-permanent auto-saves) stored as a local flat file ──
+const HISTORY_MAX = 30;
+
+async function readHistory(userId) {
+  const filePath = path.join(getUserDataDir(userId), "history.json");
+  if (!fs.existsSync(filePath)) return [];
+  try {
+    const raw = await fsPromises.readFile(filePath, "utf8");
+    return JSON.parse(raw) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function writeHistory(userId, items) {
+  const filePath = path.join(getUserDataDir(userId), "history.json");
+  await fsPromises.writeFile(filePath, JSON.stringify(items, null, 2), "utf8");
+}
+
 // ── JWT middleware ────────────────────────────────────────────────────────────
 
 function requireAuth(req, res, next) {
@@ -338,18 +357,22 @@ function translateDbCard(c) {
 app.get("/api/storage/cards", requireAuth, async (req, res) => {
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-    const response = await fetch(`${internalUrl}/api/cards/`, {
-      headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
-    });
+    const [dbResponse, histItems] = await Promise.all([
+      fetch(`${internalUrl}/api/cards/`, {
+        headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
+      }),
+      readHistory(req.user.userId),
+    ]);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[Card Storage] GET Database returned ${response.status}: ${errText}`);
-      throw new Error(`Database returned ${response.status}`);
+    if (!dbResponse.ok) {
+      const errText = await dbResponse.text();
+      console.error(`[Card Storage] GET Database returned ${dbResponse.status}: ${errText}`);
+      throw new Error(`Database returned ${dbResponse.status}`);
     }
 
-    const dbCards = await response.json();
-    res.json(dbCards.map(translateDbCard));
+    const dbCards = await dbResponse.json();
+    // Return permanent DB cards first, then history (temp) cards
+    res.json([...dbCards.map(translateDbCard), ...histItems]);
   } catch (e) {
     console.error("[Card Storage] GET /api/storage/cards Error:", e.message);
     res.status(500).json({ error: e.message });
@@ -360,6 +383,30 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
 app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
   const cardId = req.params.id;
   console.log(`[Card Storage] GET /:id → fetching card ${cardId} for user ${req.user.userId}`);
+
+  // ── History card (non-permanent, stored locally) ────────────────────────
+  if (String(cardId).startsWith("h_")) {
+    try {
+      const histItems = await readHistory(req.user.userId);
+      const card = histItems.find(c => String(c.id) === String(cardId));
+      if (!card) return res.status(404).json({ error: "History card not found" });
+      const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+      const imgFile = path.join(imgDir, `${cardId}.img`);
+      const mimeFile = path.join(imgDir, `${cardId}.mime`);
+      if (fs.existsSync(imgFile) && fs.existsSync(mimeFile)) {
+        const [imgBuf, mime] = await Promise.all([
+          fsPromises.readFile(imgFile),
+          fsPromises.readFile(mimeFile, "utf8"),
+        ]);
+        return res.json({ ...card, imageBase64: `data:${mime};base64,${imgBuf.toString("base64")}` });
+      }
+      return res.json(card);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ── Permanent (DB) card ──────────────────────────────────────────────────
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
     const response = await fetch(`${internalUrl}/api/cards/${cardId}`, {
@@ -431,6 +478,51 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     const char = record.character || record;
     const name = record.characterName || char.name || "Unnamed";
 
+    // ── Non-permanent (history/auto-save) → flat file, skip DB ───────────────
+    if (record.isPermanent === false) {
+      const histId = `h_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const now = new Date().toISOString();
+      const histCard = {
+        id: histId,
+        characterName: name,
+        isPermanent: false,
+        createdAt: record.createdAt || now,
+        updatedAt: now,
+        // Store the full character object so it can be loaded later
+        character: typeof record.character === "object" && record.character ? record.character : char,
+      };
+      // Save portrait image locally (same mechanism as DB cards)
+      const imageBase64 = record.imageBase64 || "";
+      if (imageBase64.startsWith("data:")) {
+        const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
+        if (match) {
+          const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+          if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+          await Promise.all([
+            fsPromises.writeFile(path.join(imgDir, `${histId}.img`), Buffer.from(match[2], "base64")),
+            fsPromises.writeFile(path.join(imgDir, `${histId}.mime`), match[1]),
+          ]);
+        }
+      }
+      // Persist and trim oldest items if over the cap
+      const histItems = await readHistory(req.user.userId);
+      histItems.push(histCard);
+      if (histItems.length > HISTORY_MAX) {
+        const removed = histItems.splice(0, histItems.length - HISTORY_MAX);
+        // Clean up images for evicted entries
+        const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+        for (const old of removed) {
+          for (const ext of [".img", ".mime"]) {
+            const f = path.join(imgDir, `${old.id}${ext}`);
+            if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+          }
+        }
+      }
+      await writeHistory(req.user.userId, histItems);
+      return res.json({ ...record, id: histId });
+    }
+
+    // ── Permanent → save to PostgreSQL database ───────────────────────────────
     const dbPayload = {
       name,
       description: char.description || "",
@@ -503,17 +595,34 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
 });
 
 app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
+  const cardId = req.params.id;
+  const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+
+  // ── History card (stored locally) ─────────────────────────────────────────
+  if (String(cardId).startsWith("h_")) {
+    try {
+      const histItems = await readHistory(req.user.userId);
+      await writeHistory(req.user.userId, histItems.filter(c => String(c.id) !== String(cardId)));
+      for (const ext of [".img", ".mime"]) {
+        const f = path.join(imgDir, `${cardId}${ext}`);
+        if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+      }
+      return res.json({ success: true });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ── Permanent (DB) card ────────────────────────────────────────────────────
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-    const response = await fetch(`${internalUrl}/api/cards/${req.params.id}`, {
+    const response = await fetch(`${internalUrl}/api/cards/${cardId}`, {
       method: "DELETE",
       headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
     });
     if (!response.ok) throw new Error("Failed to delete card from database");
-    // Clean up locally-stored image if present
-    const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
     for (const ext of [".img", ".mime"]) {
-      const f = path.join(imgDir, `${req.params.id}${ext}`);
+      const f = path.join(imgDir, `${cardId}${ext}`);
       if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
     }
     res.json({ success: true });
