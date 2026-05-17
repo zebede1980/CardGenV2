@@ -97,6 +97,24 @@ async function isRegistrationOpen() {
   }
 }
 
+async function apiChangePassword(currentPassword, newPassword, targetUsername = null) {
+  const token = getToken();
+  if (!token) throw new Error("Not logged in");
+
+  const body = { newPassword };
+  if (currentPassword) body.currentPassword = currentPassword;
+  if (targetUsername) body.targetUsername = targetUsername;
+
+  const res = await fetch("/api/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to change password");
+  return data;
+}
+
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
 function showAuthOverlay() {
@@ -271,4 +289,4 @@ async function initAuth() {
 }
 
 // Expose for other modules
-window.cardgenAuth = { getToken, clearToken, initAuth };
+window.cardgenAuth = { getToken, clearToken, initAuth, apiChangePassword };

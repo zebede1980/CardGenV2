@@ -236,6 +236,60 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   res.json({ userId: req.user.userId, username: req.user.username });
 });
 
+app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+  const { currentPassword, newPassword, targetUsername } = req.body || {};
+
+  if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+    return res.status(400).json({ error: "New password must be at least 8 characters" });
+  }
+
+  try {
+    const result = await withFileLock("users.json", async () => {
+      const users = await readUsers();
+
+      // Admin changing someone else's password
+      if (targetUsername) {
+        if (req.user.username.toLowerCase() !== "admin") {
+          return { status: 403, error: "Only the admin user can change other users' passwords" };
+        }
+        const targetIndex = users.findIndex((u) => u.username.toLowerCase() === targetUsername.toLowerCase());
+        if (targetIndex === -1) {
+          return { status: 404, error: "Target user not found" };
+        }
+        users[targetIndex].passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+        await writeUsers(users);
+        return { status: 200, message: `Password updated for user ${targetUsername}` };
+      }
+
+      // User changing their own password
+      if (!currentPassword) {
+        return { status: 400, error: "Current password is required to change your own password" };
+      }
+      const userIndex = users.findIndex((u) => u.id === req.user.userId);
+      if (userIndex === -1) {
+        return { status: 404, error: "User not found" };
+      }
+
+      const valid = await bcrypt.compare(currentPassword, users[userIndex].passwordHash);
+      if (!valid) {
+        return { status: 401, error: "Incorrect current password" };
+      }
+
+      users[userIndex].passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+      await writeUsers(users);
+      return { status: 200, message: "Password updated successfully" };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.json({ success: true, message: result.message });
+  } catch (e) {
+    console.error("Change password error:", e);
+    res.status(500).json({ error: "Failed to change password" });
+  }
+});
+
 // ── Data Endpoints for Settings & Configurations ─────────────────────────────
 // Config is now stored per user, ensuring each user has their own API settings
 app.get("/api/config", requireAuth, async (req, res) => {
