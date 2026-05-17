@@ -423,7 +423,6 @@ class StoryWriterApp {
             div.appendChild(actions);
             area.appendChild(div);
         });
-        area.scrollTop = area.scrollHeight;
     }
 
     async generateNext() {
@@ -445,7 +444,6 @@ class StoryWriterApp {
         streamDiv.style.whiteSpace = 'pre-wrap';
         streamDiv.style.lineHeight = '1.7';
         area.appendChild(streamDiv);
-        area.scrollTop = area.scrollHeight;
 
         try {
             const res = await window.authFetch('/api/sw/generate', {
@@ -484,11 +482,9 @@ class StoryWriterApp {
                             const data = JSON.parse(line.slice(6));
                             if (data.type === 'chunk') {
                                 streamDiv.textContent += data.content;
-                                area.scrollTop = area.scrollHeight;
                             } else if (data.type === 'trim') {
                                 // Backend trimmed to last sentence — update display to match
                                 streamDiv.textContent = data.content;
-                                area.scrollTop = area.scrollHeight;
                             } else if (data.type === 'error') {
                                 alert(data.message);
                             }
