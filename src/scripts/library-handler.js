@@ -279,24 +279,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const permanentCards = cards.filter((c) => c.isPermanent);
       const tempCards = cards.filter((c) => !c.isPermanent);
 
+      const authToken = window.cardgenAuth?.getToken() || "";
+
       if (cardList) {
         if (!permanentCards.length) {
           cardList.innerHTML =
             '<p class="library-empty">No permanent cards yet.</p>';
         } else {
           cardList.innerHTML = permanentCards
-            .map(
-              (card) => `
-                <div class="library-item">
-                  <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
-                  <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
-                  <div class="library-item-actions">
-                    <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>
-                    <button class="btn-small" data-action="delete-card" data-id="${card.id}">Delete</button>
+            .map((card) => {
+              const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+              return `
+                <div class="library-item st-card">
+                  <img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">
+                  <div class="st-card-body">
+                    <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
+                    <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
+                    <div class="library-item-actions">
+                      <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>
+                      <button class="btn-small" data-action="delete-card" data-id="${card.id}">Delete</button>
+                    </div>
                   </div>
                 </div>
-              `,
-            )
+              `;
+            })
             .join("");
         }
       }
@@ -307,18 +313,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
             '<p class="library-empty">No history available.</p>';
         } else {
           historyList.innerHTML = tempCards
-            .map(
-              (card) => `
-                <div class="library-item">
-                  <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
-                  <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
-                  <div class="library-item-actions">
-                    <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>
-                    <button class="btn-small" data-action="delete-card" data-id="${card.id}">Delete</button>
+            .map((card) => {
+              const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+              return `
+                <div class="library-item st-card">
+                  <img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">
+                  <div class="st-card-body">
+                    <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
+                    <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
+                    <div class="library-item-actions">
+                      <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>
+                      <button class="btn-small" data-action="delete-card" data-id="${card.id}">Delete</button>
+                    </div>
                   </div>
                 </div>
-              `,
-            )
+              `;
+            })
             .join("");
         }
       }

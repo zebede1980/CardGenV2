@@ -1554,6 +1554,34 @@ app.get("/api/st/ping", requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/storage/cards/thumbnail?cardId=123&token=...
+app.get("/api/storage/cards/thumbnail", requireAuth, async (req, res) => {
+  const cardId = req.query.cardId;
+  if (!cardId || typeof cardId !== "string") {
+    return res.status(400).end();
+  }
+  const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+  const imgFile = path.join(imgDir, `${cardId}.img`);
+  const mimeFile = path.join(imgDir, `${cardId}.mime`);
+
+  if (!fs.existsSync(imgFile) || !fs.existsSync(mimeFile)) {
+    return res.status(404).end();
+  }
+
+  try {
+    const [imgBuf, mime] = await Promise.all([
+      fsPromises.readFile(imgFile),
+      fsPromises.readFile(mimeFile, "utf8"),
+    ]);
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(imgBuf);
+  } catch (error) {
+    console.error("Card thumbnail error:", error);
+    res.status(500).end();
+  }
+});
+
 // Proxy ST avatar thumbnails so the browser doesn't need direct access to ST
 // GET /api/st/thumbnail?file=CharacterName.png&stUrl=http://sillytavern:8000
 app.get("/api/st/thumbnail", requireAuth, async (req, res) => {
