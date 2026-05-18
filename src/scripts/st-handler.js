@@ -18,6 +18,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return headers;
   },
 
+  async _findSTCharacterByName(name) {
+    const headers = this._stHeaders();
+    if (!headers) return null;
+    try {
+      const res = await authFetch("/api/st/characters", { headers });
+      if (!res.ok) return null;
+      const characters = await res.json();
+      if (!Array.isArray(characters)) return null;
+      const lowerName = name.toLowerCase();
+      return characters.find(c => (c.name || c.data?.name || "").toLowerCase() === lowerName) || null;
+    } catch (err) {
+      console.error("ST find by name error:", err);
+      return null;
+    }
+  },
+
   // ── Connection test ────────────────────────────────────────────────────────
 
   async handleTestSTConnection() {
@@ -178,33 +194,43 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const charName = this.currentCharacter.name || "Unknown";
     const isUpdate = !!this.stSourceAvatar;
 
-    // Build confirmation message
-    let confirmMsg;
     if (isUpdate) {
       const sourceName = this.stSourceAvatar.replace(".png", "");
       if (sourceName.toLowerCase() === charName.toLowerCase()) {
-        confirmMsg = `Update "${sourceName}" in SillyTavern?`;
+        if (!confirm(`Update "${sourceName}" in SillyTavern?`)) return;
+        await this._doPushToST(headers, charName, sourceName);
       } else {
         // Name changed — offer choice
-        const choice = await this._showPushChoiceModal(charName, this.stSourceAvatar);
+        const message = `The character name changed from <strong>${escapeHtml(sourceName)}</strong> to <strong>${escapeHtml(charName)}</strong>.<br>What would you like to do?`;
+        const choice = await this._showPushChoiceModal(message);
         if (choice === "cancel") return;
         if (choice === "new") {
-          // Push as new, don't preserve source name
           await this._doPushToST(headers, charName, null);
-          return;
+        } else {
+          await this._doPushToST(headers, charName, sourceName);
         }
-        // choice === "update" — update the original slot
-        await this._doPushToST(headers, charName, this.stSourceAvatar.replace(".png", ""));
-        return;
       }
-    } else {
-      confirmMsg = `Add "${charName}" to SillyTavern as a new character?`;
+      return;
     }
 
-    if (!confirm(confirmMsg)) return;
+    // No known link — check if a character with this name already exists in ST
+    const existing = await this._findSTCharacterByName(charName);
+    if (existing) {
+      const existingName = escapeHtml(existing.name || existing.data?.name || charName);
+      const message = `A character named <strong>${existingName}</strong> already exists in SillyTavern.<br>Would you like to update it, or create a new entry?`;
+      const choice = await this._showPushChoiceModal(message);
+      if (choice === "cancel") return;
+      if (choice === "update") {
+        this.stSourceAvatar = existing.avatar || `${existingName}.png`;
+        const preservedName = this.stSourceAvatar.replace(".png", "");
+        await this._doPushToST(headers, charName, preservedName);
+        return;
+      }
+      // choice === "new" — fall through to push as new
+    }
 
-    const preservedName = isUpdate ? this.stSourceAvatar.replace(".png", "") : null;
-    await this._doPushToST(headers, charName, preservedName);
+    if (!confirm(`Add "${charName}" to SillyTavern as a new character?`)) return;
+    await this._doPushToST(headers, charName, null);
   },
 
   async _doPushToST(headers, charName, preservedName) {
@@ -330,14 +356,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   // ── Push choice modal (name changed) ──────────────────────────────────────
 
-  _showPushChoiceModal(newName, sourceAvatar) {
+  _showPushChoiceModal(message) {
     return new Promise(resolve => {
       const modal = document.getElementById("st-push-choice-modal");
       const msg = document.getElementById("st-push-choice-msg");
       if (!modal) { resolve("cancel"); return; }
 
-      if (msg) msg.innerHTML =
-        `The character name changed from <strong>${escapeHtml(sourceAvatar.replace(".png", ""))}</strong> to <strong>${escapeHtml(newName)}</strong>.<br>What would you like to do?`;
+      if (msg) msg.innerHTML = message;
 
       const close = (choice) => {
         modal.classList.remove("show");
