@@ -174,19 +174,64 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   async _generateSingleVariant(concept, characterName, pov, lorebookData, cardType, variantIdx) {
+    // Use a standalone fetch so parallel calls don't race on APIHandler's shared state
+    // (currentAbortController, currentReader etc.)
     if (this._batchAbortController.signal.aborted) return null;
+
     try {
-      const variant = await window.apiHandler.generateCharacterSilent(
+      // Build the prompt identically to APIHandler.generateCharacterSilent
+      const characterPrompt = window.apiHandler.buildCharacterPrompt(
         concept, characterName, pov, lorebookData, cardType,
       );
-      if (!variant) return null;
-      variant.cardType = cardType;
-      if (cardType === "group" || cardType === "scenario") {
-        if (!Array.isArray(variant.tags)) variant.tags = [];
-        if (!variant.tags.includes(cardType)) variant.tags.push(cardType);
+      const model = this.config.get("api.text.model");
+      const apiKey = this.config.get("api.text.apiKey");
+      const apiUrl = this.config.get("api.text.baseUrl");
+      const authToken = window.cardgenAuth?.getToken() || "";
+
+      if (!apiUrl || !apiKey) throw new Error("API not configured");
+
+      // Make the request directly — bypassing APIHandler's shared state
+      const res = await (window.authFetch || fetch)("/api/text/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+          "X-API-URL": apiUrl,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: characterPrompt.systemPrompt },
+            { role: "user", content: characterPrompt.userPrompt },
+          ],
+          temperature: 0.8,
+          max_tokens: 8192,
+          stream: false,
+        }),
+        signal: this._batchAbortController.signal,
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`API ${res.status}: ${errText}`);
       }
-      return variant;
+
+      const json = await res.json();
+      const rawText = window.apiHandler.processNormalResponse(json);
+      if (!rawText) throw new Error("Empty response from API");
+
+      const parsed = this.characterGenerator.parseCharacterData(rawText);
+      if (!parsed) return null;
+
+      parsed.cardType = cardType;
+      if (cardType === "group" || cardType === "scenario") {
+        if (!Array.isArray(parsed.tags)) parsed.tags = [];
+        if (!parsed.tags.includes(cardType)) parsed.tags.push(cardType);
+      }
+      return parsed;
     } catch (err) {
+      if (err.name === "AbortError") return null;
       console.error(`Variant ${variantIdx + 1} failed:`, err);
       return null;
     }
