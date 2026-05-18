@@ -109,16 +109,23 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
 
         // Process as they complete
+        let failedCount = 0;
         const results = await Promise.allSettled(promises);
         for (const result of results) {
           if (result.status === "fulfilled" && result.value) {
             this._batchVariants.push(result.value);
             this._renderBatchCard(result.value, this._batchVariants.length - 1, batchGrid);
             if (batchProgress) batchProgress.textContent = `Generated ${this._batchVariants.length} of ${VARIANT_COUNT}…`;
-          } else if (result.status === "rejected") {
-            console.warn("Batch variant failed:", result.reason);
-            this.showStreamMessage(`⚠️ A variant failed: ${result.reason.message || result.reason}\n`);
+          } else {
+            failedCount++;
+            const reason = result.status === "rejected" ? (result.reason?.message || String(result.reason)) : "returned empty";
+            console.warn(`Batch variant failed (${reason})`);
+            this.showStreamMessage(`⚠️ Variant failed (${reason.slice(0, 80)})\n`);
           }
+        }
+        if (failedCount > 0 && batchProgress) {
+          batchProgress.textContent = `⚠️ ${this._batchVariants.length} of ${VARIANT_COUNT} succeeded (${failedCount} failed — possible rate limit)`;
+          batchProgress.style.color = "var(--warning)";
         }
       }
 

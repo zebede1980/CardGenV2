@@ -1796,17 +1796,22 @@
 
         <!-- Chat Tester Modal -->
         <div id="chat-tester-modal" class="modal-overlay" aria-hidden="true">
-            <div class="api-settings-modal" style="max-width: 800px; width: 92%; max-height: 92vh; display: flex; flex-direction: column;">
+            <div class="api-settings-modal" style="max-width: 860px; width: 94%; max-height: 94vh; display: flex; flex-direction: column;">
                 <div class="modal-header">
                     <h2 class="modal-title">💬 Test Chat: <span id="chat-tester-char-name">Character</span></h2>
+                    <div class="chat-header-slot-row" style="display:flex;align-items:center;gap:0.4rem;margin-left:auto;margin-right:0.75rem;">
+                        <select id="chat-slot-select" class="chat-persona-select" style="max-width:140px;" title="Active chat slot"></select>
+                        <button id="chat-slot-rename-btn" class="btn-small" title="Rename slot">✏️</button>
+                        <button id="chat-slot-delete-btn" class="btn-small btn-danger" title="Delete slot" style="background:var(--error);color:#fff;border-color:var(--error);">🗑</button>
+                    </div>
                     <button id="chat-tester-modal-close-btn" class="modal-close">×</button>
                 </div>
                 <div class="modal-body" style="display: flex; flex-direction: column; flex: 1; padding: 0; overflow: hidden;">
                     <div id="chat-messages" class="chat-messages"></div>
                     <div class="chat-input-area">
                         <div class="chat-input-row">
-                            <textarea id="chat-input" class="chat-input" rows="2" placeholder="Type your message..."></textarea>
-                            <button id="chat-send-btn" class="btn-primary chat-send-btn" title="Send message">➤</button>
+                            <textarea id="chat-input" class="chat-input" rows="2" placeholder="Type your message...&#10;Shift+Enter for newline, Ctrl+Enter to send"></textarea>
+                            <button id="chat-send-btn" class="btn-primary chat-send-btn" title="Send message (Ctrl+Enter)">➤</button>
                         </div>
                         <div class="chat-toolbar">
                             <div class="chat-toolbar-left">
@@ -1820,7 +1825,13 @@
                                 <button id="chat-stop-btn" class="btn-outline btn-small" style="display: none;" title="Stop generation">⏹ Stop</button>
                                 <button id="chat-regenerate-btn" class="btn-outline btn-small" title="Regenerate last response">🔄 Regenerate</button>
                                 <button id="chat-clear-btn" class="btn-outline btn-small" title="Clear chat history">🗑 Clear</button>
-                                <button id="chat-export-btn" class="btn-outline btn-small" title="Export chat as markdown">📥 Export</button>
+                                <div style="position:relative;">
+                                    <button id="chat-export-btn" class="btn-outline btn-small" title="Export chat">📥 Export</button>
+                                    <div id="chat-export-menu" style="display:none;position:absolute;bottom:calc(100% + 5px);right:0;z-index:600;background:var(--surface-color);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:0 -6px 20px rgba(0,0,0,0.35);min-width:160px;padding:0.35rem;flex-direction:column;gap:0.15rem;">
+                                        <button class="free-image-option" id="chat-export-md-btn" style="border-radius:var(--radius-sm);padding:0.4rem 0.6rem;font-size:0.85rem;text-align:left;background:transparent;border:none;color:var(--text-primary);cursor:pointer;">📄 Markdown</button>
+                                        <button class="free-image-option" id="chat-export-jsonl-btn" style="border-radius:var(--radius-sm);padding:0.4rem 0.6rem;font-size:0.85rem;text-align:left;background:transparent;border:none;color:var(--text-primary);cursor:pointer;">🍷 SillyTavern JSONL</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="chat-toolbar-params">
@@ -1830,6 +1841,19 @@
                             <button id="chat-save-transcript-btn" class="btn-outline btn-small" title="Save current chat as transcript">💾 Save</button>
                             <button id="chat-load-transcript-btn" class="btn-outline btn-small" title="Load a saved transcript">📂 Load</button>
                             <button id="chat-manage-personas-btn" class="btn-outline btn-small" title="Manage personas">👤 Personas</button>
+                            <button id="chat-advanced-toggle" class="btn-outline btn-small" title="Toggle advanced sampler controls">⚙️ Advanced</button>
+                        </div>
+                        <div id="chat-advanced-params" class="chat-toolbar-params" style="display:none;border-top:none;padding-top:0;">
+                            <label class="chat-param-label">Freq Pen: <input type="range" id="chat-freq-penalty" min="-2.0" max="2.0" step="0.1" value="0" class="chat-param-slider"> <span id="chat-freq-penalty-value">0</span></label>
+                            <label class="chat-param-label">Pres Pen: <input type="range" id="chat-pres-penalty" min="-2.0" max="2.0" step="0.1" value="0" class="chat-param-slider"> <span id="chat-pres-penalty-value">0</span></label>
+                            <label class="chat-param-label">Top K: <input type="range" id="chat-top-k" min="0" max="100" step="1" value="0" class="chat-param-slider"> <span id="chat-top-k-value">0</span></label>
+                            <label class="chat-param-label">Min P: <input type="range" id="chat-min-p" min="0" max="1.0" step="0.01" value="0" class="chat-param-slider"> <span id="chat-min-p-value">0</span></label>
+                            <label class="chat-param-label">Seed: <input type="number" id="chat-seed" class="chat-param-number" placeholder="auto" style="width:70px;"></label>
+                            <label class="chat-param-label" style="flex:1 1 180px;">Stop: <input type="text" id="chat-stop-sequences" class="chat-param-number" placeholder="comma, separated" style="width:100%;max-width:220px;text-align:left;padding-left:0.5rem;"></label>
+                        </div>
+                        <div class="chat-toolbar-params" style="border-top:none;padding-top:0;">
+                            <label class="chat-param-label" style="flex:1 1 100%;">Author's Note: <input type="text" id="chat-authors-note" class="chat-param-number" placeholder="Optional injection into context..." style="flex:1;max-width:none;text-align:left;padding-left:0.5rem;"></label>
+                            <label class="chat-param-label">Depth: <input type="range" id="chat-authors-note-depth" min="0" max="10" step="1" value="2" class="chat-param-slider"> <span id="chat-authors-note-depth-value">2</span></label>
                         </div>
                     </div>
                 </div>
@@ -1864,6 +1888,10 @@
                         <input id="chat-persona-form-name" type="text" class="input" placeholder="Persona name" required style="margin-bottom:0.5rem;">
                         <label class="label">Description <span style="font-weight:400;">(optional)</span></label>
                         <textarea id="chat-persona-form-desc" class="input" rows="3" placeholder="Brief description of this persona's traits…" style="width:100%;resize:vertical;" oninput="this.style.height='';this.style.height=Math.min(120,this.scrollHeight)+'px';"></textarea>
+                        <label class="label">System Prefix <span style="font-weight:400;">(optional, injected before character card)</span></label>
+                        <textarea id="chat-persona-form-prefix" class="input" rows="2" placeholder="e.g. The assistant must always speak in rhyme." style="width:100%;resize:vertical;margin-bottom:0.5rem;"></textarea>
+                        <label class="label">System Suffix <span style="font-weight:400;">(optional, injected after example messages)</span></label>
+                        <textarea id="chat-persona-form-suffix" class="input" rows="2" placeholder="e.g. Always end replies with a rhetorical question." style="width:100%;resize:vertical;margin-bottom:0.5rem;"></textarea>
                         <button id="chat-persona-form-submit-btn" type="submit" class="btn-primary" style="margin-top:0.5rem;">Add</button>
                     </form>
                 </div>

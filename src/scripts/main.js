@@ -482,9 +482,25 @@ class CharacterGeneratorApp {
     if (chatSendBtn) chatSendBtn.addEventListener("click", () => this.handleChatSend());
     if (chatInput) {
       chatInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
           this.handleChatSend();
+        } else if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          this.handleChatSend();
+        } else if (e.key === "ArrowUp" && chatInput.selectionStart === 0 && chatInput.selectionEnd === 0 && chatInput.value === "") {
+          // Populate with last user message on up-arrow when empty
+          if (this.chatTester) {
+            const msgs = this.chatTester.getMessages();
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].role === "user") {
+                e.preventDefault();
+                chatInput.value = msgs[i].content;
+                chatInput.selectionStart = chatInput.selectionEnd = chatInput.value.length;
+                break;
+              }
+            }
+          }
         }
       });
     }
@@ -494,13 +510,63 @@ class CharacterGeneratorApp {
     if (chatExportBtn) chatExportBtn.addEventListener("click", () => this.handleChatExport());
     if (chatPersonaInput) chatPersonaInput.addEventListener("change", () => this.handleChatPersonaChange());
 
-    // Chat param controls
+    // Export dropdown
+    const chatExportMdBtn = document.getElementById("chat-export-md-btn");
+    const chatExportJsonlBtn = document.getElementById("chat-export-jsonl-btn");
+    const chatExportMenu = document.getElementById("chat-export-menu");
+    if (chatExportBtn && chatExportMenu) {
+      chatExportBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isHidden = chatExportMenu.style.display === "none" || !chatExportMenu.style.display;
+        chatExportMenu.style.display = isHidden ? "flex" : "none";
+      });
+      document.addEventListener("click", (e) => {
+        if (!chatExportMenu.contains(e.target) && e.target !== chatExportBtn) {
+          chatExportMenu.style.display = "none";
+        }
+      });
+    }
+    if (chatExportMdBtn) chatExportMdBtn.addEventListener("click", () => { chatExportMenu.style.display = "none"; this.handleChatExport(); });
+    if (chatExportJsonlBtn) chatExportJsonlBtn.addEventListener("click", () => { chatExportMenu.style.display = "none"; this.handleChatExportJSONL(); });
+
+    // Chat slot controls
+    const chatSlotSelect = document.getElementById("chat-slot-select");
+    const chatSlotRenameBtn = document.getElementById("chat-slot-rename-btn");
+    const chatSlotDeleteBtn = document.getElementById("chat-slot-delete-btn");
+    if (chatSlotSelect) chatSlotSelect.addEventListener("change", () => this._handleChatSlotChange());
+    if (chatSlotRenameBtn) chatSlotRenameBtn.addEventListener("click", () => this._handleRenameSlot());
+    if (chatSlotDeleteBtn) chatSlotDeleteBtn.addEventListener("click", () => this._handleDeleteSlot());
+
+    // Chat param controls (basic + advanced)
     const chatTemperature = document.getElementById("chat-temperature");
     const chatTopP = document.getElementById("chat-top-p");
     const chatMaxTokens = document.getElementById("chat-max-tokens");
     if (chatTemperature) chatTemperature.addEventListener("input", () => this._handleChatParamChange());
     if (chatTopP) chatTopP.addEventListener("input", () => this._handleChatParamChange());
     if (chatMaxTokens) chatMaxTokens.addEventListener("input", () => this._handleChatParamChange());
+
+    const chatAdvancedToggle = document.getElementById("chat-advanced-toggle");
+    const chatAdvancedParams = document.getElementById("chat-advanced-params");
+    if (chatAdvancedToggle && chatAdvancedParams) {
+      chatAdvancedToggle.addEventListener("click", () => {
+        const hidden = chatAdvancedParams.style.display === "none";
+        chatAdvancedParams.style.display = hidden ? "flex" : "none";
+      });
+    }
+
+    [
+      "chat-freq-penalty",
+      "chat-pres-penalty",
+      "chat-top-k",
+      "chat-min-p",
+      "chat-seed",
+      "chat-stop-sequences",
+      "chat-authors-note",
+      "chat-authors-note-depth",
+    ].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", () => this._handleChatParamChange());
+    });
 
     // Chat transcript buttons
     const chatSaveTranscriptBtn = document.getElementById("chat-save-transcript-btn");

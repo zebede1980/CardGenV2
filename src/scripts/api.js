@@ -205,11 +205,15 @@ class APIHandler {
         buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
         for (const line of lines) {
-          if (line.trim() === "") continue;
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
+          const trimmed = line.trim();
+          if (trimmed === "") continue;
+          if (trimmed.startsWith("data: ")) {
+            let data = trimmed.slice(6).trim();
 
             if (data === "[DONE]") continue;
+
+            // Some proxies double-wrap: "data: data: {...}" — unwrap once
+            if (data.startsWith("data: ")) data = data.slice(6).trim();
 
             try {
               const parsed = JSON.parse(data);
@@ -220,7 +224,10 @@ class APIHandler {
                 onStream(content, fullContent);
               }
             } catch (e) {
-              console.warn("Failed to parse streaming data:", data);
+              // Log only when debug mode is on, and truncate long data
+              if (window.config?.getDebugMode?.()) {
+                console.debug("Failed to parse streaming data:", data.length > 120 ? data.slice(0, 120) + "…" : data);
+              }
             }
           }
         }

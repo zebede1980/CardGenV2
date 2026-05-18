@@ -10,6 +10,18 @@ class ChatTester {
     this.temperature = 0.85;
     this.topP = 1.0;
     this.maxTokens = 800;
+    this.frequencyPenalty = 0;
+    this.presencePenalty = 0;
+    this.topK = 0;
+    this.minP = 0;
+    this.seed = null;
+    this.stopSequences = [];
+    // Author's Note
+    this.authorsNote = "";
+    this.authorsNoteDepth = 2; // 0 = after system, 1 = after first message, etc.
+    // Chat slots keyed by character name
+    this.slots = {};
+    this.activeSlotId = null;
     // Load saved params from localStorage
     this._loadParams();
   }
@@ -23,6 +35,14 @@ class ChatTester {
         if (typeof saved.temperature === "number") this.temperature = saved.temperature;
         if (typeof saved.topP === "number") this.topP = saved.topP;
         if (typeof saved.maxTokens === "number") this.maxTokens = saved.maxTokens;
+        if (typeof saved.frequencyPenalty === "number") this.frequencyPenalty = saved.frequencyPenalty;
+        if (typeof saved.presencePenalty === "number") this.presencePenalty = saved.presencePenalty;
+        if (typeof saved.topK === "number") this.topK = saved.topK;
+        if (typeof saved.minP === "number") this.minP = saved.minP;
+        if (typeof saved.seed === "number") this.seed = saved.seed;
+        if (Array.isArray(saved.stopSequences)) this.stopSequences = saved.stopSequences;
+        if (typeof saved.authorsNote === "string") this.authorsNote = saved.authorsNote;
+        if (typeof saved.authorsNoteDepth === "number") this.authorsNoteDepth = saved.authorsNoteDepth;
       }
     } catch (e) { /* ignore */ }
   }
@@ -32,7 +52,92 @@ class ChatTester {
       temperature: this.temperature,
       topP: this.topP,
       maxTokens: this.maxTokens,
+      frequencyPenalty: this.frequencyPenalty,
+      presencePenalty: this.presencePenalty,
+      topK: this.topK,
+      minP: this.minP,
+      seed: this.seed,
+      stopSequences: this.stopSequences,
+      authorsNote: this.authorsNote,
+      authorsNoteDepth: this.authorsNoteDepth,
     }));
+  }
+
+  /* ---------- Chat Slots ---------- */
+
+  _getSlotKey() {
+    const charName = this.app.currentCharacter?.name || "Unknown";
+    return charName;
+  }
+
+  _loadSlots() {
+    try {
+      return JSON.parse(localStorage.getItem("chatgen_slots") || "{}");
+    } catch (e) { return {}; }
+  }
+
+  _saveSlots(slots) {
+    localStorage.setItem("chatgen_slots", JSON.stringify(slots));
+  }
+
+  getSlots() {
+    const key = this._getSlotKey();
+    const all = this._loadSlots();
+    return all[key] || [];
+  }
+
+  createSlot(name) {
+    const key = this._getSlotKey();
+    const all = this._loadSlots();
+    if (!all[key]) all[key] = [];
+    const id = "slot_" + Date.now();
+    const slot = { id, name: name || `Chat ${all[key].length + 1}`, createdAt: new Date().toISOString(), messages: [] };
+    all[key].push(slot);
+    this._saveSlots(all);
+    return slot;
+  }
+
+  renameSlot(id, name) {
+    const key = this._getSlotKey();
+    const all = this._loadSlots();
+    if (!all[key]) return false;
+    const slot = all[key].find((s) => s.id === id);
+    if (slot) slot.name = name;
+    this._saveSlots(all);
+    return !!slot;
+  }
+
+  deleteSlot(id) {
+    const key = this._getSlotKey();
+    const all = this._loadSlots();
+    if (!all[key]) return false;
+    all[key] = all[key].filter((s) => s.id !== id);
+    this._saveSlots(all);
+    return true;
+  }
+
+  loadSlot(id) {
+    const key = this._getSlotKey();
+    const all = this._loadSlots();
+    const slots = all[key] || [];
+    const slot = slots.find((s) => s.id === id);
+    if (!slot) return false;
+    this.activeSlotId = id;
+    this.messages = JSON.parse(JSON.stringify(slot.messages || []));
+    return true;
+  }
+
+  saveCurrentSlot() {
+    if (!this.activeSlotId) return;
+    const key = this._getSlotKey();
+    const all = this._loadSlots();
+    if (!all[key]) all[key] = [];
+    const slot = all[key].find((s) => s.id === this.activeSlotId);
+    if (slot) {
+      slot.messages = JSON.parse(JSON.stringify(this.messages));
+      slot.updatedAt = new Date().toISOString();
+      this._saveSlots(all);
+    }
   }
 
   /* ---------- Transcript Save / Load ---------- */
@@ -92,20 +197,22 @@ class ChatTester {
     localStorage.setItem("chatgen_personas", JSON.stringify(personas));
   }
 
-  static addPersona(name, description) {
+  static addPersona(name, description, systemPrefix, systemSuffix) {
     const personas = ChatTester.getPersonas();
     const id = "p_" + Date.now();
-    personas.push({ id, name: name.trim(), description: description.trim() });
+    personas.push({ id, name: name.trim(), description: description.trim(), systemPrefix: (systemPrefix || "").trim(), systemSuffix: (systemSuffix || "").trim() });
     ChatTester.savePersonas(personas);
     return id;
   }
 
-  static updatePersona(id, name, description) {
+  static updatePersona(id, name, description, systemPrefix, systemSuffix) {
     const personas = ChatTester.getPersonas();
     const p = personas.find((p) => p.id === id);
     if (!p) return false;
     p.name = name.trim();
     p.description = description.trim();
+    p.systemPrefix = (systemPrefix || "").trim();
+    p.systemSuffix = (systemSuffix || "").trim();
     ChatTester.savePersonas(personas);
     return true;
   }
@@ -123,9 +230,13 @@ class ChatTester {
 
     const parts = [];
 
-    // Optional persona description
+    // Optional persona description + prefix
     const personas = ChatTester.getPersonas();
     const activePersona = personas.find((p) => p.name === this.personaName);
+    if (activePersona?.systemPrefix) {
+      parts.push(activePersona.systemPrefix);
+      parts.push("");
+    }
     if (activePersona?.description) {
       parts.push(`[${this.personaName}'s Persona]`);
       parts.push(activePersona.description);
@@ -178,6 +289,12 @@ class ChatTester {
     if (char.mesExample) {
       parts.push("[Example Messages]");
       parts.push(this._replaceMacros(char.mesExample));
+      parts.push("");
+    }
+
+    // Persona suffix
+    if (activePersona?.systemSuffix) {
+      parts.push(activePersona.systemSuffix);
       parts.push("");
     }
 
@@ -260,6 +377,42 @@ class ChatTester {
     return matches;
   }
 
+  /* ---------- Swipe Helpers ---------- */
+
+  _ensureSwipeData(msg) {
+    if (!msg.swipes) {
+      msg.swipes = [msg.content];
+      msg.swipeIndex = 0;
+    }
+  }
+
+  addSwipe(msgId, content) {
+    const msg = this.messages.find((m) => m.id === msgId);
+    if (!msg || msg.role !== "assistant") return false;
+    this._ensureSwipeData(msg);
+    msg.swipes.push(content);
+    msg.swipeIndex = msg.swipes.length - 1;
+    msg.content = content;
+    return true;
+  }
+
+  setSwipeIndex(msgId, index) {
+    const msg = this.messages.find((m) => m.id === msgId);
+    if (!msg || msg.role !== "assistant") return false;
+    this._ensureSwipeData(msg);
+    if (index < 0 || index >= msg.swipes.length) return false;
+    msg.swipeIndex = index;
+    msg.content = msg.swipes[index];
+    return true;
+  }
+
+  getSwipeInfo(msgId) {
+    const msg = this.messages.find((m) => m.id === msgId);
+    if (!msg || msg.role !== "assistant") return null;
+    this._ensureSwipeData(msg);
+    return { current: msg.swipeIndex, total: msg.swipes.length };
+  }
+
   /* ---------- Public Actions ---------- */
 
   async sendMessage(content) {
@@ -282,11 +435,14 @@ class ChatTester {
 
     if (lastAssistantIndex === -1) return;
 
+    const msg = this.messages[lastAssistantIndex];
+    this._ensureSwipeData(msg);
+    // Remove the current content from the main array temporarily; we'll add a new swipe
     this.messages.splice(lastAssistantIndex, 1);
-    await this._generateResponse();
+    await this._generateResponse(msg);
   }
 
-  async _generateResponse() {
+  async _generateResponse(restoreMsg = null) {
     if (this.isGenerating) return;
     this.isGenerating = true;
 
@@ -306,6 +462,20 @@ class ChatTester {
 
       // Add history (respect maxHistoryMessages)
       const history = this.messages.slice(-this.maxHistoryMessages);
+
+      // Author's Note injection at configured depth
+      const anDepth = Math.max(0, this.authorsNoteDepth);
+      if (this.authorsNote.trim()) {
+        const anMsg = { role: "system", content: `[Author's Note]\n${this.authorsNote.trim()}` };
+        if (anDepth === 0) {
+          apiMessages.push(anMsg);
+        } else if (anDepth <= history.length) {
+          history.splice(history.length - anDepth, 0, anMsg);
+        } else {
+          history.unshift(anMsg);
+        }
+      }
+
       for (const msg of history) {
         apiMessages.push({ role: msg.role, content: msg.content });
       }
@@ -319,6 +489,16 @@ class ChatTester {
         stream: true,
       };
 
+      if (this.frequencyPenalty !== 0) data.frequency_penalty = this.frequencyPenalty;
+      if (this.presencePenalty !== 0) data.presence_penalty = this.presencePenalty;
+      if (this.seed !== null && typeof this.seed === "number") data.seed = this.seed;
+      if (this.stopSequences && this.stopSequences.length > 0) {
+        data.stop = this.stopSequences;
+      }
+      // top_k and min_p are not standard OpenAI but many proxies accept them
+      if (this.topK > 0) data.top_k = this.topK;
+      if (this.minP > 0) data.min_p = this.minP;
+
       const response = await window.apiHandler.makeRequest(
         "/chat/completions",
         data,
@@ -326,8 +506,15 @@ class ChatTester {
         true,
       );
 
-      const assistantMsg = { role: "assistant", content: "", id: Date.now() };
-      this.messages.push(assistantMsg);
+      let assistantMsg;
+      if (restoreMsg) {
+        assistantMsg = restoreMsg;
+        assistantMsg.content = "";
+        this.messages.push(assistantMsg);
+      } else {
+        assistantMsg = { role: "assistant", content: "", id: Date.now() };
+        this.messages.push(assistantMsg);
+      }
 
       await window.apiHandler.handleStreamResponse(
         response,
@@ -338,6 +525,16 @@ class ChatTester {
           }
         },
       );
+
+      // After stream completes, store as a swipe
+      this._ensureSwipeData(assistantMsg);
+      if (!restoreMsg) {
+        assistantMsg.swipes = [assistantMsg.content];
+        assistantMsg.swipeIndex = 0;
+      } else {
+        assistantMsg.swipes.push(assistantMsg.content);
+        assistantMsg.swipeIndex = assistantMsg.swipes.length - 1;
+      }
     } catch (error) {
       console.error("Chat generation error:", error);
       if (this.app._onChatError) {

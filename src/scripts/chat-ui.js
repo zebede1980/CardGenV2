@@ -1,4 +1,4 @@
-// Chat Tester UI Module - Modal rendering, message bubbles, lorebook highlighting, toolbar params, transcripts, personas
+// Chat Tester UI Module - Modal rendering, message bubbles, lorebook highlighting, toolbar params, transcripts, personas, swipes, markdown, slots
 Object.assign(CharacterGeneratorApp.prototype, {
   openChatTester() {
     if (!this.currentCharacter) {
@@ -29,6 +29,21 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Populate param controls
     this._syncChatParamControls();
 
+    // Sync slot selector
+    this._renderChatSlotSelector();
+
+    // If no active slot, create one
+    const slots = this.chatTester.getSlots();
+    if (!this.chatTester.activeSlotId) {
+      if (slots.length === 0) {
+        const slot = this.chatTester.createSlot("Main");
+        this.chatTester.activeSlotId = slot.id;
+      } else {
+        this.chatTester.activeSlotId = slots[0].id;
+        this.chatTester.loadSlot(slots[0].id);
+      }
+    }
+
     // If chat is empty, inject first message as character opening
     const messages = this.chatTester.getMessages();
     if (messages.length === 0 && this.currentCharacter.firstMessage) {
@@ -53,47 +68,171 @@ Object.assign(CharacterGeneratorApp.prototype, {
   closeChatTester() {
     const modal = document.getElementById("chat-tester-modal");
     if (!modal) return;
+    // Save current slot before closing
+    if (this.chatTester) {
+      this.chatTester.saveCurrentSlot();
+    }
     modal.classList.remove("show");
     modal.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
+  },
+
+  /* ── Chat Slots ─────────────────────────────────────────────────────────── */
+
+  _renderChatSlotSelector() {
+    const select = document.getElementById("chat-slot-select");
+    if (!select || !this.chatTester) return;
+    const slots = this.chatTester.getSlots();
+    const active = this.chatTester.activeSlotId;
+    let html = `<option value="" ${!active ? "selected" : ""}>📝 New Chat…</option>`;
+    for (const slot of slots) {
+      html += `<option value="${escapeHtml(slot.id)}" ${slot.id === active ? "selected" : ""}>${escapeHtml(slot.name)}</option>`;
+    }
+    select.innerHTML = html;
+  },
+
+  _handleChatSlotChange() {
+    const select = document.getElementById("chat-slot-select");
+    if (!select || !this.chatTester) return;
+    const val = select.value;
+
+    // Save current before switching
+    this.chatTester.saveCurrentSlot();
+
+    if (!val) {
+      // New slot
+      const name = prompt("Name for new chat:", `Chat ${this.chatTester.getSlots().length + 1}`);
+      if (!name) {
+        this._renderChatSlotSelector();
+        return;
+      }
+      const slot = this.chatTester.createSlot(name.trim());
+      this.chatTester.activeSlotId = slot.id;
+      this.chatTester.messages = [];
+      // Inject first message
+      if (this.currentCharacter?.firstMessage) {
+        this.chatTester.messages.push({
+          role: "assistant",
+          content: this.currentCharacter.firstMessage,
+          id: Date.now(),
+        });
+      }
+    } else {
+      this.chatTester.loadSlot(val);
+    }
+
+    this.renderChatMessages();
+    this.updateChatTokenCount();
+    this._renderChatSlotSelector();
+  },
+
+  _handleRenameSlot() {
+    if (!this.chatTester || !this.chatTester.activeSlotId) return;
+    const slots = this.chatTester.getSlots();
+    const slot = slots.find((s) => s.id === this.chatTester.activeSlotId);
+    if (!slot) return;
+    const name = prompt("Rename chat:", slot.name);
+    if (name && name.trim()) {
+      this.chatTester.renameSlot(slot.id, name.trim());
+      this._renderChatSlotSelector();
+    }
+  },
+
+  _handleDeleteSlot() {
+    if (!this.chatTester || !this.chatTester.activeSlotId) return;
+    if (!confirm("Delete this chat slot? This cannot be undone.")) return;
+    this.chatTester.deleteSlot(this.chatTester.activeSlotId);
+    this.chatTester.activeSlotId = null;
+    this.chatTester.messages = [];
+    // Create a fresh slot
+    const slot = this.chatTester.createSlot("Main");
+    this.chatTester.activeSlotId = slot.id;
+    if (this.currentCharacter?.firstMessage) {
+      this.chatTester.messages.push({
+        role: "assistant",
+        content: this.currentCharacter.firstMessage,
+        id: Date.now(),
+      });
+    }
+    this.renderChatMessages();
+    this.updateChatTokenCount();
+    this._renderChatSlotSelector();
   },
 
   /* ── Param Controls ─────────────────────────────────────────────────────── */
 
   _syncChatParamControls() {
     if (!this.chatTester) return;
-    const tempSlider = document.getElementById("chat-temperature");
-    const tempValue = document.getElementById("chat-temp-value");
-    const topPSlider = document.getElementById("chat-top-p");
-    const topPValue = document.getElementById("chat-top-p-value");
-    const maxTokensInput = document.getElementById("chat-max-tokens");
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    };
+    const setText = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
 
-    if (tempSlider) tempSlider.value = this.chatTester.temperature;
-    if (tempValue) tempValue.textContent = this.chatTester.temperature;
-    if (topPSlider) topPSlider.value = this.chatTester.topP;
-    if (topPValue) topPValue.textContent = this.chatTester.topP;
-    if (maxTokensInput) maxTokensInput.value = this.chatTester.maxTokens;
+    setVal("chat-temperature", this.chatTester.temperature);
+    setText("chat-temp-value", this.chatTester.temperature);
+    setVal("chat-top-p", this.chatTester.topP);
+    setText("chat-top-p-value", this.chatTester.topP);
+    setVal("chat-max-tokens", this.chatTester.maxTokens);
+
+    setVal("chat-freq-penalty", this.chatTester.frequencyPenalty);
+    setText("chat-freq-penalty-value", this.chatTester.frequencyPenalty);
+    setVal("chat-pres-penalty", this.chatTester.presencePenalty);
+    setText("chat-pres-penalty-value", this.chatTester.presencePenalty);
+    setVal("chat-top-k", this.chatTester.topK);
+    setText("chat-top-k-value", this.chatTester.topK);
+    setVal("chat-min-p", this.chatTester.minP);
+    setText("chat-min-p-value", this.chatTester.minP);
+    setVal("chat-seed", this.chatTester.seed ?? "");
+    setVal("chat-stop-sequences", this.chatTester.stopSequences.join(", "));
+
+    setVal("chat-authors-note", this.chatTester.authorsNote);
+    setVal("chat-authors-note-depth", this.chatTester.authorsNoteDepth);
+    setText("chat-authors-note-depth-value", this.chatTester.authorsNoteDepth);
   },
 
   _handleChatParamChange() {
     if (!this.chatTester) return;
-    const tempSlider = document.getElementById("chat-temperature");
-    const tempValue = document.getElementById("chat-temp-value");
-    const topPSlider = document.getElementById("chat-top-p");
-    const topPValue = document.getElementById("chat-top-p-value");
-    const maxTokensInput = document.getElementById("chat-max-tokens");
+    const read = (id, parser = (v) => v) => {
+      const el = document.getElementById(id);
+      return el ? parser(el.value) : undefined;
+    };
 
-    if (tempSlider) {
-      this.chatTester.temperature = parseFloat(tempSlider.value);
-      if (tempValue) tempValue.textContent = this.chatTester.temperature;
-    }
-    if (topPSlider) {
-      this.chatTester.topP = parseFloat(topPSlider.value);
-      if (topPValue) topPValue.textContent = this.chatTester.topP;
-    }
-    if (maxTokensInput) {
-      this.chatTester.maxTokens = parseInt(maxTokensInput.value, 10) || 800;
-    }
+    this.chatTester.temperature = read("chat-temperature", (v) => parseFloat(v));
+    this.chatTester.topP = read("chat-top-p", (v) => parseFloat(v));
+    this.chatTester.maxTokens = read("chat-max-tokens", (v) => parseInt(v, 10) || 800);
+    this.chatTester.frequencyPenalty = read("chat-freq-penalty", (v) => parseFloat(v));
+    this.chatTester.presencePenalty = read("chat-pres-penalty", (v) => parseFloat(v));
+    this.chatTester.topK = read("chat-top-k", (v) => parseInt(v, 10) || 0);
+    this.chatTester.minP = read("chat-min-p", (v) => parseFloat(v));
+
+    const seedVal = read("chat-seed", (v) => v.trim());
+    this.chatTester.seed = seedVal ? parseInt(seedVal, 10) : null;
+
+    const stopVal = read("chat-stop-sequences", (v) => v);
+    this.chatTester.stopSequences = stopVal
+      ? stopVal.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    this.chatTester.authorsNote = read("chat-authors-note", (v) => v) || "";
+    this.chatTester.authorsNoteDepth = read("chat-authors-note-depth", (v) => parseInt(v, 10) || 0);
+
+    // Update displayed values
+    const updateText = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    updateText("chat-temp-value", this.chatTester.temperature);
+    updateText("chat-top-p-value", this.chatTester.topP);
+    updateText("chat-freq-penalty-value", this.chatTester.frequencyPenalty);
+    updateText("chat-pres-penalty-value", this.chatTester.presencePenalty);
+    updateText("chat-top-k-value", this.chatTester.topK);
+    updateText("chat-min-p-value", this.chatTester.minP);
+    updateText("chat-authors-note-depth-value", this.chatTester.authorsNoteDepth);
+
     this.chatTester.saveParams();
   },
 
@@ -230,7 +369,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     document.getElementById("chat-persona-form-name").value = "";
     document.getElementById("chat-persona-form-desc").value = "";
+    document.getElementById("chat-persona-form-prefix").value = "";
+    document.getElementById("chat-persona-form-suffix").value = "";
     document.getElementById("chat-persona-form-edit-id").value = "";
+    document.getElementById("chat-persona-form-submit-btn").textContent = "Add";
   },
 
   _handlePersonaListClick(e) {
@@ -243,6 +385,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (p) {
         document.getElementById("chat-persona-form-name").value = p.name;
         document.getElementById("chat-persona-form-desc").value = p.description || "";
+        document.getElementById("chat-persona-form-prefix").value = p.systemPrefix || "";
+        document.getElementById("chat-persona-form-suffix").value = p.systemSuffix || "";
         document.getElementById("chat-persona-form-edit-id").value = p.id;
         document.getElementById("chat-persona-form-submit-btn").textContent = "Update";
       }
@@ -258,6 +402,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     e.preventDefault();
     const name = document.getElementById("chat-persona-form-name").value.trim();
     const desc = document.getElementById("chat-persona-form-desc").value.trim();
+    const prefix = document.getElementById("chat-persona-form-prefix").value.trim();
+    const suffix = document.getElementById("chat-persona-form-suffix").value.trim();
     const editId = document.getElementById("chat-persona-form-edit-id").value;
 
     if (!name) {
@@ -266,9 +412,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     if (editId) {
-      ChatTester.updatePersona(editId, name, desc);
+      ChatTester.updatePersona(editId, name, desc, prefix, suffix);
     } else {
-      ChatTester.addPersona(name, desc);
+      ChatTester.addPersona(name, desc, prefix, suffix);
     }
 
     this._renderPersonaList();
@@ -327,6 +473,26 @@ Object.assign(CharacterGeneratorApp.prototype, {
     bubble.className = `chat-message ${isUser ? "chat-message-user" : "chat-message-character"}`;
     bubble.dataset.id = msg.id;
 
+    const inner = document.createElement("div");
+    inner.className = "chat-message-inner";
+
+    // Avatar
+    const avatar = document.createElement("div");
+    avatar.className = `chat-avatar ${isUser ? "chat-avatar-user" : "chat-avatar-char"}`;
+    if (isUser) {
+      avatar.textContent = (this.chatTester?.getPersonaName() || "User").slice(0, 2).toUpperCase();
+    } else {
+      const charImg = this.currentCharacter?.avatarBase64;
+      if (charImg) {
+        avatar.innerHTML = `<img src="${charImg}" alt="">`;
+      } else {
+        avatar.textContent = (this.currentCharacter?.name || "Char").slice(0, 2).toUpperCase();
+      }
+    }
+
+    const body = document.createElement("div");
+    body.className = "chat-message-body";
+
     const nameEl = document.createElement("div");
     nameEl.className = "chat-message-name";
     nameEl.textContent = isUser
@@ -355,9 +521,48 @@ Object.assign(CharacterGeneratorApp.prototype, {
     actionsEl.appendChild(editBtn);
     actionsEl.appendChild(delBtn);
 
-    bubble.appendChild(nameEl);
-    bubble.appendChild(contentEl);
-    bubble.appendChild(actionsEl);
+    body.appendChild(nameEl);
+    body.appendChild(contentEl);
+    body.appendChild(actionsEl);
+
+    if (isUser) {
+      inner.appendChild(body);
+      inner.appendChild(avatar);
+    } else {
+      inner.appendChild(avatar);
+      inner.appendChild(body);
+    }
+
+    bubble.appendChild(inner);
+
+    // Swipe bar for assistant messages
+    if (!isUser) {
+      const swipeInfo = this.chatTester?.getSwipeInfo(msg.id);
+      if (swipeInfo && swipeInfo.total > 1) {
+        const swipeBar = document.createElement("div");
+        swipeBar.className = "chat-swipe-bar";
+        swipeBar.innerHTML = `
+          <button class="chat-swipe-btn" data-swipe-dir="prev" data-swipe-id="${msg.id}" title="Previous swipe">◀</button>
+          <span class="chat-swipe-count">${swipeInfo.current + 1} / ${swipeInfo.total}</span>
+          <button class="chat-swipe-btn" data-swipe-dir="next" data-swipe-id="${msg.id}" title="Next swipe">▶</button>
+        `;
+        swipeBar.addEventListener("click", (e) => {
+          const btn = e.target.closest("[data-swipe-dir]");
+          if (!btn) return;
+          const dir = btn.dataset.swipeDir;
+          const id = parseInt(btn.dataset.swipeId, 10);
+          const info = this.chatTester.getSwipeInfo(id);
+          if (!info) return;
+          let next = info.current;
+          if (dir === "prev") next = Math.max(0, next - 1);
+          else next = Math.min(info.total - 1, next + 1);
+          this.chatTester.setSwipeIndex(id, next);
+          this.renderChatMessages();
+        });
+        bubble.appendChild(swipeBar);
+      }
+    }
+
     container.appendChild(bubble);
   },
 
@@ -392,10 +597,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
     }
 
-    // Convert *italics* to <em>
-    html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    // Extract code blocks first so internal markdown isn't transformed
+    const codeBlocks = [];
+    html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
+      codeBlocks.push(code);
+      return `{{CODE_BLOCK_${codeBlocks.length - 1}}}`;
+    });
+
+    // Blockquote lines (after escapeHtml, > becomes >)
+    html = html.replace(/^> (.+)$/gm, '<blockquote class="chat-blockquote">$1</blockquote>');
+
     // Convert newlines to <br>
     html = html.replace(/\n/g, "<br>");
+
+    // Inline markdown
+    html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");   // Bold
+    html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");               // Italics
+    html = html.replace(/~~([^~]+)~~/g, "<del>$1</del>");             // Strikethrough
+    html = html.replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>'); // Inline code
+
+    // Restore code blocks
+    codeBlocks.forEach((code, i) => {
+      html = html.replace(`{{CODE_BLOCK_${i}}}`, `<pre class="chat-code-block"><code>${code}</code></pre>`);
+    });
+
     return html;
   },
 
@@ -509,6 +734,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._onChatStream = null;
       this._onChatError = null;
       this._onChatComplete = null;
+      // Persist slot
+      this.chatTester.saveCurrentSlot();
     };
 
     await this.chatTester.sendMessage(text);
@@ -540,6 +767,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._onChatStream = null;
       this._onChatError = null;
       this._onChatComplete = null;
+      this.chatTester.saveCurrentSlot();
     };
 
     await this.chatTester.regenerate();
@@ -562,6 +790,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     this.renderChatMessages();
     this.updateChatTokenCount();
+    this.chatTester.saveCurrentSlot();
   },
 
   handleChatStop() {
@@ -587,6 +816,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.chatTester.editMessage(id, trimmed);
     this.renderChatMessages();
     this.updateChatTokenCount();
+    this.chatTester.saveCurrentSlot();
 
     // If the edited message was the last one and it's a user message, auto-regenerate
     const messages = this.chatTester.getMessages();
@@ -607,6 +837,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.chatTester.deleteMessage(id);
     this.renderChatMessages();
     this.updateChatTokenCount();
+    this.chatTester.saveCurrentSlot();
   },
 
   handleChatPersonaChange() {
@@ -645,5 +876,50 @@ Object.assign(CharacterGeneratorApp.prototype, {
     URL.revokeObjectURL(url);
 
     this.showNotification("Chat exported as markdown.", "success");
+  },
+
+  handleChatExportJSONL() {
+    if (!this.chatTester || !this.currentCharacter) return;
+    const messages = this.chatTester.getMessages();
+    if (messages.length === 0) {
+      this.showNotification("No messages to export.", "warning");
+      return;
+    }
+
+    const charName = this.currentCharacter.name || "Character";
+    const userName = this.chatTester.getPersonaName();
+    const exportData = {
+      character_name: charName,
+      create_date: new Date().toISOString(),
+      chat_metadata: {
+        note_prompt: this.chatTester.authorsNote || "",
+        note_depth: this.chatTester.authorsNoteDepth,
+        exported_from: "CardGenV2",
+      },
+    };
+
+    const mesLines = messages.map((msg) => {
+      const isUser = msg.role === "user";
+      return JSON.stringify({
+        name: isUser ? userName : charName,
+        is_user: isUser,
+        mes: msg.content,
+        send_date: new Date(msg.id || Date.now()).toISOString(),
+        ...(!isUser && msg.swipes && msg.swipes.length > 1 ? { swipes: msg.swipes, swipe_id: msg.swipeIndex } : {}),
+      });
+    });
+
+    const lines = [JSON.stringify(exportData), ...mesLines];
+    const blob = new Blob([lines.join("\n")], { type: "application/jsonl" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `chat-${charName.replace(/\s+/g, "_")}-${Date.now()}.jsonl`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    this.showNotification("Chat exported as SillyTavern JSONL.", "success");
   },
 });
