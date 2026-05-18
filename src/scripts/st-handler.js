@@ -196,6 +196,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     if (isUpdate) {
       const sourceName = this.stSourceAvatar.replace(".png", "");
+      console.log("ST push (known link): stSourceAvatar=", this.stSourceAvatar, "sourceName=", sourceName, "charName=", charName);
       if (sourceName.toLowerCase() === charName.toLowerCase()) {
         if (!confirm(`Update "${sourceName}" in SillyTavern?`)) return;
         await this._doPushToST(headers, charName, sourceName);
@@ -216,13 +217,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // No known link — check if a character with this name already exists in ST
     const existing = await this._findSTCharacterByName(charName);
     if (existing) {
-      const existingName = escapeHtml(existing.name || existing.data?.name || charName);
+      const rawName = existing.name || existing.data?.name || charName;
+      const existingName = escapeHtml(rawName);
       const message = `A character named <strong>${existingName}</strong> already exists in SillyTavern.<br>Would you like to update it, or create a new entry?`;
       const choice = await this._showPushChoiceModal(message);
       if (choice === "cancel") return;
       if (choice === "update") {
-        this.stSourceAvatar = existing.avatar || `${existingName}.png`;
+        this.stSourceAvatar = existing.avatar || `${rawName}.png`;
         const preservedName = this.stSourceAvatar.replace(".png", "");
+        console.log("ST push update (no link): existing=", existing, "stSourceAvatar=", this.stSourceAvatar, "preservedName=", preservedName);
         await this._doPushToST(headers, charName, preservedName);
         return;
       }
@@ -248,6 +251,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.showNotification("Sending to SillyTavern…", "info");
       const body = { pngBase64 };
       if (preservedName) body.preservedName = preservedName;
+      console.log("ST push: sending body keys=", Object.keys(body), "preservedName=", preservedName);
 
       const res = await authFetch("/api/st/push", {
         method: "POST",

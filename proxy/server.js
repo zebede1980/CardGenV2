@@ -1466,6 +1466,7 @@ app.post("/api/st/push", requireAuth, async (req, res) => {
   const stUrl = getStUrl(req, res);
   if (!stUrl) return;
   const { pngBase64, preservedName } = req.body;
+  console.log("ST push proxy: received preservedName =", preservedName, "type =", typeof preservedName);
   if (!pngBase64 || typeof pngBase64 !== "string") {
     return res.status(400).json({ error: "pngBase64 is required" });
   }
@@ -1507,6 +1508,9 @@ app.post("/api/st/push", requireAuth, async (req, res) => {
           Buffer.from(String(preservedName))
         )
       );
+      console.log("ST push proxy: including preserved_name part =", String(preservedName));
+    } else {
+      console.log("ST push proxy: NO preserved_name part included");
     }
 
     const closing = Buffer.from(`--${boundary}--\r\n`);
@@ -1550,6 +1554,7 @@ app.post("/api/st/push", requireAuth, async (req, res) => {
       return res.status(response.status).json({ error: `ST import returned ${response.status}`, detail: errText });
     }
     const data = await response.json();
+    console.log("ST push proxy: ST response =", JSON.stringify(data));
     res.json(data);
   } catch (error) {
     console.error("ST push error:", error);
