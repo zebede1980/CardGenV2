@@ -298,7 +298,7 @@ BEGIN PROMPT:`;
       case "concept-art":
         return s("Professional character concept art of", "game concept art, character design sheet, clean rendering, professional illustration, artstation, dynamic lighting, detailed costume design");
       case "gothic-anime":
-        return s("A hyper-detailed semi-realistic anime illustration of", "dark fantasy gothic style, high contrast chiaroscuro lighting, cinematic dramatic shadows, glossy finish, masterpiece, 8k resolution, highly detailed concept art, restricted palette of deep blacks, stark whites, and luminous crimson red");
+        return s("A hyper-detailed semi-realistic anime illustration of", "dark fantasy gothic, high contrast lighting, dramatic shadows, highly detailed concept art, restricted palette-deep blacks, stark whites, luminous crimson red");
       case "gothic":
         return s("Dark gothic illustration of", "gothic art, dark fantasy, dramatic shadows, moody atmosphere, Victorian gothic aesthetic, intricate dark detail, haunting beauty");
       case "art-nouveau":
