@@ -270,15 +270,15 @@ BEGIN PROMPT:`;
       case "realistic":
         return s("A hyper-realistic photograph of", "DSLR photo, 85mm portrait lens, natural lighting, shallow depth of field, 8k resolution, photorealistic, highly detailed skin and features, masterpiece");
       case "anime":
-        return s("High quality anime illustration of", "anime style, vibrant colors, clean line art, detailed anime character design, professional anime art, 2D animation quality");
+        return s("Anime illustration of", "masterpiece, best quality, anime art, vibrant colors, detailed eyes, clean line art, soft cel shading, expressive, 2D illustration");
       case "hand-drawn-anime":
-        return s("Traditional hand-drawn anime artwork of", "hand-drawn anime, intricate ink line art, cel shading, classic 90s anime aesthetic, paper texture, authentic traditional media, not CGI, masterpiece illustration");
+        return s("Traditional hand-drawn anime artwork of", "hand-drawn anime, intricate ink line art, cel shading, classic 90s anime aesthetic, paper texture, traditional media, masterpiece illustration");
       case "painted-anime":
-        return s("Painted anime artwork of", "painted anime, rich canvas texture, expressive brushstrokes, traditional oil painting technique, vibrant colors, masterpiece illustration, not computer generated");
+        return s("Painted anime artwork of", "painted anime, rich canvas texture, expressive brushstrokes, oil painting technique, vibrant colors, masterpiece illustration");
       case "waifu":
-        return s("Beautiful waifu anime illustration of", "waifu style, best quality, ultra-detailed, masterpiece, beautiful anime character, soft lighting, distinct anime features, appealing design");
+        return s("Waifu anime illustration of", "waifu style, best quality, ultra-detailed, masterpiece, soft lighting, large expressive eyes, detailed hair, appealing design");
       case "sexy":
-        return s("A seductive, alluring portrait of", "sexy, alluring, highly attractive, beautiful, masterpiece, highly detailed, stunning, tastefully posed, professional lighting");
+        return s("A glamorous, alluring portrait of", "masterpiece, best quality, glamorous lighting, confident pose, elegant figure, radiant skin, cinematic composition, highly detailed");
       case "comic":
         return s("Western comic book art of", "comic book style, graphic novel, bold ink outlines, halftone shading, dynamic composition, vibrant comic colors, professional illustration");
       case "cinematic":
@@ -298,9 +298,9 @@ BEGIN PROMPT:`;
       case "concept-art":
         return s("Professional character concept art of", "game concept art, character design sheet, clean rendering, professional illustration, artstation, dynamic lighting, detailed costume design");
       case "gothic-anime":
-        return s("A hyper-detailed semi-realistic anime illustration of", "dark fantasy gothic, high contrast lighting, dramatic shadows, highly detailed concept art, restricted palette-deep blacks, stark whites, luminous crimson red");
+        return s("Semi-realistic anime illustration of", "dark fantasy gothic, high contrast lighting, dramatic shadows, detailed concept art, palette of deep blacks, stark whites, luminous crimson");
       case "gothic":
-        return s("Dark gothic illustration of", "gothic art, dark fantasy, dramatic shadows, moody atmosphere, Victorian gothic aesthetic, intricate dark detail, haunting beauty");
+        return s("Dark gothic illustration of", "dark fantasy, dramatic shadows, moody atmosphere, Victorian gothic, haunting beauty");
       case "art-nouveau":
         return s("Art Nouveau illustration of", "Art Nouveau style, Alphonse Mucha inspired, flowing organic lines, decorative floral border motifs, elegant curves, muted jewel tones, vintage poster art, ornamental");
       case "noir":
