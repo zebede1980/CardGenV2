@@ -304,17 +304,24 @@
                             </div>
                         </div>
 
-                        <div class="generation-buttons">
+                        <div class="generation-buttons" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                             <button
                                 id="generate-btn"
                                 class="btn-primary"
                                 style="flex: 1; min-width: 200px"
-                                title="Generate a full character card from your concept — includes description, personality, scenario, and first message"
+                                title="Generate a single character card from your concept"
                             >
-                                <span class="btn-text">Generate Character</span>
-                                <span class="btn-loading" style="display: none"
-                                    >Generating...</span
-                                >
+                                <span class="btn-text">✨ Generate 1</span>
+                                <span class="btn-loading" style="display: none">Generating...</span>
+                            </button>
+                            <button
+                                id="batch-generate-btn"
+                                class="btn-outline"
+                                style="flex: 1; min-width: 200px"
+                                title="Generate 4 variants at once and pick your favourite"
+                            >
+                                <span class="btn-text">🎲 Generate 4</span>
+                                <span class="btn-loading" style="display: none">Generating 4...</span>
                             </button>
                             <button
                                 id="stop-btn"
@@ -343,6 +350,9 @@
                                 accept=".png,.json,application/json,image/png"
                                 style="display: none"
                             />
+                            <button id="url-import-btn" class="btn-outline" title="Import a character from a JanitorAI or Chub.ai URL">
+                                🌐 Import from URL
+                            </button>
                         </div>
 
                         <details id="stream-section-details" style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem;">
@@ -1384,6 +1394,9 @@
         <script src="src/scripts/chat-tester.js?v=20260512"></script>
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
+        <script src="src/scripts/batch-generator.js?v=20260518"></script>
+        <script src="src/scripts/image-gallery.js?v=20260518"></script>
+        <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=8"></script>
         <!-- API Settings Modal -->
 
@@ -1798,6 +1811,9 @@
                         <div class="chat-toolbar">
                             <div class="chat-toolbar-left">
                                 <input id="chat-persona-name" class="chat-persona-input" type="text" value="User" placeholder="Your name" title="Your persona name" />
+                                <select id="chat-persona-select" class="chat-persona-select" title="Quick-select a saved persona">
+                                    <option value="">👤 Pick…</option>
+                                </select>
                                 <span id="chat-token-count" class="chat-token-count">~0 tokens</span>
                             </div>
                             <div class="chat-toolbar-right">
@@ -1807,7 +1823,49 @@
                                 <button id="chat-export-btn" class="btn-outline btn-small" title="Export chat as markdown">📥 Export</button>
                             </div>
                         </div>
+                        <div class="chat-toolbar-params">
+                            <label class="chat-param-label">Temp: <input type="range" id="chat-temperature" min="0.1" max="2.0" step="0.1" value="0.85" class="chat-param-slider"> <span id="chat-temp-value">0.85</span></label>
+                            <label class="chat-param-label">Top-P: <input type="range" id="chat-top-p" min="0.1" max="1.0" step="0.05" value="1.0" class="chat-param-slider"> <span id="chat-top-p-value">1.0</span></label>
+                            <label class="chat-param-label">Max Tok: <input type="number" id="chat-max-tokens" min="50" max="2000" step="50" value="800" class="chat-param-number"></label>
+                            <button id="chat-save-transcript-btn" class="btn-outline btn-small" title="Save current chat as transcript">💾 Save</button>
+                            <button id="chat-load-transcript-btn" class="btn-outline btn-small" title="Load a saved transcript">📂 Load</button>
+                            <button id="chat-manage-personas-btn" class="btn-outline btn-small" title="Manage personas">👤 Personas</button>
+                        </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Transcripts Modal -->
+        <div id="chat-transcript-modal" class="modal-overlay" aria-hidden="true">
+            <div class="api-settings-modal" style="max-width: 600px; width: 92%; max-height: 85vh;">
+                <div class="modal-header">
+                    <h2 class="modal-title">📂 Saved Transcripts</h2>
+                    <button id="chat-transcript-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="max-height: calc(85vh - 80px); overflow-y: auto;">
+                    <div id="chat-transcript-list" class="transcript-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Personas Modal -->
+        <div id="chat-personas-modal" class="modal-overlay" aria-hidden="true">
+            <div class="api-settings-modal" style="max-width: 600px; width: 92%; max-height: 85vh;">
+                <div class="modal-header">
+                    <h2 class="modal-title">👤 Manage Personas</h2>
+                    <button id="chat-personas-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="max-height: calc(85vh - 80px); overflow-y: auto;">
+                    <div id="chat-personas-list" class="persona-list"></div>
+                    <form id="chat-persona-form" style="border-top:1px solid var(--border);padding-top:1rem;margin-top:1rem;">
+                        <input type="hidden" id="chat-persona-form-edit-id" value="">
+                        <label class="label">Name</label>
+                        <input id="chat-persona-form-name" type="text" class="input" placeholder="Persona name" required style="margin-bottom:0.5rem;">
+                        <label class="label">Description <span style="font-weight:400;">(optional)</span></label>
+                        <textarea id="chat-persona-form-desc" class="input" rows="3" placeholder="Brief description of this persona's traits…" style="width:100%;resize:vertical;" oninput="this.style.height='';this.style.height=Math.min(120,this.scrollHeight)+'px';"></textarea>
+                        <button id="chat-persona-form-submit-btn" type="submit" class="btn-primary" style="margin-top:0.5rem;">Add</button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -1964,6 +2022,71 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Batch Generation Modal -->
+        <div id="batch-modal" class="modal-overlay" aria-hidden="true">
+            <div class="api-settings-modal" style="max-width: min(95vw, 1400px); width: 95%; max-height: 92vh;">
+                <div class="modal-header">
+                    <h2 class="modal-title">🎭 Choose Your Favourite</h2>
+                    <button id="batch-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <div id="batch-loading" style="text-align: center; padding: 2rem;">
+                        <div class="loading-spinner" style="margin: 0 auto;"></div>
+                        <p style="margin-top: 1rem;">Generating variants...</p>
+                        <p id="batch-progress" style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
+                    </div>
+                    <div id="batch-grid" class="batch-grid"></div>
+                    <div id="batch-detail" class="batch-detail" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- URL Import Modal -->
+        <div id="url-import-modal" class="modal-overlay" aria-hidden="true">
+            <div class="api-settings-modal" style="max-width: 600px; width: 92%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">🌐 Import Character from URL</h2>
+                    <button id="url-import-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0 0 1rem;">
+                        Paste a character page URL from JanitorAI or Chub.ai
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                        <input id="url-import-input" type="url" placeholder="https://janitorai.com/characters/..." class="content-box" style="flex: 1; padding: 0.6rem 0.75rem;">
+                        <button id="url-import-fetch-btn" class="btn-primary" style="white-space: nowrap;">Fetch Character</button>
+                    </div>
+                    <div id="url-import-status" style="min-height: 1.25rem; font-size: 0.875rem; margin-bottom: 0.5rem;"></div>
+                    <div id="url-import-preview" style="display: none; margin-top: 1rem;">
+                        <h3 id="url-import-preview-name" style="margin: 0 0 0.5rem;"></h3>
+                        <div id="url-import-preview-desc" style="font-size: 0.875rem; color: var(--text-secondary); max-height: 200px; overflow-y: auto; padding: 0.5rem; background: var(--surface-muted); border-radius: 0.375rem; white-space: pre-wrap;"></div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button id="url-import-confirm-btn" class="btn-primary" style="flex: 1;">Import into Editor</button>
+                            <button id="url-import-cancel-btn" class="btn-outline">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Gallery / Lightbox -->
+        <div id="gallery-lightbox" class="gallery-overlay" aria-hidden="true">
+            <div class="gallery-toolbar">
+                <button id="gallery-close-btn" class="gallery-btn" title="Close (Esc)">✕</button>
+                <button id="gallery-zoom-in-btn" class="gallery-btn" title="Zoom In (+)">＋</button>
+                <button id="gallery-zoom-out-btn" class="gallery-btn" title="Zoom Out (−)">－</button>
+                <button id="gallery-download-btn" class="gallery-btn" title="Download Image">⬇</button>
+                <button id="gallery-use-btn" class="gallery-btn gallery-use-btn" title="Use This Image for Card">✓ Use This</button>
+                <span id="gallery-counter" class="gallery-counter">1/1</span>
+            </div>
+            <button id="gallery-prev-btn" class="gallery-nav gallery-nav-prev" title="Previous (←)">❮</button>
+            <button id="gallery-next-btn" class="gallery-nav gallery-nav-next" title="Next (→)">❯</button>
+            <div id="gallery-image-container" class="gallery-image-container">
+                <img id="gallery-image" src="" alt="" draggable="false">
+            </div>
+            <div id="gallery-meta" class="gallery-meta"></div>
         </div>
 
     </body>

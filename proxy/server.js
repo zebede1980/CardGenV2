@@ -1622,6 +1622,295 @@ app.get("/api/st/thumbnail", requireAuth, async (req, res) => {
     res.status(500).end();
   }
 });
+
+// ── URL Import — Scrape JanitorAI / Chub.ai character pages ──────────────────
+const ALLOWED_IMPORT_DOMAINS = [
+  "janitorai.com",
+  "www.janitorai.com",
+  "chub.ai",
+  "www.chub.ai",
+  "characterhub.org",
+  "www.characterhub.org",
+];
+
+function isAllowedImportUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    return ALLOWED_IMPORT_DOMAINS.includes(u.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+app.post("/api/import/url", requireAuth, async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, error: "URL is required" });
+    }
+
+    if (!isAllowedImportUrl(url)) {
+      return res.status(400).json({
+        success: false,
+        error: `URL domain not allowed. Supported domains: ${ALLOWED_IMPORT_DOMAINS.join(", ")}`,
+      });
+    }
+
+    console.log(`[URL Import] Fetching: ${url}`);
+
+    // 15-second timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let response;
+    try {
+      response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      return res.status(502).json({ success: false, error: `Site returned HTTP ${response.status}` });
+    }
+
+    const html = await response.text();
+    const MAX_HTML = 5 * 1024 * 1024; // 5 MB cap
+    if (html.length > MAX_HTML) {
+      return res.status(413).json({ success: false, error: "Page too large (max 5 MB)" });
+    }
+
+    const character = extractCharacterFromHtml(html, url);
+
+    if (!character) {
+      return res.status(422).json({
+        success: false,
+        error: "Could not extract character data from this page. The page may not contain a character card, or the format may not be supported.",
+      });
+    }
+
+    console.log(`[URL Import] Extracted: name="${character.name}", desc=${(character.description || "").length} chars`);
+    res.json({ success: true, character });
+  } catch (e) {
+    console.error("[URL Import] Error:", e.message);
+    if (e.name === "AbortError") {
+      return res.status(504).json({ success: false, error: "Request timed out after 15 seconds" });
+    }
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── HTML parser for character data ────────────────────────────────────────────
+
+function extractCharacterFromHtml(html, sourceUrl) {
+  // Strategy 1: __NEXT_DATA__ JSON (JanitorAI, Chub.ai both use Next.js)
+  const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch) {
+    try {
+      const data = JSON.parse(nextDataMatch[1]);
+      const char = extractFromNextData(data, sourceUrl);
+      if (char) return char;
+    } catch (e) {
+      console.warn("[URL Import] Failed to parse __NEXT_DATA__:", e.message);
+    }
+  }
+
+  // Strategy 2: JSON-LD structured data
+  const ldJsonMatch = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
+  if (ldJsonMatch) {
+    try {
+      const data = JSON.parse(ldJsonMatch[1]);
+      const char = extractFromJsonLd(data);
+      if (char) return char;
+    } catch (e) { /* ignore */ }
+  }
+
+  // Strategy 3: Meta tags + visible text fallback
+  return extractFromMetaAndText(html, sourceUrl);
+}
+
+// ── Strategy 1: __NEXT_DATA__ ─────────────────────────────────────────────────
+
+function extractFromNextData(data, sourceUrl) {
+  // Try multiple paths to find character data in the Next.js page props
+  const paths = [
+    "props.pageProps.character",
+    "props.pageProps.characterData",
+    "props.pageProps.charData",
+    "props.pageProps.data",
+    "query",
+  ];
+
+  let charData = null;
+  for (const p of paths) {
+    charData = p.split(".").reduce((obj, key) => obj?.[key], data);
+    if (charData && typeof charData === "object") break;
+  }
+
+  // If nothing found at named paths, search recursively for a plausible character object
+  if (!charData || typeof charData !== "object") {
+    charData = findCharacterObject(data);
+  }
+
+  if (!charData || typeof charData !== "object") return null;
+
+  return normalizeCharacterFields(charData, sourceUrl);
+}
+
+function findCharacterObject(obj, depth = 0) {
+  if (!obj || typeof obj !== "object" || depth > 12) return null;
+  // Heuristic: an object with at least 'name' and one of ['description','personality','first_mes']
+  if (obj.name && (obj.description || obj.personality || obj.first_mes || obj.firstMessage)) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findCharacterObject(item, depth + 1);
+      if (found) return found;
+    }
+  } else {
+    for (const key of Object.keys(obj)) {
+      const found = findCharacterObject(obj[key], depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// ── Strategy 2: JSON-LD ───────────────────────────────────────────────────────
+
+function extractFromJsonLd(data) {
+  const item = Array.isArray(data) ? data[0] : data;
+  if (!item || typeof item !== "object") return null;
+  if (item["@type"] === "Person" || item["@type"] === "Character") {
+    return {
+      name: item.name || "",
+      description: item.description || "",
+    };
+  }
+  return null;
+}
+
+// ── Strategy 3: Meta tags + visible text ──────────────────────────────────────
+
+function extractFromMetaAndText(html, sourceUrl) {
+  const getMeta = (names) => {
+    for (const n of names) {
+      // og:title, twitter:title, etc.
+      const re = new RegExp(`<meta\\s[^>]*?(?:property|name)=["']${n}["'][^>]*?content=["']([^"']+)["']`, "i");
+      const m = html.match(re);
+      if (m) return m[1];
+      // Also try content then property
+      const re2 = new RegExp(`<meta\\s[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["']${n}["']`, "i");
+      const m2 = html.match(re2);
+      if (m2) return m2[1];
+    }
+    return "";
+  };
+
+  const name = getMeta(["og:title", "twitter:title", "title"]) || "";
+  const description = getMeta(["og:description", "twitter:description", "description"]) || "";
+
+  // Try to extract visible text description (first substantial paragraph after the title)
+  const bodyMatch = html.match(/<body[\s\S]*?<\/body>/i);
+  let textDescription = "";
+  if (bodyMatch) {
+    // Strip HTML tags and find first substantial paragraph
+    const text = bodyMatch[0].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    // Try to find text after common labels
+    const labelPatterns = [
+      /(?:Description|About|Personality|Bio|Backstory)\s*[:：]\s*(.{50,500}?)(?:\s{2,}|$)/i,
+      /(?:Description|About|Personality|Bio|Backstory)\s*\n\s*(.{50,500}?)(?:\n\s*\n|$)/i,
+    ];
+    for (const pat of labelPatterns) {
+      const m = text.match(pat);
+      if (m) { textDescription = m[1].trim(); break; }
+    }
+    // Fallback: first 300 chars after title area
+    if (!textDescription && name) {
+      const nameIdx = text.indexOf(name);
+      if (nameIdx >= 0) {
+        textDescription = text.slice(nameIdx + name.length).trim().slice(0, 300);
+      }
+    }
+  }
+
+  if (!name && !description && !textDescription) return null;
+
+  return {
+    name: cleanName(name || extractNameFromUrl(sourceUrl)),
+    description: (description || textDescription || "").slice(0, 2000),
+    personality: "",
+    scenario: "",
+    firstMessage: "",
+    tags: [],
+    mesExample: "",
+    creatorNotes: `Imported from ${sourceUrl}`,
+  };
+}
+
+// ── Field normalisation ───────────────────────────────────────────────────────
+
+function normalizeCharacterFields(data, sourceUrl) {
+  // Map from various naming conventions to our standard fields
+  return {
+    name: cleanName(data.name || data.character_name || data.charName || ""),
+    description: (data.description || data.desc || data.bio || data.backstory || "").slice(0, 4000),
+    personality: (data.personality || data.persona || data.traits || "").slice(0, 4000),
+    scenario: (data.scenario || data.setting || data.scene || "").slice(0, 2000),
+    firstMessage: data.firstMessage || data.first_mes || data.greeting || data.intro || data.first_message || "",
+    tags: normalizeTags(data.tags || data.tag || data.categories || []),
+    mesExample: data.mesExample || data.mes_example || data.example_dialogs || data.examples || "",
+    creatorNotes: data.creatorNotes || data.creator_notes || data.creatorcomment || `Imported from ${sourceUrl}`,
+    alternateGreetings: Array.isArray(data.alternateGreetings)
+      ? data.alternateGreetings
+      : Array.isArray(data.alternate_greetings) ? data.alternate_greetings : [],
+    systemPrompt: data.systemPrompt || data.system_prompt || data.system || "",
+    postHistoryInstructions: data.postHistoryInstructions || data.post_history_instructions || data.phi || "",
+    characterBook: data.characterBook || data.character_book || data.worldInfo || null,
+    creator: data.creator || data.author || data.created_by || "",
+    characterVersion: data.characterVersion || data.character_version || data.version || "",
+  };
+}
+
+function normalizeTags(tags) {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.map((t) => String(t).trim()).filter(Boolean);
+  if (typeof tags === "string") {
+    // Could be comma-separated or JSON string
+    try {
+      const parsed = JSON.parse(tags);
+      if (Array.isArray(parsed)) return parsed.map((t) => String(t).trim()).filter(Boolean);
+    } catch { /* not JSON */ }
+    return tags.split(",").map((t) => t.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function cleanName(raw) {
+  if (!raw) return "";
+  // Remove common prefixes/suffixes
+  let name = String(raw).replace(/^["']|["']$/g, "").trim();
+  // Strip "Character:" or "Name:" prefixes
+  name = name.replace(/^(?:Character|Name|Title)\s*[:：]\s*/i, "").trim();
+  // Limit length
+  return name.slice(0, 200);
+}
+
+function extractNameFromUrl(url) {
+  try {
+    const parts = new URL(url).pathname.split("/").filter(Boolean);
+    const last = parts[parts.length - 1] || parts[0] || "";
+    return last.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  } catch {
+    return "Imported Character";
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

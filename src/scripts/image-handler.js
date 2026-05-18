@@ -185,6 +185,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       wrapper.style.position = "relative";
       grid.appendChild(wrapper);
 
+      // Wire gallery trigger
+      const galleryImages = [{ url: displayUrl, prompt: finalPrompt || "", model: model || "", label: "New" }];
+      this._makeImageGalleryable(grid, galleryImages);
+
       this.showNotification(`Image generated! Compare and choose.`, "success");
     } catch (error) {
       console.error("Image regeneration error:", error);
@@ -327,6 +331,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
         `;
         grid.appendChild(wrapper);
       });
+
+      // Wire gallery triggers
+      const galleryImages4m = validResults.map(r => ({ url: r.url, prompt: r.prompt || "", model: r.model || "", label: r.model || `Option ${r.index + 1}` }));
+      this._makeImageGalleryable(grid, galleryImages4m);
+
       this.showNotification(
         `Generated ${validResults.length} image options!`,
         "success",
@@ -461,6 +470,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
         grid.appendChild(wrapper);
       });
 
+      // Wire gallery triggers
+      const galleryImages4p = validResults.map(r => ({ url: r.url, prompt: r.prompt || "", model: r.model || "", label: r.label || `Option ${r.index + 1}` }));
+      this._makeImageGalleryable(grid, galleryImages4p);
+
       this.showNotification(`Generated ${validResults.length} prompt variations!`, "success");
     } catch (error) {
       loading.style.display = "none";
@@ -537,6 +550,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         </div>
       `;
       grid.appendChild(wrapper);
+
+      // Wire gallery trigger
+      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: imagePrompt || "", model: `pollinations/${model}`, label: "Free" }]);
 
       this.showNotification("Free image generated! Compare and choose.", "success");
     } catch (error) {

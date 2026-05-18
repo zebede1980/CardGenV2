@@ -66,6 +66,18 @@ class CharacterGeneratorApp {
   bindEvents() {
     document.getElementById("generate-btn").addEventListener("click", () => this.handleGenerate());
     document.getElementById("stop-btn").addEventListener("click", () => this.handleStop());
+
+    // Batch generation — always generate 4 variants
+    const batchGenerateBtn = document.getElementById("batch-generate-btn");
+    if (batchGenerateBtn) batchGenerateBtn.addEventListener("click", () => this.handleBatchGenerate());
+
+    // Batch modal
+    const batchModal = document.getElementById("batch-modal");
+    const batchModalCloseBtn = document.getElementById("batch-modal-close-btn");
+    const batchGrid = document.getElementById("batch-grid");
+    if (batchModalCloseBtn) batchModalCloseBtn.addEventListener("click", () => this.closeBatchModal());
+    if (batchModal) batchModal.addEventListener("click", (e) => { if (e.target === batchModal) this.closeBatchModal(); });
+    if (batchGrid) batchGrid.addEventListener("click", (e) => this._handleBatchGridClick(e));
     document.getElementById("download-btn").addEventListener("click", () => this.handleDownload());
 
     const saveCardBtn = document.getElementById("save-card-btn");
@@ -95,6 +107,29 @@ class CharacterGeneratorApp {
       if (importRemasterTopBtn) importRemasterTopBtn.addEventListener("click", () => (importRemasterTopInput || importRemasterInput).click());
       if (importRemasterInput) importRemasterInput.addEventListener("change", (e) => this.handleImportCard(e, true));
       if (importRemasterTopInput) importRemasterTopInput.addEventListener("change", (e) => this.handleImportCard(e, true));
+    }
+
+    // URL Import button
+    const urlImportBtn = document.getElementById("url-import-btn");
+    if (urlImportBtn) urlImportBtn.addEventListener("click", () => this.openUrlImportModal());
+
+    // URL Import modal events
+    const urlImportModal = document.getElementById("url-import-modal");
+    const urlImportModalCloseBtn = document.getElementById("url-import-modal-close-btn");
+    const urlImportFetchBtn = document.getElementById("url-import-fetch-btn");
+    const urlImportConfirmBtn = document.getElementById("url-import-confirm-btn");
+    const urlImportCancelBtn = document.getElementById("url-import-cancel-btn");
+    const urlImportInput = document.getElementById("url-import-input");
+
+    if (urlImportModalCloseBtn) urlImportModalCloseBtn.addEventListener("click", () => this.closeUrlImportModal());
+    if (urlImportModal) urlImportModal.addEventListener("click", (e) => { if (e.target === urlImportModal) this.closeUrlImportModal(); });
+    if (urlImportFetchBtn) urlImportFetchBtn.addEventListener("click", () => this.handleUrlImportFetch());
+    if (urlImportConfirmBtn) urlImportConfirmBtn.addEventListener("click", () => this.handleUrlImportConfirm());
+    if (urlImportCancelBtn) urlImportCancelBtn.addEventListener("click", () => this.handleUrlImportCancel());
+    if (urlImportInput) {
+      urlImportInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); this.handleUrlImportFetch(); }
+      });
     }
 
     // Revision buttons
@@ -458,6 +493,49 @@ class CharacterGeneratorApp {
     if (chatStopBtn) chatStopBtn.addEventListener("click", () => this.handleChatStop());
     if (chatExportBtn) chatExportBtn.addEventListener("click", () => this.handleChatExport());
     if (chatPersonaInput) chatPersonaInput.addEventListener("change", () => this.handleChatPersonaChange());
+
+    // Chat param controls
+    const chatTemperature = document.getElementById("chat-temperature");
+    const chatTopP = document.getElementById("chat-top-p");
+    const chatMaxTokens = document.getElementById("chat-max-tokens");
+    if (chatTemperature) chatTemperature.addEventListener("input", () => this._handleChatParamChange());
+    if (chatTopP) chatTopP.addEventListener("input", () => this._handleChatParamChange());
+    if (chatMaxTokens) chatMaxTokens.addEventListener("input", () => this._handleChatParamChange());
+
+    // Chat transcript buttons
+    const chatSaveTranscriptBtn = document.getElementById("chat-save-transcript-btn");
+    const chatLoadTranscriptBtn = document.getElementById("chat-load-transcript-btn");
+    if (chatSaveTranscriptBtn) chatSaveTranscriptBtn.addEventListener("click", () => this._handleChatSaveTranscript());
+    if (chatLoadTranscriptBtn) chatLoadTranscriptBtn.addEventListener("click", () => this._handleChatLoadTranscript());
+
+    // Transcript modal
+    const chatTranscriptModal = document.getElementById("chat-transcript-modal");
+    const chatTranscriptModalCloseBtn = document.getElementById("chat-transcript-modal-close-btn");
+    const chatTranscriptList = document.getElementById("chat-transcript-list");
+    if (chatTranscriptModalCloseBtn) chatTranscriptModalCloseBtn.addEventListener("click", () => this._closeTranscriptModal());
+    if (chatTranscriptModal) chatTranscriptModal.addEventListener("click", (e) => { if (e.target === chatTranscriptModal) this._closeTranscriptModal(); });
+    if (chatTranscriptList) chatTranscriptList.addEventListener("click", (e) => this._handleTranscriptListClick(e));
+
+    // Personas
+    const chatManagePersonasBtn = document.getElementById("chat-manage-personas-btn");
+    if (chatManagePersonasBtn) chatManagePersonasBtn.addEventListener("click", () => this._handleManagePersonas());
+
+    const chatPersonasModal = document.getElementById("chat-personas-modal");
+    const chatPersonasModalCloseBtn = document.getElementById("chat-personas-modal-close-btn");
+    const chatPersonasList = document.getElementById("chat-personas-list");
+    const chatPersonaForm = document.getElementById("chat-persona-form");
+    if (chatPersonasModalCloseBtn) chatPersonasModalCloseBtn.addEventListener("click", () => this._closePersonasModal());
+    if (chatPersonasModal) chatPersonasModal.addEventListener("click", (e) => { if (e.target === chatPersonasModal) this._closePersonasModal(); });
+    if (chatPersonasList) chatPersonasList.addEventListener("click", (e) => this._handlePersonaListClick(e));
+    if (chatPersonaForm) chatPersonaForm.addEventListener("submit", (e) => this._handlePersonaFormSubmit(e));
+
+    // Persona selector dropdown
+    const chatPersonaSelect = document.getElementById("chat-persona-select");
+    if (chatPersonaSelect) {
+      chatPersonaSelect.addEventListener("change", () => this._handlePersonaSelectChange());
+      // Populate initially
+      this._populatePersonaSelect(chatPersonaSelect);
+    }
 
     // Drag-and-drop import anywhere on the page
     let dragCounter = 0;
@@ -848,6 +926,11 @@ class CharacterGeneratorApp {
   }
 
   handleStop() {
+    // Stop batch generation if it's running
+    if (this._batchIsGenerating) {
+      this.handleBatchStop();
+      return;
+    }
     if (this.isGenerating) {
       this.showStreamMessage("\n\n🛑 Stopping generation...\n");
       window.apiHandler.stopGeneration();

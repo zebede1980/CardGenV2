@@ -50,6 +50,11 @@ Object.assign(APIHandler.prototype, {
     }
   },
 
+  // Silent (non-streaming) character generation for batch use
+  async generateCharacterSilent(prompt, characterName, pov = "third", lorebook = null, cardType = "single") {
+    return this.generateCharacter(prompt, characterName, null, pov, lorebook, cardType);
+  },
+
   /**
    * Randomly picks a cultural naming tradition on each call.
    * Injected into name prompts so every generation is pushed into a different

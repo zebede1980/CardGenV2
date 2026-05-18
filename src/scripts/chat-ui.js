@@ -1,4 +1,4 @@
-// Chat Tester UI Module - Modal rendering, message bubbles, and event handling
+// Chat Tester UI Module - Modal rendering, message bubbles, lorebook highlighting, toolbar params, transcripts, personas
 Object.assign(CharacterGeneratorApp.prototype, {
   openChatTester() {
     if (!this.currentCharacter) {
@@ -23,8 +23,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Load persona name from input
     const personaInput = document.getElementById("chat-persona-name");
     if (personaInput) {
-      this.chatTester.setPersonaName(personaInput.value.trim());
+      personaInput.value = this.chatTester.getPersonaName();
     }
+
+    // Populate param controls
+    this._syncChatParamControls();
 
     // If chat is empty, inject first message as character opening
     const messages = this.chatTester.getMessages();
@@ -55,6 +58,255 @@ Object.assign(CharacterGeneratorApp.prototype, {
     document.body.style.overflow = "";
   },
 
+  /* ── Param Controls ─────────────────────────────────────────────────────── */
+
+  _syncChatParamControls() {
+    if (!this.chatTester) return;
+    const tempSlider = document.getElementById("chat-temperature");
+    const tempValue = document.getElementById("chat-temp-value");
+    const topPSlider = document.getElementById("chat-top-p");
+    const topPValue = document.getElementById("chat-top-p-value");
+    const maxTokensInput = document.getElementById("chat-max-tokens");
+
+    if (tempSlider) tempSlider.value = this.chatTester.temperature;
+    if (tempValue) tempValue.textContent = this.chatTester.temperature;
+    if (topPSlider) topPSlider.value = this.chatTester.topP;
+    if (topPValue) topPValue.textContent = this.chatTester.topP;
+    if (maxTokensInput) maxTokensInput.value = this.chatTester.maxTokens;
+  },
+
+  _handleChatParamChange() {
+    if (!this.chatTester) return;
+    const tempSlider = document.getElementById("chat-temperature");
+    const tempValue = document.getElementById("chat-temp-value");
+    const topPSlider = document.getElementById("chat-top-p");
+    const topPValue = document.getElementById("chat-top-p-value");
+    const maxTokensInput = document.getElementById("chat-max-tokens");
+
+    if (tempSlider) {
+      this.chatTester.temperature = parseFloat(tempSlider.value);
+      if (tempValue) tempValue.textContent = this.chatTester.temperature;
+    }
+    if (topPSlider) {
+      this.chatTester.topP = parseFloat(topPSlider.value);
+      if (topPValue) topPValue.textContent = this.chatTester.topP;
+    }
+    if (maxTokensInput) {
+      this.chatTester.maxTokens = parseInt(maxTokensInput.value, 10) || 800;
+    }
+    this.chatTester.saveParams();
+  },
+
+  /* ── Transcripts ────────────────────────────────────────────────────────── */
+
+  _handleChatSaveTranscript() {
+    if (!this.chatTester || this.chatTester.getMessages().length === 0) {
+      this.showNotification("No messages to save.", "warning");
+      return;
+    }
+    const defaultName = `Chat with ${this.currentCharacter?.name || "Character"} - ${new Date().toLocaleDateString()}`;
+    const name = prompt("Transcript name:", defaultName);
+    if (!name) return;
+    const entry = this.chatTester.saveTranscript(name.trim());
+    if (entry) {
+      this.showNotification("Transcript saved!", "success");
+    }
+  },
+
+  _handleChatLoadTranscript() {
+    const modal = document.getElementById("chat-transcript-modal");
+    if (!modal) return;
+    this._renderTranscriptList();
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  },
+
+  _closeTranscriptModal() {
+    const modal = document.getElementById("chat-transcript-modal");
+    if (!modal) return;
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  },
+
+  _renderTranscriptList() {
+    const list = document.getElementById("chat-transcript-list");
+    if (!list) return;
+    const transcripts = ChatTester.getAllTranscripts();
+
+    if (transcripts.length === 0) {
+      list.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:2rem;">No saved transcripts yet.</p>';
+      return;
+    }
+
+    // Sort newest first
+    transcripts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    list.innerHTML = transcripts.map((t) => {
+      const msgCount = t.messages ? t.messages.length : 0;
+      const date = new Date(t.createdAt).toLocaleDateString();
+      return `
+        <div class="transcript-item">
+          <div class="transcript-info">
+            <div class="transcript-name">${escapeHtml(t.name)}</div>
+            <div class="transcript-meta">${escapeHtml(t.characterName)} · ${date} · ${msgCount} messages</div>
+          </div>
+          <div class="transcript-actions">
+            <button class="btn-small" data-transcript-action="load" data-transcript-id="${escapeHtml(t.id)}">Load</button>
+            <button class="btn-small btn-danger" data-transcript-action="delete" data-transcript-id="${escapeHtml(t.id)}" style="background:var(--error);color:#fff;border-color:var(--error);">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  },
+
+  _handleTranscriptListClick(e) {
+    const btn = e.target.closest("[data-transcript-action]");
+    if (!btn) return;
+    const id = btn.dataset.transcriptId;
+    if (btn.dataset.transcriptAction === "load") {
+      if (this.chatTester && this.chatTester.isGenerating) {
+        this.showNotification("Stop generation before loading a transcript.", "warning");
+        return;
+      }
+      if (this.chatTester.getMessages().length > 0 && !confirm("Loading a transcript will replace the current chat. Continue?")) return;
+      this.chatTester.loadTranscript(id);
+      this.renderChatMessages();
+      this.updateChatTokenCount();
+      this._closeTranscriptModal();
+      // Update persona input
+      const personaInput = document.getElementById("chat-persona-name");
+      if (personaInput) personaInput.value = this.chatTester.getPersonaName();
+      this.showNotification("Transcript loaded!", "success");
+    } else if (btn.dataset.transcriptAction === "delete") {
+      if (!confirm("Delete this transcript?")) return;
+      this.chatTester.deleteTranscript(id);
+      this._renderTranscriptList();
+      this.showNotification("Transcript deleted.", "info");
+    }
+  },
+
+  /* ── Personas ───────────────────────────────────────────────────────────── */
+
+  _handleManagePersonas() {
+    const modal = document.getElementById("chat-personas-modal");
+    if (!modal) return;
+    this._renderPersonaList();
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  },
+
+  _closePersonasModal() {
+    const modal = document.getElementById("chat-personas-modal");
+    if (!modal) return;
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  },
+
+  _renderPersonaList() {
+    const list = document.getElementById("chat-personas-list");
+    if (!list) return;
+    const personas = ChatTester.getPersonas();
+
+    if (personas.length === 0) {
+      list.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:1rem;">No personas yet. Create one below.</p>';
+    } else {
+      list.innerHTML = personas.map((p) => `
+        <div class="persona-item">
+          <div class="persona-info">
+            <div class="persona-name">${escapeHtml(p.name)}</div>
+            ${p.description ? `<div class="persona-desc">${escapeHtml(p.description)}</div>` : ""}
+          </div>
+          <div class="persona-actions">
+            <button class="btn-small" data-persona-action="edit" data-persona-id="${escapeHtml(p.id)}">Edit</button>
+            <button class="btn-small btn-danger" data-persona-action="delete" data-persona-id="${escapeHtml(p.id)}" style="background:var(--error);color:#fff;border-color:var(--error);">Delete</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    document.getElementById("chat-persona-form-name").value = "";
+    document.getElementById("chat-persona-form-desc").value = "";
+    document.getElementById("chat-persona-form-edit-id").value = "";
+  },
+
+  _handlePersonaListClick(e) {
+    const btn = e.target.closest("[data-persona-action]");
+    if (!btn) return;
+    const id = btn.dataset.personaId;
+    if (btn.dataset.personaAction === "edit") {
+      const personas = ChatTester.getPersonas();
+      const p = personas.find((p) => p.id === id);
+      if (p) {
+        document.getElementById("chat-persona-form-name").value = p.name;
+        document.getElementById("chat-persona-form-desc").value = p.description || "";
+        document.getElementById("chat-persona-form-edit-id").value = p.id;
+        document.getElementById("chat-persona-form-submit-btn").textContent = "Update";
+      }
+    } else if (btn.dataset.personaAction === "delete") {
+      if (!confirm("Delete this persona?")) return;
+      ChatTester.deletePersona(id);
+      this._renderPersonaList();
+      this.showNotification("Persona deleted.", "info");
+    }
+  },
+
+  _handlePersonaFormSubmit(e) {
+    e.preventDefault();
+    const name = document.getElementById("chat-persona-form-name").value.trim();
+    const desc = document.getElementById("chat-persona-form-desc").value.trim();
+    const editId = document.getElementById("chat-persona-form-edit-id").value;
+
+    if (!name) {
+      this.showNotification("Enter a persona name.", "warning");
+      return;
+    }
+
+    if (editId) {
+      ChatTester.updatePersona(editId, name, desc);
+    } else {
+      ChatTester.addPersona(name, desc);
+    }
+
+    this._renderPersonaList();
+    document.getElementById("chat-persona-form-submit-btn").textContent = "Add";
+    document.getElementById("chat-persona-form-edit-id").value = "";
+
+    // Update persona selector dropdown
+    const select = document.getElementById("chat-persona-select");
+    if (select) this._populatePersonaSelect(select);
+  },
+
+  _populatePersonaSelect(select) {
+    if (!select) return;
+    const personas = ChatTester.getPersonas();
+    const current = this.chatTester ? this.chatTester.getPersonaName() : "User";
+    select.innerHTML = `<option value="">Type a name or pick…</option>`;
+    personas.forEach((p) => {
+      select.innerHTML += `<option value="${escapeHtml(p.name)}" ${p.name === current ? "selected" : ""}>${escapeHtml(p.name)}</option>`;
+    });
+  },
+
+  _handlePersonaSelectChange() {
+    const select = document.getElementById("chat-persona-select");
+    const input = document.getElementById("chat-persona-name");
+    if (!select || !input) return;
+    const val = select.value;
+    if (val) {
+      input.value = val;
+      if (this.chatTester) {
+        this.chatTester.setPersonaName(val);
+        this.renderChatMessages();
+      }
+      select.value = "";
+    }
+  },
+
+  /* ── Render ─────────────────────────────────────────────────────────────── */
+
   renderChatMessages() {
     const container = document.getElementById("chat-messages");
     if (!container) return;
@@ -83,7 +335,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const contentEl = document.createElement("div");
     contentEl.className = "chat-message-content";
-    contentEl.innerHTML = this._formatChatContent(msg.content);
+    contentEl.innerHTML = this._formatChatContent(msg.content, isUser);
 
     const actionsEl = document.createElement("div");
     actionsEl.className = "chat-message-actions";
@@ -109,15 +361,37 @@ Object.assign(CharacterGeneratorApp.prototype, {
     container.appendChild(bubble);
   },
 
-  _formatChatContent(text) {
+  _formatChatContent(text, isUser = false) {
     if (!text) return "";
 
     if (this.chatTester) {
       text = this.chatTester._replaceMacros(text);
     }
 
-    // Escape HTML, then convert markdown-like formatting
+    // Escape HTML
     let html = escapeHtml(text);
+
+    // Lorebook highlighting for user messages
+    if (isUser && this.chatTester) {
+      const matches = this.chatTester.getLorebookMatches(text);
+      if (matches.length > 0) {
+        // Build result with <mark> tags around matched words (case-insensitive replacement)
+        let result = "";
+        let lastIdx = 0;
+        const lowerHtml = html.toLowerCase();
+        for (const match of matches) {
+          const wordLower = match.word.toLowerCase();
+          const idx = lowerHtml.indexOf(wordLower, lastIdx);
+          if (idx === -1) continue;
+          result += html.slice(lastIdx, idx);
+          result += `<mark class="lorebook-highlight" title="Lorebook: ${escapeHtml(match.entryName)}">${html.slice(idx, idx + match.word.length)}</mark>`;
+          lastIdx = idx + match.word.length;
+        }
+        result += html.slice(lastIdx);
+        html = result;
+      }
+    }
+
     // Convert *italics* to <em>
     html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
     // Convert newlines to <br>
@@ -138,7 +412,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const contentEl = bubble.querySelector(".chat-message-content");
     if (contentEl) {
-      contentEl.innerHTML = this._formatChatContent(content);
+      const isUser = bubble.classList.contains("chat-message-user");
+      contentEl.innerHTML = this._formatChatContent(content, isUser);
     }
 
     this.scrollChatToBottom();

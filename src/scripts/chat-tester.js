@@ -1,4 +1,4 @@
-// Chat Tester Module - Handles conversation logic, prompt building, and API streaming
+// Chat Tester Module - Handles conversation logic, prompt building, API streaming, and transcript/persona management
 class ChatTester {
   constructor(app) {
     this.app = app;
@@ -6,6 +6,113 @@ class ChatTester {
     this.isGenerating = false;
     this.personaName = "User";
     this.maxHistoryMessages = 20;
+    // Generation parameters (with defaults)
+    this.temperature = 0.85;
+    this.topP = 1.0;
+    this.maxTokens = 800;
+    // Load saved params from localStorage
+    this._loadParams();
+  }
+
+  /* ---------- Parameter Persistence ---------- */
+
+  _loadParams() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("chatgen_params") || "null");
+      if (saved) {
+        if (typeof saved.temperature === "number") this.temperature = saved.temperature;
+        if (typeof saved.topP === "number") this.topP = saved.topP;
+        if (typeof saved.maxTokens === "number") this.maxTokens = saved.maxTokens;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  saveParams() {
+    localStorage.setItem("chatgen_params", JSON.stringify({
+      temperature: this.temperature,
+      topP: this.topP,
+      maxTokens: this.maxTokens,
+    }));
+  }
+
+  /* ---------- Transcript Save / Load ---------- */
+
+  saveTranscript(name) {
+    if (this.messages.length === 0) return null;
+    const transcripts = ChatTester._getAllTranscripts();
+    const id = "tx_" + Date.now();
+    const entry = {
+      id,
+      name: name || `Chat ${new Date().toLocaleDateString()}`,
+      characterName: this.app.currentCharacter?.name || "Unknown",
+      personaName: this.personaName,
+      createdAt: new Date().toISOString(),
+      messages: JSON.parse(JSON.stringify(this.messages)),
+    };
+    transcripts.push(entry);
+    if (transcripts.length > 50) transcripts.shift();
+    localStorage.setItem("chatgen_transcripts", JSON.stringify(transcripts));
+    return entry;
+  }
+
+  loadTranscript(id) {
+    const transcripts = ChatTester._getAllTranscripts();
+    const entry = transcripts.find((t) => t.id === id);
+    if (!entry) return false;
+    this.messages = JSON.parse(JSON.stringify(entry.messages));
+    this.personaName = entry.personaName || "User";
+    return true;
+  }
+
+  deleteTranscript(id) {
+    const transcripts = ChatTester._getAllTranscripts();
+    const filtered = transcripts.filter((t) => t.id !== id);
+    localStorage.setItem("chatgen_transcripts", JSON.stringify(filtered));
+  }
+
+  static _getAllTranscripts() {
+    try {
+      return JSON.parse(localStorage.getItem("chatgen_transcripts") || "[]");
+    } catch (e) { return []; }
+  }
+
+  static getAllTranscripts() {
+    return ChatTester._getAllTranscripts();
+  }
+
+  /* ---------- Persona Management ---------- */
+
+  static getPersonas() {
+    try {
+      return JSON.parse(localStorage.getItem("chatgen_personas") || "[]");
+    } catch (e) { return []; }
+  }
+
+  static savePersonas(personas) {
+    localStorage.setItem("chatgen_personas", JSON.stringify(personas));
+  }
+
+  static addPersona(name, description) {
+    const personas = ChatTester.getPersonas();
+    const id = "p_" + Date.now();
+    personas.push({ id, name: name.trim(), description: description.trim() });
+    ChatTester.savePersonas(personas);
+    return id;
+  }
+
+  static updatePersona(id, name, description) {
+    const personas = ChatTester.getPersonas();
+    const p = personas.find((p) => p.id === id);
+    if (!p) return false;
+    p.name = name.trim();
+    p.description = description.trim();
+    ChatTester.savePersonas(personas);
+    return true;
+  }
+
+  static deletePersona(id) {
+    const personas = ChatTester.getPersonas();
+    ChatTester.savePersonas(personas.filter((p) => p.id !== id));
   }
 
   /* ---------- Prompt Construction ---------- */
@@ -15,6 +122,15 @@ class ChatTester {
     if (!char) return "You are a helpful assistant.";
 
     const parts = [];
+
+    // Optional persona description
+    const personas = ChatTester.getPersonas();
+    const activePersona = personas.find((p) => p.name === this.personaName);
+    if (activePersona?.description) {
+      parts.push(`[${this.personaName}'s Persona]`);
+      parts.push(activePersona.description);
+      parts.push("");
+    }
 
     // Core instruction block
     const charName = char.name || "{{char}}";
@@ -95,7 +211,6 @@ class ChatTester {
       const entry = entries[i];
       if (entry.disable === true) continue;
       if (!entry.keys || entry.keys.length === 0) continue;
-      // Use index as fallback dedup key when entry.id is absent/undefined
       const dedupeKey = entry.id ?? i;
 
       for (const key of entry.keys) {
@@ -113,6 +228,36 @@ class ChatTester {
     }
 
     return matched;
+  }
+
+  /* ---------- Lorebook Highlighting Helpers ---------- */
+
+  // Returns array of { word, entryName } for any lorebook key found in text
+  getLorebookMatches(text) {
+    if (!text) return [];
+    const entries = this.app.lorebookEntries || [];
+    if (entries.length === 0) return [];
+    const matches = [];
+    const seenWords = new Set();
+    for (const entry of entries) {
+      if (entry.disable) continue;
+      if (!entry.keys) continue;
+      for (const key of entry.keys) {
+        if (!key || seenWords.has(key.toLowerCase())) continue;
+        const idx = text.toLowerCase().indexOf(key.toLowerCase());
+        if (idx !== -1) {
+          matches.push({
+            word: text.slice(idx, idx + key.length),
+            entryName: entry.comment || entry.keys.join(", "),
+            index: idx,
+          });
+          seenWords.add(key.toLowerCase());
+        }
+      }
+    }
+    // Sort by position
+    matches.sort((a, b) => a.index - b.index);
+    return matches;
   }
 
   /* ---------- Public Actions ---------- */
@@ -168,8 +313,9 @@ class ChatTester {
       const data = {
         model: this.app.config.get("api.text.model"),
         messages: apiMessages,
-        max_tokens: 800,
-        temperature: 0.85,
+        max_tokens: this.maxTokens,
+        temperature: this.temperature,
+        top_p: this.topP,
         stream: true,
       };
 
