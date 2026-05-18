@@ -117,6 +117,108 @@ async function apiChangePassword(currentPassword, newPassword, targetUsername = 
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
+function initChangePasswordUI() {
+  const btn = document.getElementById("change-password-btn");
+  const modal = document.getElementById("change-password-modal");
+  const closeBtn = document.getElementById("change-password-modal-close-btn");
+  const form = document.getElementById("change-password-form");
+
+  if (!btn || !modal || !form) return;
+
+  const targetUserSection = document.getElementById("admin-target-user-section");
+  const currentPasswordSection = document.getElementById("cp-current-password-section");
+  const targetUsernameInput = document.getElementById("cp-target-username");
+  const currentPasswordInput = document.getElementById("cp-current-password");
+
+  btn.addEventListener("click", () => {
+    const user = getStoredUser();
+    // Safe case-insensitive check so logging in as "Admin" or "admin" both work
+    const isAdmin = user && user.username && user.username.toLowerCase() === "admin";
+
+    if (isAdmin && targetUserSection) {
+      targetUserSection.style.display = "block";
+    } else if (targetUserSection) {
+      targetUserSection.style.display = "none";
+    }
+
+    form.reset();
+    document.getElementById("cp-error").style.display = "none";
+    document.getElementById("cp-success").style.display = "none";
+    document.getElementById("cp-submit-btn").disabled = false;
+    currentPasswordSection.style.display = "block";
+
+    modal.classList.add("show");
+    document.body.style.overflow = "hidden";
+  });
+
+  if (targetUsernameInput) {
+    targetUsernameInput.addEventListener("input", (e) => {
+      if (e.target.value.trim() !== "") {
+        currentPasswordSection.style.display = "none";
+        currentPasswordInput.removeAttribute("required");
+      } else {
+        currentPasswordSection.style.display = "block";
+        currentPasswordInput.setAttribute("required", "true");
+      }
+    });
+  }
+
+  const closeModal = () => {
+    modal.classList.remove("show");
+    document.body.style.overflow = "";
+  };
+
+  if (closeBtn) closeBtn.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && modal.classList.contains("show")) closeModal(); });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const targetUsername = targetUsernameInput?.value.trim() || null;
+    const currentPassword = currentPasswordInput?.value || null;
+    const newPassword = document.getElementById("cp-new-password")?.value || "";
+    const confirmPassword = document.getElementById("cp-confirm-password")?.value || "";
+    const errEl = document.getElementById("cp-error");
+    const succEl = document.getElementById("cp-success");
+    const submitBtn = document.getElementById("cp-submit-btn");
+
+    errEl.style.display = "none";
+    succEl.style.display = "none";
+
+    if (!targetUsername && !currentPassword) {
+      errEl.textContent = "Current password is required.";
+      errEl.style.display = "block";
+      return;
+    }
+    if (newPassword.length < 8) {
+      errEl.textContent = "New password must be at least 8 characters.";
+      errEl.style.display = "block";
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      errEl.textContent = "New passwords do not match.";
+      errEl.style.display = "block";
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Changing...";
+    try {
+      const result = await apiChangePassword(currentPassword, newPassword, targetUsername);
+      succEl.textContent = result.message || "Password changed successfully!";
+      succEl.style.display = "block";
+      form.reset();
+      setTimeout(() => closeModal(), 2000);
+    } catch (err) {
+      errEl.textContent = err.message || "Failed to change password.";
+      errEl.style.display = "block";
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Change Password";
+    }
+  });
+}
+
 function showAuthOverlay() {
   const overlay = document.getElementById("auth-overlay");
   if (overlay) overlay.style.display = "flex";
@@ -272,6 +374,8 @@ async function initAuth() {
 
   // Set default mode
   setAuthMode("login");
+
+  initChangePasswordUI();
 
   // Check if already authenticated
   const user = await apiMe();

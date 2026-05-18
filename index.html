@@ -93,6 +93,7 @@
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                         <div id="user-bar" style="display: none; align-items: center; gap: 0.5rem;">
                             <span id="user-bar-name" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                            <button id="change-password-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;">Change Password</button>
                             <button id="logout-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;">Sign Out</button>
                         </div>
                         <button id="theme-toggle-btn" class="btn-outline" style="font-size: 0.85rem; padding: 0.4rem 0.75rem;" title="Toggle light/dark theme" aria-pressed="false" aria-label="Toggle dark mode">
@@ -1894,6 +1895,48 @@
                     </div>
                     <p id="name-picker-status" style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem; min-height: 1.2em;"></p>
                     <div id="name-picker-grid" class="name-picker-grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Change Password Modal -->
+        <div id="change-password-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 400px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">🔑 Change Password</h2>
+                    <button id="change-password-modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <form id="change-password-form" novalidate>
+                        <!-- Admin section (only visible if admin) -->
+                        <div id="admin-target-user-section" style="display: none; margin-bottom: 1rem;">
+                            <label for="cp-target-username" class="label">Target Username (Admin Only)</label>
+                            <input id="cp-target-username" type="text" class="input" placeholder="Leave blank to change your own" />
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">
+                                Enter a username to reset their password without knowing the old one.
+                            </p>
+                        </div>
+                        
+                        <div id="cp-current-password-section" style="margin-bottom: 1rem;">
+                            <label for="cp-current-password" class="label">Current Password</label>
+                            <input id="cp-current-password" type="password" class="input" autocomplete="current-password" />
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label for="cp-new-password" class="label">New Password</label>
+                            <input id="cp-new-password" type="password" class="input" autocomplete="new-password" required minlength="8" />
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label for="cp-confirm-password" class="label">Confirm New Password</label>
+                            <input id="cp-confirm-password" type="password" class="input" autocomplete="new-password" required minlength="8" />
+                        </div>
+                        
+                        <div id="cp-error" style="display: none; color: #e55; font-size: 0.875rem; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(220,50,50,0.1); border-radius: 0.35rem;"></div>
+                        <div id="cp-success" style="display: none; color: #5a5; font-size: 0.875rem; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(80,220,80,0.1); border-radius: 0.35rem;"></div>
+                        
+                        <button id="cp-submit-btn" type="submit" class="btn-primary" style="width: 100%; padding: 0.7rem;">Change Password</button>
+                    </form>
                 </div>
             </div>
         </div>
