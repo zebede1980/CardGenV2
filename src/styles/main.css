@@ -660,16 +660,29 @@ textarea.content-box {
     align-items: flex-start;
     padding: 0.5rem 0.62rem;
 }
+.st-card-thumb-wrap {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
 .st-card-thumb {
+    position: relative;
+    z-index: 1;
     width: 56px;
     height: 56px;
     object-fit: cover;
     border-radius: var(--radius-sm);
-    flex-shrink: 0;
     background: var(--border);
 }
 .st-card-thumb-placeholder {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
     background: var(--surface-secondary, #e8e8e8);
+    border-radius: var(--radius-sm);
 }
 .st-card-body {
     flex: 1;

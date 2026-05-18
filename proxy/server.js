@@ -408,6 +408,35 @@ function translateDbCard(c) {
 }
 
 // ── Per-user Data Endpoints for Cards (PostgreSQL Database Bridge) ───────────
+
+// Thumbnail endpoint MUST be registered before /:id so Express doesn't treat "thumbnail" as an ID
+app.get("/api/storage/cards/thumbnail", requireAuth, async (req, res) => {
+  const cardId = req.query.cardId;
+  if (!cardId || typeof cardId !== "string") {
+    return res.status(400).end();
+  }
+  const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+  const imgFile = path.join(imgDir, `${cardId}.img`);
+  const mimeFile = path.join(imgDir, `${cardId}.mime`);
+
+  if (!fs.existsSync(imgFile) || !fs.existsSync(mimeFile)) {
+    return res.status(404).end();
+  }
+
+  try {
+    const [imgBuf, mime] = await Promise.all([
+      fsPromises.readFile(imgFile),
+      fsPromises.readFile(mimeFile, "utf8"),
+    ]);
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(imgBuf);
+  } catch (error) {
+    console.error("Card thumbnail error:", error);
+    res.status(500).end();
+  }
+});
+
 app.get("/api/storage/cards", requireAuth, async (req, res) => {
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
@@ -1551,34 +1580,6 @@ app.get("/api/st/ping", requireAuth, async (req, res) => {
     }
   } catch (error) {
     res.json({ ok: false, error: error.message });
-  }
-});
-
-// GET /api/storage/cards/thumbnail?cardId=123&token=...
-app.get("/api/storage/cards/thumbnail", requireAuth, async (req, res) => {
-  const cardId = req.query.cardId;
-  if (!cardId || typeof cardId !== "string") {
-    return res.status(400).end();
-  }
-  const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
-  const imgFile = path.join(imgDir, `${cardId}.img`);
-  const mimeFile = path.join(imgDir, `${cardId}.mime`);
-
-  if (!fs.existsSync(imgFile) || !fs.existsSync(mimeFile)) {
-    return res.status(404).end();
-  }
-
-  try {
-    const [imgBuf, mime] = await Promise.all([
-      fsPromises.readFile(imgFile),
-      fsPromises.readFile(mimeFile, "utf8"),
-    ]);
-    res.setHeader("Content-Type", mime);
-    res.setHeader("Cache-Control", "public, max-age=300");
-    res.send(imgBuf);
-  } catch (error) {
-    console.error("Card thumbnail error:", error);
-    res.status(500).end();
   }
 });
 
