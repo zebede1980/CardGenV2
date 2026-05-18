@@ -291,7 +291,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
               const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
               return `
                 <div class="library-item st-card">
-                  <img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">
+                  <div class="st-card-thumb-wrap">
+                    <img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">
+                    <div class="st-card-thumb-placeholder"></div>
+                  </div>
                   <div class="st-card-body">
                     <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
                     <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
@@ -317,7 +320,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
               const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
               return `
                 <div class="library-item st-card">
-                  <img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">
+                  <div class="st-card-thumb-wrap">
+                    <img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">
+                    <div class="st-card-thumb-placeholder"></div>
+                  </div>
                   <div class="st-card-body">
                     <div class="library-item-title">${escapeHtml(card.characterName || "Unnamed Character")}</div>
                     <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
@@ -409,7 +415,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!actionElement) return;
 
     const action = actionElement.dataset.action;
-    const id = Number(actionElement.dataset.id);
+    const id = actionElement.dataset.id;
 
     try {
       if (action === "load-card") {
