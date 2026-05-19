@@ -143,10 +143,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
       }
 
-      let imageHistoryBlobs = [];
+      let imageHistoryData = [];
       if (this.imageHistoryUrls && this.imageHistoryUrls.length > 0) {
         for (const url of this.imageHistoryUrls) {
           try {
+            if (typeof url === 'string' && url.startsWith("data:image/")) {
+              imageHistoryData.push(url);
+              continue;
+            }
             let b;
             if (url.startsWith("blob:")) {
               const res = await fetch(url);
@@ -154,7 +158,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
             } else if (this.imageGenerator && typeof this.imageGenerator.convertToBlob === "function") {
               b = await this.imageGenerator.convertToBlob(url);
             }
-            if (b) imageHistoryBlobs.push(b);
+            if (b) {
+              const base64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(b);
+              });
+              imageHistoryData.push(base64);
+            }
           } catch (err) {
             console.warn("Skipping history blob save:", err.message);
           }
@@ -165,7 +176,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         characterName: this.currentCharacter.name || "Unnamed Character",
         character: JSON.parse(JSON.stringify(this.currentCharacter)),
         imageBlob,
-        imageHistory: imageHistoryBlobs,
+        imageHistory: imageHistoryData,
         isPermanent,
         stSourceAvatar: this.stSourceAvatar || null,
         updatedAt: new Date().toISOString(),
@@ -191,7 +202,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const tempCards = allCards.filter((c) => !c.isPermanent);
         if (tempCards.length > 30) {
           tempCards.sort(
-            (a, b) => new Date(a.updatedAt) - new Date(b.updatedAt),
+            (a, b) => new Date(a.updatedAt || a.createdAt || 0).getTime() - new Date(b.updatedAt || b.createdAt || 0).getTime(),
           );
           const toDelete = tempCards.slice(0, tempCards.length - 30);
           for (const card of toDelete) {
@@ -274,8 +285,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.storage.listCards(),
       ]);
 
-      prompts.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
-      cards.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+      prompts.sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+      cards.sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
 
       const promptList = document.getElementById("stored-prompts-list");
       const cardList = document.getElementById("stored-cards-list");
@@ -319,7 +338,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         } else {
           cardList.innerHTML = permanentCards
             .map((card) => {
-              const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+              const tStamp = new Date(card.updatedAt || card.createdAt || 0).getTime();
+              const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&_t=${tStamp}`;
               return `
                 <div class="library-item st-card">
                   <div class="st-card-thumb-wrap">
@@ -348,7 +368,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         } else {
           historyList.innerHTML = tempCards
             .map((card) => {
-              const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+              const tStamp = new Date(card.updatedAt || card.createdAt || 0).getTime();
+              const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&_t=${tStamp}`;
               return `
                 <div class="library-item st-card">
                   <div class="st-card-thumb-wrap">
@@ -520,8 +541,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
           for (const item of card.imageHistory) {
             if (item) {
               try {
-                const blob = item instanceof Blob ? item : new Blob([item]);
-                this.imageHistoryUrls.push(URL.createObjectURL(blob));
+                if (typeof item === 'string' && item.startsWith('data:image/')) {
+                  this.imageHistoryUrls.push(item);
+                } else {
+                  const blob = item instanceof Blob ? item : new Blob([item]);
+                  this.imageHistoryUrls.push(URL.createObjectURL(blob));
+                }
               } catch (e) {
                 console.warn("Failed to restore history blob:", e);
               }
