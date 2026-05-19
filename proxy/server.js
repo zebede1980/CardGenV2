@@ -127,6 +127,59 @@ async function writeHistory(userId, items) {
   await fsPromises.writeFile(filePath, JSON.stringify(items, null, 2), "utf8");
 }
 
+// Delete all archived history-image files for a card (e.g. ${cardId}_h0.img)
+async function deleteCardHistoryImages(imgDir, cardId) {
+  let i = 0;
+  while (true) {
+    const imgFile = path.join(imgDir, `${cardId}_h${i}.img`);
+    if (!fs.existsSync(imgFile)) break;
+    for (const ext of [".img", ".mime"]) {
+      fsPromises.unlink(path.join(imgDir, `${cardId}_h${i}${ext}`)).catch(() => {});
+    }
+    i++;
+  }
+}
+
+// Save imageHistory array (base64 data-URLs) to per-card files
+async function saveCardHistoryImages(imgDir, cardId, imageHistory) {
+  if (!Array.isArray(imageHistory) || imageHistory.length === 0) return;
+  if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+  // Remove any previously stored history images for this card first
+  await deleteCardHistoryImages(imgDir, cardId);
+  for (let i = 0; i < imageHistory.length; i++) {
+    const item = imageHistory[i];
+    if (typeof item !== "string") continue;
+    const match = item.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!match) continue;
+    await Promise.all([
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_h${i}.img`), Buffer.from(match[2], "base64")),
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_h${i}.mime`), match[1]),
+    ]);
+  }
+}
+
+// Load imageHistory array from per-card files, returns array of base64 data-URLs
+async function loadCardHistoryImages(imgDir, cardId) {
+  const history = [];
+  let i = 0;
+  while (true) {
+    const imgFile = path.join(imgDir, `${cardId}_h${i}.img`);
+    const mimeFile = path.join(imgDir, `${cardId}_h${i}.mime`);
+    if (!fs.existsSync(imgFile)) break;
+    try {
+      const [buf, mime] = await Promise.all([
+        fsPromises.readFile(imgFile),
+        fsPromises.readFile(mimeFile, "utf8"),
+      ]);
+      history.push(`data:${mime};base64,${buf.toString("base64")}`);
+    } catch (e) {
+      break;
+    }
+    i++;
+  }
+  return history;
+}
+
 // ── JWT middleware ────────────────────────────────────────────────────────────
 
 function requireAuth(req, res, next) {
@@ -397,7 +450,7 @@ function translateDbCard(c) {
     // Library list renderer uses characterName and isPermanent
     characterName: c.name || "Unnamed Character",
     isPermanent: true,
-    updatedAt: c.created_at || new Date().toISOString(),
+    updatedAt: c.updated_at || c.created_at || new Date().toISOString(),
     createdAt: c.created_at || new Date().toISOString(),
     // Nested object for the load handler
     character,
@@ -476,14 +529,15 @@ app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
       const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
       const imgFile = path.join(imgDir, `${cardId}.img`);
       const mimeFile = path.join(imgDir, `${cardId}.mime`);
+      const imageHistory = await loadCardHistoryImages(imgDir, cardId);
       if (fs.existsSync(imgFile) && fs.existsSync(mimeFile)) {
         const [imgBuf, mime] = await Promise.all([
           fsPromises.readFile(imgFile),
           fsPromises.readFile(mimeFile, "utf8"),
         ]);
-        return res.json({ ...card, imageBase64: `data:${mime};base64,${imgBuf.toString("base64")}` });
+        return res.json({ ...card, imageBase64: `data:${mime};base64,${imgBuf.toString("base64")}`, imageHistory });
       }
-      return res.json(card);
+      return res.json({ ...card, imageHistory });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
@@ -547,6 +601,9 @@ app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
       console.log(`[Card Storage] GET /:id no image found for card ${cardId}`);
     }
 
+    // Load archived image history for this card
+    translated.imageHistory = await loadCardHistoryImages(imgDir, cardId);
+
     res.json(translated);
   } catch (e) {
     console.error(`[Card Storage] GET /api/storage/cards/:id Error: ${e.message}`);
@@ -576,10 +633,10 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
       };
       // Save portrait image locally (same mechanism as DB cards)
       const imageBase64 = record.imageBase64 || "";
+      const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
       if (imageBase64.startsWith("data:")) {
         const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
         if (match) {
-          const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
           if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
           await Promise.all([
             fsPromises.writeFile(path.join(imgDir, `${histId}.img`), Buffer.from(match[2], "base64")),
@@ -587,18 +644,20 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
           ]);
         }
       }
+      // Save archived image history alongside the portrait
+      await saveCardHistoryImages(imgDir, histId, record.imageHistory);
       // Persist and trim oldest items if over the cap
       const histItems = await readHistory(req.user.userId);
       histItems.push(histCard);
       if (histItems.length > HISTORY_MAX) {
         const removed = histItems.splice(0, histItems.length - HISTORY_MAX);
-        // Clean up images for evicted entries
-        const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+        // Clean up portrait and history images for evicted entries
         for (const old of removed) {
           for (const ext of [".img", ".mime"]) {
             const f = path.join(imgDir, `${old.id}${ext}`);
             if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
           }
+          deleteCardHistoryImages(imgDir, old.id);
         }
       }
       await writeHistory(req.user.userId, histItems);
@@ -658,17 +717,19 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
 
     // Save portrait image to proxy filesystem keyed by card DB id
     const imageBase64 = record.imageBase64 || "";
+    const permImgDir = path.join(getUserDataDir(req.user.userId), "card-images");
     if (imageBase64.startsWith("data:")) {
       const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
       if (match) {
-        const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
-        if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+        if (!fs.existsSync(permImgDir)) fs.mkdirSync(permImgDir, { recursive: true });
         await Promise.all([
-          fsPromises.writeFile(path.join(imgDir, `${dbCard.id}.img`), Buffer.from(match[2], "base64")),
-          fsPromises.writeFile(path.join(imgDir, `${dbCard.id}.mime`), match[1]),
+          fsPromises.writeFile(path.join(permImgDir, `${dbCard.id}.img`), Buffer.from(match[2], "base64")),
+          fsPromises.writeFile(path.join(permImgDir, `${dbCard.id}.mime`), match[1]),
         ]);
       }
     }
+    // Save archived image history alongside the portrait
+    await saveCardHistoryImages(permImgDir, dbCard.id, record.imageHistory);
 
     res.json({ ...record, id: dbCard.id });
   } catch (e) {
@@ -690,6 +751,7 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
         const f = path.join(imgDir, `${cardId}${ext}`);
         if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
       }
+      deleteCardHistoryImages(imgDir, cardId);
       return res.json({ success: true });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -704,6 +766,7 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
       headers: { "X-User-Id": String(req.user.userId), "X-User-Name": String(req.user.username), "X-Internal-Secret": INTERNAL_API_SECRET }
     });
     if (!response.ok) throw new Error("Failed to delete card from database");
+    deleteCardHistoryImages(imgDir, cardId);
     for (const ext of [".img", ".mime"]) {
       const f = path.join(imgDir, `${cardId}${ext}`);
       if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});

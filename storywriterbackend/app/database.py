@@ -61,6 +61,15 @@ def run_migrations():
                 "ALTER TABLE settings ADD COLUMN image_model TEXT NOT NULL DEFAULT ''"
             ))
 
+        # character_cards.updated_at (back-fill from created_at for existing rows)
+        if not _column_exists(conn, "character_cards", "updated_at"):
+            conn.execute(text(
+                "ALTER TABLE character_cards ADD COLUMN updated_at TIMESTAMP"
+            ))
+            conn.execute(text(
+                "UPDATE character_cards SET updated_at = created_at WHERE updated_at IS NULL"
+            ))
+
 def init_db():
     run_migrations()
 

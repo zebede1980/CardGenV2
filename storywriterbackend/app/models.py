@@ -37,6 +37,7 @@ class CharacterCard(Base):
     character_book = Column(Text, default="")  # JSON string of lorebook
     image_path = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Story(Base):
     __tablename__ = "stories"
