@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 import os
 import shutil
 import uuid
@@ -75,6 +76,7 @@ def update_card(card_id: int, card: CharacterCardCreate, db: Session = Depends(g
     
     for key, value in card.model_dump().items():
         setattr(db_card, key, value)
+    db_card.updated_at = datetime.utcnow()
         
     db.commit()
     db.refresh(db_card)
@@ -82,7 +84,10 @@ def update_card(card_id: int, card: CharacterCardCreate, db: Session = Depends(g
 
 @router.get("/", response_model=List[CharacterCardOut])
 def list_cards(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(CharacterCard).filter(CharacterCard.user_id == current_user.id).order_by(CharacterCard.created_at.desc()).all()
+    from sqlalchemy import func
+    return db.query(CharacterCard).filter(CharacterCard.user_id == current_user.id).order_by(
+        func.coalesce(CharacterCard.updated_at, CharacterCard.created_at).desc()
+    ).all()
 
 @router.get("/{card_id}", response_model=CharacterCardOut)
 def get_card(card_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
