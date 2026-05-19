@@ -365,120 +365,185 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     this.openImageOptionsModal();
     const modalTitle = document.querySelector("#image-options-modal .modal-title");
-    if (modalTitle) modalTitle.innerHTML = "🖼️ Choose an Image Option";
+    if (modalTitle) modalTitle.innerHTML = "🖼️ Choose Styles for Variations";
 
     const grid = document.getElementById("image-options-grid");
     const loading = document.getElementById("image-options-loading");
     const loadingText = loading.querySelector("p");
-    if (loadingText) loadingText.textContent = "Generating 4 prompt variations... this might take a minute.";
+    if (loadingText) loadingText.textContent = "Generating style variations... this might take a minute.";
 
-    grid.innerHTML = "";
-    loading.style.display = "block";
+    loading.style.display = "none";
 
-    const model = this.config.get("api.image.model") || (this.config.get("api.image.models") || [])[0] || "";
-    if (!model) {
-      loading.style.display = "none";
-      this.showNotification("No active image model selected", "warning");
-      return;
+    // Grab options from main dropdown or fallback
+    const mainStyleSelect = document.getElementById("image-style");
+    let optionsHtml = '';
+    if (mainStyleSelect) {
+      optionsHtml = mainStyleSelect.innerHTML;
+    } else {
+      const styles = ["", "realistic", "anime", "hand-drawn-anime", "painted-anime", "waifu", "sexy", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "gothic-anime", "gothic", "art-nouveau", "noir", "ink-sketch", "storybook", "manhwa", "chibi", "vintage"];
+      optionsHtml = styles.map(s => `<option value="${s}">${s === "" ? 'Default / None' : s}</option>`).join('');
     }
 
-    try {
-      // Get or generate the base prompt
-      const customPromptTextarea = document.getElementById("custom-image-prompt");
-      let basePrompt = customPromptTextarea?.value?.trim();
-      const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
-      if (!basePrompt) {
-        try {
-          basePrompt = await window.apiHandler.generateImagePrompt(
-            this.currentCharacter.description,
-            this.currentCharacter.name,
-            cardType,
-          );
-          if (customPromptTextarea) {
-            customPromptTextarea.value = basePrompt;
-            window.updatePromptCharCount();
-          }
-        } catch (e) {
-          basePrompt = window.apiHandler.buildDirectImagePrompt(
-            this.currentCharacter.description,
-            this.currentCharacter.name,
-          );
-        }
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem; background: var(--surface-color); border-radius: 0.5rem; border: 1px solid var(--border);">
+        <p style="margin: 0; color: var(--text-primary); font-weight: 500;">Select up to 4 styles for your image variations:</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+          <select id="style-choice-0" class="content-box" style="padding: 0.5rem;">
+            ${optionsHtml}
+          </select>
+          <select id="style-choice-1" class="content-box" style="padding: 0.5rem;">
+            <option value="SKIP">-- Skip --</option>
+            ${optionsHtml}
+          </select>
+          <select id="style-choice-2" class="content-box" style="padding: 0.5rem;">
+            <option value="SKIP">-- Skip --</option>
+            ${optionsHtml}
+          </select>
+          <select id="style-choice-3" class="content-box" style="padding: 0.5rem;">
+            <option value="SKIP">-- Skip --</option>
+            ${optionsHtml}
+          </select>
+        </div>
+        <button id="start-generate-styles-btn" class="btn-primary" style="align-self: flex-start; padding: 0.5rem 2rem;">Generate Images</button>
+      </div>
+    `;
+
+    // Initialize defaults
+    const currentStyle = this.config.get("api.image.style");
+    if (currentStyle !== undefined) {
+      const firstSelect = document.getElementById("style-choice-0");
+      if (firstSelect) firstSelect.value = currentStyle;
+    }
+
+    // Set 1,2,3 to SKIP explicitly
+    [1, 2, 3].forEach(i => {
+        const sel = document.getElementById(`style-choice-${i}`);
+        if (sel) sel.value = "SKIP";
+    });
+
+    const startBtn = document.getElementById("start-generate-styles-btn");
+    startBtn.onclick = async () => {
+      const selectedStyles = [0, 1, 2, 3]
+        .map(i => document.getElementById(`style-choice-${i}`)?.value)
+        .filter(s => s !== undefined && s !== "SKIP");
+
+      if (selectedStyles.length === 0) {
+        this.showNotification("Please select at least one style.", "warning");
+        return;
       }
 
-      // Four distinct framing variations on the same base prompt
-      const variations = [
-        { suffix: "", label: "Default" },
-        { suffix: ", close-up portrait, face and shoulders, detailed facial features", label: "Close-up" },
-        { suffix: ", full body shot, dynamic pose, showing complete outfit and stature", label: "Full body" },
-        { suffix: ", cinematic composition, dramatic lighting, environmental storytelling", label: "Cinematic" },
-      ];
+      // Start Generation
+      grid.innerHTML = "";
+      loading.style.display = "block";
+      if (modalTitle) modalTitle.innerHTML = "🖼️ Choose an Image Option";
 
-      const promises = variations.map(({ suffix, label }, index) => {
-        const prompt = basePrompt + suffix;
-        return window.apiHandler
-          .generateImage(
-            this.currentCharacter.description,
-            this.currentCharacter.name,
-            prompt,
-            model,
-            cardType,
-          )
-          .then(async (imageUrl) => {
-            let displayUrl = imageUrl;
-            if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
-              const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-              const response = await (window.authFetch || fetch)(proxyUrl);
-              if (response.ok) {
-                const blob = await response.blob();
-                displayUrl = URL.createObjectURL(blob);
-              }
+      const model = this.config.get("api.image.model") || (this.config.get("api.image.models") || [])[0] || "";
+      if (!model) {
+        loading.style.display = "none";
+        this.showNotification("No active image model selected", "warning");
+        return;
+      }
+
+      try {
+        // Get or generate the base prompt
+        const customPromptTextarea = document.getElementById("custom-image-prompt");
+        let basePrompt = customPromptTextarea?.value?.trim();
+        const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
+        if (!basePrompt) {
+          try {
+            basePrompt = await window.apiHandler.generateImagePrompt(
+              this.currentCharacter.description,
+              this.currentCharacter.name,
+              cardType,
+            );
+            if (customPromptTextarea) {
+              customPromptTextarea.value = basePrompt;
+              window.updatePromptCharCount();
             }
-            return { url: displayUrl, prompt, model, label, index };
-          })
-          .catch((err) => {
-            console.error(`Variation "${label}" failed:`, err);
-            return null;
-          });
-      });
+          } catch (e) {
+            basePrompt = window.apiHandler.buildDirectImagePrompt(
+              this.currentCharacter.description,
+              this.currentCharacter.name,
+            );
+          }
+        }
 
-      const results = await Promise.all(promises);
-      loading.style.display = "none";
+        const promises = selectedStyles.map((style, index) => {
+          return window.apiHandler
+            .generateImage(
+              this.currentCharacter.description,
+              this.currentCharacter.name,
+              basePrompt,
+              model,
+              cardType,
+              style
+            )
+            .then(async (imageUrl) => {
+              let displayUrl = imageUrl;
+              if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+                const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+                const response = await (window.authFetch || fetch)(proxyUrl);
+                if (response.ok) {
+                  const blob = await response.blob();
+                  displayUrl = URL.createObjectURL(blob);
+                }
+              }
+              const label = style === "" ? "Default" : style;
+              return { url: displayUrl, prompt: basePrompt, model, label, index, styleUsed: style };
+            })
+            .catch((err) => {
+              console.error(`Variation "${style}" failed:`, err);
+              return null;
+            });
+        });
 
-      const validResults = results.filter((r) => r !== null);
-      if (validResults.length === 0) throw new Error("All image generations failed.");
+        const results = await Promise.all(promises);
+        loading.style.display = "none";
 
-      // Prepend current image for comparison
-      const newBlobUrls4p = validResults.map(r => r.url);
-      this._insertCurrentImageCard(grid, newBlobUrls4p);
+        const validResults = results.filter((r) => r !== null);
+        if (validResults.length === 0) throw new Error("All image generations failed.");
 
-      validResults.forEach((res) => {
-        const wrapper = document.createElement("div");
-        wrapper.style.cursor = "pointer";
-        wrapper.style.border = "2px solid transparent";
-        wrapper.style.borderRadius = "0.5rem";
-        wrapper.style.overflow = "hidden";
-        wrapper.style.transition = "border-color 0.2s";
-        wrapper.style.backgroundColor = "var(--surface-color)";
-        wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
-        wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
-        wrapper.onclick = () => this.selectImageOption(res.url, res.prompt, res.model, validResults);
-        wrapper.innerHTML = `
-          <img src="${res.url}" style="width:100%;height:auto;display:block;" alt="${res.label}">
-          <div style="padding:0.5rem;text-align:center;font-size:0.8rem;color:var(--text-secondary);background:rgba(0,0,0,0.1);border-top:1px solid var(--border);font-family:monospace;">${res.label} · ${res.model}</div>
-        `;
-        grid.appendChild(wrapper);
-      });
+        // Prepend current image for comparison
+        const newBlobUrls4p = validResults.map(r => r.url);
+        this._insertCurrentImageCard(grid, newBlobUrls4p);
 
-      // Wire gallery triggers
-      const galleryImages4p = validResults.map(r => ({ url: r.url, prompt: r.prompt || "", model: r.model || "", label: r.label || `Option ${r.index + 1}` }));
-      this._makeImageGalleryable(grid, galleryImages4p);
+        validResults.forEach((res) => {
+          const wrapper = document.createElement("div");
+          wrapper.style.cursor = "pointer";
+          wrapper.style.border = "2px solid transparent";
+          wrapper.style.borderRadius = "0.5rem";
+          wrapper.style.overflow = "hidden";
+          wrapper.style.transition = "border-color 0.2s";
+          wrapper.style.backgroundColor = "var(--surface-color)";
+          wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
+          wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
+          
+          wrapper.onclick = () => {
+            const styleSelect = document.getElementById("image-style");
+            if (styleSelect) {
+                styleSelect.value = res.styleUsed;
+                this.saveAPISettings(); // from CharacterGeneratorApp
+            }
+            this.selectImageOption(res.url, res.prompt, res.model, validResults);
+          };
+          
+          wrapper.innerHTML = `
+            <img src="${res.url}" style="width:100%;height:auto;display:block;" alt="${res.label}">
+            <div style="padding:0.5rem;text-align:center;font-size:0.8rem;color:var(--text-secondary);background:rgba(0,0,0,0.1);border-top:1px solid var(--border);font-family:monospace;">${res.label} · ${res.model}</div>
+          `;
+          grid.appendChild(wrapper);
+        });
 
-      this.showNotification(`Generated ${validResults.length} prompt variations!`, "success");
-    } catch (error) {
-      loading.style.display = "none";
-      this.showNotification(`Failed to generate images: ${error.message}`, "error");
-    }
+        // Wire gallery triggers
+        const galleryImages4p = validResults.map(r => ({ url: r.url, prompt: r.prompt || "", model: r.model || "", label: r.label || `Option ${r.index + 1}` }));
+        this._makeImageGalleryable(grid, galleryImages4p);
+
+        this.showNotification(`Generated ${validResults.length} style variations!`, "success");
+      } catch (error) {
+        loading.style.display = "none";
+        this.showNotification(`Failed to generate images: ${error.message}`, "error");
+      }
+    };
   },
 
   async handleFreeImage(service, model) {

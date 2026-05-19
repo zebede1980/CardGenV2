@@ -7,6 +7,7 @@ Object.assign(APIHandler.prototype, {
     customPrompt = null,
     modelOverride = null,
     cardType = "single",
+    styleOverride = undefined
   ) {
     let imagePrompt;
     if (customPrompt) {
@@ -35,7 +36,7 @@ Object.assign(APIHandler.prototype, {
 
     // Bookend with style tags (prefix + suffix)
     let finalApiPrompt = imagePrompt;
-    const style = this.config.get("api.image.style");
+    const style = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
     if (style) {
       const { prefix, suffix } = this.getImageStyleTags(style);
       if (prefix) finalApiPrompt = `${prefix} ${finalApiPrompt.trim()}`;
