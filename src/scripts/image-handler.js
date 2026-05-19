@@ -40,6 +40,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     ) {
       customPromptTextarea.value = window.apiHandler.lastGeneratedImagePrompt;
     }
+
+    await this.saveCardToLibrary();
+    await this.refreshLibraryViews();
   },
 
   async handleRegenerateImage() {
