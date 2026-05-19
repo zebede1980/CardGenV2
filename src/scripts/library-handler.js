@@ -132,9 +132,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       let imageBlob = null;
       if (this.currentImageUrl) {
         try {
-          imageBlob = await this.imageGenerator.convertToBlob(
-            this.currentImageUrl,
-          );
+          if (this.currentImageUrl.startsWith("blob:")) {
+            const res = await fetch(this.currentImageUrl);
+            imageBlob = await res.blob();
+          } else if (this.imageGenerator && typeof this.imageGenerator.convertToBlob === "function") {
+            imageBlob = await this.imageGenerator.convertToBlob(this.currentImageUrl);
+          }
         } catch (error) {
           console.warn("Skipping image blob save:", error.message);
         }
@@ -144,7 +147,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (this.imageHistoryUrls && this.imageHistoryUrls.length > 0) {
         for (const url of this.imageHistoryUrls) {
           try {
-            const b = await this.imageGenerator.convertToBlob(url);
+            let b;
+            if (url.startsWith("blob:")) {
+              const res = await fetch(url);
+              b = await res.blob();
+            } else if (this.imageGenerator && typeof this.imageGenerator.convertToBlob === "function") {
+              b = await this.imageGenerator.convertToBlob(url);
+            }
             if (b) imageHistoryBlobs.push(b);
           } catch (err) {
             console.warn("Skipping history blob save:", err.message);
@@ -159,6 +168,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         imageHistory: imageHistoryBlobs,
         isPermanent,
         stSourceAvatar: this.stSourceAvatar || null,
+        updatedAt: new Date().toISOString(),
       };
 
       if (specificId) {
@@ -167,7 +177,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const existing = cards.find((c) => c.id === specificId);
         if (existing && existing.createdAt) {
           cardData.createdAt = existing.createdAt;
+        } else {
+          cardData.createdAt = new Date().toISOString();
         }
+      } else {
+        cardData.createdAt = new Date().toISOString();
       }
 
       await this.storage.saveCard(cardData);
@@ -260,8 +274,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.storage.listCards(),
       ]);
 
-      prompts.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
-      cards.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+      prompts.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+      cards.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
 
       const promptList = document.getElementById("stored-prompts-list");
       const cardList = document.getElementById("stored-cards-list");
@@ -503,9 +517,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
         this.imageHistoryUrls = [];
         if (card.imageHistory && Array.isArray(card.imageHistory)) {
-          for (const blob of card.imageHistory) {
-            if (blob instanceof Blob) {
-              this.imageHistoryUrls.push(URL.createObjectURL(blob));
+          for (const item of card.imageHistory) {
+            if (item) {
+              try {
+                const blob = item instanceof Blob ? item : new Blob([item]);
+                this.imageHistoryUrls.push(URL.createObjectURL(blob));
+              } catch (e) {
+                console.warn("Failed to restore history blob:", e);
+              }
             }
           }
         }
