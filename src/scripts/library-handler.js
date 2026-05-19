@@ -140,11 +140,25 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
       }
 
+      let imageHistoryBlobs = [];
+      if (this.imageHistoryUrls && this.imageHistoryUrls.length > 0) {
+        for (const url of this.imageHistoryUrls) {
+          try {
+            const b = await this.imageGenerator.convertToBlob(url);
+            if (b) imageHistoryBlobs.push(b);
+          } catch (err) {
+            console.warn("Skipping history blob save:", err.message);
+          }
+        }
+      }
+
       const cardData = {
         characterName: this.currentCharacter.name || "Unnamed Character",
         character: JSON.parse(JSON.stringify(this.currentCharacter)),
         imageBlob,
+        imageHistory: imageHistoryBlobs,
         isPermanent,
+        stSourceAvatar: this.stSourceAvatar || null,
       };
 
       if (specificId) {
@@ -245,6 +259,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.storage.listPrompts(),
         this.storage.listCards(),
       ]);
+
+      prompts.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+      cards.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
       const promptList = document.getElementById("stored-prompts-list");
       const cardList = document.getElementById("stored-cards-list");
@@ -421,8 +438,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (action === "load-card") {
         const card = await this.storage.getCard(id);
         if (!card?.character) return;
-        // Loading from local library — this is not an ST card, clear the ST slot link
-        this.stSourceAvatar = null;
+        // Restore the ST slot link if it was saved, otherwise clear it
+        this.stSourceAvatar = card.stSourceAvatar || null;
         this._updatePushButton();
         this.currentCharacter = card.character;
         this.originalCharacter = JSON.parse(JSON.stringify(card.character));
@@ -478,6 +495,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
             `;
           }
         }
+
+        if (this.imageHistoryUrls) {
+          this.imageHistoryUrls.forEach(url => {
+            if (url && url.startsWith("blob:")) URL.revokeObjectURL(url);
+          });
+        }
+        this.imageHistoryUrls = [];
+        if (card.imageHistory && Array.isArray(card.imageHistory)) {
+          for (const blob of card.imageHistory) {
+            if (blob instanceof Blob) {
+              this.imageHistoryUrls.push(URL.createObjectURL(blob));
+            }
+          }
+        }
+        if (typeof this.updateImageHistoryButton === "function") this.updateImageHistoryButton();
+
         this.showNotification("Card loaded", "success");
       } else if (action === "delete-card") {
         await this.storage.deleteCard(id);

@@ -12,9 +12,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     window.updatePromptCharCount();
 
-    if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:")) {
-      console.log("🗑️ Revoking previous blob URL:", this.currentImageUrl);
-      URL.revokeObjectURL(this.currentImageUrl);
+    if (this.currentImageUrl) {
+      console.log("📥 Archiving previous image URL:", this.currentImageUrl);
+      this._archiveCurrentImage();
     }
 
     const imageDescriptionInput = referenceImageDescription
@@ -388,18 +388,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
       <div style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem; background: var(--surface-color); border-radius: 0.5rem; border: 1px solid var(--border);">
         <p style="margin: 0; color: var(--text-primary); font-weight: 500;">Select up to 4 styles for your image variations:</p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-          <select id="style-choice-0" class="content-box" style="padding: 0.5rem;">
+          <select id="style-choice-0" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
             ${optionsHtml}
           </select>
-          <select id="style-choice-1" class="content-box" style="padding: 0.5rem;">
+          <select id="style-choice-1" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
             <option value="SKIP">-- Skip --</option>
             ${optionsHtml}
           </select>
-          <select id="style-choice-2" class="content-box" style="padding: 0.5rem;">
+          <select id="style-choice-2" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
             <option value="SKIP">-- Skip --</option>
             ${optionsHtml}
           </select>
-          <select id="style-choice-3" class="content-box" style="padding: 0.5rem;">
+          <select id="style-choice-3" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
             <option value="SKIP">-- Skip --</option>
             ${optionsHtml}
           </select>
@@ -674,10 +674,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     if (
       this.currentImageUrl &&
-      this.currentImageUrl.startsWith("blob:") &&
       this.currentImageUrl !== selectedUrl
     ) {
-      URL.revokeObjectURL(this.currentImageUrl);
+      this._archiveCurrentImage();
     }
 
     this.currentImageUrl = selectedUrl;
@@ -775,8 +774,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         throw new Error("Please select an image file");
       }
 
-      if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(this.currentImageUrl);
+      if (this.currentImageUrl) {
+        this._archiveCurrentImage();
       }
 
       this.currentImageUrl = URL.createObjectURL(file);
@@ -950,6 +949,117 @@ Object.assign(CharacterGeneratorApp.prototype, {
         select.value = models[0];
       }
     }
+  },
+
+  _archiveCurrentImage() {
+    if (this.currentImageUrl) {
+      if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
+      if (!this.imageHistoryUrls.includes(this.currentImageUrl)) {
+        this.imageHistoryUrls.push(this.currentImageUrl);
+        // Keep memory in check - max 20 archived images per card
+        if (this.imageHistoryUrls.length > 20) {
+          const oldest = this.imageHistoryUrls.shift();
+          if (oldest && oldest.startsWith("blob:")) {
+            URL.revokeObjectURL(oldest);
+          }
+        }
+      }
+      if (typeof this.updateImageHistoryButton === "function") {
+        this.updateImageHistoryButton();
+      }
+    }
+  },
+
+  updateImageHistoryButton() {
+    const controls = document.getElementById("image-controls");
+    if (!controls) return;
+    
+    let btn = document.getElementById("image-history-btn");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.id = "image-history-btn";
+      btn.className = "btn-secondary";
+      btn.style.marginLeft = "0.5rem";
+      btn.onclick = () => this.showImageHistory();
+      controls.appendChild(btn);
+    }
+    
+    if (this.imageHistoryUrls && this.imageHistoryUrls.length > 0) {
+      btn.style.display = "inline-flex";
+      btn.innerHTML = `🕰️ History (${this.imageHistoryUrls.length})`;
+    } else {
+      btn.style.display = "none";
+    }
+  },
+
+  showImageHistory() {
+    if (!this.imageHistoryUrls || this.imageHistoryUrls.length === 0) {
+      this.showNotification("No image history available for this card.", "info");
+      return;
+    }
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = "🕰️ Image History (Compare & Choose)";
+
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    if (loading) loading.style.display = "none";
+    grid.innerHTML = "";
+
+    const validResults = this.imageHistoryUrls.map((url, i) => ({ url, label: `Archived Image ${i + 1}` }));
+
+    this._insertCurrentImageCard(grid, []);
+
+    validResults.forEach((res, index) => {
+      const wrapper = document.createElement("div");
+      wrapper.style.cursor = "pointer";
+      wrapper.style.border = "2px solid transparent";
+      wrapper.style.borderRadius = "0.5rem";
+      wrapper.style.overflow = "hidden";
+      wrapper.style.transition = "border-color 0.2s";
+      wrapper.style.backgroundColor = "var(--surface-color)";
+      wrapper.style.position = "relative";
+      wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
+      wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
+      wrapper.onclick = () => this.restoreImageFromHistory(res.url, index);
+      
+      wrapper.innerHTML = `
+        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--bg-color);color:var(--text-primary);font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;border:1px solid var(--border);">ARCHIVE</div>
+        <img src="${res.url}" style="width:100%;height:auto;display:block;" alt="${res.label}">
+        <div style="padding:1rem;text-align:center;background:rgba(0,0,0,0.1);border-top:1px solid var(--border);">
+          <button class="btn-primary" style="width:100%;">Restore Image</button>
+        </div>
+      `;
+      grid.appendChild(wrapper);
+    });
+
+    this._makeImageGalleryable(grid, validResults.map(r => ({ url: r.url, label: r.label })));
+  },
+
+  async restoreImageFromHistory(selectedUrl, historyIndex) {
+    this.closeImageOptionsModal();
+
+    if (this.currentImageUrl) {
+      if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
+      this.imageHistoryUrls[historyIndex] = this.currentImageUrl;
+    } else {
+      this.imageHistoryUrls.splice(historyIndex, 1);
+    }
+
+    this.currentImageUrl = selectedUrl;
+
+    const imageContainer = document.getElementById("image-content");
+    if (imageContainer) {
+      imageContainer.innerHTML = window.imageGenerator?.formatImageForDisplay 
+        ? window.imageGenerator.formatImageForDisplay(selectedUrl)
+        : `<div class="image-container"><img src="${selectedUrl}" alt="Restored Image" class="generated-image"></div>`;
+    }
+
+    this.showNotification("Image restored from history!", "success");
+    this.updateImageHistoryButton();
+
+    await this.saveCardToLibrary();
+    await this.refreshLibraryViews();
   },
 
 });
