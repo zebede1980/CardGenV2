@@ -985,22 +985,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   updateImageHistoryButton() {
-    const controls = document.getElementById("image-controls");
-    if (!controls) return;
-    
-    let btn = document.getElementById("image-history-btn");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.id = "image-history-btn";
-      btn.className = "btn-secondary";
-      btn.style.marginLeft = "0.5rem";
-      btn.onclick = () => this.showImageHistory();
-      controls.appendChild(btn);
-    }
-    
+    const btn = document.getElementById("image-history-btn");
+    if (!btn) return;
     if (this.imageHistoryUrls && this.imageHistoryUrls.length > 0) {
-      btn.style.display = "inline-flex";
-      btn.innerHTML = `🕰️ History (${this.imageHistoryUrls.length})`;
+      btn.style.display = "";
+      btn.textContent = `🕰️ History (${this.imageHistoryUrls.length})`;
     } else {
       btn.style.display = "none";
     }
