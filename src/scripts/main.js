@@ -21,6 +21,7 @@ class CharacterGeneratorApp {
     this.currentCharacter = null;
     this.originalCharacter = null;
     this.currentImageUrl = null;
+    this.imageHistoryUrls = [];
     this.lorebookEntries = [];
     this.altGreetings = [];
     this.lorebookData = null;

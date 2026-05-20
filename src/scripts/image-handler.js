@@ -642,7 +642,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     wrapper.onmouseenter = () => { wrapper.style.boxShadow = "0 0 0 4px rgba(31,157,102,0.22)"; };
     wrapper.onmouseleave = () => { wrapper.style.boxShadow = ""; };
     wrapper.onclick = () => {
-      newBlobUrls.forEach(url => { if (url && url !== currentUrl && url.startsWith("blob:")) URL.revokeObjectURL(url); });
+      // Archive the new generated images rather than discarding them
+      newBlobUrls.forEach(url => {
+        if (url && url !== currentUrl) this._addToHistory(url);
+      });
       this.closeImageOptionsModal();
       this.showNotification("Keeping current image.", "info");
     };
@@ -675,30 +678,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async selectImageOption(selectedUrl, selectedPrompt, selectedModel, allResults) {
     this.closeImageOptionsModal();
 
-    if (
-      this.currentImageUrl &&
-      this.currentImageUrl !== selectedUrl
-    ) {
+    // Archive the image being replaced
+    if (this.currentImageUrl && this.currentImageUrl !== selectedUrl) {
       this._archiveCurrentImage();
     }
 
     this.currentImageUrl = selectedUrl;
 
-    // Archive unselected generated images rather than immediately revoking them
-    if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
-    allResults.forEach((res) => {
-      if (res && res.url && res.url !== selectedUrl) {
-        if (!this.imageHistoryUrls.includes(res.url)) {
-          this.imageHistoryUrls.push(res.url);
-          if (this.imageHistoryUrls.length > 20) {
-            const oldest = this.imageHistoryUrls.shift();
-            if (oldest && oldest.startsWith("blob:")) URL.revokeObjectURL(oldest);
-          }
+    // Archive all other generated images that weren't chosen
+    if (Array.isArray(allResults)) {
+      allResults.forEach((res) => {
+        if (res && res.url && res.url !== selectedUrl) {
+          this._addToHistory(res.url);
         }
-      }
-    });
-    if (typeof this.updateImageHistoryButton === "function") {
-      this.updateImageHistoryButton();
+      });
     }
 
     const imageContainer = document.getElementById("image-content");
@@ -965,31 +958,36 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  // ── History helpers ────────────────────────────────────────────────────────
+
+  // Single entry-point for adding a URL to the in-memory archive.
+  // Deduplicates, enforces the 20-item cap, and refreshes the button.
+  _addToHistory(url) {
+    if (!url) return;
+    if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
+    if (this.imageHistoryUrls.includes(url)) return; // already there
+    this.imageHistoryUrls.push(url);
+    if (this.imageHistoryUrls.length > 20) {
+      const oldest = this.imageHistoryUrls.shift();
+      if (oldest && oldest.startsWith("blob:")) URL.revokeObjectURL(oldest);
+    }
+    this.updateImageHistoryButton();
+  },
+
+  // Archive the current card image (called before replacing it with a new one).
   _archiveCurrentImage() {
     if (this.currentImageUrl) {
-      if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
-      if (!this.imageHistoryUrls.includes(this.currentImageUrl)) {
-        this.imageHistoryUrls.push(this.currentImageUrl);
-        // Keep memory in check - max 20 archived images per card
-        if (this.imageHistoryUrls.length > 20) {
-          const oldest = this.imageHistoryUrls.shift();
-          if (oldest && oldest.startsWith("blob:")) {
-            URL.revokeObjectURL(oldest);
-          }
-        }
-      }
-      if (typeof this.updateImageHistoryButton === "function") {
-        this.updateImageHistoryButton();
-      }
+      this._addToHistory(this.currentImageUrl);
     }
   },
 
   updateImageHistoryButton() {
     const btn = document.getElementById("image-history-btn");
     if (!btn) return;
-    if (this.imageHistoryUrls && this.imageHistoryUrls.length > 0) {
-      btn.style.display = "";
-      btn.textContent = `🕰️ History (${this.imageHistoryUrls.length})`;
+    const count = this.imageHistoryUrls ? this.imageHistoryUrls.length : 0;
+    if (count > 0) {
+      btn.style.display = "inline-flex";
+      btn.textContent = `🕰️ History (${count})`;
     } else {
       btn.style.display = "none";
     }
@@ -1042,8 +1040,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async restoreImageFromHistory(selectedUrl, historyIndex) {
     this.closeImageOptionsModal();
 
+    // Swap: put current image back into history at the same slot, remove restored one
+    if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
     if (this.currentImageUrl) {
-      if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
       this.imageHistoryUrls[historyIndex] = this.currentImageUrl;
     } else {
       this.imageHistoryUrls.splice(historyIndex, 1);
