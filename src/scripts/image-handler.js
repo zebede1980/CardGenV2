@@ -684,11 +684,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     this.currentImageUrl = selectedUrl;
 
+    // Archive unselected generated images rather than immediately revoking them
+    if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
     allResults.forEach((res) => {
-      if (res.url !== selectedUrl && res.url.startsWith("blob:")) {
-        URL.revokeObjectURL(res.url);
+      if (res && res.url && res.url !== selectedUrl) {
+        if (!this.imageHistoryUrls.includes(res.url)) {
+          this.imageHistoryUrls.push(res.url);
+          if (this.imageHistoryUrls.length > 20) {
+            const oldest = this.imageHistoryUrls.shift();
+            if (oldest && oldest.startsWith("blob:")) URL.revokeObjectURL(oldest);
+          }
+        }
       }
     });
+    if (typeof this.updateImageHistoryButton === "function") {
+      this.updateImageHistoryButton();
+    }
 
     const imageContainer = document.getElementById("image-content");
     if (imageContainer) {
