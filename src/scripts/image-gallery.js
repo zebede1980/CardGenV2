@@ -325,14 +325,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Find all direct child image wrappers (divs containing <img>)
     const wrappers = gridContainer.querySelectorAll(":scope > div");
-    wrappers.forEach((wrapper, i) => {
-      if (i >= images.length) return;
-      // Skip the "CURRENT" keep-card
+    let imageIndex = 0; // separate counter so skipped wrappers don't shift indexes
+    wrappers.forEach((wrapper) => {
+      // Skip the "CURRENT" keep-card — it is not in the images[] array
       if (wrapper.querySelector('[style*="CURRENT"]')) return;
+
+      if (imageIndex >= images.length) return;
 
       // Already has gallery trigger?
       if (wrapper.dataset.galleryImage === "true") return;
       wrapper.dataset.galleryImage = "true";
+
+      const capturedIndex = imageIndex;
+      imageIndex++;
 
       // Add magnifying glass overlay
       const zoomBtn = document.createElement("button");
@@ -345,7 +350,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       zoomBtn.addEventListener("mouseleave", () => { zoomBtn.style.transform = "scale(1)"; zoomBtn.style.background = "rgba(0,0,0,0.55)"; });
       zoomBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.openGallery(images, i);
+        this.openGallery(images, capturedIndex);
       });
       wrapper.appendChild(zoomBtn);
     });
