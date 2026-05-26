@@ -9,6 +9,30 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 
 ---
 
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+  - [Docker Compose (Recommended)](#docker-compose-recommended)
+  - [Local (Dev)](#local-dev)
+  - [Local (Production-like)](#local-production-like)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [In-App API Settings](#in-app-api-settings)
+  - [Brave Search API Setup](#brave-search-api-setup-optional)
+- [Usage](#usage)
+  - [Basic Generation Workflow](#basic-generation-workflow)
+  - [Web Search for Real/Fictional Characters](#web-search-for-realfictional-characters)
+  - [SillyTavern Bridge Workflow](#sillytavern-bridge-workflow)
+- [Card Design Philosophy](#card-design-philosophy)
+- [API Compatibility Notes](#api-compatibility-notes)
+- [Docker Notes](#docker-notes)
+- [Project Structure](#project-structure)
+- [License](#license)
+
+---
+
 ## Features
 
 ### Character Generation
@@ -21,12 +45,27 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Generated cards use short prose for backstory/scenario and direct bullet points for traits and behaviours — not padded narrative.
 - Tag field: add comma-separated tags that are preserved in the exported card and shown in the SillyTavern library.
 
+### 🔍 Web Search for Real / Fictional Characters *(new)*
+- Tick **"🔍 Search Web for Details"** before generating to look up real people or film/TV/game characters via the Brave Search API.
+- The proxy runs targeted searches (Wikipedia, fandom wikis) and feeds verified details (biography, physical appearance, personality traits, key facts) into the LLM prompt as ground truth.
+- Produces accurate character cards for real-world figures or existing fictional characters — e.g. "Tony Stark from Iron Man" or "Beyonce".
+- Automatically detects generic concepts (e.g. "a stoic blacksmith") and skips search, saving API calls.
+- Gracefully falls back to normal LLM-only generation if search is unavailable or returns no results.
+- Toggle starts **unchecked** by default — opt-in only.
+
 ### Import & Edit
 - Import existing cards (`.png` with embedded `chara_card_v2` data, or `.json`) and edit them in-place.
 - **Import & Remaster** — import a card and immediately run an AI rewrite pass that fixes inconsistencies, tightens language, and brings the card in line with the conciseness standard.
 - Per-field **Redo** buttons regenerate any single section with AI; an optional instruction box lets you guide the rewrite.
 - Per-field **Reset** buttons revert a section back to the last generated or imported baseline, discarding manual edits.
 - All fields (name, description, personality, scenario, first message, example messages, tags) are directly editable in the text areas at any time.
+- **🌐 Import from URL** — paste a JanitorAI or Chub.ai character page URL to scrape and convert to Spec V2.
+
+### Batch Generation *(new)*
+- Click **🎲 Generate 4** to create four character variants from one concept in parallel.
+- Results are displayed in a side-by-side comparison grid.
+- Click **⭐ Pick This** on any variant to load it into the editor.
+- The first variant streams live; the other three generate silently in the background.
 
 ### AI Revision Tools
 - **Revise Card with AI** — apply a free-text instruction to rewrite the whole card (e.g. "make her more guarded and less verbose").
@@ -65,8 +104,16 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - **Generate 4 (Variations)** — generates four prompt variations from the active model.
 - **Free image generation via Pollinations.ai** — generates images without any API key or account; uses the Flux model by default with configurable width, height, and random seed.
 - Upload your own image instead of AI-generating one.
+- **Image Gallery / Lightbox** *(new)* — click any generated image to view full-screen with zoom, previous/next navigation, and keyboard support.
 - CORS-bypass proxy routes all image requests through the backend to avoid browser restrictions.
 - Image prompt character count is displayed live to help you stay within model limits.
+
+### Chat Tester
+- Test your character in a live chat simulation before exporting.
+- Adjustable temperature and top_p sliders to control creativity.
+- Save and load chat transcripts.
+- Persona selector to test how the character responds to different user personalities.
+- Lorebook trigger highlighting shows which entries fired during the conversation.
 
 ### SillyTavern Bridge
 - Configure a SillyTavern base URL in API Settings to connect directly to a running ST instance.
@@ -95,51 +142,84 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 
 ## Requirements
 
-- Node.js 18+ (for local dev; the proxy Dockerfile uses Node 18 Alpine)
+- Node.js 18+ (for local dev; Docker image uses Node 18 Alpine)
 - OpenAI-compatible text API endpoint (required)
 - OpenAI-compatible image API endpoint (optional — or use the built-in Pollinations.ai free tier)
 - Vision-capable text model (optional — only needed for reference-image auto-description)
+- Brave Search API key (optional — only needed for the Web Search feature)
 
 ---
 
-## Quick Start
+## Installation
+
+### Docker Compose (Recommended)
+
+The easiest way to run the full stack (frontend Nginx + proxy + story writer backend + PostgreSQL) with persistent data:
+
+```bash
+# 1. Clone or copy the project
+cd CardGenV2
+
+# 2. Create environment file
+cp .env.example .env
+
+# 3. Edit .env with your settings (see Configuration section below)
+nano .env
+
+# 4. Build and start all services
+docker compose up -d --build
+
+# 5. Check proxy is healthy
+curl http://localhost:2426/health
+```
+
+**Access points:**
+- Frontend: `http://localhost:2427` (or your `FRONTEND_PORT`)
+- Proxy health: `http://localhost:2426/health` (or your `PROXY_PORT`)
+
+**Stop / Restart:**
+```bash
+docker compose down          # Stop all containers
+docker compose up -d         # Start existing containers
+docker compose logs -f proxy # Watch proxy logs
+```
 
 ### Local (Dev)
 
+Use this when you want hot-reload and automatic browser open:
+
 ```bash
+# 1. Install root dependencies (frontend dev server)
 npm install
+
+# 2. Install proxy dependencies
 cd proxy && npm install && cd ..
+
+# 3. Start both frontend and proxy in parallel
 npm run dev
 ```
 
 - Frontend: `http://localhost:2427` (opens automatically)
 - Proxy API: `http://localhost:2426`
 
-### Local (Non-dev / production-like)
+The dev frontend (`http-server`) proxies `/api/*` requests to the proxy server automatically.
+
+### Local (Production-like)
+
+Use this when you want the same static-file serving as Docker but without containers:
 
 ```bash
 npm install
 npm start
 ```
 
-### Docker Compose
-
-```bash
-cp docker-compose.example.yml docker-compose.yml
-# Edit docker-compose.yml, or create a .env file to override ports
-docker compose up -d --build
-```
-
-- Frontend: `http://localhost:2427` (or the port set by `FRONTEND_PORT`)
-- Proxy health: `http://localhost:2426/health` (or the port set by `PROXY_PORT`)
-
-> **Library persistence:** `./proxy/data` on your host is mounted to `/app/data` inside the proxy container. Saved cards, prompts, and API settings survive container restarts. Back up this directory to preserve your library.
+This starts both the proxy and the frontend via `concurrently`.
 
 ---
 
 ## Configuration
 
-### Environment Variables (`.env` / Docker)
+### Environment Variables
 
 Create a `.env` file in the project root (next to `docker-compose.yml`) to override defaults without editing the compose file.
 
@@ -148,12 +228,23 @@ Create a `.env` file in the project root (next to `docker-compose.yml`) to overr
 | `FRONTEND_PORT` | `2427` | Host port mapped to the Nginx frontend container |
 | `PROXY_PORT` | `2426` | Host port for the Node.js proxy server |
 | `FRONTEND_URL` | `http://localhost:2427` | Origin sent in CORS headers and OpenRouter `HTTP-Referer` |
+| `JWT_SECRET` | *(insecure default)* | Secret for signing auth tokens. **Change this in production!** |
+| `ALLOW_REGISTRATION` | `false` | Set to `true` to allow new user sign-ups |
+| `STORY_APP_URL` | `http://storywriterbackend:8000` | Internal URL for the Story Writer backend |
+| `STORY_APP_PUBLIC_URL` | *(empty)* | Public URL shown in the browser for Story Writer |
+| `INTERNAL_API_SECRET` | *(insecure default)* | Shared secret between proxy and Story Writer backend. **Change this!** |
+| `BRAVE_SEARCH_API_KEY` | *(empty)* | Your Brave Search API key — enables the Web Search feature |
+| `BRAVE_SEARCH_ENABLED` | `true` | Set to `false` to disable search even if a key is configured |
 
 **Example `.env`:**
 ```env
-FRONTEND_PORT=3000
-PROXY_PORT=3001
-FRONTEND_URL=http://192.168.1.50:3000
+FRONTEND_PORT=2427
+PROXY_PORT=2426
+FRONTEND_URL=http://localhost:2427
+JWT_SECRET=change-this-to-a-long-random-string
+ALLOW_REGISTRATION=false
+INTERNAL_API_SECRET=another-long-random-string
+BRAVE_SEARCH_API_KEY=your-brave-search-api-key
 ```
 
 ### In-App API Settings
@@ -192,28 +283,66 @@ All settings are saved server-side to `proxy/data/config.json` via `POST /api/co
 |---|---|
 | Debug Mode | Toggles verbose `console.log` output in the browser and proxy. Off by default |
 
+### Brave Search API Setup (Optional)
+
+The **🔍 Search Web for Details** feature uses the Brave Search API to look up real people and fictional characters:
+
+1. Sign up at https://brave.com/search/api/
+2. Select the **"Search" Data-for-AI plan** (not "Answers")
+3. The free tier gives you **1,000 queries/month** — enough for low usage
+4. Copy your API key and add it to your `.env`:
+   ```env
+   BRAVE_SEARCH_API_KEY=BSxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+5. Restart the proxy container:
+   ```bash
+   docker compose restart proxy
+   ```
+6. Proxy startup logs will show: `🔍 Character Web Search enabled (Brave Search API)`
+
+> **Privacy note:** Search queries are performed server-side by the proxy. Your API key never reaches the browser.
+
 ---
 
 ## Usage
 
-1. Open **API Settings** and configure your text API endpoint, key, and model.
+### Basic Generation Workflow
+
+1. Open **API Settings** (gear icon) and configure your text API endpoint, key, and model.
 2. Enter a **Character Concept** in the text box. Be as detailed or as brief as you like.
 3. Optionally set a **Character Name** (or leave blank for the AI to generate one).
 4. Choose **POV** — first-person or third-person.
 5. Optionally upload a **Lorebook JSON** (World Info) as grounding context for generation.
 6. Optionally upload a **Reference Image** — it will be auto-described if a vision model is set.
-7. Click **Generate Character** and watch the card stream in. Click **Stop** at any time to halt generation.
-8. Edit any field directly in the text areas. Use **Redo** to regenerate a single section with optional instruction, or **Reset** to revert to the last generated/imported baseline.
-9. Use the **Revision Tools** to refine the card:
-   - **Reduce Bloat** to move lore to the lorebook and strip prose padding.
-   - **Scan for Lorebook Content** to elevate lore without the bloat pass.
-   - **Revise Card** for any specific free-text change instruction.
-   - **Check Consistency** + **Auto-Fix** for logic and continuity issues.
-10. Open the **Lorebook Manager** to add world-building entries, or let the AI suggest and generate them.
-11. Open **Alternate Greetings** to add alternative opening scenes.
-12. Generate **Example Messages** — they are embedded in the exported card automatically.
-13. Optionally click **Snapshot to History** to save the current state as a named checkpoint.
-14. Click **Download Character Card (PNG)** to export, or use **Download as JSON** if you don't need an image.
+7. Click **✨ Generate 1** and watch the card stream in. Click **⏹ Stop** at any time to halt generation.
+8. Or click **🎲 Generate 4** to create four variants and pick your favourite from the comparison grid.
+9. Edit any field directly in the text areas. Use **Redo** to regenerate a single section with optional instruction, or **Reset** to revert to the last generated/imported baseline.
+10. Use the **Revision Tools** to refine the card:
+    - **Reduce Bloat** to move lore to the lorebook and strip prose padding.
+    - **Scan for Lorebook Content** to elevate lore without the bloat pass.
+    - **Revise Card** for any specific free-text change instruction.
+    - **Check Consistency** + **Auto-Fix** for logic and continuity issues.
+11. Open the **Lorebook Manager** to add world-building entries, or let the AI suggest and generate them.
+12. Open **Alternate Greetings** to add alternative opening scenes.
+13. Generate **Example Messages** — they are embedded in the exported card automatically.
+14. Optionally click **Snapshot to History** to save the current state as a named checkpoint.
+15. Click **Download Character Card (PNG)** to export, or use **Download as JSON** if you don't need an image.
+
+### Web Search for Real / Fictional Characters
+
+Use this when you want an accurate card based on a real person or an established fictional character:
+
+1. Enter a concept that names a specific person or character, e.g.:
+   - `"Tony Stark from Iron Man"`
+   - `"Beyonce"`
+   - `"Ellen Ripley from Alien"`
+2. Tick the **🔍 Search Web for Details** checkbox that appears below the concept textarea.
+3. Click **Generate**.
+4. The app searches the web for verified biographical details, physical descriptions, personality traits, and key facts.
+5. These details are injected into the LLM's prompt as ground truth, producing a character card faithful to the source.
+6. If the search fails or returns nothing, the app silently falls back to normal LLM-only generation.
+
+> **Tip:** Generic concepts like `"a stoic medieval blacksmith"` automatically skip the web search even if the toggle is on, saving API calls.
 
 ### SillyTavern Bridge Workflow
 
@@ -294,6 +423,7 @@ src/
     main.js                  — App controller and event binding
     app-ui.js                — UI helpers (notifications, streaming, state buttons)
     character-generator.js   — Character prompt templates and response parsing
+    character-search.js      — Web search orchestration (Brave Search API)
     character-display.js     — Field display, edit, reset, import, remaster, tags
     revision-handler.js      — AI revision, reduce bloat, consistency check/auto-fix
     alt-greetings-handler.js — Alternate greetings CRUD and AI generation
@@ -301,23 +431,33 @@ src/
     library-handler.js       — Save/load/delete prompts & cards; snapshot to history
     image-handler.js         — Image generate/upload, reference image, model fetch
     image-generator.js       — Image prompt generation logic
+    image-gallery.js         — Full-screen lightbox for generated images
     lorebook-generator.js    — Lorebook AI generation (standalone module)
     st-handler.js            — SillyTavern bridge (browse, load, push characters)
+    chat-tester.js           — Chat simulation with adjustable parameters
+    chat-ui.js               — Chat toolbar, transcript modal, lorebook highlights
     png-encoder.js           — Embed chara_card_v2 metadata into PNG files
+    batch-generator.js       — Batch comparison grid (Generate 4 variants)
+    url-import.js            — Import characters from JanitorAI / Chub.ai URLs
     api.js                   — APIHandler base (request, streaming, retry, abort)
     api-character.js         — Character generation, revision, and field-regeneration prompts
     api-image.js             — Image generation methods
     api-lorebook.js          — Lorebook/alt-greeting/consistency/card-scan API methods
     config.js                — Config management (localStorage + server sync)
     storage.js               — Server-side library storage (cards and prompts)
-  styles/
+    auth.js                  — Client-side authentication
+ styles/
     main.css                 — Application styles
 proxy/
-  server.js                  — Express proxy (text, image, config, library, ST bridge, CORS)
+  server.js                  — Express proxy (text, image, config, library, ST bridge, search, CORS)
   data/                      — Runtime data directory (gitignored)
     cards.json               — Saved card library (auto-created)
     prompts.json             — Saved prompt library (auto-created)
     config.json              — Persisted API settings (auto-created)
+storywriterbackend/          — Integrated Story Writer backend (Python/FastAPI)
+  app/
+    routers/                 — FastAPI route handlers
+    services/                — LLM service, context manager, card parser
 ```
 
 ---
