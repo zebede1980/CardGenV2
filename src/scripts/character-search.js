@@ -55,7 +55,7 @@ class CharacterSearch {
         // Build augmented concept and use search-aware generation
         const augmentedConcept = this._buildAugmentedConcept(concept, searchResults);
         this._updateSearchStatus("✅ Details found — generating accurate character", "found");
-        return await this.apiHandlerInstance.generateCharacterWithSearch(
+        const rawCharacter = await this.apiHandlerInstance.generateCharacterWithSearch(
           augmentedConcept,
           characterName,
           searchResults,
@@ -64,6 +64,7 @@ class CharacterSearch {
           lorebook,
           cardType,
         );
+        return window.characterGenerator.parseCharacterData(rawCharacter);
       } else {
         this._updateSearchStatus("⚠️ No details found — generating from concept only", "not-found");
       }
