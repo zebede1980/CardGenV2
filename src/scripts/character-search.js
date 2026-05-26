@@ -4,7 +4,7 @@ class CharacterSearch {
   constructor() {
     this.apiHandler = null;
     this.lastSearchResults = null;
-    this.searchEnabled = true;
+    this.searchEnabled = false;
     this.searchInProgress = false;
   }
 
