@@ -68,6 +68,14 @@ class CharacterGeneratorApp {
     document.getElementById("generate-btn").addEventListener("click", () => this.handleGenerate());
     document.getElementById("stop-btn").addEventListener("click", () => this.handleStop());
 
+    // Search web toggle
+    const searchToggle = document.getElementById("search-web-toggle");
+    if (searchToggle && window.characterSearch) {
+      searchToggle.addEventListener("change", (e) => {
+        window.characterSearch.setEnabled(e.target.checked);
+      });
+    }
+
     // Batch generation — always generate 4 variants
     const batchGenerateBtn = document.getElementById("batch-generate-btn");
     if (batchGenerateBtn) batchGenerateBtn.addEventListener("click", () => this.handleBatchGenerate());
@@ -814,7 +822,7 @@ class CharacterGeneratorApp {
       if (!promptSaved) this.showStreamMessage("⚠️ Prompt could not be saved to local library.\n");
 
       this.showStreamMessage("🚀 Starting character generation...\n\n");
-      this.currentCharacter = await this.characterGenerator.generateCharacter(
+      this.currentCharacter = await window.characterSearch.generateCharacter(
         effectiveConcept, characterName,
         (token, fullContent) => this.handleCharacterStream(token, fullContent),
         pov, this.lorebookData, cardType,

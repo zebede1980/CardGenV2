@@ -56,6 +56,113 @@ Object.assign(APIHandler.prototype, {
   },
 
   /**
+   * Generate a character with web-search-augmented prompt.
+   * Uses buildSearchAugmentedPrompt to weave verified details into the LLM prompt.
+   */
+  async generateCharacterWithSearch(
+    prompt, characterName, searchResults, onStream = null, pov = "third", lorebook = null, cardType = "single",
+  ) {
+    const characterPrompt = this.buildSearchAugmentedPrompt(
+      prompt, characterName, searchResults, pov, lorebook, cardType,
+    );
+    const model = this.config.get("api.text.model") || "glm-4-6";
+
+    this.config.log("Using text model:", model);
+    this.config.log("Character name provided:", characterName || "(AI will generate)");
+    this.config.log("Search-augmented prompt: using", (characterPrompt.systemPrompt || "").length, "system chars");
+
+    const data = {
+      model: model,
+      messages: [
+        { role: "system", content: characterPrompt.systemPrompt },
+        { role: "user", content: characterPrompt.userPrompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 8192,
+      stream: !!onStream,
+    };
+
+    if (onStream) {
+      const response = await this.makeRequest("/chat/completions", data, false, true);
+      return this.handleStreamResponse(response, onStream);
+    } else {
+      try {
+        const response = await this.makeRequest("/chat/completions", data, false, false);
+        return this.processNormalResponse(response);
+      } catch (error) {
+        if (error.message.includes("401") || error.message.includes("Authorization")) {
+          this.config.log("Trying alternative auth methods...");
+          const response = await this.tryAlternativeAuth("/chat/completions", data);
+          return this.processNormalResponse(response);
+        }
+        throw error;
+      }
+    }
+  },
+
+  /**
+   * Build a search-augmented character prompt by injecting verified web
+   * details directly into the system prompt before the template section.
+   */
+  buildSearchAugmentedPrompt(concept, characterName, searchResults, pov = "third", lorebook = null, cardType = "single") {
+    // Delegate non-single card types to existing builders unchanged
+    if (cardType === "group") return this._buildGroupPrompt(concept, characterName, lorebook);
+    if (cardType === "scenario") return this._buildScenarioPrompt(concept, characterName, lorebook);
+
+    // Start with the existing base prompts
+    const basePrompt = this.buildCharacterPrompt(concept, characterName, pov, lorebook, cardType);
+
+    // Build the verified-details injection block
+    const sections = [];
+    sections.push("---");
+    sections.push("");
+    sections.push("**🔍 VERIFIED CHARACTER DETAILS (from web search):**");
+    sections.push("");
+    sections.push("The following details about this character/person were found via web search. **You MUST use these verified details as the ground truth for your generation.** Do not contradict or invent alternative facts where these details exist.");
+
+    if (searchResults.biographical) {
+      sections.push("");
+      sections.push("**Biographical / Background:**");
+      sections.push(searchResults.biographical);
+    }
+    if (searchResults.appearance) {
+      sections.push("");
+      sections.push("**Physical Appearance:**");
+      sections.push(searchResults.appearance);
+    }
+    if (searchResults.personality) {
+      sections.push("");
+      sections.push("**Personality / Character Traits:**");
+      sections.push(searchResults.personality);
+    }
+    if (searchResults.keyFacts) {
+      sections.push("");
+      sections.push("**Key Facts / Notable Details:**");
+      sections.push(searchResults.keyFacts);
+    }
+
+    sections.push("");
+    sections.push("**IMPORTANT:** Use these verified details for accuracy. If the character is a fictional character from a specific work, set the scenario in that universe. If it's a real person, ground the character in reality.");
+    sections.push("---");
+
+    const injectedBlock = sections.join("\n");
+
+    // Insert the search context right before the template header
+    const insertionMarker = "### **Character Profile Template**";
+    const insertionPoint = basePrompt.systemPrompt.indexOf(insertionMarker);
+    if (insertionPoint !== -1) {
+      basePrompt.systemPrompt =
+        basePrompt.systemPrompt.slice(0, insertionPoint) +
+        injectedBlock + "\n\n" +
+        basePrompt.systemPrompt.slice(insertionPoint);
+    } else {
+      basePrompt.systemPrompt += "\n\n" + injectedBlock;
+    }
+
+    return basePrompt;
+  },
+
+  /**
    * Randomly picks a cultural naming tradition on each call.
    * Injected into name prompts so every generation is pushed into a different
    * cultural space, breaking the AI's tendency to default to Anglo surnames.

@@ -38,6 +38,9 @@ services:
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
       # Optional: URL of the Story Writer backend API
       - STORY_APP_URL=${STORY_APP_URL:-http://storywriterbackend:8000}
+      # Brave Search API for character web search (1,000 free queries/month)
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+      - BRAVE_SEARCH_ENABLED=${BRAVE_SEARCH_ENABLED:-true}
       # Public URL shown to the browser for the Story Writer tab
       - STORY_APP_PUBLIC_URL=${STORY_APP_PUBLIC_URL:-}
       # Shared secret for internal proxy→backend calls (must match storywriterbackend)

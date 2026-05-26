@@ -1767,6 +1767,161 @@ app.post("/api/import/url", requireAuth, async (req, res) => {
   }
 });
 
+// ── Character Web Search (Brave Search API) ────────────────────────────────────
+const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
+const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY || "";
+const BRAVE_SEARCH_ENABLED = process.env.BRAVE_SEARCH_ENABLED !== "false" && !!BRAVE_SEARCH_API_KEY;
+
+if (!BRAVE_SEARCH_ENABLED && process.env.BRAVE_SEARCH_API_KEY) {
+  console.warn("⚠️  BRAVE_SEARCH_ENABLED is explicitly 'false' — web search disabled.");
+}
+if (!BRAVE_SEARCH_API_KEY && process.env.BRAVE_SEARCH_ENABLED !== "false") {
+  console.warn("⚠️  BRAVE_SEARCH_API_KEY not set — Character Web Search will be skipped. Set BRAVE_SEARCH_API_KEY in your .env.");
+}
+
+/**
+ * Perform a single search query via Brave Search API
+ */
+async function braveWebSearch(query, count = 5) {
+  if (!BRAVE_SEARCH_ENABLED || !BRAVE_SEARCH_API_KEY) {
+    return null;
+  }
+  const params = new URLSearchParams({
+    q: query,
+    count: String(count),
+    search_lang: "en",
+    text_decorations: "false",
+  });
+  const url = `${BRAVE_SEARCH_URL}?${params.toString()}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": BRAVE_SEARCH_API_KEY,
+      },
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      console.warn(`[Brave Search] HTTP ${response.status}: ${response.statusText}`);
+      return null;
+    }
+    const data = await response.json();
+    if (!data && !data.web || !data.web.results) {
+      return { results: [] };
+    }
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.warn("[Brave Search] Error:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Aggregate multiple search queries into structured character data
+ */
+async function searchCharacterDetails(name, isFictional) {
+  const queries = [
+    `"${name}" character personality appearance biography`,
+    `"${name}" Wikipedia personality description backstory`,
+  ];
+  if (isFictional) {
+    queries.push(`"${name}" fandom wiki personality traits appearance`);
+  } else {
+    queries.push(`"${name}" biography notable traits physical description`);
+  }
+
+  const allResults = [];
+  for (const q of queries) {
+    const result = await braveWebSearch(q, 3);
+    if (result && result.web && result.web.results) {
+      allResults.push(...result.web.results);
+    }
+  }
+
+  if (allResults.length === 0) {
+    return null;
+  }
+
+  // Deduplicate by URL
+  const seenUrls = new Set();
+  const deduped = allResults.filter((r) => {
+    if (!r.url || seenUrls.has(r.url)) return false;
+    seenUrls.add(r.url);
+    return true;
+  });
+
+  // Aggregate snippets into character data fields
+  const biographical = [];
+  const appearance = [];
+  const personality = [];
+  const keyFacts = [];
+  const sourceUrls = deduped.map((r) => r.url).slice(0, 6);
+
+  for (const r of deduped) {
+    const text = ((r.title || "") + " " + (r.description || "")).toLowerCase();
+    const snippetFull = ((r.title || "") + ". " + (r.description || "")).trim();
+    if (!snippetFull) continue;
+
+    if (/\b(physical )?appearance\b|\b(look|height|build|hair|eye|face|body|skin|outfit)/.test(text) && appearance.length < 3) {
+      appearance.push(snippetFull);
+    } else if (/\b(personality|trait|temperament|attitude|behaviour|behavior|arrogant|shy|confident|cold|warm)\b/.test(text) && personality.length < 3) {
+      personality.push(snippetFull);
+    } else if (/\b(biography|backstory|early life|childhood|born|raised|origin|family|career|history)\b/.test(text) && biographical.length < 4) {
+      biographical.push(snippetFull);
+    } else if (keyFacts.length < 3) {
+      keyFacts.push(snippetFull);
+    }
+  }
+
+  // If nothing was classified, dump all snippets into biographical as fallback
+  if (biographical.length === 0 && appearance.length === 0 && personality.length === 0) {
+    const allSnippets = deduped.map((r) => ((r.title || "") + ". " + (r.description || "")).trim()).filter(Boolean);
+    biographical.push(...allSnippets.slice(0, 5));
+  }
+
+  return {
+    biographical: biographical.join("\n"),
+    appearance: appearance.join("\n"),
+    personality: personality.join("\n"),
+    keyFacts: keyFacts.join("\n"),
+    sourceUrls,
+  };
+}
+
+/**
+ * POST /api/search/character
+ * Body: { name: string, isFictional: boolean }
+ */
+app.post("/api/search/character", requireAuth, async (req, res) => {
+  try {
+    const { name, isFictional } = req.body;
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ success: false, error: "name is required" });
+    }
+    if (!BRAVE_SEARCH_ENABLED) {
+      return res.status(503).json({ success: false, error: "Search not configured", configured: false });
+    }
+
+    console.log(`[Char Search] Searching for: "${name}", fictional=${isFictional}`);
+    const results = await searchCharacterDetails(name.trim(), !!isFictional);
+
+    if (!results) {
+      return res.json({ success: true, results: null, message: "No results found" });
+    }
+
+    console.log(`[Char Search] Extracted bio=${(results.biographical || "").length}, appearance=${(results.appearance || "").length}, personality=${(results.personality || "").length}`);
+    res.json({ success: true, results });
+  } catch (e) {
+    console.error("[Char Search] Error:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ── HTML parser for character data ────────────────────────────────────────────
 
 function extractCharacterFromHtml(html, sourceUrl) {
@@ -1980,4 +2135,9 @@ app.listen(PORT, () => {
   console.log(`🚀 Proxy server running on http://localhost:${PORT}`);
   console.log(`📡 Ready to proxy requests to configured APIs`);
   console.log(`🔑 API URLs will be provided via request headers`);
+  if (BRAVE_SEARCH_ENABLED) {
+    console.log("🔍 Character Web Search enabled (Brave Search API)");
+  } else {
+    console.log("🔍 Character Web Search disabled — set BRAVE_SEARCH_API_KEY to enable");
+  }
 });
