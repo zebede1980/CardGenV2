@@ -1826,13 +1826,16 @@ async function braveWebSearch(query, count = 5) {
  */
 async function searchCharacterDetails(name, isFictional) {
   const queries = [
-    `"${name}" character personality appearance biography`,
-    `"${name}" Wikipedia personality description backstory`,
+    `"${name}" biography`,
+    `"${name}" personality traits character`,
+    `"${name}" physical appearance description looks`,
   ];
   if (isFictional) {
-    queries.push(`"${name}" fandom wiki personality traits appearance`);
+    queries.push(`"${name}" fandom wiki character profile appearance personality`);
+    queries.push(`"${name}" Wikipedia character biography appearance`);
   } else {
-    queries.push(`"${name}" biography notable traits physical description`);
+    queries.push(`"${name}" Wikipedia biography`);
+    queries.push(`"${name}" real person profile description`);
   }
 
   const allResults = [];

@@ -68,12 +68,18 @@ class CharacterGeneratorApp {
     document.getElementById("generate-btn").addEventListener("click", () => this.handleGenerate());
     document.getElementById("stop-btn").addEventListener("click", () => this.handleStop());
 
-    // Search web toggle
-    const searchToggle = document.getElementById("search-web-toggle");
-    if (searchToggle && window.characterSearch) {
-      searchToggle.addEventListener("change", (e) => {
-        window.characterSearch.setEnabled(e.target.checked);
-      });
+    // Mode selector — toggle between Classic and Web Search input blocks
+    const modeRadios = document.querySelectorAll('input[name="generation-mode"]');
+    if (modeRadios.length > 0) {
+      const classicBlock = document.getElementById("classic-mode-inputs");
+      const searchBlock = document.getElementById("search-mode-inputs");
+      const onModeChange = () => {
+        const mode = document.querySelector('input[name="generation-mode"]:checked')?.value || "classic";
+        if (classicBlock) classicBlock.style.display = mode === "classic" ? "" : "none";
+        if (searchBlock) searchBlock.style.display = mode === "search" ? "" : "none";
+      };
+      modeRadios.forEach((r) => r.addEventListener("change", onModeChange));
+      onModeChange();
     }
 
     // Batch generation — always generate 4 variants
@@ -769,12 +775,19 @@ class CharacterGeneratorApp {
       return;
     }
 
+    const generationMode = document.querySelector('input[name="generation-mode"]:checked')?.value || "classic";
     const concept = document.getElementById("character-concept").value.trim();
+    const searchQuery = document.getElementById("search-query")?.value?.trim() || "";
+    const searchScenario = document.getElementById("search-scenario")?.value?.trim() || "";
     const characterName = document.getElementById("character-name").value.trim();
     const referenceImageDescription = document.getElementById("reference-image-description")?.value?.trim();
 
-    if (!concept) {
+    if (generationMode === "classic" && !concept) {
       this.showNotification("Please enter a character concept", "warning");
+      return;
+    }
+    if (generationMode === "search" && !searchQuery) {
+      this.showNotification("Please enter a character to search for", "warning");
       return;
     }
 
@@ -810,10 +823,13 @@ class CharacterGeneratorApp {
       const pov = document.getElementById("pov-select").value;
       const cardType = document.getElementById("card-type-select")?.value || "single";
       let effectiveConcept = concept;
-      if (referenceImageDescription) effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+      if (generationMode === "classic" && referenceImageDescription) {
+        effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+      }
 
+      const saveConcept = generationMode === "classic" ? concept : searchQuery;
       const promptSaved = await this.savePromptToLibrary({
-        concept, characterName, pov, cardType,
+        concept: saveConcept, characterName, pov, cardType,
         lorebookData: this.lorebookData,
         referenceImageDescription: referenceImageDescription || "",
         referenceImageDataUrl: this.referenceImageDataUrl || "",
@@ -822,11 +838,19 @@ class CharacterGeneratorApp {
       if (!promptSaved) this.showStreamMessage("⚠️ Prompt could not be saved to local library.\n");
 
       this.showStreamMessage("🚀 Starting character generation...\n\n");
-      this.currentCharacter = await window.characterSearch.generateCharacter(
-        effectiveConcept, characterName,
-        (token, fullContent) => this.handleCharacterStream(token, fullContent),
-        pov, this.lorebookData, cardType,
-      );
+      if (generationMode === "search") {
+        this.currentCharacter = await window.characterSearch.generateCharacter(
+          searchQuery, searchScenario, characterName,
+          (token, fullContent) => this.handleCharacterStream(token, fullContent),
+          pov, this.lorebookData, cardType,
+        );
+      } else {
+        this.currentCharacter = await this.characterGenerator.generateCharacter(
+          effectiveConcept, characterName,
+          (token, fullContent) => this.handleCharacterStream(token, fullContent),
+          pov, this.lorebookData, cardType,
+        );
+      }
 
       // Stamp cardType on the character and auto-tag non-single types
       this.currentCharacter.cardType = cardType;

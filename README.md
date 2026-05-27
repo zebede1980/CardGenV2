@@ -46,12 +46,12 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Tag field: add comma-separated tags that are preserved in the exported card and shown in the SillyTavern library.
 
 ### 🔍 Web Search for Real / Fictional Characters *(new)*
-- Tick **"🔍 Search Web for Details"** before generating to look up real people or film/TV/game characters via the Brave Search API.
-- The proxy runs targeted searches (Wikipedia, fandom wikis) and feeds verified details (biography, physical appearance, personality traits, key facts) into the LLM prompt as ground truth.
-- Produces accurate character cards for real-world figures or existing fictional characters — e.g. "Tony Stark from Iron Man" or "Beyonce".
-- Automatically detects generic concepts (e.g. "a stoic blacksmith") and skips search, saving API calls.
+- Switch to **🔍 Web Search Mode** via the radio buttons at the top of the inputs section.
+- Enter the character's name in the **"Search For"** field (e.g. `"Ellen Ripley from Alien"`, `"Beyonce"`, `"Tony Stark from Iron Man"`).
+- Optionally describe a **"Scenario / Context"** — this is passed directly to the LLM without being searched, so you control the setup while the AI handles the character's canonical details.
+- The proxy runs 5 targeted Brave Search queries (biography, personality, physical appearance, Wikipedia, fandom/person-profile) and feeds verified details into the LLM prompt as ground truth.
+- Produces accurate character cards — the AI generates personality, appearance, and backstory from search results while using your scenario as the roleplay setup.
 - Gracefully falls back to normal LLM-only generation if search is unavailable or returns no results.
-- Toggle starts **unchecked** by default — opt-in only.
 
 ### Import & Edit
 - Import existing cards (`.png` with embedded `chara_card_v2` data, or `.json`) and edit them in-place.
@@ -306,7 +306,11 @@ The **🔍 Search Web for Details** feature uses the Brave Search API to look up
 
 ## Usage
 
-### Basic Generation Workflow
+### Choosing a Mode
+
+Use the **⏺ Classic Mode / 🔍 Web Search Mode** radio buttons at the top of the Character Generation Inputs section to switch between two workflows.
+
+### Classic Mode
 
 1. Open **API Settings** (gear icon) and configure your text API endpoint, key, and model.
 2. Enter a **Character Concept** in the text box. Be as detailed or as brief as you like.
@@ -328,21 +332,18 @@ The **🔍 Search Web for Details** feature uses the Brave Search API to look up
 14. Optionally click **Snapshot to History** to save the current state as a named checkpoint.
 15. Click **Download Character Card (PNG)** to export, or use **Download as JSON** if you don't need an image.
 
-### Web Search for Real / Fictional Characters
+### Web Search Mode
 
 Use this when you want an accurate card based on a real person or an established fictional character:
 
-1. Enter a concept that names a specific person or character, e.g.:
-   - `"Tony Stark from Iron Man"`
-   - `"Beyonce"`
-   - `"Ellen Ripley from Alien"`
-2. Tick the **🔍 Search Web for Details** checkbox that appears below the concept textarea.
-3. Click **Generate**.
-4. The app searches the web for verified biographical details, physical descriptions, personality traits, and key facts.
-5. These details are injected into the LLM's prompt as ground truth, producing a character card faithful to the source.
-6. If the search fails or returns nothing, the app silently falls back to normal LLM-only generation.
-
-> **Tip:** Generic concepts like `"a stoic medieval blacksmith"` automatically skip the web search even if the toggle is on, saving API calls.
+1. Select **🔍 Web Search Mode** at the top of the inputs section.
+2. Enter the character name in the **Search For** field — e.g. `"Ellen Ripley from Alien"`, `"Beyonce"`, `"Tony Stark from Iron Man"`.
+3. Optionally enter a **Scenario / Context** — e.g. `"You meet her at a seedy spaceport bar"`. This is NOT web-searched; it's passed directly to the LLM as the roleplay setup.
+4. Fill in any other optional fields (Character Name, Reference Image, Lorebook, POV, Card Type) as desired.
+5. Click **✨ Generate 1** (or **🎲 Generate 4**).
+6. The app runs 5 targeted Brave Search queries for biography, personality, physical appearance, and encyclopedia/fandom data.
+7. Search results are injected into the LLM prompt as verified ground truth, while your scenario sets the roleplay context.
+8. If the search fails or returns nothing, the app silently falls back to normal LLM-only generation using your scenario as a concept.
 
 ### SillyTavern Bridge Workflow
 

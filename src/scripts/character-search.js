@@ -4,7 +4,6 @@ class CharacterSearch {
   constructor() {
     this.apiHandler = null;
     this.lastSearchResults = null;
-    this.searchEnabled = false;
     this.searchInProgress = false;
   }
 
@@ -14,31 +13,20 @@ class CharacterSearch {
   }
 
   /**
-   * Toggle search on/off from UI
+   * Generate a character with web search augmentation.
+   * @param {string} searchName — the person/character to search for (e.g. "Ellen Ripley from Alien")
+   * @param {string} scenario — optional user-provided scenario. If blank, LLM generates one from search results.
+   * @param {string} characterName — optional fixed character name
+   * @param {function} onStream — streaming callback
+   * @param {string} pov — "first" or "third"
+   * @param {object} lorebook — optional lorebook data
+   * @param {string} cardType — "single", "group", or "scenario"
    */
-  setEnabled(enabled) {
-    this.searchEnabled = enabled;
-  }
-
-  /**
-   * Generate a character with optional web search augmentation.
-   * Falls back to normal generation if search fails or is disabled.
-   */
-  async generateCharacter(concept, characterName, onStream, pov, lorebook, cardType) {
-    const shouldSearch = this.searchEnabled && !this._isGenericConcept(concept);
-
-    if (!shouldSearch) {
-      // Normal generation path — no search
-      const charGen = window.characterGenerator;
-      return charGen.generateCharacter(concept, characterName, onStream, pov, lorebook, cardType);
-    }
-
-    // Determine the search name: use characterName if provided, else extract from concept
-    const searchName = characterName || this._extractNameFromConcept(concept);
-
+  async generateCharacter(searchName, scenario, characterName, onStream, pov, lorebook, cardType) {
     if (!searchName || searchName.length < 2) {
-      // Can't meaningfully search — fall back
+      // No meaningful search term — fall back to normal generation with scenario as concept
       const charGen = window.characterGenerator;
+      const concept = scenario || searchName || "";
       return charGen.generateCharacter(concept, characterName, onStream, pov, lorebook, cardType);
     }
 
@@ -46,15 +34,17 @@ class CharacterSearch {
       this.searchInProgress = true;
       this._updateSearchStatus("🔍 Searching web for details...", "searching");
 
-      const isFictional = this._detectIfFictional(concept);
+      const isFictional = this._detectIfFictional(searchName);
       const searchResults = await this._performSearch(searchName, isFictional);
       this.lastSearchResults = searchResults;
       this.searchInProgress = false;
 
       if (searchResults) {
-        // Build augmented concept and use search-aware generation
-        const augmentedConcept = this._buildAugmentedConcept(concept, searchResults);
         this._updateSearchStatus("✅ Details found — generating accurate character", "found");
+
+        // Build concept: search results + optional scenario (not searched)
+        const augmentedConcept = this._buildAugmentedConcept(searchName, scenario, searchResults);
+
         const rawCharacter = await this.apiHandlerInstance.generateCharacterWithSearch(
           augmentedConcept,
           characterName,
@@ -66,56 +56,24 @@ class CharacterSearch {
         );
         return window.characterGenerator.parseCharacterData(rawCharacter);
       } else {
-        this._updateSearchStatus("⚠️ No details found — generating from concept only", "not-found");
+        this._updateSearchStatus("⚠️ No details found — generating from context only", "not-found");
       }
     } catch (error) {
       this.searchInProgress = false;
       console.warn("Web search failed, falling back to normal generation:", error);
-      this._updateSearchStatus("⚠️ Search unavailable — generating from concept", "error");
+      this._updateSearchStatus("⚠️ Search unavailable — generating from context", "error");
     }
 
-    // Fallback path
+    // Fallback path — use scenario as concept if available
     const charGen = window.characterGenerator;
-    return charGen.generateCharacter(concept, characterName, onStream, pov, lorebook, cardType);
+    const fallbackConcept = scenario || searchName || "";
+    return charGen.generateCharacter(fallbackConcept, characterName, onStream, pov, lorebook, cardType);
   }
 
   /**
-   * Heuristic: is this a generic concept ("a stoic blacksmith") vs a specific person/character?
+   * Heuristic: does the search name mention a work of fiction?
    */
-  _isGenericConcept(concept) {
-    const trimmed = concept.trim().toLowerCase();
-    const genericPatterns = [
-      /^a\s+/,           // "a stoic blacksmith"
-      /^an\s+/,          // "an elven archer"
-      /^create\s+/i,     // "create a wizard"
-      /^generate\s+/i,
-      /^make\s+/i,
-      /^build\s+/i,
-      /^design\s+/i,
-    ];
-    return genericPatterns.some((p) => p.test(trimmed));
-  }
-
-  /**
-   * Try to extract a name from the concept if no explicit name given
-   */
-  _extractNameFromConcept(concept) {
-    const trimmed = concept.trim();
-    // "Tony Stark from Iron Man" -> "Tony Stark"
-    const fromMatch = trimmed.match(/^(.+?)\s+from\s+/i);
-    if (fromMatch) return fromMatch[1].trim();
-    // "the character John Wick" -> "John Wick"
-    const charMatch = trimmed.match(/(?:character|person|named?)\s+[""]?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)[""]?/i);
-    if (charMatch) return charMatch[1].trim();
-    // Just take first 2-3 words as potential name
-    const words = trimmed.split(/\s+/);
-    return words.slice(0, 3).join(" ");
-  }
-
-  /**
-   * Heuristic: does the concept mention a work of fiction?
-   */
-  _detectIfFictional(concept) {
+  _detectIfFictional(name) {
     const fictionIndicators = [
       /\bfrom\b/i, /\bmovie\b/i, /\bfilm\b/i, /\bseries\b/i,
       /\bshow\b/i, /\banime\b/i, /\bgame\b/i, /\bbook\b/i,
@@ -123,7 +81,7 @@ class CharacterSearch {
       /\bcharacter\b/i, /\bplayed\s+by\b/i, /\bportrayed\b/i,
       /\bactor\b/i, /\bactress\b/i, /\bfictional\b/i,
     ];
-    return fictionIndicators.some((p) => p.test(concept));
+    return fictionIndicators.some((p) => p.test(name));
   }
 
   async _performSearch(name, isFictional) {
@@ -149,13 +107,19 @@ class CharacterSearch {
     return data.results;
   }
 
-  _buildAugmentedConcept(originalConcept, searchResults) {
-    let augmented = originalConcept;
+  _buildAugmentedConcept(searchName, scenario, searchResults) {
+    let augmented = `Character: ${searchName}`;
     augmented += "\n\n[The following verified details about this person/character were found via web search. Use them to ensure accuracy.]\n";
     if (searchResults.biographical) augmented += `\nBIOGRAPHY:\n${searchResults.biographical}`;
     if (searchResults.appearance) augmented += `\nPHYSICAL APPEARANCE:\n${searchResults.appearance}`;
     if (searchResults.personality) augmented += `\nPERSONALITY:\n${searchResults.personality}`;
     if (searchResults.keyFacts) augmented += `\nKEY FACTS:\n${searchResults.keyFacts}`;
+
+    // Append user-provided scenario — this is NOT web-searched, just passed through
+    if (scenario && scenario.trim()) {
+      augmented += `\n\nSCENARIO / CONTEXT (provided by user — DO NOT change this):\n${scenario.trim()}`;
+    }
+
     return augmented;
   }
 

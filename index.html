@@ -117,27 +117,57 @@
                         <summary class="section-title" style="cursor: pointer; padding: 0.5rem 0; margin-bottom: 1rem; user-select: none;">
                             Character Generation Inputs
                         </summary>
-                        <div class="form-group">
-                            <label for="character-concept" class="label"
-                                >Character Concept</label
-                            >
-                            <textarea
-                                id="character-concept"
-                                class="textarea"
-                                placeholder="Describe your character concept... (e.g., 'A stoic medieval blacksmith with a secret artistic passion')"
-                                rows="8"
-                            ></textarea>
+                        <!-- Mode Selector -->
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <div class="mode-selector">
+                                <label class="mode-option" id="mode-classic-label">
+                                    <input type="radio" name="generation-mode" value="classic" checked />
+                                    <span>⏺ Classic Mode</span>
+                                </label>
+                                <label class="mode-option" id="mode-search-label">
+                                    <input type="radio" name="generation-mode" value="search" />
+                                    <span>🔍 Web Search Mode</span>
+                                </label>
+                            </div>
                         </div>
 
-                        <!-- Search Web Toggle -->
-                        <div class="form-row" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label class="search-toggle">
-                                    <input type="checkbox" id="search-web-toggle" />
-                                    <span>🔍 Search Web for Details</span>
-                                </label>
-                                <span id="search-status"></span>
+                        <!-- Classic Mode Inputs -->
+                        <div id="classic-mode-inputs" class="mode-input-block">
+                            <div class="form-group">
+                                <label for="character-concept" class="label">Character Concept</label>
+                                <textarea
+                                    id="character-concept"
+                                    class="textarea"
+                                    placeholder="Describe your character concept... (e.g., 'A stoic medieval blacksmith with a secret artistic passion')"
+                                    rows="8"
+                                ></textarea>
                             </div>
+                        </div>
+
+                        <!-- Web Search Mode Inputs -->
+                        <div id="search-mode-inputs" class="mode-input-block" style="display: none;">
+                            <div class="form-group">
+                                <label for="search-query" class="label">Search For</label>
+                                <input
+                                    type="text"
+                                    id="search-query"
+                                    class="input"
+                                    placeholder="e.g. Ellen Ripley from Alien, Beyonce, Tony Stark from Iron Man"
+                                />
+                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    The exact name of the person or fictional character to look up.
+                                </p>
+                            </div>
+                            <div class="form-group">
+                                <label for="search-scenario" class="label">Scenario / Context (optional)</label>
+                                <textarea
+                                    id="search-scenario"
+                                    class="textarea"
+                                    placeholder="Describe the scenario or situation... (e.g., 'You meet her in a bar on the edge of the galaxy' or 'Set during the events of Iron Man 1'). Leave blank to let the AI generate one from search results."
+                                    rows="4"
+                                ></textarea>
+                            </div>
+                            <span id="search-status"></span>
                         </div>
 
                         <div class="form-group">
