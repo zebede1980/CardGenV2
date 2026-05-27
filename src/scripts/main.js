@@ -307,6 +307,8 @@ class CharacterGeneratorApp {
     if (refreshSTBtn) refreshSTBtn.addEventListener("click", () => this.handleRefreshSTLibrary());
     const stList = document.getElementById("st-characters-list");
     if (stList) stList.addEventListener("click", (e) => this.handleSTLibraryClick(e));
+    const stFilter = document.getElementById("st-library-filter");
+    if (stFilter) stFilter.addEventListener("input", () => this.handleSTLibraryFilter());
     const pushToSTBtn = document.getElementById("push-to-st-btn");
     if (pushToSTBtn) pushToSTBtn.addEventListener("click", () => this.handlePushToST());
     const testSTBtn = document.getElementById("test-st-btn");

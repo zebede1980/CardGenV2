@@ -1277,9 +1277,12 @@
                     <details>
                         <summary class="section-title" style="cursor: pointer; padding: 0.5rem 0; user-select: none;">🔗 SillyTavern Library</summary>
                         <div style="margin-top: 1rem;">
-                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
                                 <button id="refresh-st-library-btn" class="btn-small">🔄 Refresh</button>
                                 <span style="font-size: 0.8rem; color: var(--text-secondary);">Browse characters directly from your SillyTavern instance. Configure the URL in API Settings.</span>
+                            </div>
+                            <div style="margin-bottom: 1rem;">
+                                <input type="text" id="st-library-filter" class="input" placeholder="Filter characters by name…" style="max-width: 320px;" />
                             </div>
                             <div id="st-characters-list" class="content-box library-list">
                                 <p class="library-empty">Click Refresh to load characters from SillyTavern.</p>

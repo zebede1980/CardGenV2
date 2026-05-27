@@ -75,6 +75,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   // ── Browse ST characters ───────────────────────────────────────────────────
 
+  // Cache the full character list so we can filter it client-side
+  _stCharactersCache: null,
+
   async handleRefreshSTLibrary() {
     const headers = this._stHeaders();
     const list = document.getElementById("st-characters-list");
@@ -93,51 +96,87 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       if (!Array.isArray(characters) || characters.length === 0) {
         list.innerHTML = '<p class="library-empty">No characters found in SillyTavern.</p>';
+        this._stCharactersCache = [];
         return;
       }
 
       // Sort by date_added descending (most recent first)
       characters.sort((a, b) => (b.date_added || 0) - (a.date_added || 0));
+      this._stCharactersCache = characters;
 
-      const stUrl = (this.config.get("st.baseUrl") || "").replace(/\/$/, "");
-      list.innerHTML = characters.map(c => {
-        const name = escapeHtml(c.name || c.data?.name || "Unnamed");
-        const avatar = c.avatar || "";
-        const date = c.date_added ? new Date(c.date_added).toLocaleDateString() : "";
-        const description = c.data?.description || c.description || "";
-        const firstMes = c.data?.first_mes || c.first_mes || "";
-        const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.data?.tags) ? c.data.tags : []);
-        const snippet = escapeHtml((description || firstMes).replace(/\n+/g, " ").trim().slice(0, 120));
-        const tagHtml = tags.slice(0, 5).map(t => `<span class="st-card-tag">${escapeHtml(String(t))}</span>`).join("");
-        // Route thumbnail through our proxy — the browser can't reach ST directly
-        // Append the JWT token as a query param since <img src> can't send headers
-        const authToken = window.cardgenAuth?.getToken() || "";
-        const thumbUrl = avatar
-          ? `/api/st/thumbnail?file=${encodeURIComponent(avatar)}&stUrl=${encodeURIComponent(stUrl)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`
-          : "";
-        const thumbHtml = thumbUrl
-          ? `<img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
-          : `<div class="st-card-thumb st-card-thumb-placeholder"></div>`;
-        return `
-          <div class="library-item st-card">
-            ${thumbHtml}
-            <div class="st-card-body">
-              <div class="library-item-title">${name}</div>
-              ${snippet ? `<div class="st-card-snippet">${snippet}…</div>` : ""}
-              ${tagHtml ? `<div class="st-card-tags">${tagHtml}</div>` : ""}
-              <div class="st-card-footer">
-                <span class="library-item-date">${date}</span>
-                <div class="library-item-actions">
-                  <button class="btn-small" data-action="load-st-card" data-avatar="${escapeHtml(avatar)}" data-name="${escapeHtml(c.name || c.data?.name || "Unnamed")}">Load</button>
-                </div>
-              </div>
-            </div>
-          </div>`;
-      }).join("");
+      // Apply any active filter
+      const filterInput = document.getElementById("st-library-filter");
+      const filterText = filterInput?.value?.trim() || "";
+      this._renderSTLibrary(filterText);
     } catch (err) {
       console.error("ST library refresh error:", err);
       list.innerHTML = `<p class="library-empty" style="color:var(--error);">Error: ${escapeHtml(err.message)}</p>`;
+      this._stCharactersCache = [];
     }
+  },
+
+  handleSTLibraryFilter() {
+    const filterInput = document.getElementById("st-library-filter");
+    const filterText = filterInput?.value?.trim() || "";
+    this._renderSTLibrary(filterText);
+  },
+
+  _renderSTLibrary(filterText) {
+    const list = document.getElementById("st-characters-list");
+    const characters = this._stCharactersCache || [];
+    if (!list) return;
+
+    if (characters.length === 0) {
+      list.innerHTML = '<p class="library-empty">No characters found in SillyTavern.</p>';
+      return;
+    }
+
+    // Filter by name (case-insensitive)
+    const filtered = filterText
+      ? characters.filter(c => {
+          const name = (c.name || c.data?.name || "").toLowerCase();
+          return name.includes(filterText.toLowerCase());
+        })
+      : characters;
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<p class="library-empty">No characters matching "${escapeHtml(filterText)}"</p>`;
+      return;
+    }
+
+    const stUrl = (this.config.get("st.baseUrl") || "").replace(/\/$/, "");
+    list.innerHTML = filtered.map(c => {
+      const name = escapeHtml(c.name || c.data?.name || "Unnamed");
+      const avatar = c.avatar || "";
+      const date = c.date_added ? new Date(c.date_added).toLocaleDateString() : "";
+      const description = c.data?.description || c.description || "";
+      const firstMes = c.data?.first_mes || c.first_mes || "";
+      const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.data?.tags) ? c.data.tags : []);
+      const snippet = escapeHtml((description || firstMes).replace(/\n+/g, " ").trim().slice(0, 120));
+      const tagHtml = tags.slice(0, 5).map(t => `<span class="st-card-tag">${escapeHtml(String(t))}</span>`).join("");
+      const authToken = window.cardgenAuth?.getToken() || "";
+      const thumbUrl = avatar
+        ? `/api/st/thumbnail?file=${encodeURIComponent(avatar)}&stUrl=${encodeURIComponent(stUrl)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`
+        : "";
+      const thumbHtml = thumbUrl
+        ? `<img class="st-card-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        : `<div class="st-card-thumb st-card-thumb-placeholder"></div>`;
+      return `
+        <div class="library-item st-card">
+          ${thumbHtml}
+          <div class="st-card-body">
+            <div class="library-item-title">${name}</div>
+            ${snippet ? `<div class="st-card-snippet">${snippet}…</div>` : ""}
+            ${tagHtml ? `<div class="st-card-tags">${tagHtml}</div>` : ""}
+            <div class="st-card-footer">
+              <span class="library-item-date">${date}</span>
+              <div class="library-item-actions">
+                <button class="btn-small" data-action="load-st-card" data-avatar="${escapeHtml(avatar)}" data-name="${escapeHtml(c.name || c.data?.name || "Unnamed")}">Load</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }).join("");
   },
 
   async handleSTLibraryClick(event) {
