@@ -230,33 +230,103 @@ Object.assign(CharacterGeneratorApp.prototype, {
     };
   },
 
-  _computeDiffWords(oldText, newText) {
-    // Simple word-level diff using LCS-like approach
-    const oldWords = (oldText || "").split(/(\s+)/);
-    const newWords = (newText || "").split(/(\s+)/);
-    const result = [];
-    let i = 0, j = 0;
+  /**
+   * Compute line-level LCS matrix.
+   * Returns [lcsLength, matrix] where matrix[row][col] = length of LCS.
+   */
+  _lcsMatrix(oldLines, newLines) {
+    const m = oldLines.length, n = newLines.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = oldLines[i - 1] === newLines[j - 1]
+          ? dp[i - 1][j - 1] + 1
+          : Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+    return dp;
+  },
 
-    while (i < oldWords.length || j < newWords.length) {
-      if (i >= oldWords.length) {
-        result.push({ type: "add", text: newWords[j++] });
-      } else if (j >= newWords.length) {
-        result.push({ type: "del", text: oldWords[i++] });
-      } else if (oldWords[i] === newWords[j]) {
-        result.push({ type: "same", text: oldWords[i++] });
-        j++;
+  /**
+   * Backtrack the LCS matrix to classify lines as same, deleted, or added.
+   */
+  _lcsOps(oldLines, newLines, dp) {
+    const ops = [];
+    let i = oldLines.length, j = newLines.length;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+        ops.unshift({ op: "same", oldLine: oldLines[i - 1], newLine: newLines[j - 1] });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        ops.unshift({ op: "add", newLine: newLines[j - 1] });
+        j--;
       } else {
-        // Greedy: look ahead for next match
-        const nextMatchInNew = newWords.indexOf(oldWords[i], j);
-        const nextMatchInOld = oldWords.indexOf(newWords[j], i);
-        if (nextMatchInNew !== -1 && (nextMatchInOld === -1 || nextMatchInNew - j <= nextMatchInOld - i)) {
-          while (j < nextMatchInNew) result.push({ type: "add", text: newWords[j++] });
-        } else if (nextMatchInOld !== -1) {
-          while (i < nextMatchInOld) result.push({ type: "del", text: oldWords[i++] });
-        } else {
-          result.push({ type: "del", text: oldWords[i++] });
-          result.push({ type: "add", text: newWords[j++] });
+        ops.unshift({ op: "del", oldLine: oldLines[i - 1] });
+        i--;
+      }
+    }
+    return ops;
+  },
+
+  /**
+   * Word-level diff of two lines. Uses a greedy match with a modest
+   * look-ahead to avoid cascading red/green on small changes.
+   */
+  _diffWords(oldStr, newStr) {
+    const oldWords = (oldStr || "").split(/(\s+)/);
+    const newWords = (newStr || "").split(/(\s+)/);
+    const result = [];
+    let o = 0, n = 0;
+
+    while (o < oldWords.length || n < newWords.length) {
+      if (o >= oldWords.length) {
+        result.push({ type: "add", text: newWords[n++] });
+      } else if (n >= newWords.length) {
+        result.push({ type: "del", text: oldWords[o++] });
+      } else if (oldWords[o] === newWords[n]) {
+        result.push({ type: "same", text: oldWords[o] });
+        o++; n++;
+      } else {
+        // Search for a re-sync point within a limited window (look-ahead = 20 words)
+        const maxLook = 20;
+        let bestDist = Infinity, bestO = o, bestN = n;
+        for (let oo = o; oo < Math.min(oldWords.length, o + maxLook); oo++) {
+          for (let nn = n; nn < Math.min(newWords.length, n + maxLook); nn++) {
+            if (oldWords[oo] === newWords[nn]) {
+              const dist = (oo - o) + (nn - n);
+              if (dist < bestDist) { bestDist = dist; bestO = oo; bestN = nn; }
+            }
+          }
         }
+        if (bestDist < Infinity && bestDist <= 12) {
+          while (o < bestO) result.push({ type: "del", text: oldWords[o++] });
+          while (n < bestN) result.push({ type: "add", text: newWords[n++] });
+        } else {
+          // No decent match found — fall back to pairwise
+          result.push({ type: "del", text: oldWords[o++] });
+          result.push({ type: "add", text: newWords[n++] });
+        }
+      }
+    }
+    return result;
+  },
+
+  _computeDiffWords(oldText, newText) {
+    const oldLines = (oldText || "").split("\n");
+    const newLines = (newText || "").split("\n");
+    const dp = this._lcsMatrix(oldLines, newLines);
+    const ops = this._lcsOps(oldLines, newLines, dp);
+
+    const result = [];
+    for (const op of ops) {
+      if (op.op === "same") {
+        result.push({ type: "same", text: op.oldLine + "\n" });
+      } else if (op.op === "del") {
+        // deleted line — all words marked as del
+        result.push({ type: "del", text: op.oldLine + "\n" });
+      } else {
+        // added line — all words marked as add
+        result.push({ type: "add", text: op.newLine + "\n" });
       }
     }
     return result;
