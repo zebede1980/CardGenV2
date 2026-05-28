@@ -318,14 +318,24 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const ops = this._lcsOps(oldLines, newLines, dp);
 
     const result = [];
-    for (const op of ops) {
+    for (let idx = 0; idx < ops.length; idx++) {
+      const op = ops[idx];
       if (op.op === "same") {
         result.push({ type: "same", text: op.oldLine + "\n" });
       } else if (op.op === "del") {
-        // deleted line — all words marked as del
-        result.push({ type: "del", text: op.oldLine + "\n" });
-      } else {
-        // added line — all words marked as add
+        const nextOp = ops[idx + 1];
+        if (nextOp && nextOp.op === "add") {
+          const wordDiff = this._diffWords(op.oldLine, nextOp.newLine);
+          for (const part of wordDiff) {
+            result.push(part);
+          }
+          result.push({ type: "same", text: "\n" });
+          idx++; // skip the paired add
+        } else {
+          result.push({ type: "del", text: op.oldLine + "\n" });
+        }
+      } else if (op.op === "add") {
+        // lone add (no corresponding del)
         result.push({ type: "add", text: op.newLine + "\n" });
       }
     }
