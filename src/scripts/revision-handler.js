@@ -269,48 +269,81 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   /**
-   * Word-level diff of two lines. Uses a greedy match with a modest
-   * look-ahead to avoid cascading red/green on small changes.
+   * Decide whether two lines are similar enough to deserve a word-level diff.
+   * Uses a simple Jaccard-style word overlap; 30 % shared words is the threshold.
+   */
+  _linesAreSimilar(a, b) {
+    const wordsA = (a || "").trim().split(/\s+/).filter(w => w.length > 0);
+    const wordsB = (b || "").trim().split(/\s+/).filter(w => w.length > 0);
+    if (wordsA.length === 0 && wordsB.length === 0) return true;
+    const setA = new Set(wordsA.map(w => w.toLowerCase()));
+    const setB = new Set(wordsB.map(w => w.toLowerCase()));
+    let shared = 0;
+    for (const w of setA) if (setB.has(w)) shared++;
+    const maxLen = Math.max(setA.size, setB.size);
+    return maxLen > 0 && (shared / maxLen) >= 0.30;
+  },
+
+  /**
+   * Word-level diff of two strings. Uses an LCS on words so insertions
+   * and deletions are always minimal and precise — no arbitrary look-ahead
+   * cut-offs that cause cascading red/green.
    */
   _diffWords(oldStr, newStr) {
     const oldWords = (oldStr || "").split(/(\s+)/);
     const newWords = (newStr || "").split(/(\s+)/);
-    const result = [];
-    let o = 0, n = 0;
+    const m = oldWords.length, n = newWords.length;
 
-    while (o < oldWords.length || n < newWords.length) {
-      if (o >= oldWords.length) {
-        result.push({ type: "add", text: newWords[n++] });
-      } else if (n >= newWords.length) {
-        result.push({ type: "del", text: oldWords[o++] });
-      } else if (oldWords[o] === newWords[n]) {
-        result.push({ type: "same", text: oldWords[o] });
-        o++; n++;
-      } else {
-        // Search for a re-sync point within a limited window (look-ahead = 20 words)
-        const maxLook = 20;
-        let bestDist = Infinity, bestO = o, bestN = n;
-        for (let oo = o; oo < Math.min(oldWords.length, o + maxLook); oo++) {
-          for (let nn = n; nn < Math.min(newWords.length, n + maxLook); nn++) {
-            if (oldWords[oo] === newWords[nn]) {
-              const dist = (oo - o) + (nn - n);
-              if (dist < bestDist) { bestDist = dist; bestO = oo; bestN = nn; }
-            }
-          }
-        }
-        if (bestDist < Infinity && bestDist <= 12) {
-          while (o < bestO) result.push({ type: "del", text: oldWords[o++] });
-          while (n < bestN) result.push({ type: "add", text: newWords[n++] });
-        } else {
-          // No decent match found — fall back to pairwise
-          result.push({ type: "del", text: oldWords[o++] });
-          result.push({ type: "add", text: newWords[n++] });
-        }
+    // LCS length matrix
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = oldWords[i - 1] === newWords[j - 1]
+          ? dp[i - 1][j - 1] + 1
+          : Math.max(dp[i - 1][j], dp[i][j - 1]);
       }
     }
+
+    // Backtrack, merging consecutive add/del runs into single spans
+    const result = [];
+    let curDel = null, curAdd = null;
+
+    const flush = () => {
+      if (curDel) { result.push({ type: "del", text: curDel }); curDel = null; }
+      if (curAdd) { result.push({ type: "add", text: curAdd }); curAdd = null; }
+    };
+
+    let i = m, j = n;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
+        flush();
+        result.push({ type: "same", text: oldWords[i - 1] });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        curAdd = (curAdd || "") + newWords[j - 1];
+        j--;
+      } else {
+        curDel = (curDel || "") + oldWords[i - 1];
+        i--;
+      }
+    }
+    flush();
+    result.reverse();
     return result;
   },
 
+  /**
+   * Compute a diff between two multi-line texts.
+   *
+   * Strategy:
+   * 1. Run an LCS on lines to detect unchanged, deleted, and added lines.
+   * 2. Group consecutive deletions/additions into "runs".
+   * 3. Pair deletions with additions line-by-line. If the paired lines are
+   *    "similar enough", do a word-level diff; otherwise show the whole line
+   *    as deleted and the whole new line as added.
+   * 4. Merge consecutive add/del fragments so a single contiguous changed
+   *    phrase becomes one highlighted span instead of word-by-word fragments.
+   */
   _computeDiffWords(oldText, newText) {
     const oldLines = (oldText || "").split("\n");
     const newLines = (newText || "").split("\n");
@@ -318,25 +351,51 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const ops = this._lcsOps(oldLines, newLines, dp);
 
     const result = [];
-    for (let idx = 0; idx < ops.length; idx++) {
+    let idx = 0;
+
+    const flushWordDiff = (parts) => {
+      for (const p of parts) {
+        const last = result[result.length - 1];
+        if (last && last.type === p.type) {
+          last.text += p.text;
+        } else {
+          result.push({ type: p.type, text: p.text });
+        }
+      }
+    };
+
+    while (idx < ops.length) {
       const op = ops[idx];
       if (op.op === "same") {
         result.push({ type: "same", text: op.oldLine + "\n" });
-      } else if (op.op === "del") {
-        const nextOp = ops[idx + 1];
-        if (nextOp && nextOp.op === "add") {
-          const wordDiff = this._diffWords(op.oldLine, nextOp.newLine);
-          for (const part of wordDiff) {
-            result.push(part);
-          }
+        idx++;
+        continue;
+      }
+
+      // Gather a contiguous run of dels and adds
+      const run = [];
+      while (idx < ops.length && ops[idx].op !== "same") {
+        run.push(ops[idx]); idx++;
+      }
+      const oldRun = run.filter(o => o.op === "del").map(o => o.oldLine);
+      const newRun = run.filter(o => o.op === "add").map(o => o.newLine);
+      const pairs = Math.min(oldRun.length, newRun.length);
+
+      for (let p = 0; p < pairs; p++) {
+        if (this._linesAreSimilar(oldRun[p], newRun[p])) {
+          const wordParts = this._diffWords(oldRun[p], newRun[p]);
+          flushWordDiff(wordParts);
           result.push({ type: "same", text: "\n" });
-          idx++; // skip the paired add
         } else {
-          result.push({ type: "del", text: op.oldLine + "\n" });
+          result.push({ type: "del", text: oldRun[p] + "\n" });
+          result.push({ type: "add", text: newRun[p] + "\n" });
         }
-      } else if (op.op === "add") {
-        // lone add (no corresponding del)
-        result.push({ type: "add", text: op.newLine + "\n" });
+      }
+      for (let p = pairs; p < oldRun.length; p++) {
+        result.push({ type: "del", text: oldRun[p] + "\n" });
+      }
+      for (let p = pairs; p < newRun.length; p++) {
+        result.push({ type: "add", text: newRun[p] + "\n" });
       }
     }
     return result;
