@@ -631,7 +631,13 @@ ${lorebookContent}`;
         },
         {
           role: "user",
-          content: `Revise the following character according to this request: ${revisionInstruction}\n\nPOV requirement: keep content in ${povText} style where it originally applies.\n\nCurrent character JSON:\n${JSON.stringify(currentCharacter, null, 2)}`,
+          content: (() => {
+            // Strip character_book and alternateGreetings from the revision input —
+            // the lorebook content is stored separately and should not be copied into
+            // card fields; alternateGreetings are preserved on the return value.
+            const { character_book: _book, alternateGreetings: _greetings, ...cardForRevision } = currentCharacter;
+            return `Revise the following character according to this request: ${revisionInstruction}\n\nPOV requirement: keep content in ${povText} style where it originally applies.\n\nCurrent character JSON:\n${JSON.stringify(cardForRevision, null, 2)}`;
+          })(),
         },
       ],
       temperature: 0.7,
@@ -933,6 +939,25 @@ Generate exactly 10 names as a JSON array. Make each name as different from the 
     return context;
   },
 
+  /**
+   * Returns a compact lorebook context listing only trigger keys — NOT entry content.
+   * Use this when regenerating individual card fields (scenario, firstMessage, etc.)
+   * so the AI knows which keywords to weave in without having full lorebook text
+   * available to copy verbatim into the card.
+   */
+  formatLorebookKeysContext(lorebookEntries) {
+    if (!lorebookEntries || !Array.isArray(lorebookEntries) || lorebookEntries.length === 0) return "";
+    const allKeys = [];
+    lorebookEntries.forEach((entry) => {
+      if (entry.enabled !== false && entry.keys && entry.keys.length > 0) {
+        allKeys.push(...entry.keys);
+      }
+    });
+    if (allKeys.length === 0) return "";
+    const uniqueKeys = [...new Set(allKeys)];
+    return `\n\nLorebook trigger keywords — weave these naturally into your text so they activate lorebook entries during roleplay. Do NOT copy or paraphrase lorebook content into this field; just ensure these words appear organically: ${uniqueKeys.join(", ")}`;
+  },
+
   async regenerateField(character, field, customPrompt = "", pov = "third", lorebookEntries = []) {
     if (!character) throw new Error("Character is required");
 
@@ -964,7 +989,7 @@ DO NOT output full markdown blocks for other sections, ONLY the revised content 
       systemNoteInstruction = `\n\nIMPORTANT: You MUST append the following exact text at the very end of the rewritten scenario:\n[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]`;
     }
 
-    const lorebookContext = this.formatLorebookContext(lorebookEntries);
+    const lorebookContext = this.formatLorebookKeysContext(lorebookEntries);
     const userPrompt = `Character Profile Context:
 Name: ${charName}
 Description: ${character.description}
@@ -1032,7 +1057,7 @@ IMPORTANT:
       ? `\nCRITICAL INSTRUCTION FOR THIS GENERATION: The user has requested the following specific style/tone for these messages: "${customPrompt}". Ensure the examples strongly reflect this request.`
       : "";
 
-    const lorebookContext = this.formatLorebookContext(lorebookEntries);
+    const lorebookContext = this.formatLorebookKeysContext(lorebookEntries);
     const userPrompt = `Character Name: ${charName}
 
 Character Description:

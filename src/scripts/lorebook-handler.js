@@ -291,12 +291,56 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     if (
       confirm(
-        "This will use AI to rewrite your current Scenario so it naturally includes your Lorebook keys.\n\n⚠️ Warning: Any manual edits you've made to the Scenario will be overwritten. Proceed?",
+        "This will update the Scenario and First Message to mention your Lorebook trigger keywords naturally.\n\n⚠️ Warning: Any manual edits you've made to these fields will be overwritten. Proceed?",
       )
     ) {
       this.closeLorebookManager();
-      this.showNotification("Injecting keys into scenario...", "info");
-      this.handleRegenerateField("scenario");
+      this._executeInjectLorebookKeys();
+    }
+  },
+
+  async _executeInjectLorebookKeys() {
+    const allKeys = [...new Set(this.lorebookEntries.flatMap((e) => e.keys.filter(Boolean)))];
+    if (allKeys.length === 0) return;
+
+    const keyList = allKeys.join(", ");
+    const instruction =
+      `Update ONLY the Scenario and First Message fields so that each of the following lorebook trigger keywords is mentioned at least once naturally within those texts. Keywords: ${keyList}\n\n` +
+      `STRICT RULES:\n` +
+      `- Weave each keyword into the existing text organically — do NOT list them or dump them in bulk.\n` +
+      `- Do NOT copy, summarise, or paraphrase lorebook entry content into the scenario or first message.\n` +
+      `- Keep changes minimal — only add what is necessary to ensure the keywords appear.\n` +
+      `- All other card fields (description, personality) must remain completely unchanged.`;
+
+    const pov = document.getElementById("pov-select")?.value || "third";
+    const before = this._captureCardSnapshot();
+
+    this.showNotification("Injecting lorebook keys into scenario and first message…", "info");
+
+    try {
+      const revised = await this.apiHandler.reviseCharacter(
+        this.currentCharacter,
+        instruction,
+        pov,
+      );
+
+      const approved = await this.promptCardDiffApproval(before, revised);
+
+      if (approved) {
+        this.currentCharacter = revised;
+        this.originalCharacter = JSON.parse(JSON.stringify(revised));
+        this.displayCharacter();
+        await this.saveCardToLibrary();
+        this.showNotification("Lorebook keys injected into Scenario and First Message!", "success");
+      } else {
+        this.showNotification("Lorebook key injection discarded.", "info");
+      }
+    } catch (error) {
+      console.error("Inject lorebook keys failed:", error);
+      const wasStoppedByUser = error.message?.includes("Generation stopped by user");
+      if (!wasStoppedByUser) {
+        this.showNotification(`Failed to inject keys: ${error.message}`, "error");
+      }
     }
   },
 
@@ -507,7 +551,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const allLorebookKeys = this.lorebookEntries.flatMap(e => e.keys.filter(Boolean));
       const uniqueKeys = [...new Set(allLorebookKeys)];
       if (uniqueKeys.length > 0) {
-        instruction += `\n\nCRITICAL — LOREBOOK COHESION: The Scenario field must naturally mention each of the following lorebook trigger keywords at least once so that the entries activate during roleplay. Weave them into the scenario text organically — do not just list them. Keywords to include: ${uniqueKeys.join(", ")}.`;
+        instruction += `\n\nLOREBOOK COHESION: Ensure the Scenario field naturally mentions each of the following trigger keywords at least once so the entries activate during roleplay. Weave them into the existing scenario text organically — do NOT list them, and do NOT copy or paraphrase lorebook entry content into the card. Just ensure each keyword appears naturally. Keywords: ${uniqueKeys.join(", ")}.`;
       }
     }
     if (alsoReduceBloat) {
