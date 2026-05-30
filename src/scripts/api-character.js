@@ -660,6 +660,9 @@ ${lorebookContent}`;
         scenario: parsed.scenario || currentCharacter.scenario || "",
         firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
         mesExample: parsed.mesExample || parsed.mes_example || currentCharacter.mesExample || "",
+        creatorNotes: currentCharacter.creatorNotes || "",
+        tags: Array.isArray(currentCharacter.tags) ? currentCharacter.tags : [],
+        cardType: currentCharacter.cardType || "single",
         character_book: currentCharacter.character_book,
         alternateGreetings: currentCharacter.alternateGreetings,
       };

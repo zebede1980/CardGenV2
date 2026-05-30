@@ -320,10 +320,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
         result.push({ type: "same", text: oldWords[i - 1] });
         i--; j--;
       } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        curAdd = (curAdd || "") + newWords[j - 1];
+        curAdd = newWords[j - 1] + (curAdd || "");
         j--;
       } else {
-        curDel = (curDel || "") + oldWords[i - 1];
+        curDel = oldWords[i - 1] + (curDel || "");
         i--;
       }
     }
