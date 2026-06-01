@@ -246,26 +246,81 @@ Object.assign(CharacterGeneratorApp.prototype, {
           this.showStreamMessage("🎨 Generating character image...\n");
           await this.generateImage();
           this.showStreamMessage("✅ Image generation complete!\n");
-        } catch (imgError) {
-          console.error("Image generation error:", imgError);
-          this.showStreamMessage(`⚠️ Image generation failed: ${imgError.message}\n`);
+        } catch (imageError) {
+          console.error("Image generation error:", imageError);
+          this.showStreamMessage(`⚠️ Image generation failed: ${imageError.message}\n`);
           this.showStreamMessage("📝 Continuing with character data only...\n");
-          document.getElementById("image-content").innerHTML = [
-            '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">',
-            '<p>Image generation failed</p>',
-            `<p style="font-size:0.875rem;margin-top:0.5rem;color:var(--error);">${imgError.message}</p>`,
-            '<p style="font-size:0.875rem;margin-top:0.5rem;">You can upload your own image</p>',
-            '</div>',
-          ].join('');
+          document.getElementById("image-content").innerHTML = `
+            <div style="text-align:center;padding:2rem;color:var(--text-secondary);">
+              <p>Image generation failed</p>
+              <p style="font-size:0.875rem;margin-top:0.5rem;color:var(--error);">${imageError.message}</p>
+              <p style="font-size:0.875rem;margin-top:0.5rem;">You can upload your own image</p>
+            </div>`;
+        }
+      } else {
+        this.showStreamMessage("⏭️ Skipping image generation (image generation disabled or no API configured)\n");
+        document.getElementById("image-content").innerHTML = `
+          <div style="text-align:center;padding:2rem;color:var(--text-secondary);">
+            <div style="font-size:2rem;margin-bottom:1rem;">🖼️</div>
+            <p style="font-weight:500;margin-bottom:0.5rem;">Image Generation Disabled</p>
+            <p style="font-size:0.875rem;margin-bottom:1rem;">Enable image generation in settings or upload your own image</p>
+            <button onclick="document.getElementById('upload-image-btn').click()" style="padding:0.5rem 1rem;background:var(--accent);color:white;border:none;border-radius:0.375rem;cursor:pointer;">
+              📁 Upload Image
+            </button>
+          </div>`;
+      }
+
+      this.showResultSection();
+      document.getElementById("image-controls").style.display = "block";
+
+      if (imageApiBase && imageApiKey) {
+        const promptEditor = document.getElementById("image-prompt-editor");
+        const customPromptTextarea = document.getElementById("custom-image-prompt");
+        const referenceDescription = document.getElementById("reference-image-description")?.value?.trim();
+
+        if (promptEditor) {
+          promptEditor.style.display = "block";
+
+          if (customPromptTextarea && referenceDescription && !customPromptTextarea.value.trim()) {
+            customPromptTextarea.value = `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`;
+            window.updatePromptCharCount();
+          }
+
+          if (customPromptTextarea && window.apiHandler.lastGeneratedImagePrompt) {
+            customPromptTextarea.value = window.apiHandler.lastGeneratedImagePrompt;
+            window.updatePromptCharCount();
+          } else if (!hasReferenceImage && customPromptTextarea && !customPromptTextarea.value.trim()) {
+            try {
+              customPromptTextarea.value = await window.apiHandler.generateImagePrompt(
+                this.currentCharacter.description,
+                this.currentCharacter.name,
+              );
+            } catch (error) {
+              console.error("Failed to generate image prompt:", error);
+              customPromptTextarea.value = window.apiHandler.buildDirectImagePrompt(
+                this.currentCharacter.description, this.currentCharacter.name,
+              );
+            }
+            window.updatePromptCharCount();
+          }
         }
       }
+
+      this.showNotification("Character generated successfully!", "success");
     } catch (error) {
       console.error("Inspire Me full generation failed:", error);
-      this.showStreamMessage(`\n❌ Generation failed: ${error.message}\n`);
-      this.showNotification(`Generation failed: ${error.message}`, "error");
+      if (error.message.includes("Generation stopped by user")) {
+        this.showStreamMessage(`\n🛑 Generation stopped.\n`);
+      } else {
+        this.showStreamMessage(`\n❌ Generation failed: ${error.message}\n`);
+        this.showNotification(`Generation failed: ${error.message}`, "error");
+      }
+      this.hideResultSection();
     } finally {
       this.isGenerating = false;
       this.setGeneratingState(false);
+      const inputSectionDetails = document.getElementById("input-section-details");
+      if (inputSectionDetails) inputSectionDetails.open = false;
     }
   },
 
