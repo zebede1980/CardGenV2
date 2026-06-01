@@ -128,6 +128,60 @@
                                     <input type="radio" name="generation-mode" value="search" />
                                     <span>🔍 Web Search Mode</span>
                                 </label>
+                                <label class="mode-option" id="mode-inspire-label">
+                                    <input type="radio" name="generation-mode" value="inspire" />
+                                    <span>💡 Inspire Me</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Inspire Me Mode Inputs -->
+                        <div id="inspire-mode-inputs" class="mode-input-block" style="display: none;">
+                            <div class="form-row" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label for="inspire-gender" class="label">Gender</label>
+                                    <select id="inspire-gender" class="input">
+                                        <option value="any" selected>Any</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="genderless">Gender-less / Non-binary</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label for="inspire-nsfw" class="label">Content Rating</label>
+                                    <select id="inspire-nsfw" class="input">
+                                        <option value="sfw" selected>SFW Only</option>
+                                        <option value="nsfw">NSFW Allowed</option>
+                                        <option value="any">No Preference</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="inspire-theme" class="label">Theme / Direction</label>
+                                <input type="text" id="inspire-theme" class="input"
+                                    placeholder="e.g. cyberpunk detective, fantasy tavern owner, post-apocalyptic survivor..." />
+                            </div>
+                            <div class="form-row" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label for="inspire-genre" class="label">Genre / Vibe</label>
+                                    <select id="inspire-genre" class="input">
+                                        <option value="any" selected>Any / Surprise Me</option>
+                                        <option value="fantasy">Fantasy</option>
+                                        <option value="scifi">Sci-Fi</option>
+                                        <option value="modern">Modern / Slice of Life</option>
+                                        <option value="horror">Horror / Dark</option>
+                                        <option value="romance">Romance</option>
+                                        <option value="mystery">Mystery / Noir</option>
+                                        <option value="historical">Historical</option>
+                                        <option value="superhero">Superhero / Powered</option>
+                                        <option value="apocalyptic">Post-Apocalyptic</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label for="inspire-trope" class="label">Trope / Archetype (optional)</label>
+                                    <input type="text" id="inspire-trope" class="input"
+                                        placeholder="e.g. reluctant hero, villain redemption, enemies-to-lovers..." />
+                                </div>
                             </div>
                         </div>
 
@@ -1451,6 +1505,7 @@
         <script src="src/scripts/image-gallery.js?v=20260518"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=8"></script>
+        <script src="src/scripts/inspire-me.js?v=20260601"></script>
         <!-- API Settings Modal -->
 
         <!-- ST push-choice modal (name changed) -->
@@ -2168,6 +2223,36 @@
                 <img id="gallery-image" src="" alt="" draggable="false">
             </div>
             <div id="gallery-meta" class="gallery-meta"></div>
+        </div>
+
+        <!-- Inspire Me Idea Picker Modal -->
+        <div id="inspire-picker-modal" class="modal-overlay" aria-hidden="true">
+            <div class="api-settings-modal" style="max-width: min(95vw, 1000px); width: 92%; max-height: 92vh;">
+                <div class="modal-header">
+                    <h2 class="modal-title">💡 Pick Your Concept</h2>
+                    <button id="inspire-picker-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0 0 1rem;">
+                        Here are 4 character ideas based on your filters. Click one to select it, add any extra guidance below, then hit Go.
+                    </p>
+                    <div id="inspire-loading" style="text-align: center; padding: 2rem;">
+                        <div class="loading-spinner" style="margin: 0 auto;"></div>
+                        <p style="margin-top: 1rem;">Brainstorming ideas...</p>
+                    </div>
+                    <div id="inspire-ideas-grid" class="inspire-ideas-grid" style="display: none;"></div>
+                    <div id="inspire-memo-area" style="display: none; margin-top: 1.25rem;">
+                        <label for="inspire-memo" class="label">Extra Guidance (optional)</label>
+                        <textarea id="inspire-memo" class="textarea" rows="3"
+                            placeholder="Any tweaks or details you want in the full character... e.g. make them older, give them a dark secret, set it in space..."></textarea>
+                    </div>
+                    <div id="inspire-confirm-area" style="display: none; margin-top: 1.25rem; text-align: right;">
+                        <button id="inspire-go-btn" class="btn-primary" style="font-size: 1.1rem; padding: 0.75rem 2.5rem;">
+                            🎭 Generate Full Character
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
     </body>

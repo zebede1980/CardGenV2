@@ -1207,4 +1207,70 @@ Write the Creator's Notes blurb now. Plain text only, no formatting.`;
     }
   },
 
+  /* ── Inspire Me — Idea Generation ──────────────────────────────────────── */
+
+  /**
+   * Generate 4 high-level character ideas based on user filters.
+   * Used by the Inspire Me mode's Stage 1 (idea spark).
+   */
+  async generateInspireIdeas(filters) {
+    const prompt = this.buildInspireIdeasPrompt(filters);
+    const model = this.config.get("api.text.model") || "glm-4-6";
+
+    const data = {
+      model: model,
+      messages: [
+        { role: "system", content: prompt.systemPrompt },
+        { role: "user", content: prompt.userPrompt },
+      ],
+      temperature: 0.9,
+      max_tokens: 2048,
+      stream: false,
+    };
+
+    const response = await this.makeRequest("/chat/completions", data, false, false);
+    return this.processNormalResponse(response);
+  },
+
+  /**
+   * Build the system + user prompts for brainstorming 4 character ideas.
+   */
+  buildInspireIdeasPrompt(filters) {
+    const genderMap = {
+      any: "any gender identity",
+      male: "male",
+      female: "female",
+      genderless: "genderless, non-binary, or agender",
+    };
+    const nsfwMap = {
+      sfw: "The ideas MUST be strictly SFW / safe for work.",
+      nsfw: "NSFW themes are allowed if the concept calls for it.",
+      any: "No content restrictions.",
+    };
+
+    const systemPrompt = [
+      "You are a creative character-concept brainstormer for a roleplaying-card generator. Your job is to generate 4 unique, compelling character ideas based on user-specified filters.",
+      "",
+      "Each idea must be a STRICTLY FORMATTED single line like this:",
+      "N. **Character Name/Title** — Two to three sentences describing the character's core concept, their defining trait or internal conflict, and the kind of story or scenario they belong in.",
+      "",
+      "RULES:",
+      "- Generate exactly 4 ideas, numbered 1 through 4.",
+      `- Gender filter: ${genderMap[filters.gender] || "any gender identity"}.`,
+      `- ${nsfwMap[filters.nsfw] || "No content restrictions."}`,
+      filters.genre !== "any" ? `- Genre / vibe: ${filters.genre}.` : "- No particular genre restriction.",
+      filters.trope ? `- Consider the trope/archetype direction: ${filters.trope}.` : "",
+      "- Be wildly creative and diverse — each idea should feel distinct in tone, setting, and concept.",
+      "- Avoid cliches unless using them in an intentionally fresh or subversive way.",
+      "- Each description must be exactly 2-3 sentences. No bullet points, no markdown beyond the bolded name.",
+      "- Output ONLY the 4 numbered ideas, nothing else — no preamble, no closing remarks.",
+    ].filter(Boolean).join("\n");
+
+    const userPrompt = filters.theme
+      ? `Theme / direction: ${filters.theme}\n\nGenerate 4 character ideas based on the above theme. Make them distinct and surprising.`
+      : "Generate 4 original character ideas. Surprise me with unexpected concepts! Make them diverse in genre, tone, and character type.";
+
+    return { systemPrompt, userPrompt };
+  },
+
 });

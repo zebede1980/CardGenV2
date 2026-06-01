@@ -73,10 +73,12 @@ class CharacterGeneratorApp {
     if (modeRadios.length > 0) {
       const classicBlock = document.getElementById("classic-mode-inputs");
       const searchBlock = document.getElementById("search-mode-inputs");
+      const inspireBlock = document.getElementById("inspire-mode-inputs");
       const onModeChange = () => {
         const mode = document.querySelector('input[name="generation-mode"]:checked')?.value || "classic";
         if (classicBlock) classicBlock.style.display = mode === "classic" ? "" : "none";
         if (searchBlock) searchBlock.style.display = mode === "search" ? "" : "none";
+        if (inspireBlock) inspireBlock.style.display = mode === "inspire" ? "" : "none";
       };
       modeRadios.forEach((r) => r.addEventListener("change", onModeChange));
       onModeChange();
@@ -93,6 +95,15 @@ class CharacterGeneratorApp {
     if (batchModalCloseBtn) batchModalCloseBtn.addEventListener("click", () => this.closeBatchModal());
     if (batchModal) batchModal.addEventListener("click", (e) => { if (e.target === batchModal) this.closeBatchModal(); });
     if (batchGrid) batchGrid.addEventListener("click", (e) => this._handleBatchGridClick(e));
+
+    // Inspire Me modal events
+    const inspirePickerCloseBtn = document.getElementById("inspire-picker-close-btn");
+    const inspirePickerModal = document.getElementById("inspire-picker-modal");
+    const inspireGoBtn = document.getElementById("inspire-go-btn");
+    if (inspirePickerCloseBtn) inspirePickerCloseBtn.addEventListener("click", () => this.closeInspireModal());
+    if (inspirePickerModal) inspirePickerModal.addEventListener("click", (e) => { if (e.target === inspirePickerModal) this.closeInspireModal(); });
+    if (inspireGoBtn) inspireGoBtn.addEventListener("click", () => this.handleInspireFullGenerate());
+
     document.getElementById("download-btn").addEventListener("click", () => this.handleDownload());
 
     const saveCardBtn = document.getElementById("save-card-btn");
@@ -783,6 +794,10 @@ class CharacterGeneratorApp {
     const searchScenario = document.getElementById("search-scenario")?.value?.trim() || "";
     const characterName = document.getElementById("character-name").value.trim();
     const referenceImageDescription = document.getElementById("reference-image-description")?.value?.trim();
+
+    if (generationMode === "inspire") {
+      return this.handleInspireGenerate();
+    }
 
     if (generationMode === "classic" && !concept) {
       this.showNotification("Please enter a character concept", "warning");
