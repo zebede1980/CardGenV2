@@ -27,11 +27,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
       trope: document.getElementById("inspire-trope")?.value?.trim() || "",
     };
 
-    if (!filters.theme) {
-      this.showNotification("Please enter a theme or direction", "warning");
-      return;
-    }
-
     this._inspireIsGenerating = true;
     this._inspireIdeas = [];
     this._inspireSelectedIdx = -1;
