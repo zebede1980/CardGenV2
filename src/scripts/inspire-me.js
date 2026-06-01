@@ -243,10 +243,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.showStreamMessage("🖼️ Using uploaded reference image as final card image (skipped image API generation)\n");
       } else if (imageApiBase && imageApiKey && enableImageGeneration) {
         try {
-          await this.handleGenerateImage();
+          this.showStreamMessage("🎨 Generating character image...\n");
+          await this.generateImage();
+          this.showStreamMessage("✅ Image generation complete!\n");
         } catch (imgError) {
-          console.warn("Auto image generation failed:", imgError);
-          this.showStreamMessage(`\n⚠️ Image generation failed: ${imgError.message}\n`);
+          console.error("Image generation error:", imgError);
+          this.showStreamMessage(`⚠️ Image generation failed: ${imgError.message}\n`);
+          this.showStreamMessage("📝 Continuing with character data only...\n");
+          document.getElementById("image-content").innerHTML = [
+            '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">',
+            '<p>Image generation failed</p>',
+            `<p style="font-size:0.875rem;margin-top:0.5rem;color:var(--error);">${imgError.message}</p>`,
+            '<p style="font-size:0.875rem;margin-top:0.5rem;">You can upload your own image</p>',
+            '</div>',
+          ].join('');
         }
       }
     } catch (error) {
