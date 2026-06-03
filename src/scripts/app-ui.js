@@ -110,6 +110,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const snapshotHistoryBtn = document.getElementById("snapshot-history-btn");
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
     const testChatBtn = document.getElementById("test-chat-btn");
+    const remasterBtn = document.getElementById("remaster-btn");
+    const remasterTopBtn = document.getElementById("remaster-top-btn");
 
     resultSection.style.display = "block";
     downloadBtn.style.display = "inline-flex";
@@ -126,6 +128,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (testChatBtn && this.currentCharacter) {
       testChatBtn.style.display = "inline-flex";
     }
+    if (remasterBtn && this.currentCharacter) {
+      remasterBtn.style.display = "inline-flex";
+    }
+    if (remasterTopBtn && this.currentCharacter) {
+      remasterTopBtn.style.display = "inline-flex";
+    }
 
     // Show push-to-ST button if ST URL is configured
     const pushToSTBtn = document.getElementById("push-to-st-btn");
@@ -140,12 +148,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const saveCardBtn = document.getElementById("save-card-btn");
     const checkConsistencyBtn = document.getElementById("check-consistency-btn");
     const testChatBtn = document.getElementById("test-chat-btn");
+    const remasterBtn = document.getElementById("remaster-btn");
+    const remasterTopBtn = document.getElementById("remaster-top-btn");
 
     resultSection.style.display = "none";
     downloadBtn.style.display = "none";
     if (saveCardBtn) saveCardBtn.style.display = "none";
     if (checkConsistencyBtn) checkConsistencyBtn.style.display = "none";
     if (testChatBtn) testChatBtn.style.display = "none";
+    if (remasterBtn) remasterBtn.style.display = "none";
+    if (remasterTopBtn) remasterTopBtn.style.display = "none";
   },
 
   clearStream() {

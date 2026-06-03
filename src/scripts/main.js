@@ -135,6 +135,12 @@ class CharacterGeneratorApp {
       if (importRemasterTopInput) importRemasterTopInput.addEventListener("change", (e) => this.handleImportCard(e, true));
     }
 
+    // Remaster Current Card buttons (triggers remaster on already-loaded card)
+    const remasterBtn = document.getElementById("remaster-btn");
+    const remasterTopBtn = document.getElementById("remaster-top-btn");
+    if (remasterBtn) remasterBtn.addEventListener("click", () => this.handleRemasterCurrentCard());
+    if (remasterTopBtn) remasterTopBtn.addEventListener("click", () => this.handleRemasterCurrentCard());
+
     // URL Import button
     const urlImportBtn = document.getElementById("url-import-btn");
     if (urlImportBtn) urlImportBtn.addEventListener("click", () => this.openUrlImportModal());
@@ -1065,6 +1071,15 @@ class CharacterGeneratorApp {
       this.setRevisionState(false);
       this.showNotification("Revision stopped by user", "warning");
     }
+  }
+
+  async handleRemasterCurrentCard() {
+    if (!this.currentCharacter) {
+      this.showNotification("No card loaded to remaster", "warning");
+      return;
+    }
+    this.showNotification("Starting AI remaster...", "info");
+    await this.handleAutoRemaster();
   }
 }
 
