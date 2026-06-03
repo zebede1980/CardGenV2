@@ -317,8 +317,12 @@ BEGIN PROMPT:`;
         return s("Cute chibi anime illustration of", "chibi style, super deformed SD, large head small body, adorable rounded features, pastel colors, clean lines, kawaii, chibi character art");
       case "vintage":
         return s("Vintage retro illustration of", "vintage illustration, retro poster art, mid-century modern design, muted aged color palette, Art Deco influences, halftone texture, 1950s magazine illustration style");
-      case "prismatic-anime": 
+      case "prismatic-anime":
           return s("Luminescent anime illustration of","dynamic lighting, glowing lens flares, floating light particles, shattered prisms, vibrant cyan and magenta, high contrast, masterpiece");
+      case "genshin":
+        return s("3D cel-shaded anime illustration of", "Genshin Impact style, official game art, intricate fantasy outfit, glowing elemental magic, soft vibrant lighting, high quality 3D anime render, masterpiece");
+      case "dark-graphic-novel":
+        return s("Gritty graphic novel illustration of", "dark fantasy comic style, heavy inking, crosshatching shading, muted earth tones, detailed line art, dramatic shadows, masterpiece");
       default: return { prefix: "", suffix: "" };
     }
   },
