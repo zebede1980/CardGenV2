@@ -269,6 +269,8 @@ BEGIN PROMPT:`;
   getImageStyleTags(style) {
     const s = (prefix, suffix) => ({ prefix, suffix });
     switch (style) {
+      case "semi-realistic":
+        return s("High-quality 2.5D semi-realistic illustration of", "detailed digital painting, modern manhwa cover art style, highly detailed features, glossy textures, cinematic dual lighting, dramatic atmosphere, masterpiece");
       case "realistic":
         return s("A hyper-realistic photograph of", "DSLR photo, 85mm portrait lens, natural lighting, shallow depth of field, 8k resolution, photorealistic, highly detailed skin and features, masterpiece");
       case "anime":
@@ -284,9 +286,9 @@ BEGIN PROMPT:`;
       case "comic":
         return s("Western comic book art of", "comic book style, graphic novel, bold ink outlines, halftone shading, dynamic composition, vibrant comic colors, professional illustration");
       case "cinematic":
-        return s("A cinematic film still of", "cinematic photography, anamorphic lens, dramatic chiaroscuro lighting, volumetric light, movie still, epic composition, 35mm film, color graded, photorealistic");
+        return s("A cinematic film still of", "cinematic photography, anamorphic lens, dramatic chiaroscuro lighting, volumetric light, movie still, epic composition, photorealistic, masterpiece");
       case "fantasy":
-        return s("Epic digital fantasy art of", "fantasy digital painting, artstation masterpiece, stylized illustration, detailed fantasy art, Greg Rutkowski style, epic atmosphere");
+        return s("Epic digital fantasy art of", "fantasy digital painting, stylized illustration, detailed fantasy art, dramatic lighting, epic atmosphere, intricate costume design, masterpiece");
       case "cyberpunk":
         return s("Cyberpunk digital art of", "cyberpunk aesthetic, neon-lit rain-soaked streets, dark futuristic dystopia, holographic signage, synthwave color palette, high tech low life, highly detailed");
       case "3d-render":
@@ -302,7 +304,7 @@ BEGIN PROMPT:`;
       case "gothic-anime":
         return s("Semi-realistic anime illustration of", "dark fantasy gothic, high contrast lighting, dramatic shadows, detailed concept art, palette of deep blacks, stark whites, luminous crimson");
       case "gothic":
-        return s("Dark gothic illustration of", "dark fantasy, dramatic shadows, moody atmosphere, Victorian gothic, haunting beauty");
+        return s("Dark gothic fantasy illustration of", "gothic horror, dramatic chiaroscuro lighting, deep shadows, ornate Victorian detail, cathedral motifs, haunting atmosphere, highly detailed, masterpiece");
       case "art-nouveau":
         return s("Art Nouveau illustration of", "Art Nouveau style, Alphonse Mucha inspired, flowing organic lines, decorative floral border motifs, elegant curves, muted jewel tones, vintage poster art, ornamental");
       case "noir":
@@ -316,13 +318,39 @@ BEGIN PROMPT:`;
       case "chibi":
         return s("Cute chibi anime illustration of", "chibi style, super deformed SD, large head small body, adorable rounded features, pastel colors, clean lines, kawaii, chibi character art");
       case "vintage":
-        return s("Vintage retro illustration of", "vintage illustration, retro poster art, mid-century modern design, muted aged color palette, Art Deco influences, halftone texture, 1950s magazine illustration style");
+        return s("Vintage retro illustration of", "vintage illustration, 1950s magazine style, mid-century modern design, muted aged color palette, halftone texture, nostalgic Americana, retro poster art, masterpiece");
       case "prismatic-anime":
           return s("Luminescent anime illustration of","dynamic lighting, glowing lens flares, floating light particles, shattered prisms, vibrant cyan and magenta, high contrast, masterpiece");
       case "genshin":
         return s("3D cel-shaded anime illustration of", "Genshin Impact style, official game art, intricate fantasy outfit, glowing elemental magic, soft vibrant lighting, high quality 3D anime render, masterpiece");
       case "dark-graphic-novel":
         return s("Gritty graphic novel illustration of", "dark fantasy comic style, heavy inking, crosshatching shading, muted earth tones, detailed line art, dramatic shadows, masterpiece");
+      case "arcane":
+        return s("Arcane-style painted 3D illustration of", "Arcane League of Legends style, Fortiche Production, hand-painted 3D, rich textured brushstrokes, dramatic cinematic lighting, stylized realism, masterpiece");
+      case "disney-pixar":
+        return s("Disney Pixar 3D animated character of", "Pixar style, Disney animation, expressive character design, soft subsurface scattering, vibrant warm colors, charming appeal, high quality 3D render");
+      case "ghibli":
+        return s("Studio Ghibli anime illustration of", "Studio Ghibli style, Hayao Miyazaki, soft watercolor backgrounds, lush nature detail, gentle hand-drawn aesthetic, warm nostalgic lighting, masterpiece anime film still");
+      case "90s-dark-animation":
+        return s("90s dark animation style illustration of", "Batman The Animated Series style, dark deco, flat cel shading, heavy black shadows, moody atmosphere, limited color palette, noir comic animation, masterpiece");
+      case "voxel":
+        return s("Voxel art 3D character of", "voxel art style, blocky 3D, isometric, crisp cubes, Minecraft aesthetic, clean sharp edges, vibrant colors, game asset, high quality voxel render");
+      case "propaganda-poster":
+        return s("Propaganda poster illustration of", "Soviet constructivist propaganda poster, bold geometric shapes, limited palette of red black and cream, heroic pose, stencil typography, WPA era, striking graphic design");
+      case "stained-glass":
+        return s("Stained glass window art of", "stained glass cathedral window, luminous translucent colors, bold lead lines, mosaic fragments, sacred geometry, backlit glowing radiance, medieval gothic style, masterpiece");
+      case "ukiyo-e":
+        return s("Japanese ukiyo-e woodblock print of", "ukiyo-e style, Japanese woodblock print, Hokusai and Hiroshige influence, flat color planes, bold outlines, washi paper texture, Edo period aesthetic, traditional Japanese art, masterpiece");
+      case "pin-up":
+        return s("Classic pin-up illustration of", "pin-up art, Vargas style, 1940s cheesecake, playful boudoir glamour, airbrushed skin, vintage Americana, soft curves, retro pin-up girl, masterpiece illustration");
+      case "hentai":
+        return s("Ecchi hentai anime illustration of", "hentai anime style, glossy rendering, detailed curves, soft lighting, blush tones, cel shading, high quality, provocative pose, masterpiece");
+      case "frazetta":
+        return s("Frank Frazetta fantasy painting of", "Frazetta style, classic sword and sorcery, dramatic oil painting, dramatic chiaroscuro, powerful athletic physique, primal energy, dark fantasy, iconic 1970s fantasy art, masterpiece");
+      case "manhwa-18":
+        return s("Mature manhwa webtoon illustration of", "manhwa 18+ art style, glossy clean rendering, detailed anatomy, dramatic lighting, highly stylized, Korean mature webtoon aesthetic, professional quality");
+      case "yaoi-bl":
+        return s("Yaoi boys love anime illustration of", "yaoi BL style, elegant bishounen, delicate features, long-limbed, rose-tinted palette, soft romantic atmosphere, flowing hair, graceful pose, shounen-ai, masterpiece");
       default: return { prefix: "", suffix: "" };
     }
   },
