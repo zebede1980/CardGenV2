@@ -146,7 +146,21 @@
                                         <option value="female">Female</option>
                                         <option value="genderless">Gender-less / Non-binary</option>
                                     </select>
+                                    <p class="input-hint">The character's core gender identity. Does not determine romantic attraction.</p>
                                 </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label for="inspire-orientation" class="label">Sexual Orientation</label>
+                                    <select id="inspire-orientation" class="input">
+                                        <option value="any" selected>Any / Not Applicable</option>
+                                        <option value="heterosexual">Heterosexual</option>
+                                        <option value="homosexual">Homosexual (Gay / Lesbian)</option>
+                                        <option value="bisexual">Bisexual / Pansexual</option>
+                                        <option value="asexual">Asexual / Aromantic</option>
+                                    </select>
+                                    <p class="input-hint">Who the character is romantically or sexually attracted to (if applicable).</p>
+                                </div>
+                            </div>
+                            <div class="form-row" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
                                 <div class="form-group" style="flex: 1;">
                                     <label for="inspire-nsfw" class="label">Content Rating</label>
                                     <select id="inspire-nsfw" class="input">
@@ -154,16 +168,10 @@
                                         <option value="nsfw">NSFW Allowed</option>
                                         <option value="any">No Preference</option>
                                     </select>
+                                    <p class="input-hint">Controls whether adult/explicit themes may appear in the generated ideas.</p>
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="inspire-theme" class="label">Theme / Direction (optional)</label>
-                                <input type="text" id="inspire-theme" class="input"
-                                    placeholder="e.g. cyberpunk detective, fantasy tavern owner... leave blank for total surprise!" />
-                            </div>
-                            <div class="form-row" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
                                 <div class="form-group" style="flex: 1;">
-                                    <label for="inspire-genre" class="label">Genre / Vibe</label>
+                                    <label for="inspire-genre" class="label">Genre / Setting</label>
                                     <select id="inspire-genre" class="input">
                                         <option value="any" selected>Any / Surprise Me</option>
                                         <option value="fantasy">Fantasy</option>
@@ -177,12 +185,20 @@
                                         <option value="superhero">Superhero / Powered</option>
                                         <option value="apocalyptic">Post-Apocalyptic</option>
                                     </select>
+                                    <p class="input-hint">The broad <strong>world and tone</strong> the character inhabits — the backdrop, not the character's personal story.</p>
                                 </div>
-                                <div class="form-group" style="flex: 1;">
-                                    <label for="inspire-trope" class="label">Trope / Archetype (optional)</label>
-                                    <input type="text" id="inspire-trope" class="input"
-                                        placeholder="e.g. reluctant hero, villain redemption, enemies-to-lovers..." />
-                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="inspire-theme" class="label">Theme / Concept (optional)</label>
+                                <input type="text" id="inspire-theme" class="input"
+                                    placeholder="e.g. a disgraced starship captain on the run, a healer who can't heal themselves, a ghost who doesn't know they're dead..." />
+                                <p class="input-hint">A <strong>specific creative seed</strong> — a character concept, occupation, or situation. More concrete than genre, more personal than trope. Leave blank for the AI to invent one.</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="inspire-trope" class="label">Trope / Archetype (optional)</label>
+                                <input type="text" id="inspire-trope" class="input"
+                                    placeholder="e.g. reluctant hero, villain redemption, enemies-to-lovers, found family, the chosen one, fish out of water..." />
+                                <p class="input-hint">A <strong>narrative pattern or character role</strong> — a classic storytelling dynamic you want the character to embody. Works across any genre.</p>
                             </div>
                         </div>
 

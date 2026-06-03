@@ -241,7 +241,8 @@ Extract these specifics from the profile text:
 Format rules:
 - Output ONE paragraph, no lists, no labels, no headers
 - Lead with the subject and physical details, weave in expression and setting naturally
-- End with 3-5 comma-separated quality tags suited to the character's tone (e.g. "cinematic lighting, highly detailed, dramatic shadows" for a noir character; "soft natural light, painterly" for a gentle one)
+- Describe the lighting, mood, and atmosphere that fits the character's tone — integrate these naturally into the descriptive text rather than as standalone tags
+- Do NOT add comma-separated quality tags like "cinematic lighting, highly detailed" at the end — the image style controls handle that
 - Total output: 150-400 words
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 

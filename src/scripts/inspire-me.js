@@ -21,6 +21,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const filters = {
       gender: document.getElementById("inspire-gender")?.value || "any",
+      orientation: document.getElementById("inspire-orientation")?.value || "any",
       theme: document.getElementById("inspire-theme")?.value?.trim() || "",
       nsfw: document.getElementById("inspire-nsfw")?.value || "sfw",
       genre: document.getElementById("inspire-genre")?.value || "any",

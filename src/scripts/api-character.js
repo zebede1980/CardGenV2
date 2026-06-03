@@ -1242,6 +1242,13 @@ Write the Creator's Notes blurb now. Plain text only, no formatting.`;
       female: "female",
       genderless: "genderless, non-binary, or agender",
     };
+    const orientationMap = {
+      any: "any sexual/romantic orientation — do not assume or restrict attraction",
+      heterosexual: "heterosexual — attracted to the opposite gender only",
+      homosexual: "homosexual (gay/lesbian) — attracted to the same gender only",
+      bisexual: "bisexual or pansexual — attracted to people regardless of gender",
+      asexual: "asexual or aromantic — experiences little or no romantic/sexual attraction",
+    };
     const nsfwMap = {
       sfw: "The ideas MUST be strictly SFW / safe for work.",
       nsfw: "NSFW themes are allowed if the concept calls for it.",
@@ -1256,9 +1263,10 @@ Write the Creator's Notes blurb now. Plain text only, no formatting.`;
       "",
       "RULES:",
       "- Generate exactly 4 ideas, numbered 1 through 4.",
-      `- Gender filter: ${genderMap[filters.gender] || "any gender identity"}.`,
+      `- Gender identity: ${genderMap[filters.gender] || "any gender identity"}.`,
+      `- Sexual/romantic orientation: ${orientationMap[filters.orientation] || orientationMap.any}. IMPORTANT — this is separate from gender identity. The character's orientation determines who they are attracted to, not their own gender.`,
       `- ${nsfwMap[filters.nsfw] || "No content restrictions."}`,
-      filters.genre !== "any" ? `- Genre / vibe: ${filters.genre}.` : "- No particular genre restriction.",
+      filters.genre !== "any" ? `- Genre / setting: ${filters.genre}.` : "- No particular genre restriction.",
       filters.trope ? `- Consider the trope/archetype direction: ${filters.trope}.` : "",
       "- Be wildly creative and diverse — each idea should feel distinct in tone, setting, and concept.",
       "- Avoid cliches unless using them in an intentionally fresh or subversive way.",

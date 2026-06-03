@@ -2158,6 +2158,16 @@ textarea.content-box {
     border-color: rgba(255, 255, 255, 0.12);
 }
 
+/* ── Input Hint Text ────────────────────────────────────────────────────────── */
+
+.input-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 0.25rem 0 0;
+    line-height: 1.4;
+    opacity: 0.85;
+}
+
 /* ── Inspire Me Mode ──────────────────────────────────────────────────────────── */
 
 .inspire-ideas-grid {
