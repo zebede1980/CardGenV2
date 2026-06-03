@@ -1694,6 +1694,8 @@ const ALLOWED_IMPORT_DOMAINS = [
   "www.chub.ai",
   "characterhub.org",
   "www.characterhub.org",
+  "jannyai.com",
+  "www.jannyai.com",
 ];
 
 function isAllowedImportUrl(urlStr) {
