@@ -317,6 +317,8 @@ BEGIN PROMPT:`;
         return s("Cute chibi anime illustration of", "chibi style, super deformed SD, large head small body, adorable rounded features, pastel colors, clean lines, kawaii, chibi character art");
       case "vintage":
         return s("Vintage retro illustration of", "vintage illustration, retro poster art, mid-century modern design, muted aged color palette, Art Deco influences, halftone texture, 1950s magazine illustration style");
+      case "prismatic-anime": 
+          return s("Luminescent anime illustration of","dynamic lighting, glowing lens flares, floating light particles, shattered prisms, vibrant cyan and magenta, high contrast, masterpiece");
       default: return { prefix: "", suffix: "" };
     }
   },
