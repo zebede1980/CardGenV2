@@ -561,6 +561,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.originalCharacter = JSON.parse(JSON.stringify(characterData));
       this.displayCharacter();
       this.showResultSection();
+      const inputSectionDetails = document.getElementById("input-section-details");
+      if (inputSectionDetails) inputSectionDetails.open = false;
 
       if (importedImageUrl) {
         this.currentImageUrl = importedImageUrl;

@@ -480,6 +480,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.originalCharacter = JSON.parse(JSON.stringify(card.character));
         this.displayCharacter();
         this.showResultSection();
+        const inputSectionDetails = document.getElementById("input-section-details");
+        if (inputSectionDetails) inputSectionDetails.open = false;
         document.getElementById("image-controls").style.display = "block";
 
         if (
