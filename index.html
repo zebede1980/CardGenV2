@@ -1462,6 +1462,46 @@
                                     Set this to pin a specific model for story images independently of character card generation.
                                 </p>
                             </div>
+
+                            <!-- 🔊 Text-to-Speech Settings -->
+                            <div style="margin-top: 1.25rem;">
+                                <h4 style="margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--text-primary); border-bottom: 1px solid var(--border-strong); padding-bottom: 0.4rem;">🔊 Text-to-Speech</h4>
+
+                                <label class="label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="sw-tts-enabled" />
+                                    Enable TTS Narration
+                                </label>
+                                <p style="font-size: 0.72rem; color: var(--text-secondary); margin: 0.2rem 0 0.5rem 1.5rem;">
+                                    Read story chunks aloud using a local Coqui TTS engine.
+                                </p>
+
+                                <label class="label" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="sw-auto-mode" />
+                                    Auto Mode
+                                </label>
+                                <p style="font-size: 0.72rem; color: var(--text-secondary); margin: 0.2rem 0 0.5rem 1.5rem;">
+                                    Automatically generate the next chunk after the current one finishes narrating. Hands-free listening.
+                                </p>
+
+                                <div style="margin-top: 0.75rem;">
+                                    <label class="label" for="sw-tts-voice">Voice</label>
+                                    <select id="sw-tts-voice" class="input" style="background: var(--surface-color); max-width: 260px;">
+                                        <option value="">— Loading voices… —</option>
+                                    </select>
+                                    <span id="sw-tts-status" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;"></span>
+                                </div>
+
+                                <div style="margin-top: 0.5rem;">
+                                    <label class="label" for="sw-tts-speed">Speed: <span id="sw-tts-speed-label">1.0x</span></label>
+                                    <input type="range" id="sw-tts-speed" min="0.5" max="2.0" step="0.1" value="1.0" style="width: 100%; max-width: 260px;" />
+                                </div>
+
+                                <div style="margin-top: 0.5rem;">
+                                    <label class="label" for="sw-tts-volume">Volume</label>
+                                    <input type="range" id="sw-tts-volume" min="0" max="100" step="5" value="80" style="width: 100%; max-width: 260px;" />
+                                </div>
+                            </div>
+
                             <div style="margin-top: 1rem; display: flex; align-items: center; gap: 1rem;">
                                 <button id="sw-save-settings-btn" class="btn-primary" style="padding: 0.5rem 1.2rem;">Save Settings</button>
                                 <span id="sw-settings-status" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
@@ -1494,6 +1534,15 @@
                         <div style="margin-bottom: 1rem;">
                             <label class="label">Synopsis / Memo</label>
                             <textarea id="sw-synopsis" class="textarea" rows="3" placeholder="Map out your story premise, plot points, worldbuilding notes..." style="background: var(--surface-color);"></textarea>
+                        </div>
+
+                        <!-- Narration Playback Controls (hidden until TTS active) -->
+                        <div id="sw-narration-controls" style="display: none; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; margin-bottom: 0.75rem;">
+                            <span style="font-weight: 600; font-size: 0.85rem;">🔊 Narrating</span>
+                            <button id="sw-tts-pause-btn" class="btn-small" title="Pause / Resume narration">⏸ Pause</button>
+                            <button id="sw-tts-skip-btn" class="btn-small" title="Skip current sentence">⏭ Skip</button>
+                            <button id="sw-tts-stop-btn" class="btn-small" style="color: var(--error-color, #e55); border-color: var(--error-color, #e55);" title="Stop narration completely">⏹ Stop</button>
+                            <span id="sw-tts-progress" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;"></span>
                         </div>
 
                         <div id="sw-story-area" class="content-box" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; padding: 1.5rem; background: var(--surface-color);">

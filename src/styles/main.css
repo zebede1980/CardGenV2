@@ -2226,3 +2226,43 @@ textarea.content-box {
     line-height: 1.5;
     flex: 1;
 }
+
+/* ── TTS Narration Controls ──────────────────────────────────────────────── */
+
+#sw-narration-controls {
+    animation: narration-slide-in 0.25s ease-out;
+}
+
+@keyframes narration-slide-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+#sw-narration-controls .btn-small {
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+#sw-narration-controls .btn-small:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+/* TTS settings labels with inline checkboxes */
+#sw-settings-panel label.label input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--accent);
+    width: 1rem;
+    height: 1rem;
+}
+
+/* TTS speed/volume range sliders */
+#sw-tts-speed,
+#sw-tts-volume {
+    accent-color: var(--accent);
+}

@@ -90,6 +90,11 @@ class SettingsOut(BaseModel):
     chunk_size: int
     system_prompt: str
     image_model: str
+    tts_enabled: bool = False
+    tts_voice: str = "p230"
+    tts_model: str = "tts_models/en/vctk/vits"
+    tts_speed: float = 1.0
+    auto_mode: bool = False
     class Config:
         from_attributes = True
 
@@ -104,6 +109,11 @@ class SettingsUpdate(BaseModel):
     chunk_size: Optional[int] = None
     system_prompt: Optional[str] = None
     image_model: Optional[str] = None
+    tts_enabled: Optional[bool] = None
+    tts_voice: Optional[str] = None
+    tts_model: Optional[str] = None
+    tts_speed: Optional[float] = None
+    auto_mode: Optional[bool] = None
 
 class GenerateRequest(BaseModel):
     story_id: int

@@ -83,6 +83,12 @@ class Settings(Base):
     chunk_size = Column(Integer, default=800)  # target tokens per generation chunk
     system_prompt = Column(Text, default="")  # global author instructions injected into every generation
     image_model = Column(Text, default="")  # override image model for story illustration (blank = use CardGen active)
+    # TTS settings
+    tts_enabled = Column(Boolean, default=False)
+    tts_voice = Column(String, default="p230")  # Speaker ID for multi-speaker models (VCTK)
+    tts_model = Column(String, default="tts_models/en/vctk/vits")
+    tts_speed = Column(Float, default=1.0)
+    auto_mode = Column(Boolean, default=False)  # Auto-generate next chunk after narration
 
 class SteeringInstruction(Base):
     __tablename__ = "steering_instructions"

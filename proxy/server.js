@@ -1025,6 +1025,71 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: "StoryWriter backend unreachable: " + error.message }); }
 });
 
+// ── TTS Bridge Proxy ─────────────────────────────────────────────────────────
+// Forwards TTS requests from the browser to the Coqui TTS Docker service.
+
+const TTS_URL = (process.env.TTS_URL || "http://tts:8500").replace(/\/$/, "");
+
+app.get("/api/tts/health", async (_req, res) => {
+  try {
+    const response = await fetch(`${TTS_URL}/health`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(503).json({ status: "unreachable", error: error.message });
+  }
+});
+
+app.get("/api/tts/voices", async (_req, res) => {
+  try {
+    const response = await fetch(`${TTS_URL}/voices`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(503).json({ status: "error", error: error.message, speakers: [] });
+  }
+});
+
+app.get("/api/tts/models", async (_req, res) => {
+  try {
+    const response = await fetch(`${TTS_URL}/models`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(503).json({ models: [], error: error.message });
+  }
+});
+
+app.post("/api/tts/synthesize", async (req, res) => {
+  try {
+    const response = await fetch(`${TTS_URL}/synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      res.status(response.status).send(errText);
+      return;
+    }
+
+    // Stream audio back to the browser
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Cache-Control", "no-cache");
+
+    // Copy any duration header
+    const duration = response.headers.get("x-tts-duration-seconds");
+    if (duration) {
+      res.setHeader("X-TTS-Duration-Seconds", duration);
+    }
+
+    response.body.pipe(res);
+  } catch (error) {
+    res.status(503).json({ error: "TTS service unreachable: " + error.message });
+  }
+});
+
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
   try {
