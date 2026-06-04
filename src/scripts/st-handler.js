@@ -131,11 +131,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    // Filter by name (case-insensitive)
+    // Filter by name, description, first message, and tags (case-insensitive)
     const filtered = filterText
       ? characters.filter(c => {
+          const lowerFilter = filterText.toLowerCase();
           const name = (c.name || c.data?.name || "").toLowerCase();
-          return name.includes(filterText.toLowerCase());
+          const description = (c.data?.description || c.description || "").toLowerCase();
+          const firstMes = (c.data?.first_mes || c.first_mes || "").toLowerCase();
+          const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.data?.tags) ? c.data.tags : []);
+          const tagsStr = tags.map(t => String(t).toLowerCase()).join(" ");
+          return name.includes(lowerFilter) ||
+            description.includes(lowerFilter) ||
+            firstMes.includes(lowerFilter) ||
+            tagsStr.includes(lowerFilter);
         })
       : characters;
 
