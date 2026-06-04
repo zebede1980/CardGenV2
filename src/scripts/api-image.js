@@ -146,15 +146,14 @@ ${prompt}
 Shortened prompt:`,
         },
       ],
-      max_tokens: 8192,
+      max_tokens: 500,
       temperature: 0.3,
-      stream: true,
+      stream: false,
     };
 
     try {
-      const response = await this.makeRequest("/api/text/chat/completions", data, false, true);
-      const shortenedPrompt = await this.handleStreamResponse(response, () => {});
-      const finalPrompt = shortenedPrompt.trim();
+      const result = await this.makeRequest("/api/text/chat/completions", data, false, false);
+      const finalPrompt = this.processNormalResponse(result).trim();
       console.log(`✅ Shortened prompt to ${finalPrompt.length} characters`);
 
       if (!finalPrompt || finalPrompt.length === 0) {
