@@ -154,6 +154,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Show image controls
       const imageControls = document.getElementById("image-controls");
       if (imageControls) imageControls.style.display = "block";
+      const buttonsRow = document.getElementById("image-buttons-row");
+      if (buttonsRow) buttonsRow.style.display = "";
 
       // Save to library
       await this.saveCardToLibrary();

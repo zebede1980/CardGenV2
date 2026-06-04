@@ -1075,75 +1075,7 @@
                                         <option value="">Default Model</option>
                                     </select>
                                 </div>
-                                    <div class="image-buttons-row">
-                                        <button
-                                            id="regenerate-prompt-btn"
-                                            class="btn-small"
-                                            title="Generate a new image prompt based on the character's description. You can edit the prompt manually before generating the image."
-                                        >
-                                            💡 Prompt
-                                        </button>
-                                        <button
-                                            id="regenerate-image-btn"
-                                            class="btn-small"
-                                            title="Generate a new character image using the current prompt text. Edit the prompt first if you want to adjust the result."
-                                        >
-                                            🖼️ Image
-                                        </button>
-                                        <button
-                                            id="generate-four-images-btn"
-                                            class="btn-small"
-                                            title="Generate four images simultaneously, one from each of your saved image models, so you can compare styles and pick the best result."
-                                        >
-                                            🖼️ Gen 4 (Models)
-                                        </button>
-                                        <button
-                                            id="generate-four-prompts-btn"
-                                            class="btn-small"
-                                            title="Generate four images from the same model using slight prompt variations, giving you a range of looks to choose from."
-                                        >
-                                            🖼️ Gen 4 (Prompts)
-                                        </button>
-                                        <button
-                                            id="image-history-btn"
-                                            class="btn-small"
-                                            style="display:none"
-                                            title="Browse previously generated images for this card and restore one."
-                                        >
-                                            🕰️ History
-                                        </button>
-                                        <button
-                                            id="upload-image-btn"
-                                            class="btn-small"
-                                            title="Upload your own image to use as the character portrait instead of AI-generating one. Accepts common image formats."
-                                        >
-                                            📁 Upload
-                                        </button>
-                                        <div class="free-image-dropdown-wrapper" id="free-image-dropdown-wrapper">
-                                            <button
-                                                id="free-image-btn"
-                                                class="btn-small"
-                                                title="Generate an image using Pollinations.ai — completely free, no API key needed. Click to choose a style."
-                                            >
-                                                🆓 Free Image ▾
-                                            </button>
-                                            <div id="free-image-menu" class="free-image-menu" style="display:none;">
-                                                <div class="free-image-menu-header">Pollinations.ai · Free, No Key</div>
-                                                <button class="free-image-option" data-service="pollinations" data-model="flux">FLUX (High Quality)</button>
-                                                <button class="free-image-option" data-service="pollinations" data-model="flux-realism">FLUX Realism</button>
-                                                <button class="free-image-option" data-service="pollinations" data-model="flux-anime">FLUX Anime</button>
-                                                <button class="free-image-option" data-service="pollinations" data-model="flux-3d">FLUX 3D</button>
-                                                <button class="free-image-option" data-service="pollinations" data-model="turbo">Turbo (Fast SDXL)</button>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
-                                <input
-                                    type="file"
-                                    id="image-upload-input"
-                                    accept="image/png,image/jpeg,image/jpg"
-                                    style="display: none"
-                                />
                             </div>
 
                             <!-- Prompt Guidance -->
@@ -1247,6 +1179,75 @@
                                         </p>
                                     </div>
                                 </details>
+                            </div>
+                            <!-- Image Action Buttons -->
+                            <div class="image-buttons-row" style="margin-top: 1rem; display: none" id="image-buttons-row">
+                                <button
+                                    id="regenerate-prompt-btn"
+                                    class="btn-small"
+                                    title="Generate a new image prompt based on the character's description. You can edit the prompt manually before generating the image."
+                                >
+                                    💡 Prompt
+                                </button>
+                                <button
+                                    id="regenerate-image-btn"
+                                    class="btn-small"
+                                    title="Generate a new character image using the current prompt text. Edit the prompt first if you want to adjust the result."
+                                >
+                                    🖼️ Image
+                                </button>
+                                <button
+                                    id="generate-four-images-btn"
+                                    class="btn-small"
+                                    title="Generate four images simultaneously, one from each of your saved image models, so you can compare styles and pick the best result."
+                                >
+                                    🖼️ Gen 4 (Models)
+                                </button>
+                                <button
+                                    id="generate-four-prompts-btn"
+                                    class="btn-small"
+                                    title="Generate four images from the same model using slight prompt variations, giving you a range of looks to choose from."
+                                >
+                                    🖼️ Gen 4 (Prompts)
+                                </button>
+                                <button
+                                    id="image-history-btn"
+                                    class="btn-small"
+                                    style="display:none"
+                                    title="Browse previously generated images for this card and restore one."
+                                >
+                                    🕰️ History
+                                </button>
+                                <button
+                                    id="upload-image-btn"
+                                    class="btn-small"
+                                    title="Upload your own image to use as the character portrait instead of AI-generating one. Accepts common image formats."
+                                >
+                                    📁 Upload
+                                </button>
+                                <div class="free-image-dropdown-wrapper" id="free-image-dropdown-wrapper">
+                                    <button
+                                        id="free-image-btn"
+                                        class="btn-small"
+                                        title="Generate an image using Pollinations.ai — completely free, no API key needed. Click to choose a style."
+                                    >
+                                        🆓 Free Image ▾
+                                    </button>
+                                    <div id="free-image-menu" class="free-image-menu" style="display:none;">
+                                        <div class="free-image-menu-header">Pollinations.ai · Free, No Key</div>
+                                        <button class="free-image-option" data-service="pollinations" data-model="flux">FLUX (High Quality)</button>
+                                        <button class="free-image-option" data-service="pollinations" data-model="flux-realism">FLUX Realism</button>
+                                        <button class="free-image-option" data-service="pollinations" data-model="flux-anime">FLUX Anime</button>
+                                        <button class="free-image-option" data-service="pollinations" data-model="flux-3d">FLUX 3D</button>
+                                        <button class="free-image-option" data-service="pollinations" data-model="turbo">Turbo (Fast SDXL)</button>
+                                    </div>
+                                </div>
+                                <input
+                                    type="file"
+                                    id="image-upload-input"
+                                    accept="image/png,image/jpeg,image/jpg"
+                                    style="display: none"
+                                />
                             </div>
                         </div>
                     </div>

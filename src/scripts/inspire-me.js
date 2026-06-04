@@ -268,6 +268,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       this.showResultSection();
       document.getElementById("image-controls").style.display = "block";
+      document.getElementById("image-buttons-row").style.display = "";
 
       if (imageApiBase && imageApiKey) {
         const promptEditor = document.getElementById("image-prompt-editor");

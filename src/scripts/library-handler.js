@@ -483,6 +483,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const inputSectionDetails = document.getElementById("input-section-details");
         if (inputSectionDetails) inputSectionDetails.open = false;
         document.getElementById("image-controls").style.display = "block";
+        document.getElementById("image-buttons-row").style.display = "";
 
         if (
           card.character.character_book &&

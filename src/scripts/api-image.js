@@ -45,6 +45,18 @@ Object.assign(APIHandler.prototype, {
       if (suffix) finalApiPrompt = `${finalApiPrompt.trim()}, ${suffix}`;
     }
 
+    // Safety trim: some image models have prompt length limits (e.g. z-image-turbo: 1200 chars).
+    // The truncateImagePrompt step targets 1000 chars, but style tags can add ~200+ more.
+    // Trim the final prompt to stay within safe bounds, at a sentence boundary if possible.
+    const IMAGE_PROMPT_MAX = 1150;
+    if (finalApiPrompt.length > IMAGE_PROMPT_MAX) {
+      const trimmed = finalApiPrompt.substring(0, IMAGE_PROMPT_MAX);
+      const lastPeriod = trimmed.lastIndexOf(".");
+      const lastComma = trimmed.lastIndexOf(",");
+      const cutPoint = lastPeriod > IMAGE_PROMPT_MAX * 0.7 ? lastPeriod + 1 : lastComma > IMAGE_PROMPT_MAX * 0.7 ? lastComma : IMAGE_PROMPT_MAX;
+      finalApiPrompt = trimmed.substring(0, cutPoint).trim();
+    }
+
     const model = modelOverride || this.config.get("api.image.model");
 
     console.log("=== SENDING TO IMAGE API ===");

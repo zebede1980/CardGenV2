@@ -575,6 +575,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       document.getElementById("image-controls").style.display = "block";
+      document.getElementById("image-buttons-row").style.display = "";
 
       // Restore card type dropdown
       const cardTypeSelect = document.getElementById("card-type-select");
