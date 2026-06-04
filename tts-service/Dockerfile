@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir -r requirements.txt torch torchaudio --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+    && pip install --no-cache-dir "torch>=2.3.1" "torchaudio>=2.3.1" --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
