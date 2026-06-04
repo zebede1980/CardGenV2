@@ -250,10 +250,8 @@ async def startup_event():
     preload = os.environ.get("TTS_PRELOAD", "true").lower() == "true"
     if preload:
         logger.info(f"Preloading TTS model on startup: {DEFAULT_MODEL}")
-        try:
-            _get_tts()
-        except Exception as e:
-            logger.warning(f"Model preload failed (will retry on first request): {e}")
+        # Run in a background thread so Uvicorn can bind the port immediately
+        threading.Thread(target=_get_tts, daemon=True).start()
     else:
         logger.info("TTS_PRELOAD=false — model will load on first request")
 
