@@ -1,11 +1,17 @@
 // Image Handling Methods — extends CharacterGeneratorApp prototype
 Object.assign(CharacterGeneratorApp.prototype, {
 
+  // Read the prompt guidance field (steering hint for AI prompt generation)
+  _getGuidance() {
+    return document.getElementById("prompt-guidance")?.value?.trim() || "";
+  },
+
   async generateImage() {
     const imageContainer = document.getElementById("image-content");
 
     const customPromptTextarea = document.getElementById("custom-image-prompt");
     const customPrompt = customPromptTextarea?.value?.trim();
+    const guidance = document.getElementById("prompt-guidance")?.value?.trim() || "";
     const referenceImageDescription = document
       .getElementById("reference-image-description")
       ?.value?.trim();
@@ -29,6 +35,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       imageContainer,
       effectivePrompt,
       cardType,
+      guidance,
     );
 
     this.currentImageUrl = imageResult.url || imageResult;
@@ -81,6 +88,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             descriptionForPrompt,
             this.currentCharacter.name,
             cardType,
+            this._getGuidance(),
           );
           customPromptTextarea.value = defaultPrompt;
           window.updatePromptCharCount();
@@ -131,6 +139,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         effectivePrompt,
         model,
         cardType,
+        undefined,
+        this._getGuidance(),
       );
 
       let displayUrl = imageUrl;
@@ -247,6 +257,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             this.currentCharacter.description,
             this.currentCharacter.name,
             cardType,
+            this._getGuidance(),
           );
           if (customPromptTextarea) {
             customPromptTextarea.value = basePrompt;
@@ -458,6 +469,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
               this.currentCharacter.description,
               this.currentCharacter.name,
               cardType,
+              this._getGuidance(),
             );
             if (customPromptTextarea) {
               customPromptTextarea.value = basePrompt;
@@ -579,6 +591,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             this.currentCharacter.description,
             this.currentCharacter.name,
             cardType,
+            this._getGuidance(),
           );
           if (customPromptTextarea) {
             customPromptTextarea.value = imagePrompt;
@@ -743,6 +756,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const newPrompt = await window.apiHandler.generateImagePrompt(
         this.currentCharacter.description,
         this.currentCharacter.name,
+        "single",
+        this._getGuidance(),
       );
       customPromptTextarea.value = newPrompt;
       window.updatePromptCharCount();

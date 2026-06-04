@@ -7,7 +7,8 @@ Object.assign(APIHandler.prototype, {
     customPrompt = null,
     modelOverride = null,
     cardType = "single",
-    styleOverride = undefined
+    styleOverride = undefined,
+    guidance = ""
   ) {
     let imagePrompt;
     if (customPrompt) {
@@ -16,8 +17,9 @@ Object.assign(APIHandler.prototype, {
       console.log("=== GENERATING IMAGE PROMPT VIA TEXT API ===");
       console.log("Character name:", characterName);
       console.log("Character description length:", characterDescription?.length || 0);
+      if (guidance) console.log("Guidance:", guidance);
       try {
-        imagePrompt = await this.generateImagePrompt(characterDescription, characterName, cardType);
+        imagePrompt = await this.generateImagePrompt(characterDescription, characterName, cardType, guidance);
       } catch (error) {
         console.error("Failed to generate image prompt:", error);
         throw new Error(`Failed to generate image prompt: ${error.message}`);
@@ -92,12 +94,12 @@ Object.assign(APIHandler.prototype, {
     throw new Error("Unexpected image API response format: " + JSON.stringify(result));
   },
 
-  async generateImagePrompt(characterDescription, characterName, cardType = "single") {
+  async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "") {
     if (!characterDescription || !characterName) {
       throw new Error("Character description and name are required to generate an image prompt");
     }
 
-    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType);
+    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType, guidance);
     const model = this.config.get("api.text.model");
 
     const data = {
@@ -210,7 +212,7 @@ Shortened prompt:`,
     return prompt;
   },
 
-  buildImagePromptInstruction(characterDescription, characterName, cardType = "single") {
+  buildImagePromptInstruction(characterDescription, characterName, cardType = "single", guidance = "") {
     const personalityTraits = this.extractPersonalityTraits(characterDescription);
 
     let taskInstruction = "";
@@ -220,10 +222,15 @@ Shortened prompt:`,
       taskInstruction = `\n\nIMPORTANT: This is a SCENARIO / LOCATION card. Generate a scene or environment illustration — focus on the atmosphere, setting, and sense of place rather than on a single character portrait. Any figures present should feel like part of the environment, not the subject. Prioritise mood, lighting, and environmental detail.`;
     }
 
+    let guidanceBlock = "";
+    if (guidance && guidance.trim()) {
+      guidanceBlock = `\n\nUSER GUIDANCE (high priority — steer the image toward these specifics):\n${guidance.trim()}\n\nIncorporate the guidance above as the primary creative direction. Override or adapt profile details as needed to satisfy the guidance.`;
+    }
+
     return `You are an expert at extracting visual details from character profiles to write image generation prompts.
 
 Character Name: ${characterName || "Unknown"}
-Personality Traits Detected: ${personalityTraits}${taskInstruction}
+Personality Traits Detected: ${personalityTraits}${taskInstruction}${guidanceBlock}
 
 Full Character Profile:
 ${characterDescription}
