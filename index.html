@@ -1539,7 +1539,7 @@
                         </div>
                     </section>
 
-                    <section class="result-section" id="sw-workspace-view" style="display: none; flex-direction: column; height: 80vh; min-height: 650px;">
+                    <section class="result-section" id="sw-workspace-view" style="display: none; flex-direction: column; padding-bottom: 4rem;">
                         <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
                             <button id="sw-back-btn" class="btn-outline" style="padding: 0.4rem 0.8rem;">← Back</button>
                             <input type="text" id="sw-title" class="input" style="flex: 1; min-width: 150px; font-weight: bold; font-size: 1.1rem; background: var(--surface-color);">
@@ -1556,7 +1556,7 @@
                         </details>
 
                         <!-- Narration Playback Controls (hidden until TTS active) -->
-                        <div id="sw-narration-controls" style="display: none; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                        <div id="sw-narration-controls" style="display: none; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; position: sticky; top: 0.5rem; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
                             <span style="font-weight: 600; font-size: 0.85rem;">🔊 Narrating</span>
                             <button id="sw-tts-pause-btn" class="btn-small" title="Pause / Resume narration">⏸ Pause</button>
                             <button id="sw-tts-skip-btn" class="btn-small" title="Skip current sentence">⏭ Skip</button>
@@ -1564,7 +1564,7 @@
                             <span id="sw-tts-progress" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;"></span>
                         </div>
 
-                        <div id="sw-story-area" class="content-box" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--surface-color); min-height: 300px;">
+                        <div id="sw-story-area" class="content-box" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--surface-color); min-height: 300px;">
                             <!-- Story Segments injected here -->
                         </div>
 

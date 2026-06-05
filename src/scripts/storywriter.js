@@ -1244,6 +1244,11 @@ class StoryWriterApp {
         streamDiv.style.lineHeight = '1.7';
         area.appendChild(streamDiv);
 
+        // Auto-scroll to the bottom so the new segment and controls are visible
+        setTimeout(() => {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }, 50);
+
         try {
             const res = await window.authFetch('/api/sw/generate', {
                 method: 'POST',
