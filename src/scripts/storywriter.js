@@ -77,15 +77,25 @@ function formatSpeakerLabel(speakerId) {
  */
 class TTSPlayer {
     constructor() {
-        this.audioContext = null;
-        this.gainNode = null;
+        this.audioElement = new Audio();
+        // Unlock audio element on iOS immediately during instantiation (which happens in a click handler)
+        this.audioElement.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        this.audioElement.play().catch(() => {});
+        
+        this.audioElement.onended = () => {
+            if (!this.stopped && !this.paused) {
+                this._playNext();
+            }
+        };
+        this._setupMediaSession();
+        
+        this.currentUrl = null;
         this.textQueue = [];
         this.audioQueue = [];
         this.playing = false;
         this.paused = false;
         this.stopped = false;
         this.loading = false;
-        this.currentSource = null;
         this.onQueueLow = null;
         this._queueLowFired = false;
         this.onQueueEmpty = null;   // callback when all queued audio finishes naturally
@@ -96,17 +106,23 @@ class TTSPlayer {
         this.googleApiKey = '';
     }
 
-    _getContext() {
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            this.gainNode = this.audioContext.createGain();
-            this.gainNode.connect(this.audioContext.destination);
+    _setupMediaSession() {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => this.resume());
+            navigator.mediaSession.setActionHandler('pause', () => this.pause());
+            navigator.mediaSession.setActionHandler('nexttrack', () => this.skip());
+            navigator.mediaSession.setActionHandler('stop', () => this.stop());
         }
-        // Resume if suspended (browser autoplay policy)
-        if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
+    }
+
+    _updateMediaMetadata(text) {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: text || 'Story Narration',
+                artist: 'SillyTavern Story Writer',
+                album: 'Character Generator V2',
+            });
         }
-        return this.audioContext;
     }
 
     /**
@@ -114,9 +130,7 @@ class TTSPlayer {
      */
     setVolume(vol) {
         const gain = Math.max(0, Math.min(1, vol / 100));
-        if (this.gainNode) {
-            this.gainNode.gain.value = gain;
-        }
+        this.audioElement.volume = gain;
     }
 
     /**
@@ -168,12 +182,11 @@ class TTSPlayer {
                 console.warn('[TTSPlayer] Synthesis HTTP', res.status, errText, '— skipping sentence');
                 if (this.onError) this.onError(`HTTP ${res.status}: ${errText || 'Failed'}`);
             } else {
-                const arrayBuffer = await res.arrayBuffer();
-                if (arrayBuffer.byteLength > 0) {
-                    const ctx = this._getContext();
-                    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-                    this.audioQueue.push(audioBuffer);
-                    console.debug('[TTSPlayer] Audio buffered', { duration: audioBuffer.duration, queueLength: this.audioQueue.length });
+                const blob = await res.blob();
+                if (blob.size > 0) {
+                    const url = URL.createObjectURL(blob);
+                    this.audioQueue.push({ url, text });
+                    console.debug('[TTSPlayer] Audio buffered', { queueLength: this.audioQueue.length });
                     if (!this.playing && !this.paused) {
                         this._playNext();
                     }
@@ -215,23 +228,24 @@ class TTSPlayer {
             return;
         }
 
-        const audioBuffer = this.audioQueue.shift();
-        const ctx = this._getContext();
+        const audioItem = this.audioQueue.shift();
         this.playing = true;
 
-        this.currentSource = ctx.createBufferSource();
-        this.currentSource.buffer = audioBuffer;
-        this.currentSource.connect(this.gainNode);
-        this.currentSource.onended = () => {
-            this.currentSource = null;
-            if (!this.stopped && !this.paused) {
-                this._playNext();
-            }
-        };
+        if (this.currentUrl) {
+            URL.revokeObjectURL(this.currentUrl);
+        }
+        
+        this.currentUrl = audioItem.url;
+        this.audioElement.src = audioItem.url;
+        this._updateMediaMetadata(audioItem.text);
 
-        const startTime = Math.max(ctx.currentTime + 0.05, 0);
-        this.currentSource.start(startTime);
-        console.debug('[TTSPlayer] Started playback', { duration: audioBuffer.duration, startTime });
+        try {
+            await this.audioElement.play();
+            console.debug('[TTSPlayer] Started playback for:', audioItem.text);
+        } catch (e) {
+            console.error('[TTSPlayer] Playback failed (autoplay blocked?):', e);
+            this.playing = false;
+        }
 
         // Continue buffering while current audio plays.
         this._maybeLoadNext();
@@ -239,24 +253,24 @@ class TTSPlayer {
 
     pause() {
         this.paused = true;
-        if (this.audioContext) {
-            this.audioContext.suspend();
-        }
+        this.audioElement.pause();
     }
 
     resume() {
         this.paused = false;
-        if (this.audioContext) {
-            this.audioContext.resume();
+        if (!this.playing && this.currentUrl) {
+            this.playing = true;
+            this.audioElement.play().catch(e => console.error('[TTSPlayer] Resume failed:', e));
+            this._maybeLoadNext();
+        } else if (!this.playing) {
+            this._playNext();
+        } else {
+            this.audioElement.play().catch(e => console.error(e));
         }
-        if (!this.playing) this._playNext();
     }
 
     skip() {
-        if (this.currentSource) {
-            try { this.currentSource.stop(); } catch (_) {}
-            this.currentSource = null;
-        }
+        this.audioElement.pause();
         this._playNext();
     }
 
@@ -266,13 +280,18 @@ class TTSPlayer {
         this.onQueueLow = null;
         this._queueLowFired = false;
         this.paused = false;
+        
+        this.audioElement.pause();
+        this.audioElement.src = '';
+        if (this.currentUrl) {
+            URL.revokeObjectURL(this.currentUrl);
+            this.currentUrl = null;
+        }
+        
         this.textQueue = [];
+        this.audioQueue.forEach(item => URL.revokeObjectURL(item.url));
         this.audioQueue = [];
         this.loading = false;
-        if (this.currentSource) {
-            try { this.currentSource.stop(); } catch (_) {}
-            this.currentSource = null;
-        }
         this.playing = false;
     }
 
