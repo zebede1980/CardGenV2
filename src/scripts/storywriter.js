@@ -1,4 +1,74 @@
 /**
+ * Known speaker labels for Coqui VCTK voices.
+ * If a voice ID is not in this list, we fall back to a generic label.
+ */
+const TTS_SPEAKER_LABELS = {
+    p225: 'Speaker 225',
+    p226: 'Speaker 226',
+    p227: 'Speaker 227',
+    p228: 'Speaker 228',
+    p229: 'Speaker 229',
+    p230: 'Speaker 230',
+    p231: 'Speaker 231',
+    p232: 'Speaker 232',
+    p233: 'Speaker 233',
+    p234: 'Speaker 234',
+    p235: 'Speaker 235',
+    p236: 'Speaker 236',
+    p237: 'Speaker 237',
+    p238: 'Speaker 238',
+    p239: 'Speaker 239',
+    p240: 'Speaker 240',
+    p241: 'Speaker 241',
+    p242: 'Speaker 242',
+    p243: 'Speaker 243',
+    p244: 'Speaker 244',
+    p245: 'Speaker 245',
+    p246: 'Speaker 246',
+    p247: 'Speaker 247',
+    p248: 'Speaker 248',
+    p249: 'Speaker 249',
+    p250: 'Speaker 250',
+    p251: 'Speaker 251',
+    p252: 'Speaker 252',
+    p253: 'Speaker 253',
+    p254: 'Speaker 254',
+    p255: 'Speaker 255',
+    p256: 'Speaker 256',
+    p257: 'Speaker 257',
+    p258: 'Speaker 258',
+    p259: 'Speaker 259',
+    p260: 'Speaker 260',
+    p261: 'Speaker 261',
+    p262: 'Speaker 262',
+    p263: 'Speaker 263',
+    p264: 'Speaker 264',
+    p265: 'Speaker 265',
+    p266: 'Speaker 266',
+    p267: 'Speaker 267',
+    p268: 'Speaker 268',
+    p269: 'Speaker 269',
+    p270: 'Speaker 270',
+    p271: 'Speaker 271',
+    p272: 'Speaker 272',
+};
+
+function formatSpeakerLabel(speakerId) {
+    if (typeof speakerId !== 'string') {
+        return String(speakerId);
+    }
+    const label = TTS_SPEAKER_LABELS[speakerId];
+    if (label) {
+        return `${speakerId} — ${label}`;
+    }
+    const match = speakerId.match(/^p(\d+)$/i);
+    if (match) {
+        return `${speakerId} — Speaker ${match[1]}`;
+    }
+    return speakerId;
+}
+
+/**
  * TTSPlayer — Manages the Web Audio API pipeline for sequential sentence playback.
  * Uses a GainNode for volume control and queues sentences fetched from the TTS bridge.
  */
@@ -6,10 +76,12 @@ class TTSPlayer {
     constructor() {
         this.audioContext = null;
         this.gainNode = null;
-        this.queue = [];
+        this.textQueue = [];
+        this.audioQueue = [];
         this.playing = false;
         this.paused = false;
         this.stopped = false;
+        this.loading = false;
         this.currentSource = null;
         this.onQueueEmpty = null;   // callback when all queued audio finishes naturally
         this.voice = 'p230';
@@ -40,13 +112,60 @@ class TTSPlayer {
     }
 
     /**
-     * Add a sentence to the playback queue. Kicks off playback if not already running.
+     * Add a sentence to the playback queue. Kicks off buffering and playback.
      */
     enqueue(text) {
         if (!text || !text.trim()) return;
-        this.queue.push(text.trim());
-        if (!this.playing && !this.paused) {
+        const trimmed = text.trim();
+        console.debug('[TTSPlayer] Enqueue sentence', trimmed);
+        this.textQueue.push(trimmed);
+        this._maybeLoadNext();
+        if (!this.playing && !this.paused && this.audioQueue.length > 0) {
             this._playNext();
+        }
+    }
+
+    async _maybeLoadNext() {
+        if (this.stopped || this.paused || this.loading || this.textQueue.length === 0) {
+            return;
+        }
+
+        // Keep one sentence buffered ahead.
+        if (this.audioQueue.length >= 2) {
+            return;
+        }
+
+        this.loading = true;
+        const text = this.textQueue.shift();
+        console.debug('[TTSPlayer] Loading audio for sentence', text);
+        try {
+            const res = await window.authFetch('/api/tts/synthesize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice: this.voice, speed: this.speed }),
+            });
+
+            if (!res.ok) {
+                console.warn('[TTSPlayer] Synthesis HTTP', res.status, '— skipping sentence');
+            } else {
+                const arrayBuffer = await res.arrayBuffer();
+                if (arrayBuffer.byteLength > 0) {
+                    const ctx = this._getContext();
+                    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                    this.audioQueue.push(audioBuffer);
+                    console.debug('[TTSPlayer] Audio buffered', { duration: audioBuffer.duration, queueLength: this.audioQueue.length });
+                    if (!this.playing && !this.paused) {
+                        this._playNext();
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[TTSPlayer] Audio load error:', e);
+        } finally {
+            this.loading = false;
+            if (!this.stopped && !this.paused && this.textQueue.length > 0 && this.audioQueue.length < 2) {
+                this._maybeLoadNext();
+            }
         }
     }
 
@@ -56,57 +175,41 @@ class TTSPlayer {
             return;
         }
 
-        if (this.queue.length === 0) {
+        if (this.paused) {
+            return;
+        }
+
+        if (this.audioQueue.length === 0) {
+            if (this.textQueue.length > 0) {
+                this._maybeLoadNext();
+            }
             this.playing = false;
-            if (this.onQueueEmpty) {
+            if (this.onQueueEmpty && this.textQueue.length === 0 && this.audioQueue.length === 0) {
                 this.onQueueEmpty();
             }
             return;
         }
 
+        const audioBuffer = this.audioQueue.shift();
+        const ctx = this._getContext();
         this.playing = true;
-        if (this.paused) return;
 
-        const text = this.queue.shift();
-        try {
-            const res = await window.authFetch('/api/tts/synthesize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text,
-                    voice: this.voice,
-                    speed: this.speed,
-                }),
-            });
-
-            if (!res.ok) {
-                console.warn('[TTSPlayer] Synthesis HTTP', res.status, '— skipping sentence');
+        this.currentSource = ctx.createBufferSource();
+        this.currentSource.buffer = audioBuffer;
+        this.currentSource.connect(this.gainNode);
+        this.currentSource.onended = () => {
+            this.currentSource = null;
+            if (!this.stopped && !this.paused) {
                 this._playNext();
-                return;
             }
+        };
 
-            const arrayBuffer = await res.arrayBuffer();
-            if (arrayBuffer.byteLength === 0) {
-                this._playNext();
-                return;
-            }
+        const startTime = Math.max(ctx.currentTime + 0.05, 0);
+        this.currentSource.start(startTime);
+        console.debug('[TTSPlayer] Started playback', { duration: audioBuffer.duration, startTime });
 
-            const ctx = this._getContext();
-            const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-
-            this.currentSource = ctx.createBufferSource();
-            this.currentSource.buffer = audioBuffer;
-            this.currentSource.connect(this.gainNode);
-            this.currentSource.onended = () => {
-                this.currentSource = null;
-                this._playNext();
-            };
-            this.currentSource.start();
-        } catch (e) {
-            console.error('[TTSPlayer] Playback error:', e);
-            // Skip to next sentence on error
-            this._playNext();
-        }
+        // Continue buffering while current audio plays.
+        this._maybeLoadNext();
     }
 
     pause() {
@@ -133,9 +236,12 @@ class TTSPlayer {
     }
 
     stop() {
+        console.debug('[TTSPlayer] stop');
         this.stopped = true;
         this.paused = false;
-        this.queue = [];
+        this.textQueue = [];
+        this.audioQueue = [];
+        this.loading = false;
         if (this.currentSource) {
             try { this.currentSource.stop(); } catch (_) {}
             this.currentSource = null;
@@ -270,6 +376,7 @@ class StoryWriterApp {
             if (this.ttsPlayer) this.ttsPlayer.skip();
         });
         document.getElementById('sw-tts-stop-btn')?.addEventListener('click', () => this._stopNarration());
+        document.getElementById('sw-tts-test-btn')?.addEventListener('click', () => this.testVoiceSample());
 
         // ── TTS settings UI reactivity ─────────────────────────────────────────
         const speedSlider = document.getElementById('sw-tts-speed');
@@ -336,6 +443,7 @@ class StoryWriterApp {
                 tts_voice: s.tts_voice || 'p230',
                 tts_speed: s.tts_speed || 1.0,
             };
+            console.debug('[StoryWriter][TTS] Loaded settings', this.ttsSettings);
 
             const ttsEnabled = document.getElementById('sw-tts-enabled');
             const autoMode = document.getElementById('sw-auto-mode');
@@ -425,6 +533,7 @@ class StoryWriterApp {
         try {
             const res = await window.authFetch('/api/tts/voices');
             const data = await res.json();
+            console.debug('[StoryWriter][TTS] Voice endpoint response', data);
 
             if (data.status === 'loading') {
                 voiceSelect.innerHTML = '<option value="">\u2014 Model loading\u2026 \u2014</option>';
@@ -451,7 +560,7 @@ class StoryWriterApp {
             speakers.forEach(speaker => {
                 const opt = document.createElement('option');
                 opt.value = speaker;
-                opt.textContent = speaker;
+                opt.textContent = formatSpeakerLabel(speaker);
                 voiceSelect.appendChild(opt);
             });
 
@@ -463,12 +572,60 @@ class StoryWriterApp {
             }
 
             if (statusSpan) statusSpan.textContent = speakers.length + ' voices available';
+            console.debug('[StoryWriter][TTS] Loaded voices', speakers);
         } catch (e) {
             console.error('[StoryWriter] Failed to load TTS voices:', e);
             voiceSelect.innerHTML = '<option value="">\u2014 TTS unreachable \u2014</option>';
             const statusSpan = document.getElementById('sw-tts-status');
             if (statusSpan) statusSpan.textContent = '\u26a0\ufe0f TTS service not reachable';
         }
+    }
+
+    async testVoiceSample() {
+        const testBtn = document.getElementById('sw-tts-test-btn');
+        const testStatus = document.getElementById('sw-tts-test-status');
+        const voiceSelect = document.getElementById('sw-tts-voice');
+        const speedSlider = document.getElementById('sw-tts-speed');
+        const volumeSlider = document.getElementById('sw-tts-volume');
+        const originalStatus = testStatus?.textContent || '';
+
+        if (!voiceSelect) return;
+        const voice = voiceSelect.value;
+        if (!voice) {
+            if (testStatus) testStatus.textContent = 'Please select a voice first.';
+            return;
+        }
+
+        if (this.ttsPlayer) {
+            this._stopNarration();
+        }
+
+        if (testBtn) {
+            testBtn.disabled = true;
+            testBtn.textContent = 'Testing…';
+        }
+        if (testStatus) {
+            testStatus.textContent = 'Playing sample…';
+        }
+
+        const player = new TTSPlayer();
+        player.voice = voice;
+        player.speed = parseFloat(speedSlider?.value || '1.0');
+        player.setVolume(parseInt(volumeSlider?.value || '80', 10));
+        player.onQueueEmpty = () => {
+            if (testStatus) testStatus.textContent = 'Sample complete.';
+            if (testBtn) {
+                testBtn.textContent = 'Test Voice';
+                testBtn.disabled = false;
+            }
+            setTimeout(() => {
+                if (testStatus && testStatus.textContent === 'Sample complete.') {
+                    testStatus.textContent = originalStatus;
+                }
+            }, 2500);
+        };
+
+        player.enqueue('This is a sample of the selected voice.');
     }
 
     // ── Story management ──────────────────────────────────────────────────────
@@ -755,11 +912,13 @@ class StoryWriterApp {
     // ── Narration control helpers ──────────────────────────────────────────────
 
     _showNarrationControls() {
+        console.debug('[StoryWriter][TTS] Showing narration controls');
         const bar = document.getElementById('sw-narration-controls');
         if (bar) bar.style.display = 'flex';
     }
 
     _hideNarrationControls() {
+        console.debug('[StoryWriter][TTS] Hiding narration controls');
         const bar = document.getElementById('sw-narration-controls');
         if (bar) bar.style.display = 'none';
         const progress = document.getElementById('sw-tts-progress');
@@ -784,6 +943,7 @@ class StoryWriterApp {
     }
 
     _stopNarration() {
+        console.debug('[StoryWriter][TTS] Stop narration triggered');
         if (this.ttsPlayer) {
             this.ttsPlayer.stop();
             this.ttsPlayer = null;
@@ -809,6 +969,7 @@ class StoryWriterApp {
         const ttsVoice   = document.getElementById('sw-tts-voice')?.value || 'p230';
         const ttsSpeed   = parseFloat(document.getElementById('sw-tts-speed')?.value || '1.0');
         const volume     = parseInt(document.getElementById('sw-tts-volume')?.value || '80', 10);
+        console.debug('[StoryWriter][TTS] GenerateNext settings', { ttsEnabled, autoMode, ttsVoice, ttsSpeed, volume });
 
         let sentenceDetector = null;
         if (ttsEnabled) {
