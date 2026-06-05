@@ -27,6 +27,10 @@ class Config {
           style: "",
           timeout: 180000,
         },
+        tts: {
+          provider: "local",
+          apiKey: "",
+        },
       },
       app: {
         maxRetries: 3,

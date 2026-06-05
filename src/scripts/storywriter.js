@@ -495,9 +495,9 @@ class StoryWriterApp {
             }
 
             // ── TTS settings ───────────────────────────────────────────────────
-            let savedProvider = localStorage.getItem('sw-tts-provider') || 'local';
+            let savedProvider = window.config.get('api.tts.provider') || localStorage.getItem('sw-tts-provider') || 'local';
             if (savedProvider === 'google') savedProvider = 'google-premium';
-            const savedGoogleKey = localStorage.getItem('sw-tts-google-key') || '';
+            const savedGoogleKey = window.config.get('api.tts.apiKey') || localStorage.getItem('sw-tts-google-key') || '';
 
             this.ttsSettings = {
                 tts_enabled: s.tts_enabled || false,
@@ -558,8 +558,12 @@ class StoryWriterApp {
         const ttsProvider = document.getElementById('sw-tts-provider')?.value || 'local';
         const ttsGoogleKey = document.getElementById('sw-tts-google-key')?.value || '';
 
-        localStorage.setItem('sw-tts-provider', ttsProvider);
-        localStorage.setItem('sw-tts-google-key', ttsGoogleKey);
+        if (window.config) {
+            window.config.set('api.tts.provider', ttsProvider);
+            window.config.set('api.tts.apiKey', ttsGoogleKey);
+        }
+        localStorage.removeItem('sw-tts-provider');
+        localStorage.removeItem('sw-tts-google-key');
 
         const payload = {
             max_tokens: maxTokens,
