@@ -89,6 +89,7 @@ class TTSPlayer {
         this.onPlaybackStart = null;
         this.hasStartedPlayback = false;
         this.onQueueEmpty = null;   // callback when all queued audio finishes naturally
+        this.onError = null;        // callback for synthesis errors
         this.voice = 'p230';
         this.speed = 1.0;
         this.provider = 'local';
@@ -153,7 +154,9 @@ class TTSPlayer {
             });
 
             if (!res.ok) {
-                console.warn('[TTSPlayer] Synthesis HTTP', res.status, '— skipping sentence');
+                const errText = await res.text().catch(() => '');
+                console.warn('[TTSPlayer] Synthesis HTTP', res.status, errText, '— skipping sentence');
+                if (this.onError) this.onError(`HTTP ${res.status}: ${errText || 'Failed'}`);
             } else {
                 const arrayBuffer = await res.arrayBuffer();
                 if (arrayBuffer.byteLength > 0) {
@@ -168,10 +171,15 @@ class TTSPlayer {
             }
         } catch (e) {
             console.error('[TTSPlayer] Audio load error:', e);
+            if (this.onError) this.onError(`Network error: ${e.message}`);
         } finally {
             this.loading = false;
-            if (!this.stopped && !this.paused && this.textQueue.length > 0 && this.audioQueue.length < 2) {
-                this._maybeLoadNext();
+            if (!this.stopped && !this.paused) {
+                if (this.textQueue.length > 0 && this.audioQueue.length < 2) {
+                    this._maybeLoadNext();
+                } else if (!this.playing && this.audioQueue.length === 0) {
+                    this._playNext();
+                }
             }
         }
     }
@@ -681,17 +689,30 @@ class StoryWriterApp {
         player.setVolume(parseInt(volumeSlider?.value || '80', 10));
         player.provider = document.getElementById('sw-tts-provider')?.value || 'local';
         player.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
+
+        let hasError = false;
+        player.onError = (err) => {
+            hasError = true;
+            if (testStatus) {
+                testStatus.textContent = `❌ ${err}`;
+                testStatus.style.color = 'var(--error-color, #e55)';
+            }
+        };
+
         player.onQueueEmpty = () => {
-            if (testStatus) testStatus.textContent = 'Sample complete.';
+            if (testStatus && !hasError) {
+                testStatus.textContent = 'Sample complete.';
+            }
             if (testBtn) {
                 testBtn.textContent = 'Test Voice';
                 testBtn.disabled = false;
             }
             setTimeout(() => {
-                if (testStatus && testStatus.textContent === 'Sample complete.') {
+                if (testStatus && (testStatus.textContent === 'Sample complete.' || hasError)) {
                     testStatus.textContent = originalStatus;
+                    testStatus.style.color = '';
                 }
-            }, 2500);
+            }, 3500);
         };
 
         player.enqueue('This is a sample of the selected voice.');
