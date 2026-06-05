@@ -86,6 +86,8 @@ class TTSPlayer {
         this.stopped = false;
         this.loading = false;
         this.currentSource = null;
+        this.onPlaybackStart = null;
+        this.hasStartedPlayback = false;
         this.onQueueEmpty = null;   // callback when all queued audio finishes naturally
         this.voice = 'p230';
         this.speed = 1.0;
@@ -199,6 +201,15 @@ class TTSPlayer {
         const ctx = this._getContext();
         this.playing = true;
 
+        if (!this.hasStartedPlayback) {
+            this.hasStartedPlayback = true;
+            if (this.onPlaybackStart) {
+                // This callback is used to trigger pipelined generation
+                this.onPlaybackStart();
+                this.onPlaybackStart = null; // Fire only once per segment playback
+            }
+        }
+
         this.currentSource = ctx.createBufferSource();
         this.currentSource.buffer = audioBuffer;
         this.currentSource.connect(this.gainNode);
@@ -243,6 +254,8 @@ class TTSPlayer {
     stop() {
         console.debug('[TTSPlayer] stop');
         this.stopped = true;
+        this.onPlaybackStart = null;
+        this.hasStartedPlayback = false;
         this.paused = false;
         this.textQueue = [];
         this.audioQueue = [];
@@ -256,6 +269,7 @@ class TTSPlayer {
 
     reset() {
         this.stop();
+        // hasStartedPlayback is reset inside stop()
         this.stopped = false;
     }
 }
@@ -305,7 +319,8 @@ class StoryWriterApp {
         this.currentStoryId = null;
         this.story = null;
         this.allCards = [];
-        this.generating = false;
+        this.isFetchingLLM = false;
+        this.shouldGenerateNext = false;
         this.ttsPlayer = null;       // Active TTSPlayer instance (null when TTS disabled)
         this.ttsSettings = {};       // Cached TTS settings from backend
         this.currentPlayingSegmentId = null; // Track which segment is currently playing
@@ -1044,7 +1059,7 @@ class StoryWriterApp {
         this._updateSegmentPlayingIndicator(this.story.segments[index].id);
         this.ttsPlayer.onQueueEmpty = () => {
             this._updateNarrationProgress('');
-            if (autoMode && !this.generating) {
+            if (autoMode && !this.isFetchingLLM) {
                 this.generateNext();
             } else {
                 this._clearPlayingSegmentIndicator();
@@ -1107,12 +1122,13 @@ class StoryWriterApp {
     // ── Generate next story chunk (with optional TTS narration) ────────────────
 
     async generateNext() {
-        if (this.generating || !this.story) return;
+        if (this.isFetchingLLM || !this.story) return;
         const steering = document.getElementById('sw-steering').value.trim();
         const btn = document.getElementById('sw-generate-btn');
         const area = document.getElementById('sw-story-area');
 
-        this.generating = true;
+        this.isFetchingLLM = true;
+        this.shouldGenerateNext = false;
         btn.textContent = 'Generating...';
         btn.disabled = true;
 
@@ -1141,15 +1157,23 @@ class StoryWriterApp {
             const pauseBtn = document.getElementById('sw-tts-pause-btn');
             if (pauseBtn) pauseBtn.textContent = '\u23f8 Pause';
 
+            this.ttsPlayer.onPlaybackStart = () => {
+                if (autoMode) {
+                    console.debug('[StoryWriter] Playback started, flagging for pipelined generation.');
+                    this.shouldGenerateNext = true;
+                    // If the current fetch finished before playback even started, kick off the next one now.
+                    if (!this.isFetchingLLM) {
+                        this.generateNext();
+                    }
+                }
+            };
+
             sentenceDetector = new SentenceDetector();
 
             // When all audio finishes, decide next action
             this.ttsPlayer.onQueueEmpty = () => {
                 this._updateNarrationProgress('');
-                if (autoMode && this.generating === false) {
-                    // Only auto-trigger if not already generating the next (safety)
-                    this.generateNext();
-                } else if (!autoMode) {
+                if (!autoMode || (autoMode && !this.isFetchingLLM && !this.shouldGenerateNext)) {
                     this._hideNarrationControls();
                 }
             };
@@ -1245,16 +1269,19 @@ class StoryWriterApp {
             await this.refreshWorkspace();
         } catch (e) {
             console.error(e);
-            alert("Generation failed");
+            alert("Generation failed: " + e.message);
             streamDiv.remove();
             if (this.ttsPlayer) {
                 this.ttsPlayer.stop();
                 this._hideNarrationControls();
             }
         } finally {
-            this.generating = false;
+            this.isFetchingLLM = false;
             btn.textContent = 'Generate Next';
             btn.disabled = false;
+            if (this.shouldGenerateNext) {
+                this.generateNext();
+            }
         }
     }
 }
