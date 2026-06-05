@@ -115,6 +115,16 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Persona selector to test how the character responds to different user personalities.
 - Lorebook trigger highlighting shows which entries fired during the conversation.
 
+### Story Writer & TTS Narration *(new)*
+- A dedicated workspace to write continuous stories with your generated characters.
+- Steer the story chunk-by-chunk with custom prompts, or let the AI continue naturally.
+- **Text-to-Speech (TTS) Narration**: Read story segments aloud seamlessly.
+- **Auto Mode**: Perfectly pipelined background generation automatically requests and narrates the next chunk of the story for a hands-free listening experience.
+- **Multiple TTS Providers**:
+  - **Local Coqui TTS**: Runs entirely locally via an optional Docker container (free, private).
+  - **Google Cloud TTS**: Supports both Standard and Premium (Neural2 / WaveNet) voices via Google API key.
+- **Mobile/iOS Native Support**: Integrates with the HTML5 Media Session API, allowing uninterrupted background audio playback and lock-screen controls (Pause, Skip, Stop) on mobile devices.
+
 ### SillyTavern Bridge
 - Configure a SillyTavern base URL in API Settings to connect directly to a running ST instance.
 - **Test Connection** — verifies connectivity and reports how many characters are in ST.
@@ -271,6 +281,16 @@ All settings are saved server-side to `proxy/data/config.json` via `POST /api/co
 | Image Style | Optional style hint forwarded to the API (e.g. `vivid`, `natural`) |
 | Enable Image Generation | Toggle to show/hide all image controls |
 
+#### TTS Narration (Story Writer)
+
+Configured directly within the **⚙️ Generation Settings** panel in the Story Writer tab. Settings are saved centrally to your profile.
+
+| Setting | Notes |
+|---|---|
+| Provider | Choose between **Local Coqui TTS**, **Google Cloud (Standard)**, or **Google Cloud (Premium)**. |
+| Google API Key | Required only if a Google provider is selected. Ensure your key has the *Cloud Text-to-Speech API* enabled and a linked billing account (even for free tier limits). |
+| Voice | Select from available voices. Automatically fetches the list from your active provider. |
+
 #### SillyTavern Bridge
 
 | Setting | Notes |
@@ -381,6 +401,14 @@ The **Reduce Bloat** and **Scan for Lorebook Content** tools help you bring impo
 ---
 
 ## Docker Notes
+
+### Local TTS Service (Coqui)
+
+If you want to use the **Local Coqui TTS** provider in the Story Writer, you need to run the optional `tts` Docker service alongside your proxy and frontend.
+- Ensure your `docker-compose.yml` includes the `tts` service block (exposing port `8500`).
+- The required TTS models are automatically downloaded on first run and stored in the `./tts-models` host volume.
+- GPU acceleration (via NVIDIA Container Toolkit) is highly recommended for real-time local narration, though modern CPUs can also keep up with reading pace.
+- Note: The Google Cloud TTS option routes through the proxy and does **not** require this container to be running.
 
 ### Networking with SillyTavern
 
