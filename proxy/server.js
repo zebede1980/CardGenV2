@@ -1062,19 +1062,52 @@ app.get("/api/tts/models", async (_req, res) => {
 
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
+    const { text, voice, speed, provider, googleApiKey } = req.body;
+
+    // Branch: Google Cloud TTS
+    if (provider && provider.startsWith("google")) {
+      if (!googleApiKey) {
+        return res.status(401).json({ error: "Google API key is required for Google TTS" });
+      }
+
+      const googleUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleApiKey}`;
+      const languageCode = voice.substring(0, 5) || "en-US"; // e.g., extract 'en-US' from 'en-US-Neural2-F'
+      
+      const response = await fetch(googleUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: { text },
+          voice: { name: voice, languageCode: languageCode },
+          audioConfig: { audioEncoding: "LINEAR16", speakingRate: speed || 1.0 }
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.text();
+        return res.status(response.status).send(`Google TTS Error: ${errData}`);
+      }
+
+      const data = await response.json();
+      // Google returns base64 encoded audio in the 'audioContent' field
+      const audioBuffer = Buffer.from(data.audioContent, 'base64');
+      res.setHeader("Content-Type", "audio/wav");
+      res.setHeader("Cache-Control", "no-cache");
+      return res.send(audioBuffer);
+    }
+
+    // Branch: Local Coqui TTS
     const response = await fetch(`${TTS_URL}/synthesize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify({ text, voice, speed }), // Exclude provider/key from Coqui
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      res.status(response.status).send(errText);
-      return;
+      return res.status(response.status).send(errText);
     }
 
-    // Stream audio back to the browser
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Cache-Control", "no-cache");
 
@@ -1087,6 +1120,39 @@ app.post("/api/tts/synthesize", async (req, res) => {
     response.body.pipe(res);
   } catch (error) {
     res.status(503).json({ error: "TTS service unreachable: " + error.message });
+  }
+});
+
+// Fetch Google Voices
+app.get("/api/tts/google-voices", async (req, res) => {
+  try {
+    const apiKey = req.query.key;
+    const tier = req.query.tier || 'premium';
+    if (!apiKey) return res.status(401).json({ error: "API Key required" });
+
+    const response = await fetch(`https://texttospeech.googleapis.com/v1/voices?key=${apiKey}`);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Failed to fetch Google voices" });
+    }
+
+    const data = await response.json();
+    // Filter to only include English voices based on tier to keep the list clean
+    let voices = [];
+    if (tier === 'standard') {
+      voices = data.voices
+        .filter(v => v.languageCodes[0].startsWith("en-") && v.name.includes("Standard"))
+        .map(v => v.name)
+        .sort();
+    } else {
+      voices = data.voices
+        .filter(v => v.languageCodes[0].startsWith("en-") && (v.name.includes("Neural2") || v.name.includes("Wavenet")))
+        .map(v => v.name)
+        .sort();
+    }
+
+    res.json({ status: "ready", speakers: voices });
+  } catch (error) {
+    res.status(503).json({ error: "Failed to fetch voices: " + error.message });
   }
 });
 

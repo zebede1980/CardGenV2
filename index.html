@@ -1484,6 +1484,20 @@
                                 </p>
 
                                 <div style="margin-top: 0.75rem;">
+                                    <label class="label" for="sw-tts-provider">Provider</label>
+                                    <select id="sw-tts-provider" class="input" style="background: var(--surface-color); max-width: 260px;">
+                                        <option value="local">Local Coqui TTS</option>
+                                        <option value="google-premium">Google Cloud (Premium: Neural2 / WaveNet)</option>
+                                        <option value="google-standard">Google Cloud (Standard)</option>
+                                    </select>
+                                </div>
+
+                                <div id="sw-tts-google-key-container" style="margin-top: 0.5rem; display: none;">
+                                    <label class="label" for="sw-tts-google-key">Google API Key</label>
+                                    <input type="password" id="sw-tts-google-key" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="AIzaSy..." />
+                                </div>
+
+                                <div style="margin-top: 0.75rem;">
                                     <label class="label" for="sw-tts-voice">Voice</label>
                                     <select id="sw-tts-voice" class="input" style="background: var(--surface-color); max-width: 260px;">
                                         <option value="">— Loading voices… —</option>
