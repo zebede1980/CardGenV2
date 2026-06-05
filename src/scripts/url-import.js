@@ -15,6 +15,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
     modal.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
     setTimeout(() => document.getElementById("url-import-input")?.focus(), 100);
+
+    // Inject token input if not exists
+    const urlInput = document.getElementById("url-import-input");
+    if (urlInput && !document.getElementById("url-import-token-input")) {
+      const tokenInput = document.createElement("input");
+      tokenInput.id = "url-import-token-input";
+      tokenInput.type = "password";
+      tokenInput.placeholder = "Chub.ai API Token (Optional, for NSFW/Private)";
+      tokenInput.className = "content-box";
+      tokenInput.style.cssText = "width:100%; padding:0.6rem 0.75rem; margin-bottom:0.75rem;";
+      urlInput.parentNode.insertBefore(tokenInput, urlInput.nextSibling);
+    }
+
+    // Inject Import & Remaster button if not exists
+    const confirmBtn = document.getElementById("url-import-confirm-btn");
+    if (confirmBtn && !document.getElementById("url-import-remaster-btn")) {
+      const remasterBtn = document.createElement("button");
+      remasterBtn.id = "url-import-remaster-btn";
+      remasterBtn.className = "btn-secondary";
+      remasterBtn.textContent = "Import & Remaster";
+      remasterBtn.style.flex = "1";
+      remasterBtn.addEventListener("click", () => this.handleUrlImportRemaster());
+      confirmBtn.parentNode.insertBefore(remasterBtn, confirmBtn.nextSibling);
+    }
   },
 
   closeUrlImportModal() {
@@ -34,6 +58,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const fetchBtn = document.getElementById("url-import-fetch-btn");
 
     const url = input?.value?.trim();
+    const token = document.getElementById("url-import-token-input")?.value?.trim();
     if (!url) {
       statusEl.innerHTML = '<span style="color:var(--error);">Please enter a URL.</span>';
       return;
@@ -54,7 +79,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const res = await (window.authFetch || fetch)("/api/import/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, token }),
       });
 
       const data = await res.json();
@@ -171,6 +196,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
   handleUrlImportCancel() {
     this._urlImportData = null;
     this.closeUrlImportModal();
+  },
+
+  async handleUrlImportRemaster() {
+    await this.handleUrlImportConfirm();
+    if (this.currentCharacter) {
+      this.showNotification("Card imported, starting AI remaster...", "info");
+      await this.handleAutoRemaster();
+    }
   },
 
 });
