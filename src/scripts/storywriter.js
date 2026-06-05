@@ -370,12 +370,12 @@ class StoryWriterApp {
                 tabStoryWriter.className = 'btn-outline';
             });
 
-            tabStoryWriter.addEventListener('click', () => {
+            tabStoryWriter.addEventListener('click', async () => {
                 viewCardGen.style.display = 'none';
                 viewStoryWriter.style.display = 'block';
                 tabCardGen.className = 'btn-outline';
                 tabStoryWriter.className = 'btn-primary';
-                this.loadSettings();
+                await this.loadSettings();
                 this.loadStories();
                 this.loadVoices();
             });
