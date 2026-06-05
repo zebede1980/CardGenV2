@@ -86,8 +86,8 @@ class TTSPlayer {
         this.stopped = false;
         this.loading = false;
         this.currentSource = null;
-        this.onPlaybackStart = null;
-        this.hasStartedPlayback = false;
+        this.onQueueLow = null;
+        this._queueLowFired = false;
         this.onQueueEmpty = null;   // callback when all queued audio finishes naturally
         this.onError = null;        // callback for synthesis errors
         this.voice = 'p230';
@@ -127,6 +127,7 @@ class TTSPlayer {
         const trimmed = text.trim();
         console.debug('[TTSPlayer] Enqueue sentence', trimmed);
         this.textQueue.push(trimmed);
+        this._queueLowFired = false;
         this._maybeLoadNext();
         if (!this.playing && !this.paused && this.audioQueue.length > 0) {
             this._playNext();
@@ -135,6 +136,10 @@ class TTSPlayer {
 
     async _maybeLoadNext() {
         if (this.stopped || this.paused || this.loading || this.textQueue.length === 0) {
+            if (this.textQueue.length === 0 && !this.loading && !this._queueLowFired && !this.stopped) {
+                this._queueLowFired = true;
+                if (this.onQueueLow) this.onQueueLow();
+            }
             return;
         }
 
@@ -145,6 +150,11 @@ class TTSPlayer {
 
         this.loading = true;
         const text = this.textQueue.shift();
+        
+        if (this.textQueue.length === 0 && !this._queueLowFired && !this.stopped) {
+            this._queueLowFired = true;
+            if (this.onQueueLow) this.onQueueLow();
+        }
         console.debug('[TTSPlayer] Loading audio for sentence', text);
         try {
             const res = await window.authFetch('/api/tts/synthesize', {
@@ -209,15 +219,6 @@ class TTSPlayer {
         const ctx = this._getContext();
         this.playing = true;
 
-        if (!this.hasStartedPlayback) {
-            this.hasStartedPlayback = true;
-            if (this.onPlaybackStart) {
-                // This callback is used to trigger pipelined generation
-                this.onPlaybackStart();
-                this.onPlaybackStart = null; // Fire only once per segment playback
-            }
-        }
-
         this.currentSource = ctx.createBufferSource();
         this.currentSource.buffer = audioBuffer;
         this.currentSource.connect(this.gainNode);
@@ -262,8 +263,8 @@ class TTSPlayer {
     stop() {
         console.debug('[TTSPlayer] stop');
         this.stopped = true;
-        this.onPlaybackStart = null;
-        this.hasStartedPlayback = false;
+        this.onQueueLow = null;
+        this._queueLowFired = false;
         this.paused = false;
         this.textQueue = [];
         this.audioQueue = [];
@@ -277,7 +278,6 @@ class TTSPlayer {
 
     reset() {
         this.stop();
-        // hasStartedPlayback is reset inside stop()
         this.stopped = false;
     }
 }
@@ -298,8 +298,8 @@ class SentenceDetector {
     feed(chunk) {
         this.buffer += chunk;
         const sentences = [];
-        // Match sentence-ending punctuation followed by space+capital or end-of-string
-        const re = /([^.!?\n]+[.!?]+)(?=\s+[A-Z"\u201C\u2018]|\s*\n|$)/g;
+        // Match lazily up to punctuation + optional quotes, avoiding splits at common abbreviations.
+        const re = /([\s\S]+?(?<!\b(?:Mr|Mrs|Ms|Dr|Prof|Rev|Capt|Gen|St|Sgt|Sr|Jr|vs|etc))[.!?]+["'\u201D\u2019)\]]*)(?=\s+[A-Z"\u201C\u2018]|\s*\n|$)/g;
         let match;
         let lastIndex = 0;
         while ((match = re.exec(this.buffer)) !== null) {
@@ -328,7 +328,6 @@ class StoryWriterApp {
         this.story = null;
         this.allCards = [];
         this.isFetchingLLM = false;
-        this.shouldGenerateNext = false;
         this.ttsPlayer = null;       // Active TTSPlayer instance (null when TTS disabled)
         this.ttsSettings = {};       // Cached TTS settings from backend
         this.currentPlayingSegmentId = null; // Track which segment is currently playing
@@ -397,6 +396,7 @@ class StoryWriterApp {
         }
 
         document.getElementById('sw-generate-btn')?.addEventListener('click', () => this.generateNext());
+        document.getElementById('sw-stop-btn')?.addEventListener('click', () => this.stopGeneration());
         document.getElementById('sw-save-settings-btn')?.addEventListener('click', () => this.saveSettings());
 
         // ── TTS playback control bindings ──────────────────────────────────────
@@ -1077,12 +1077,17 @@ class StoryWriterApp {
         const pauseBtn = document.getElementById('sw-tts-pause-btn');
         if (pauseBtn) pauseBtn.textContent = '\u23f8 Pause';
 
+        this.ttsPlayer.onQueueLow = () => {
+            const isAuto = document.getElementById('sw-auto-mode')?.checked || false;
+            if (isAuto && !this.isFetchingLLM) {
+                this.generateNext();
+            }
+        };
         this._updateSegmentPlayingIndicator(this.story.segments[index].id);
         this.ttsPlayer.onQueueEmpty = () => {
             this._updateNarrationProgress('');
-            if (autoMode && !this.isFetchingLLM) {
-                this.generateNext();
-            } else {
+            const isAuto = document.getElementById('sw-auto-mode')?.checked || false;
+            if (!isAuto && !this.isFetchingLLM) {
                 this._clearPlayingSegmentIndicator();
                 this._hideNarrationControls();
             }
@@ -1149,9 +1154,10 @@ class StoryWriterApp {
         const area = document.getElementById('sw-story-area');
 
         this.isFetchingLLM = true;
-        this.shouldGenerateNext = false;
         btn.textContent = 'Generating...';
         btn.disabled = true;
+        const stopBtn = document.getElementById('sw-stop-btn');
+        if (stopBtn) stopBtn.style.display = 'inline-block';
 
         // ── Set up TTS if enabled ──────────────────────────────────────────────
         const ttsEnabled = document.getElementById('sw-tts-enabled')?.checked || false;
@@ -1163,11 +1169,10 @@ class StoryWriterApp {
 
         let sentenceDetector = null;
         if (ttsEnabled) {
-            // Create or reset TTS player
-            if (this.ttsPlayer) {
-                this.ttsPlayer.reset();
-            } else {
+            let isNewPlayer = false;
+            if (!this.ttsPlayer || this.ttsPlayer.stopped) {
                 this.ttsPlayer = new TTSPlayer();
+                isNewPlayer = true;
             }
             this.ttsPlayer.voice = ttsVoice;
             this.ttsPlayer.speed = ttsSpeed;
@@ -1178,26 +1183,25 @@ class StoryWriterApp {
             const pauseBtn = document.getElementById('sw-tts-pause-btn');
             if (pauseBtn) pauseBtn.textContent = '\u23f8 Pause';
 
-            this.ttsPlayer.onPlaybackStart = () => {
-                if (autoMode) {
-                    console.debug('[StoryWriter] Playback started, flagging for pipelined generation.');
-                    this.shouldGenerateNext = true;
-                    // If the current fetch finished before playback even started, kick off the next one now.
-                    if (!this.isFetchingLLM) {
+            if (isNewPlayer) {
+                this.ttsPlayer.onQueueLow = () => {
+                    const isAuto = document.getElementById('sw-auto-mode')?.checked || false;
+                    if (isAuto && !this.isFetchingLLM) {
+                        console.debug('[StoryWriter] Queue low, pipelining next generation.');
                         this.generateNext();
                     }
-                }
-            };
+                };
+
+                this.ttsPlayer.onQueueEmpty = () => {
+                    this._updateNarrationProgress('');
+                    const isAuto = document.getElementById('sw-auto-mode')?.checked || false;
+                    if (!isAuto && !this.isFetchingLLM) {
+                        this._hideNarrationControls();
+                    }
+                };
+            }
 
             sentenceDetector = new SentenceDetector();
-
-            // When all audio finishes, decide next action
-            this.ttsPlayer.onQueueEmpty = () => {
-                this._updateNarrationProgress('');
-                if (!autoMode || (autoMode && !this.isFetchingLLM && !this.shouldGenerateNext)) {
-                    this._hideNarrationControls();
-                }
-            };
         } else {
             // TTS disabled — clean up any existing player
             if (this.ttsPlayer) {
@@ -1290,8 +1294,13 @@ class StoryWriterApp {
             await this.refreshWorkspace();
         } catch (e) {
             console.error(e);
-            alert("Generation failed: " + e.message);
-            streamDiv.remove();
+            const isAbort = e.message?.includes("stopped by user") || e.name === "AbortError" || e.message?.includes("abort");
+            if (!isAbort) {
+                alert("Generation failed: " + e.message);
+                streamDiv.remove();
+            } else {
+                this.refreshWorkspace();
+            }
             if (this.ttsPlayer) {
                 this.ttsPlayer.stop();
                 this._hideNarrationControls();
@@ -1300,9 +1309,27 @@ class StoryWriterApp {
             this.isFetchingLLM = false;
             btn.textContent = 'Generate Next';
             btn.disabled = false;
-            if (this.shouldGenerateNext) {
-                this.generateNext();
+            if (stopBtn) stopBtn.style.display = 'none';
+            
+            const isAuto = document.getElementById('sw-auto-mode')?.checked || false;
+            const wasAborted = stopBtn?.dataset?.aborted === "true";
+            
+            if (isAuto && this.ttsPlayer && !this.ttsPlayer.stopped && !wasAborted) {
+                if (this.ttsPlayer.textQueue.length === 0) {
+                    this.generateNext();
+                }
             }
+            
+            if (stopBtn) delete stopBtn.dataset.aborted;
+        }
+    }
+
+    stopGeneration() {
+        if (this.isFetchingLLM) {
+            console.debug('[StoryWriter] Stop generation triggered');
+            const stopBtn = document.getElementById('sw-stop-btn');
+            if (stopBtn) stopBtn.dataset.aborted = "true";
+            if (window.apiHandler) window.apiHandler.stopGeneration();
         }
     }
 }
