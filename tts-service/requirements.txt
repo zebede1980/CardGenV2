@@ -2,7 +2,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
 TTS==0.22.0
-torch==2.4.1+cpu
-torchaudio==2.4.1+cpu
+torch==2.4.1
+torchaudio==2.4.1
 numpy>=1.26.0
 soundfile>=0.12.0
