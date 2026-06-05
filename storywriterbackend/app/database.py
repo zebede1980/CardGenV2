@@ -61,6 +61,28 @@ def run_migrations():
                 "ALTER TABLE settings ADD COLUMN image_model TEXT NOT NULL DEFAULT ''"
             ))
 
+        # TTS settings columns
+        if not _column_exists(conn, "settings", "tts_enabled"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN tts_enabled BOOLEAN NOT NULL DEFAULT false"
+            ))
+        if not _column_exists(conn, "settings", "tts_voice"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN tts_voice TEXT NOT NULL DEFAULT 'p230'"
+            ))
+        if not _column_exists(conn, "settings", "tts_model"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN tts_model TEXT NOT NULL DEFAULT 'tts_models/en/vctk/vits'"
+            ))
+        if not _column_exists(conn, "settings", "tts_speed"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN tts_speed FLOAT NOT NULL DEFAULT 1.0"
+            ))
+        if not _column_exists(conn, "settings", "auto_mode"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN auto_mode BOOLEAN NOT NULL DEFAULT false"
+            ))
+
         # character_cards.updated_at (back-fill from created_at for existing rows)
         if not _column_exists(conn, "character_cards", "updated_at"):
             conn.execute(text(
