@@ -303,6 +303,7 @@ class StoryWriterApp {
         this.generating = false;
         this.ttsPlayer = null;       // Active TTSPlayer instance (null when TTS disabled)
         this.ttsSettings = {};       // Cached TTS settings from backend
+        this.currentPlayingSegmentId = null; // Track which segment is currently playing
 
         document.addEventListener('DOMContentLoaded', () => {
             this.bindEvents();
@@ -758,6 +759,7 @@ class StoryWriterApp {
 
         this.story.segments.forEach(seg => {
             const div = document.createElement('div');
+            div.dataset.segmentId = seg.id;
             div.style.padding = '1rem';
             div.style.marginBottom = '1rem';
             div.style.background = 'var(--bg-tertiary)';
@@ -788,8 +790,15 @@ class StoryWriterApp {
             actions.style.marginTop = '0.75rem';
             actions.style.display = 'flex';
             actions.style.gap = '0.5rem';
-            actions.style.justifyContent = 'flex-end';
+            actions.style.justifyContent = 'space-between';
+            actions.style.alignItems = 'center';
             actions.style.flexWrap = 'wrap';
+
+            const playingBadge = document.createElement('span');
+            playingBadge.className = 'sw-segment-playing-badge';
+            playingBadge.style.cssText = 'font-size:0.75rem; color:var(--success-color,#2d9f66); font-weight:600; display:none;';
+            playingBadge.textContent = 'Playing';
+            actions.appendChild(playingBadge);
 
             const editBtn = document.createElement('button');
             editBtn.className = 'btn-small';
@@ -834,6 +843,12 @@ class StoryWriterApp {
                     saveBtn.textContent = 'Save';
                 }
             });
+
+            const playBtn = document.createElement('button');
+            playBtn.className = 'btn-small';
+            playBtn.textContent = '▶ Play';
+            playBtn.title = 'Play from this point in the story';
+            playBtn.addEventListener('click', () => this.playFromSegmentIndex(this.story.segments.indexOf(seg)));
 
             const imgBtn = document.createElement('button');
             imgBtn.className = 'btn-small';
@@ -897,6 +912,7 @@ class StoryWriterApp {
                 }
             });
 
+            actions.appendChild(playBtn);
             actions.appendChild(imgBtn);
             actions.appendChild(editBtn);
             actions.appendChild(saveBtn);
@@ -907,6 +923,28 @@ class StoryWriterApp {
             div.appendChild(actions);
             area.appendChild(div);
         });
+
+        // Re-apply the active playback indicator after rendering segments
+        if (this.currentPlayingSegmentId !== null) {
+            this._updateSegmentPlayingIndicator(this.currentPlayingSegmentId);
+        }
+    }
+
+    _updateSegmentPlayingIndicator(segmentId) {
+        this.currentPlayingSegmentId = segmentId;
+        const segmentEls = document.querySelectorAll('#sw-story-area [data-segment-id]');
+        segmentEls.forEach(el => {
+            const badge = el.querySelector('.sw-segment-playing-badge');
+            const isActive = segmentId !== null && String(el.dataset.segmentId) === String(segmentId);
+            if (badge) {
+                badge.style.display = isActive ? 'inline-flex' : 'none';
+            }
+            el.style.boxShadow = isActive ? '0 0 0 2px rgba(45,159,102,0.18)' : '';
+        });
+    }
+
+    _clearPlayingSegmentIndicator() {
+        this._updateSegmentPlayingIndicator(null);
     }
 
     // ── Narration control helpers ──────────────────────────────────────────────
@@ -923,6 +961,65 @@ class StoryWriterApp {
         if (bar) bar.style.display = 'none';
         const progress = document.getElementById('sw-tts-progress');
         if (progress) progress.textContent = '';
+    }
+
+    playFromSegmentIndex(index) {
+        if (!this.story || !Number.isInteger(index) || index < 0 || index >= this.story.segments.length) {
+            return;
+        }
+
+        const ttsVoice = document.getElementById('sw-tts-voice')?.value || 'p230';
+        const ttsSpeed = parseFloat(document.getElementById('sw-tts-speed')?.value || '1.0');
+        const volume = parseInt(document.getElementById('sw-tts-volume')?.value || '80', 10);
+        const autoMode = document.getElementById('sw-auto-mode')?.checked || false;
+
+        if (this.ttsPlayer) {
+            this.ttsPlayer.stop();
+            this.ttsPlayer = null;
+        }
+
+        this.ttsPlayer = new TTSPlayer();
+        this.ttsPlayer.voice = ttsVoice;
+        this.ttsPlayer.speed = ttsSpeed;
+        this.ttsPlayer.setVolume(volume);
+        this._showNarrationControls();
+        const pauseBtn = document.getElementById('sw-tts-pause-btn');
+        if (pauseBtn) pauseBtn.textContent = '\u23f8 Pause';
+
+        this._updateSegmentPlayingIndicator(this.story.segments[index].id);
+        this.ttsPlayer.onQueueEmpty = () => {
+            this._updateNarrationProgress('');
+            if (autoMode && !this.generating) {
+                this.generateNext();
+            } else {
+                this._clearPlayingSegmentIndicator();
+                this._hideNarrationControls();
+            }
+        };
+
+        const detector = new SentenceDetector();
+        const segmentsToPlay = this.story.segments.slice(index);
+        let queued = 0;
+
+        segmentsToPlay.forEach(seg => {
+            const sentences = detector.feed(seg.content + '\n');
+            sentences.forEach(sentence => {
+                this.ttsPlayer.enqueue(sentence);
+                queued += 1;
+            });
+        });
+
+        detector.flush().forEach(sentence => {
+            this.ttsPlayer.enqueue(sentence);
+            queued += 1;
+        });
+
+        if (queued > 0) {
+            this._updateNarrationProgress('Speaking...');
+        } else {
+            this._updateNarrationProgress('No text available to play.');
+            this._hideNarrationControls();
+        }
     }
 
     _updateNarrationProgress(text) {
@@ -948,6 +1045,7 @@ class StoryWriterApp {
             this.ttsPlayer.stop();
             this.ttsPlayer = null;
         }
+        this._clearPlayingSegmentIndicator();
         this._hideNarrationControls();
     }
 
