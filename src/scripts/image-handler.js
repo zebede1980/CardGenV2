@@ -91,6 +91,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             this._getGuidance(),
           );
           customPromptTextarea.value = defaultPrompt;
+          if (this.currentCharacter) this.currentCharacter.imagePrompt = defaultPrompt;
           window.updatePromptCharCount();
         } catch (error) {
           console.error("Failed to generate image prompt:", error);
@@ -99,6 +100,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             this.currentCharacter.name,
           );
           customPromptTextarea.value = fallbackPrompt;
+          if (this.currentCharacter) this.currentCharacter.imagePrompt = fallbackPrompt;
           window.updatePromptCharCount();
         }
       }
@@ -261,6 +263,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           );
           if (customPromptTextarea) {
             customPromptTextarea.value = basePrompt;
+            if (this.currentCharacter) this.currentCharacter.imagePrompt = basePrompt;
             window.updatePromptCharCount();
           }
         } catch (e) {
@@ -473,6 +476,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
             );
             if (customPromptTextarea) {
               customPromptTextarea.value = basePrompt;
+              if (this.currentCharacter) this.currentCharacter.imagePrompt = basePrompt;
               window.updatePromptCharCount();
             }
           } catch (e) {
@@ -595,6 +599,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           );
           if (customPromptTextarea) {
             customPromptTextarea.value = imagePrompt;
+            if (this.currentCharacter) this.currentCharacter.imagePrompt = imagePrompt;
             window.updatePromptCharCount();
           }
         } catch (e) {
@@ -760,6 +765,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this._getGuidance(),
       );
       customPromptTextarea.value = newPrompt;
+      if (this.currentCharacter) this.currentCharacter.imagePrompt = newPrompt;
       window.updatePromptCharCount();
       this.showNotification("Image prompt regenerated!", "success");
     } catch (error) {
@@ -769,6 +775,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.currentCharacter.name,
       );
       customPromptTextarea.value = fallbackPrompt;
+      if (this.currentCharacter) this.currentCharacter.imagePrompt = fallbackPrompt;
       window.updatePromptCharCount();
       this.showNotification("Using fallback prompt generation", "warning");
     } finally {

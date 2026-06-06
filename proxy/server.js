@@ -507,8 +507,19 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
     }
 
     const dbCards = await dbResponse.json();
-    // Return permanent DB cards first, then history (temp) cards
-    res.json([...dbCards.map(translateDbCard), ...histItems]);
+    
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    const extensions = await readJsonStore(extFile) || {};
+
+    const translatedCards = dbCards.map(c => {
+      const translated = translateDbCard(c);
+      if (extensions[translated.id]) {
+        translated.character.imagePrompt = extensions[translated.id].imagePrompt || "";
+        translated.character.imageGuidance = extensions[translated.id].imageGuidance || "";
+      }
+      return translated;
+    });
+    res.json([...translatedCards, ...histItems]);
   } catch (e) {
     console.error("[Card Storage] GET /api/storage/cards Error:", e.message);
     res.status(500).json({ error: e.message });
@@ -558,6 +569,13 @@ app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
 
     const translated = translateDbCard(await response.json());
     console.log(`[Card Storage] GET /:id translated card: name="${translated.characterName}", image_path="${translated.image_path}"`);
+
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    const extensions = await readJsonStore(extFile) || {};
+    if (extensions[translated.id]) {
+      translated.character.imagePrompt = extensions[translated.id].imagePrompt || "";
+      translated.character.imageGuidance = extensions[translated.id].imageGuidance || "";
+    }
 
     // ── Image resolution: three-tier lookup ──────────────────────────────────
     const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
@@ -731,6 +749,16 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     // Save archived image history alongside the portrait
     await saveCardHistoryImages(permImgDir, dbCard.id, record.imageHistory);
 
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    await withFileLock(`user-${req.user.userId}-ext`, async () => {
+      const extensions = await readJsonStore(extFile) || {};
+      extensions[dbCard.id] = {
+        imagePrompt: char.imagePrompt || "",
+        imageGuidance: char.imageGuidance || ""
+      };
+      await writeJsonStore(extFile, extensions);
+    });
+
     res.json({ ...record, id: dbCard.id });
   } catch (e) {
     console.error("[Card Storage] POST /api/storage/cards Error:", e.message);
@@ -771,6 +799,16 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
       const f = path.join(imgDir, `${cardId}${ext}`);
       if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
     }
+    
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    await withFileLock(`user-${req.user.userId}-ext`, async () => {
+      const extensions = await readJsonStore(extFile) || {};
+      if (extensions[cardId]) {
+        delete extensions[cardId];
+        await writeJsonStore(extFile, extensions);
+      }
+    });
+
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

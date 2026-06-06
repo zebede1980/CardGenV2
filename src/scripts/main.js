@@ -39,6 +39,25 @@ class CharacterGeneratorApp {
       localStorage.removeItem("charGeneratorConfig");
     }
     await this.config.waitForConfig();
+
+    // Patch displayCharacter to load image prompt fields
+    const origDisplay = this.displayCharacter;
+    if (origDisplay && !this._displayCharacterPatched) {
+      this.displayCharacter = function(...args) {
+        origDisplay.apply(this, args);
+        const customPromptInput = document.getElementById("custom-image-prompt");
+        const promptGuidanceInput = document.getElementById("prompt-guidance");
+        if (customPromptInput) {
+            customPromptInput.value = this.currentCharacter?.imagePrompt || "";
+            if (window.updatePromptCharCount) window.updatePromptCharCount();
+        }
+        if (promptGuidanceInput) {
+            promptGuidanceInput.value = this.currentCharacter?.imageGuidance || "";
+        }
+      };
+      this._displayCharacterPatched = true;
+    }
+
     await this.ensureStorageReady();
     this.config.saveToForm();
     this.initTheme();
@@ -241,6 +260,20 @@ class CharacterGeneratorApp {
     if (creatorNotesTextarea) creatorNotesTextarea.addEventListener("input", () => {
       if (this.currentCharacter) this.currentCharacter.creatorNotes = creatorNotesTextarea.value;
     });
+
+    const customImagePrompt = document.getElementById("custom-image-prompt");
+    if (customImagePrompt) {
+      customImagePrompt.addEventListener("input", () => {
+        if (this.currentCharacter) this.currentCharacter.imagePrompt = customImagePrompt.value;
+      });
+    }
+
+    const promptGuidance = document.getElementById("prompt-guidance");
+    if (promptGuidance) {
+      promptGuidance.addEventListener("input", () => {
+        if (this.currentCharacter) this.currentCharacter.imageGuidance = promptGuidance.value;
+      });
+    }
 
     // Debug mode
     const debugModeCheckbox = document.getElementById("debug-mode");
@@ -831,6 +864,9 @@ class CharacterGeneratorApp {
     ["description-prompt", "personality-prompt", "scenario-prompt", "first-message-prompt", "example-messages-prompt"]
       .forEach((id) => { const el = document.getElementById(id); if (el) el.value = ""; });
 
+    const guidanceInput = document.getElementById("prompt-guidance");
+    if (guidanceInput) guidanceInput.value = "";
+
     const imageContent = document.getElementById("image-content");
     if (imageContent) {
       imageContent.innerHTML = `<div class="image-placeholder"><div class="loading-spinner"></div></div>`;
@@ -957,11 +993,13 @@ class CharacterGeneratorApp {
 
           if (customPromptTextarea && referenceDescription && !customPromptTextarea.value.trim()) {
             customPromptTextarea.value = `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`;
+            this.currentCharacter.imagePrompt = customPromptTextarea.value;
             window.updatePromptCharCount();
           }
 
           if (customPromptTextarea && window.apiHandler.lastGeneratedImagePrompt) {
             customPromptTextarea.value = window.apiHandler.lastGeneratedImagePrompt;
+            this.currentCharacter.imagePrompt = window.apiHandler.lastGeneratedImagePrompt;
             window.updatePromptCharCount();
           } else if (!hasReferenceImage && customPromptTextarea && !customPromptTextarea.value.trim()) {
             try {
@@ -974,6 +1012,7 @@ class CharacterGeneratorApp {
                 this.currentCharacter.description, this.currentCharacter.name,
               );
             }
+            this.currentCharacter.imagePrompt = customPromptTextarea.value;
             window.updatePromptCharCount();
           }
         }
