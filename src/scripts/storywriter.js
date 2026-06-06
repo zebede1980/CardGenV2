@@ -350,6 +350,7 @@ class StoryWriterApp {
         this.ttsPlayer = null;       // Active TTSPlayer instance (null when TTS disabled)
         this.ttsSettings = {};       // Cached TTS settings from backend
         this.currentPlayingSegmentId = null; // Track which segment is currently playing
+        this.abortController = null; // Used to abort LLM generation fetches
 
         document.addEventListener('DOMContentLoaded', () => {
             this.bindEvents();
@@ -1182,6 +1183,7 @@ class StoryWriterApp {
         btn.disabled = true;
         const stopBtn = document.getElementById('sw-stop-btn');
         if (stopBtn) stopBtn.style.display = 'inline-block';
+        this.abortController = new AbortController();
 
         // ── Set up TTS if enabled ──────────────────────────────────────────────
         const ttsEnabled = document.getElementById('sw-tts-enabled')?.checked || false;
@@ -1254,7 +1256,8 @@ class StoryWriterApp {
             const res = await window.authFetch('/api/sw/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ story_id: this.story.id, steering: steering || null })
+                body: JSON.stringify({ story_id: this.story.id, steering: steering || null }),
+                signal: this.abortController.signal
             });
 
             if (!res.ok) {
@@ -1338,6 +1341,7 @@ class StoryWriterApp {
             }
         } finally {
             this.isFetchingLLM = false;
+            this.abortController = null;
             btn.textContent = 'Generate Next';
             btn.disabled = false;
             if (stopBtn) stopBtn.style.display = 'none';
@@ -1360,7 +1364,10 @@ class StoryWriterApp {
             console.debug('[StoryWriter] Stop generation triggered');
             const stopBtn = document.getElementById('sw-stop-btn');
             if (stopBtn) stopBtn.dataset.aborted = "true";
-            if (window.apiHandler) window.apiHandler.stopGeneration();
+            if (this.abortController) {
+                this.abortController.abort();
+                this.abortController = null;
+            }
         }
     }
 }
