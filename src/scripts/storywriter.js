@@ -1172,7 +1172,8 @@ class StoryWriterApp {
 
     async generateNext() {
         if (this.isFetchingLLM || !this.story) return;
-        const steering = document.getElementById('sw-steering').value.trim();
+        const steeringInput = document.getElementById('sw-steering');
+        const steering = steeringInput.value.trim();
         const btn = document.getElementById('sw-generate-btn');
         const area = document.getElementById('sw-story-area');
 
@@ -1318,7 +1319,9 @@ class StoryWriterApp {
                 remaining.forEach(s => this.ttsPlayer.enqueue(s));
             }
 
-            document.getElementById('sw-steering').value = '';
+            if (steeringInput.value.trim() === steering) {
+                steeringInput.value = '';
+            }
             await this.refreshWorkspace();
         } catch (e) {
             console.error(e);
