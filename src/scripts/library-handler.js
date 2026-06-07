@@ -648,7 +648,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Pass the filtered cards to the gallery, and load it upon selection
       window.cardGallery.open(permanentCards, async (cardId) => {
         // Reuse the logic from handleLibraryCardClick to cleanly load the card into the editor
-        const mockEvent = { target: Object.assign(document.createElement('div'), { dataset: { action: 'load-card', id: cardId } }) };
+        const targetEl = document.createElement('div');
+        targetEl.dataset.action = 'load-card';
+        targetEl.dataset.id = cardId;
+        const mockEvent = { target: targetEl };
         await this.handleLibraryCardClick(mockEvent);
       });
     } catch (e) {
