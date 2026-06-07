@@ -5,13 +5,6 @@
 class CardGallery {
     constructor() {
         this.createModal();
-        
-        // Inject gallery button next to "Saved Cards" header after DOM loads
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.injectLibraryButton());
-        } else {
-            this.injectLibraryButton();
-        }
     }
 
     createModal() {
@@ -57,61 +50,6 @@ class CardGallery {
         // Bind close events
         document.getElementById('card-gallery-close').addEventListener('click', () => this.close());
         document.getElementById('card-gallery-info-close').addEventListener('click', () => this.closeInfo());
-    }
-
-    injectLibraryButton() {
-        const inject = () => {
-            // Look for headers containing the text "Saved Cards"
-            const headers = Array.from(document.querySelectorAll('h2, h3, div')).filter(el => 
-                el.textContent.toLowerCase().includes('saved cards') && 
-                el.children.length === 0 && 
-                !el.hasAttribute('data-gallery-injected')
-            );
-            
-            headers.forEach(el => {
-                el.setAttribute('data-gallery-injected', 'true');
-                
-                const btn = document.createElement('button');
-                btn.className = 'btn-small btn-primary';
-                btn.textContent = '🖼️ Gallery View';
-                btn.style.marginLeft = '1rem';
-                btn.addEventListener('click', async () => {
-                    let cards = [];
-                    if (window.characterGeneratorApp && window.characterGeneratorApp.libraryCards) {
-                        cards = window.characterGeneratorApp.libraryCards;
-                    } else if (window.authFetch) {
-                        try {
-                            const res = await window.authFetch('/api/cards');
-                            if (res.ok) cards = await res.json();
-                        } catch (e) {
-                            console.error('Failed to fetch cards for gallery', e);
-                        }
-                    }
-                    this.open(cards, (selectedCard) => {
-                        const cardId = selectedCard.id || selectedCard;
-                        if (window.characterGeneratorApp && typeof window.characterGeneratorApp.loadCardFromLibrary === 'function') {
-                            window.characterGeneratorApp.loadCardFromLibrary(cardId);
-                        } else {
-                            console.log('Selected card ID:', cardId);
-                        }
-                    });
-                });
-                
-                const container = document.createElement('div');
-                container.style.display = 'flex';
-                container.style.alignItems = 'center';
-                container.style.justifyContent = 'space-between';
-                container.style.marginBottom = '0.5rem';
-                
-                el.parentNode.insertBefore(container, el);
-                container.appendChild(el);
-                container.appendChild(btn);
-            });
-        };
-
-        inject();
-        const observer = new MutationObserver(inject);
-        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     open(cards, onSelect) {
