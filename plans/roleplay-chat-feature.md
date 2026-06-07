@@ -130,6 +130,10 @@ New tables to be added to `storywriterbackend/app/models.py`:
 - [x] **Backend:** Implement the `Rolling Summary` threshold.
 - [x] **Backend:** Create the background task for `Auto-Fact Extraction` to populate the `ChatMemory` table asynchronously.
 
+### Phase 5: Quality of Life & Polish
+- [x] **Frontend:** Add inline editing and deletion for individual chat messages.
+- [x] **Frontend:** Add automatic scrolling to bottom as streaming AI responses generate.
+
 ---
 
 ## 5. Potential Issues & Risks to Consider

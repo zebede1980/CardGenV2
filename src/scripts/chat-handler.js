@@ -481,7 +481,6 @@ class RoleplayChatHandler {
         const userMsgObj = { role: 'user', content, ooc_note: oocNote };
         this.els.msgInput.value = '';
         this.els.oocInput.value = '';
-        this.appendMessage({ role: 'user', content, ooc_note: oocNote });
         const userBubbleWrapper = this.appendMessage(userMsgObj);
         
         this.isGenerating = true;
@@ -546,6 +545,7 @@ class RoleplayChatHandler {
                             console.error("LLM Error:", data.message);
                             contentEl.innerHTML += `<br><span style="color:var(--error)">[Error: ${data.message}]</span>`;
                         }
+                    }
                 }
             }
         } catch (e) {
