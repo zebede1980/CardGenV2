@@ -119,6 +119,8 @@ class CardGallery {
         const grid = document.getElementById('card-gallery-grid');
         grid.innerHTML = '';
         
+        const authToken = window.cardgenAuth?.getToken() || "";
+        
         if (!cards || cards.length === 0) {
             grid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">No characters found.</p>';
         } else {
@@ -141,6 +143,8 @@ class CardGallery {
                 tile.onmouseenter = () => { tile.style.transform = 'scale(1.03)'; tile.style.borderColor = 'var(--accent, #3b82f6)'; };
                 tile.onmouseleave = () => { tile.style.transform = 'scale(1)'; tile.style.borderColor = 'var(--border, #3a3a4a)'; };
                 
+                const cardName = card.characterName || (card.character && card.character.name) || card.name || 'Unknown Character';
+
                 // Image resolution logic
                 let imgSrc = fallbackSvg;
                 if (card.avatar && card.avatar.startsWith('data:')) {
@@ -150,15 +154,15 @@ class CardGallery {
                 } else if (card.image) {
                     imgSrc = card.image;
                 } else if (card.id) {
-                    // Try falling back to an API endpoint
-                    imgSrc = `/api/cards/${card.id}/image`;
+                    const tStamp = new Date(card.updatedAt || card.createdAt || 0).getTime();
+                    imgSrc = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? \`&token=\${encodeURIComponent(authToken)}\` : ""}&_t=${tStamp}`;
                 }
 
                 tile.innerHTML = `
                     <div style="width: 100%; aspect-ratio: 1/1; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary, #1e1e2e); display: flex; align-items: center; justify-content: center;">
-                        <img src="${imgSrc}" alt="${this.escapeHtml(card.name)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width: 100%; height: 100%; object-fit: cover;">
+                        <img src="${imgSrc}" alt="${this.escapeHtml(cardName)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width: 100%; height: 100%; object-fit: cover;">
                     </div>
-                    <h3 style="margin: 0; font-size: 1.1rem; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(card.name)}">${this.escapeHtml(card.name)}</h3>
+                    <h3 style="margin: 0; font-size: 1.1rem; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(cardName)}">${this.escapeHtml(cardName)}</h3>
                     <div style="display: flex; gap: 0.5rem; width: 100%; margin-top: auto;">
                         <button class="btn-small btn-outline info-btn" style="flex: 1;">Info</button>
                         <button class="btn-small btn-primary select-btn" style="flex: 1;">Select</button>
@@ -194,13 +198,15 @@ class CardGallery {
     }
 
     showInfo(card) {
-        document.getElementById('gallery-info-title').textContent = card.name || 'Unknown Character';
+        const charObj = card.character || card;
+        const cardName = card.characterName || charObj.name || 'Unknown Character';
+        document.getElementById('gallery-info-title').textContent = cardName;
         
         let contentHtml = '';
-        if (card.description) contentHtml += `<div style="margin-bottom: 1rem;"><strong>Description:</strong><br>${this.escapeHtml(card.description)}</div>`;
-        if (card.personality) contentHtml += `<div style="margin-bottom: 1rem;"><strong>Personality:</strong><br>${this.escapeHtml(card.personality)}</div>`;
-        if (card.scenario) contentHtml += `<div style="margin-bottom: 1rem;"><strong>Scenario:</strong><br>${this.escapeHtml(card.scenario)}</div>`;
-        if (card.firstMessage) contentHtml += `<div style="margin-bottom: 1rem;"><strong>First Message:</strong><br>${this.escapeHtml(card.firstMessage)}</div>`;
+        if (charObj.description) contentHtml += `<div style="margin-bottom: 1rem;"><strong>Description:</strong><br>${this.escapeHtml(charObj.description)}</div>`;
+        if (charObj.personality) contentHtml += `<div style="margin-bottom: 1rem;"><strong>Personality:</strong><br>${this.escapeHtml(charObj.personality)}</div>`;
+        if (charObj.scenario) contentHtml += `<div style="margin-bottom: 1rem;"><strong>Scenario:</strong><br>${this.escapeHtml(charObj.scenario)}</div>`;
+        if (charObj.firstMessage) contentHtml += `<div style="margin-bottom: 1rem;"><strong>First Message:</strong><br>${this.escapeHtml(charObj.firstMessage)}</div>`;
         
         if (!contentHtml) contentHtml = 'No detailed information available for this character.';
         
