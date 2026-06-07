@@ -17,7 +17,10 @@ class CardGallery {
         this.modal.innerHTML = `
             <div class="api-settings-modal" style="max-width: 95vw; width: 1200px; max-height: 90vh; display: flex; flex-direction: column;">
                 <div class="modal-header">
-                    <h2 class="modal-title">🖼️ Character Gallery</h2>
+                    <div style="display: flex; align-items: center; gap: 1rem; flex: 1;">
+                        <h2 class="modal-title" style="margin: 0;">🖼️ Character Gallery</h2>
+                        <input type="text" id="card-gallery-search" class="input" placeholder="Search characters..." style="max-width: 300px; height: 2.25rem;">
+                    </div>
                     <button id="card-gallery-close" class="modal-close">×</button>
                 </div>
                 <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; background: var(--bg-page, #1e1e2e);">
@@ -48,12 +51,48 @@ class CardGallery {
         document.body.appendChild(this.infoModal);
 
         // Bind close events
+        document.getElementById('card-gallery-search').addEventListener('input', (e) => this.filterGallery(e.target.value));
         document.getElementById('card-gallery-close').addEventListener('click', () => this.close());
         document.getElementById('card-gallery-info-close').addEventListener('click', () => this.closeInfo());
     }
 
     open(cards, onSelect) {
         this.onSelect = onSelect;
+        this.cards = cards || [];
+        
+        const searchInput = document.getElementById('card-gallery-search');
+        if (searchInput) searchInput.value = '';
+        
+        this.renderGrid(this.cards);
+        
+        this.modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    filterGallery(searchTerm) {
+        if (!this.cards) return;
+        
+        if (!searchTerm || !searchTerm.trim()) {
+            this.renderGrid(this.cards);
+            return;
+        }
+        
+        const term = searchTerm.toLowerCase().trim();
+        const filtered = this.cards.filter(card => {
+            const charObj = card.character || card;
+            const name = (card.characterName || charObj.name || '').toLowerCase();
+            const desc = (charObj.description || '').toLowerCase();
+            const pers = (charObj.personality || '').toLowerCase();
+            const scen = (charObj.scenario || '').toLowerCase();
+            const first = (charObj.firstMessage || '').toLowerCase();
+            
+            return name.includes(term) || desc.includes(term) || pers.includes(term) || scen.includes(term) || first.includes(term);
+        });
+        
+        this.renderGrid(filtered);
+    }
+
+    renderGrid(cards) {
         const grid = document.getElementById('card-gallery-grid');
         grid.innerHTML = '';
         
@@ -125,9 +164,6 @@ class CardGallery {
                 grid.appendChild(tile);
             });
         }
-        
-        this.modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
     }
 
     close() {
