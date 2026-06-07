@@ -93,7 +93,7 @@ class CardGallery {
                     imgSrc = card.image;
                 } else if (card.id) {
                     const tStamp = new Date(card.updatedAt || card.createdAt || 0).getTime();
-                    imgSrc = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? \`&token=\${encodeURIComponent(authToken)}\` : ""}&_t=${tStamp}`;
+                    imgSrc = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? '&token=' + encodeURIComponent(authToken) : ''}&_t=${tStamp}`;
                 }
 
                 tile.innerHTML = `
