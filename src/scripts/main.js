@@ -351,6 +351,8 @@ class CharacterGeneratorApp {
     if (clearPromptsBtn) clearPromptsBtn.addEventListener("click", () => this.handleClearPrompts());
     const migrateCardsBtn = document.getElementById("migrate-cards-btn");
     if (migrateCardsBtn) migrateCardsBtn.addEventListener("click", () => this.handleMigrateCards());
+    const galleryCardsBtn = document.getElementById("gallery-cards-btn");
+    if (galleryCardsBtn) galleryCardsBtn.addEventListener("click", () => this.handleOpenLibraryGallery());
 
     // SillyTavern bridge
     const refreshSTBtn = document.getElementById("refresh-st-library-btn");

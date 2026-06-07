@@ -630,4 +630,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleOpenLibraryGallery() {
+    if (!this.storageReady || !this.storage) {
+      this.showNotification("Library storage is unavailable.", "warning");
+      return;
+    }
+    if (!window.cardGallery) {
+      this.showNotification("Gallery module is not loaded.", "error");
+      return;
+    }
+    
+    try {
+      // Fetch only permanent cards directly from your storage DB
+      const allCards = await this.storage.listCards();
+      const permanentCards = allCards.filter(c => c.isPermanent);
+      
+      // Pass the filtered cards to the gallery, and load it upon selection
+      window.cardGallery.open(permanentCards, async (cardId) => {
+        // Reuse the logic from handleLibraryCardClick to cleanly load the card into the editor
+        const mockEvent = { target: Object.assign(document.createElement('div'), { dataset: { action: 'load-card', id: cardId } }) };
+        await this.handleLibraryCardClick(mockEvent);
+      });
+    } catch (e) {
+      console.error("Failed to open gallery:", e);
+      this.showNotification("Failed to open gallery view.", "error");
+    }
+  },
+
 });

@@ -856,6 +856,24 @@ class StoryWriterApp {
             select.appendChild(opt);
         });
         select.disabled = available.length === 0;
+
+        let galleryBtn = document.getElementById('sw-add-card-gallery-btn');
+        if (!galleryBtn) {
+            galleryBtn = document.createElement('button');
+            galleryBtn.id = 'sw-add-card-gallery-btn';
+            galleryBtn.className = 'btn-small btn-outline';
+            galleryBtn.textContent = '🖼️ Gallery';
+            galleryBtn.style.marginLeft = '0.5rem';
+            galleryBtn.addEventListener('click', () => {
+                if (window.cardGallery) {
+                    window.cardGallery.open(available, (cardId) => {
+                        this.attachCard(cardId);
+                    });
+                }
+            });
+            select.parentNode.insertBefore(galleryBtn, select.nextSibling);
+        }
+        galleryBtn.disabled = available.length === 0;
     }
 
     async attachCard(cardId) {

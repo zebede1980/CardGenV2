@@ -1367,7 +1367,10 @@
                         <div>
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                                 <h3 class="library-title" style="margin: 0;">Saved Cards (Permanent)</h3>
-                                <button id="migrate-cards-btn" class="btn-small" style="font-size: 0.75rem;" title="One-time import of all cards from the old cards.json file into the database">📦 Migrate from old storage</button>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button id="gallery-cards-btn" class="btn-small" style="font-size: 0.75rem;" title="View your saved cards in a visual gallery">🖼️ Gallery</button>
+                                    <button id="migrate-cards-btn" class="btn-small" style="font-size: 0.75rem;" title="One-time import of all cards from the old cards.json file into the database">📦 Migrate from old storage</button>
+                                </div>
                             </div>
                             <div
                                 id="stored-cards-list"
