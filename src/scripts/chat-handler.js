@@ -298,7 +298,15 @@ class RoleplayChatHandler {
         
         const nameEl = document.createElement('div');
         nameEl.className = 'chat-bubble-name';
-        nameEl.textContent = msg.role === 'user' ? 'You' : (msg.character_name || 'Assistant');
+        nameEl.style.display = 'flex';
+        nameEl.style.justifyContent = 'space-between';
+        nameEl.style.alignItems = 'center';
+        nameEl.style.width = '100%';
+        
+        const nameText = document.createElement('span');
+        nameText.className = 'chat-bubble-name-text';
+        nameText.textContent = msg.role === 'user' ? 'You' : (msg.character_name || 'Assistant');
+        nameEl.appendChild(nameText);
         
         const bubbleEl = document.createElement('div');
         bubbleEl.className = 'chat-bubble';
@@ -313,10 +321,125 @@ class RoleplayChatHandler {
         wrapper.appendChild(nameEl);
         wrapper.appendChild(bubbleEl);
         
+        if (msg.id) {
+            this.attachMessageActions(wrapper, msg, bubbleEl, nameEl);
+        }
+        
         this.els.timeline.appendChild(wrapper);
         this.scrollToBottom();
         
         return wrapper;
+    }
+
+    attachMessageActions(wrapper, msg, bubbleEl, nameEl) {
+        if (wrapper.querySelector('.chat-message-actions')) return;
+
+        const actionsEl = document.createElement('div');
+        actionsEl.className = 'chat-message-actions';
+        actionsEl.style.display = 'flex';
+        actionsEl.style.gap = '0.5rem';
+        actionsEl.style.opacity = '0';
+        actionsEl.style.transition = 'opacity 0.2s';
+
+        wrapper.addEventListener('mouseenter', () => actionsEl.style.opacity = '1');
+        wrapper.addEventListener('mouseleave', () => actionsEl.style.opacity = '0');
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'chat-action-btn';
+        editBtn.innerHTML = '✏️ Edit';
+        editBtn.onclick = () => this.editMessage(msg, bubbleEl);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'chat-action-btn';
+        delBtn.innerHTML = '🗑️';
+        delBtn.onclick = () => this.deleteMessage(msg.id, wrapper);
+
+        actionsEl.appendChild(editBtn);
+        actionsEl.appendChild(delBtn);
+
+        nameEl.appendChild(actionsEl);
+    }
+
+    async editMessage(msg, bubbleEl) {
+        if (bubbleEl.querySelector('textarea')) return;
+
+        const currentContent = msg.content || '';
+        const originalHTML = bubbleEl.innerHTML;
+        
+        const textarea = document.createElement('textarea');
+        textarea.className = 'content-box';
+        textarea.style.width = '100%';
+        textarea.style.minHeight = '100px';
+        textarea.style.fontFamily = 'inherit';
+        textarea.style.marginBottom = '0.5rem';
+        textarea.value = currentContent;
+
+        const controls = document.createElement('div');
+        controls.style.display = 'flex';
+        controls.style.gap = '0.5rem';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn-primary btn-small';
+        saveBtn.textContent = 'Save';
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-outline btn-small';
+        cancelBtn.textContent = 'Cancel';
+
+        controls.appendChild(saveBtn);
+        controls.appendChild(cancelBtn);
+
+        bubbleEl.innerHTML = '';
+        bubbleEl.appendChild(textarea);
+        bubbleEl.appendChild(controls);
+        textarea.focus();
+
+        cancelBtn.onclick = () => {
+            bubbleEl.innerHTML = originalHTML;
+        };
+
+        saveBtn.onclick = async () => {
+            const newContent = textarea.value.trim();
+            try {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving...';
+                const res = await window.authFetch(`/api/chats/${this.activeChatId}/messages/${msg.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newContent })
+                });
+                if (res.ok) {
+                    msg.content = newContent;
+                    let contentStr = msg.content;
+                    if (msg.ooc_note) contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
+                    bubbleEl.innerHTML = this.formatMessage(contentStr);
+                } else {
+                    alert('Failed to save message');
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save';
+                }
+            } catch (e) {
+                console.error(e);
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
+            }
+        };
+    }
+
+    async deleteMessage(id, wrapper) {
+        if (!confirm('Are you sure you want to delete this message?')) return;
+        try {
+            const res = await window.authFetch(`/api/chats/${this.activeChatId}/messages/${id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                wrapper.remove();
+            } else {
+                alert('Failed to delete message');
+            }
+        } catch (e) {
+            console.error(e);
+        }
     }
 
     formatMessage(text) {
@@ -354,17 +477,19 @@ class RoleplayChatHandler {
         }
         
         // 1. Optimistic UI update
+        const userMsgObj = { role: 'user', content, ooc_note: oocNote };
         this.els.msgInput.value = '';
         this.els.oocInput.value = '';
-        this.appendMessage({ role: 'user', content, ooc_note: oocNote });
+        const userBubbleWrapper = this.appendMessage(userMsgObj);
         
         this.isGenerating = true;
         this.els.sendBtn.disabled = true;
         
         // 2. Create empty AI bubble for streaming
-        const aiBubble = this.appendMessage({ role: 'assistant', character_name: characterName || 'Routing...', content: '' });
-        const contentEl = aiBubble.querySelector('.chat-bubble');
-        const nameEl = aiBubble.querySelector('.chat-bubble-name');
+        const aiMsgObj = { role: 'assistant', character_name: characterName || 'Routing...', content: '' };
+        const aiBubbleWrapper = this.appendMessage(aiMsgObj);
+        const contentEl = aiBubbleWrapper.querySelector('.chat-bubble');
+        const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
         
         try {
             const res = await window.authFetch(`/api/chats/${this.activeChatId}/message`, {
@@ -393,13 +518,25 @@ class RoleplayChatHandler {
                         const dataStr = line.slice(6);
                         const data = JSON.parse(dataStr);
                         
-                        if (data.type === 'metadata' && data.character_name) {
-                            nameEl.textContent = data.character_name;
+                        if (data.type === 'metadata') {
+                            if (data.character_name) {
+                                nameTextEl.textContent = data.character_name;
+                                aiMsgObj.character_name = data.character_name;
+                            }
+                            if (data.user_message_id) {
+                                userMsgObj.id = data.user_message_id;
+                                this.attachMessageActions(userBubbleWrapper, userMsgObj, userBubbleWrapper.querySelector('.chat-bubble'), userBubbleWrapper.querySelector('.chat-bubble-name'));
+                            }
+                            if (data.assistant_message_id) {
+                                aiMsgObj.id = data.assistant_message_id;
+                                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, aiBubbleWrapper.querySelector('.chat-bubble-name'));
+                            }
                         } else if (data.type === 'chunk') {
                             fullText += data.content;
+                            aiMsgObj.content = fullText; // Keep it continuously updated for editing
                             contentEl.innerHTML = this.formatMessage(fullText);
-                            if (nameEl.textContent === 'Routing...' || nameEl.textContent === 'Generating...') {
-                                nameEl.textContent = 'Assistant'; // Fallback
+                            if (nameTextEl.textContent === 'Routing...' || nameTextEl.textContent === 'Generating...') {
+                                nameTextEl.textContent = 'Assistant'; // Fallback
                             }
                             this.scrollToBottom();
                         } else if (data.type === 'error') {

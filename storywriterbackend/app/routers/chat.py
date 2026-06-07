@@ -265,6 +265,33 @@ def delete_chat(chat_id: str, db: Session = Depends(get_db), user_id: int = Depe
     db.commit()
     return {"success": True}
 
+@router.patch("/{chat_id}/messages/{message_id}", response_model=schemas.ChatMessageOut)
+def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessageUpdate, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.chat_id == chat_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    msg.content = msg_in.content
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+@router.delete("/{chat_id}/messages/{message_id}")
+def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.chat_id == chat_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    db.delete(msg)
+    db.commit()
+    return {"success": True}
+
 @router.post("/{chat_id}/message")
 async def send_message(
     chat_id: str,
@@ -331,6 +358,7 @@ async def send_message(
                 await llm.close()
 
     # 1. Save User Message
+    user_msg = None
     if req.content or req.ooc_note:
         user_msg = models.ChatMessage(
             chat_id=chat_id,
@@ -357,7 +385,12 @@ async def send_message(
     
     # 4. Setup Background Detached Generation & Queue
     queue = asyncio.Queue()
-    queue.put_nowait({"type": "metadata", "character_name": speaker_name})
+    queue.put_nowait({
+        "type": "metadata", 
+        "character_name": speaker_name,
+        "user_message_id": user_msg.id if user_msg else None,
+        "assistant_message_id": assistant_msg_id
+    })
     
     async def generate_task():
         llm = LLMService(settings)

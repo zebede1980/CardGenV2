@@ -154,6 +154,9 @@ class ChatMemoryOut(BaseModel):
     class Config:
         from_attributes = True
 
+class ChatMessageUpdate(BaseModel):
+    content: str
+
 class RoleplayChatCreate(BaseModel):
     title: str
     system_prompt: str = ""
