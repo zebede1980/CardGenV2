@@ -352,9 +352,11 @@ class StoryWriterApp {
         this.currentPlayingSegmentId = null; // Track which segment is currently playing
         this.abortController = null; // Used to abort LLM generation fetches
 
-        document.addEventListener('DOMContentLoaded', () => {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.bindEvents());
+        } else {
             this.bindEvents();
-        });
+        }
     }
 
     bindEvents() {
