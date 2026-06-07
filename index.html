@@ -2452,10 +2452,11 @@
               <label class="label">Chat Title</label>
               <input type="text" id="chat-new-title" class="content-box" style="width:100%; margin-bottom: 1rem;" placeholder="E.g., Tavern Encounter" />
               
-              <label class="label">Select Characters</label>
-              <select id="chat-new-characters" class="content-box" multiple style="width:100%; height: 120px; margin-bottom: 0.5rem;">
-              </select>
-              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Hold Ctrl/Cmd to select multiple characters for a group chat.</p>
+              <label class="label">Selected Characters</label>
+              <div id="chat-new-selected-chars" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; min-height: 42px; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);">
+                  <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
+              </div>
+              <button id="chat-new-add-char-btn" class="btn-outline btn-small" style="width: 100%; margin-bottom: 1rem;">🖼️ Add Character from Gallery</button>
 
               <label class="label">Custom System Prompt (Optional)</label>
               <textarea id="chat-new-system-prompt" class="content-box" rows="3" style="width:100%; margin-bottom: 1rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>

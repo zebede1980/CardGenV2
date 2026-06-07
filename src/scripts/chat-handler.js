@@ -81,7 +81,8 @@ class RoleplayChatHandler {
             newModal: document.getElementById('chat-new-modal'),
             newCloseBtn: document.getElementById('chat-new-close-btn'),
             newTitle: document.getElementById('chat-new-title'),
-            newChars: document.getElementById('chat-new-characters'),
+            newSelectedChars: document.getElementById('chat-new-selected-chars'),
+            newAddCharBtn: document.getElementById('chat-new-add-char-btn'),
             newSysPrompt: document.getElementById('chat-new-system-prompt'),
             createSubmitBtn: document.getElementById('chat-create-submit-btn'),
         };
@@ -93,6 +94,10 @@ class RoleplayChatHandler {
         this.els.newBtn.addEventListener('click', () => this.openNewChatModal());
         this.els.newCloseBtn.addEventListener('click', () => this.closeNewChatModal());
         this.els.createSubmitBtn.addEventListener('click', () => this.createNewChat());
+        
+        if (this.els.newAddCharBtn) {
+            this.els.newAddCharBtn.addEventListener('click', () => this.openGalleryForNewChat());
+        }
         
         this.els.oocToggleBtn.addEventListener('click', () => {
             const isHidden = this.els.oocContainer.style.display === 'none';
@@ -118,24 +123,79 @@ class RoleplayChatHandler {
     }
 
     async openNewChatModal() {
+        this.newChatSelectedCards = [];
+        this.renderNewChatSelectedChars();
+        this.els.newTitle.value = '';
+        this.els.newSysPrompt.value = '';
+        this.els.newModal.classList.add('show');
+        
         try {
-            const res = await window.authFetch('/api/cards/');
-            const cards = await res.json();
-            
-            this.els.newChars.innerHTML = '';
-            cards.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id;
-                opt.textContent = c.name || 'Unnamed';
-                this.els.newChars.appendChild(opt);
-            });
-            
-            this.els.newTitle.value = '';
-            this.els.newSysPrompt.value = '';
-            this.els.newModal.classList.add('show');
+            const res = await window.authFetch('/api/sw/cards/');
+            if (res.ok) {
+                this.availableCards = await res.json();
+            } else {
+                this.availableCards = [];
+            }
         } catch (e) {
             console.error("Failed to load cards for modal", e);
+            this.availableCards = [];
         }
+    }
+
+    openGalleryForNewChat() {
+        if (!window.cardGallery) {
+            alert("Gallery module not loaded.");
+            return;
+        }
+        
+        const alreadySelected = new Set((this.newChatSelectedCards || []).map(c => c.id));
+        const unselectedCards = (this.availableCards || []).filter(c => !alreadySelected.has(c.id));
+        
+        window.cardGallery.open(unselectedCards, (selectedCardOrId) => {
+            const cardId = typeof selectedCardOrId === 'object' ? selectedCardOrId.id : selectedCardOrId;
+            const card = this.availableCards.find(c => c.id === cardId);
+            if (card) {
+                this.newChatSelectedCards.push(card);
+                this.renderNewChatSelectedChars();
+            }
+        });
+    }
+
+    renderNewChatSelectedChars() {
+        if (!this.els.newSelectedChars) return;
+        
+        this.els.newSelectedChars.innerHTML = '';
+        if (!this.newChatSelectedCards || this.newChatSelectedCards.length === 0) {
+            this.els.newSelectedChars.innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>';
+            return;
+        }
+        
+        this.newChatSelectedCards.forEach((card, index) => {
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.style.display = 'inline-flex';
+            tag.style.alignItems = 'center';
+            tag.style.gap = '5px';
+            tag.style.fontSize = '0.85rem';
+            tag.innerHTML = `${this.escapeHtml(card.name || 'Unnamed')} <button style="background:none; border:none; cursor:pointer; color:var(--error);" title="Remove">×</button>`;
+            
+            tag.querySelector('button').addEventListener('click', () => {
+                this.newChatSelectedCards.splice(index, 1);
+                this.renderNewChatSelectedChars();
+            });
+            
+            this.els.newSelectedChars.appendChild(tag);
+        });
+    }
+
+    escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
     closeNewChatModal() {
@@ -145,14 +205,13 @@ class RoleplayChatHandler {
     async createNewChat() {
         const title = this.els.newTitle.value.trim() || 'New Chat';
         const sysPrompt = this.els.newSysPrompt.value.trim();
-        const selectedOpts = Array.from(this.els.newChars.selectedOptions);
-        const cardIds = selectedOpts.map(o => parseInt(o.value));
+        const cardIds = (this.newChatSelectedCards || []).map(c => c.id);
         
         try {
             this.els.createSubmitBtn.disabled = true;
             this.els.createSubmitBtn.textContent = 'Creating...';
             
-            const res = await window.authFetch('/api/chats/', {
+            const res = await window.authFetch('/api/sw/chats/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, system_prompt: sysPrompt, card_ids: cardIds })
@@ -174,7 +233,7 @@ class RoleplayChatHandler {
 
     async loadSessionList() {
         try {
-            const res = await window.authFetch('/api/chats/');
+            const res = await window.authFetch('/api/sw/chats/');
             if (!res.ok) return;
             this.chats = await res.json();
             this.renderSessionList();
@@ -220,7 +279,7 @@ class RoleplayChatHandler {
             delBtn.onclick = async (e) => {
                 e.stopPropagation();
                 if(confirm(`Are you sure you want to delete "${chat.title}"?`)) {
-                    await window.authFetch(`/api/chats/${chat.id}`, { method: 'DELETE' });
+                    await window.authFetch(`/api/sw/chats/${chat.id}`, { method: 'DELETE' });
                     if(this.activeChatId === chat.id) this.activeChatId = null;
                     this.loadSessionList();
                 }
@@ -249,7 +308,7 @@ class RoleplayChatHandler {
         });
         
         try {
-            const res = await window.authFetch(`/api/chats/${chatId}`);
+            const res = await window.authFetch(`/api/sw/chats/${chatId}`);
             if (!res.ok) return;
             const chat = await res.json();
             
@@ -404,7 +463,7 @@ class RoleplayChatHandler {
             try {
                 saveBtn.disabled = true;
                 saveBtn.textContent = 'Saving...';
-                const res = await window.authFetch(`/api/chats/${this.activeChatId}/messages/${msg.id}`, {
+                const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${msg.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content: newContent })
@@ -430,7 +489,7 @@ class RoleplayChatHandler {
     async deleteMessage(id, wrapper) {
         if (!confirm('Are you sure you want to delete this message?')) return;
         try {
-            const res = await window.authFetch(`/api/chats/${this.activeChatId}/messages/${id}`, {
+            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${id}`, {
                 method: 'DELETE'
             });
             if (res.ok) {
@@ -494,7 +553,7 @@ class RoleplayChatHandler {
         const nameEl = aiBubbleWrapper.querySelector('.chat-bubble-name');
 
         try {
-            const res = await window.authFetch(`/api/chats/${this.activeChatId}/message`, {
+            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content, ooc_note: oocNote, character_name: characterName })

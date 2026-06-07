@@ -16,7 +16,7 @@ const initChatSettings = () => {
         }
 
         try {
-            const res = await window.authFetch(`/api/chats/${chatId}`);
+            const res = await window.authFetch(`/api/sw/chats/${chatId}`);
             if (res.ok) {
                 const chat = await res.json();
                 titleInput.value = chat.title || '';
@@ -38,7 +38,7 @@ const initChatSettings = () => {
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving...';
             
-            const res = await window.authFetch(`/api/chats/${chatId}`, {
+            const res = await window.authFetch(`/api/sw/chats/${chatId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title: titleInput.value.trim(), system_prompt: promptInput.value.trim() })
