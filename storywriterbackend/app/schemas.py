@@ -131,3 +131,55 @@ class EditSegmentRequest(BaseModel):
 
 class SummaryRequest(BaseModel):
     story_id: int
+
+class ChatMessageOut(BaseModel):
+    id: str
+    chat_id: str
+    role: str
+    character_name: Optional[str] = None
+    content: str
+    ooc_note: str
+    is_summarized: bool = False
+    is_extracted: bool = False
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ChatMemoryOut(BaseModel):
+    id: str
+    chat_id: str
+    fact: str
+    is_active: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class RoleplayChatCreate(BaseModel):
+    title: str
+    system_prompt: str = ""
+    card_ids: List[int] = []
+
+class RoleplayChatUpdate(BaseModel):
+    title: Optional[str] = None
+    system_prompt: Optional[str] = None
+
+class RoleplayChatOut(BaseModel):
+    id: str
+    user_id: int
+    title: str
+    system_prompt: str
+    summary: str
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class RoleplayChatDetailOut(RoleplayChatOut):
+    messages: List[ChatMessageOut] = []
+    memories: List[ChatMemoryOut] = []
+    characters: List[CharacterCardOut] = []
+
+class SendMessageRequest(BaseModel):
+    content: str
+    ooc_note: Optional[str] = ""
+    character_name: Optional[str] = None

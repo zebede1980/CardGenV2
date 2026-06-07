@@ -2266,3 +2266,103 @@ textarea.content-box {
 #sw-tts-volume {
     accent-color: var(--accent);
 }
+
+/* ==========================================================================
+   RICH EMBEDDED UI ELEMENTS (Roleplay Chat)
+   ========================================================================== */
+
+/* Text Messages (Simulated Phone) */
+.rich-text-message {
+    background: var(--surface-strong);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    margin: 0.75rem 0;
+    max-width: 300px;
+    box-shadow: var(--shadow-sm);
+    font-family: "IBM Plex Sans", sans-serif;
+}
+
+.rich-text-sender {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.rich-text-content {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* Stat / Progress Bars */
+.rich-stat-bar-container {
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+    max-width: 350px;
+}
+
+.rich-stat-bar-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rich-stat-value {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+.rich-stat-bar-track {
+    background: rgba(16, 36, 58, 0.1);
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+[data-theme="dark"] .rich-stat-bar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.rich-stat-bar-fill {
+    background: var(--accent);
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+/* Task / Objective Indicators */
+.rich-task-box {
+    border-left: 3px solid var(--warning);
+    background: var(--surface-strong);
+    padding: 0.75rem 1rem;
+    margin: 0.75rem 0;
+    border-radius: 0 8px 8px 0;
+    box-shadow: var(--shadow-sm);
+}
+
+.rich-task-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--warning);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.rich-task-desc {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}

@@ -108,6 +108,7 @@
                 <div id="view-tabs" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
                     <button id="tab-cardgen" class="btn-primary" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎭 Character Generator</button>
                     <button id="tab-storywriter" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">✍️ Story Writer</button>
+                    <button id="tab-roleplaychat" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">💬 Roleplay Chat</button>
                 </div>
 
                 <!-- Character Generator View -->
@@ -1579,6 +1580,53 @@
                     </section>
                 </div>
 
+                <!-- Roleplay Chat View -->
+                <div id="view-roleplaychat" class="tab-content" style="display: none;">
+                  <div class="chat-container">
+                    
+                    <!-- Sidebar: Chat Sessions -->
+                    <div class="chat-sidebar">
+                      <div class="chat-sidebar-header">
+                        <h2 style="margin: 0; font-size: 1.1rem;">Chats</h2>
+                        <button id="chat-new-btn" class="btn-primary btn-small">➕ New</button>
+                      </div>
+                      <div id="chat-session-list" class="chat-session-list">
+                        <!-- Chat sessions will be dynamically injected here -->
+                      </div>
+                    </div>
+
+                    <!-- Main Chat Area -->
+                    <div class="chat-main">
+                      <div class="chat-header">
+                        <div class="chat-header-info">
+                          <h2 id="chat-active-title" style="margin: 0; font-size: 1.25rem;">Select a Chat</h2>
+                          <span id="chat-active-characters" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                        </div>
+                        <div class="chat-header-actions">
+                          <button id="chat-settings-btn" class="btn-outline btn-small">⚙️ Settings</button>
+                        </div>
+                      </div>
+
+                      <div id="chat-timeline" class="chat-timeline">
+                        <div class="chat-placeholder">
+                          <p>Create a new chat or select an existing one to begin roleplaying.</p>
+                        </div>
+                      </div>
+
+                      <div class="chat-input-area">
+                        <div id="chat-ooc-container" class="chat-ooc-container" style="display: none;">
+                          <input type="text" id="chat-ooc-input" class="content-box" placeholder="[OOC Note to AI: E.g., 'Make them angrier' or 'Notice the ring I just dropped']" />
+                        </div>
+                        <div class="chat-input-controls">
+                          <button id="chat-toggle-ooc-btn" class="btn-outline" title="Toggle OOC Note">🎭 OOC</button>
+                          <textarea id="chat-message-input" class="content-box" rows="1" placeholder="Type your message... (Shift+Enter for newline)" disabled></textarea>
+                          <button id="chat-send-btn" class="btn-primary" disabled>Send</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
             </main>
 
             <footer class="footer">
@@ -1633,6 +1681,7 @@
         <script src="src/scripts/revision-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/chat-tester.js?v=20260512"></script>
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
+        <script src="src/scripts/rich-element-parser.js"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
         <script src="src/scripts/batch-generator.js?v=20260518"></script>
         <script src="src/scripts/image-gallery.js?v=20260518"></script>
@@ -1640,6 +1689,8 @@
         <script src="src/scripts/storywriter.js?v=8"></script>
         <script src="src/scripts/inspire-me.js?v=20260601"></script>
         <script src="src/scripts/gallery-mode.js"></script>
+        <script src="src/scripts/chat-handler.js"></script>
+        <script src="src/scripts/chat-settings.js"></script>
         <!-- API Settings Modal -->
 
         <!-- ST push-choice modal (name changed) -->
@@ -2389,5 +2440,49 @@
             </div>
         </div>
 
+        <!-- NEW CHAT MODAL -->
+        <div id="chat-new-modal" class="modal-overlay">
+          <div class="api-settings-modal" style="max-width: 500px; width: 90%;">
+            <div class="modal-header">
+              <h2 class="modal-title">Create New Chat</h2>
+              <button id="chat-new-close-btn" class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+              <label class="label">Chat Title</label>
+              <input type="text" id="chat-new-title" class="content-box" style="width:100%; margin-bottom: 1rem;" placeholder="E.g., Tavern Encounter" />
+              
+              <label class="label">Select Characters</label>
+              <select id="chat-new-characters" class="content-box" multiple style="width:100%; height: 120px; margin-bottom: 0.5rem;">
+              </select>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Hold Ctrl/Cmd to select multiple characters for a group chat.</p>
+
+              <label class="label">Custom System Prompt (Optional)</label>
+              <textarea id="chat-new-system-prompt" class="content-box" rows="3" style="width:100%; margin-bottom: 1rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>
+              <button id="chat-create-submit-btn" class="btn-primary" style="width:100%;">Start Chatting</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHAT SETTINGS MODAL -->
+        <div id="chat-settings-modal" class="modal-overlay">
+          <div class="api-settings-modal" style="max-width: 500px; width: 90%;">
+            <div class="modal-header">
+              <h2 class="modal-title">⚙️ Chat Settings</h2>
+              <button id="chat-settings-close-btn" class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+              <label class="label">Chat Title</label>
+              <input type="text" id="chat-settings-title" class="content-box" style="width:100%; margin-bottom: 1rem;" />
+              
+              <label class="label">System Prompt (Jailbreaks, Rules)</label>
+              <textarea id="chat-settings-system-prompt" class="content-box" rows="5" style="width:100%; margin-bottom: 0.5rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                This prompt is injected at the very beginning of the context window.
+              </p>
+
+              <button id="chat-settings-save-btn" class="btn-primary" style="width:100%;">Save Settings</button>
+            </div>
+          </div>
+        </div>
     </body>
 </html>
