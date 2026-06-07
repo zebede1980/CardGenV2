@@ -298,6 +298,7 @@ class RoleplayChatHandler {
         
         const nameEl = document.createElement('div');
         nameEl.className = 'chat-bubble-name';
+        nameEl.textContent = msg.role === 'user' ? 'You' : (msg.character_name || 'Assistant');
         nameEl.style.display = 'flex';
         nameEl.style.justifyContent = 'space-between';
         nameEl.style.alignItems = 'center';
@@ -480,6 +481,7 @@ class RoleplayChatHandler {
         const userMsgObj = { role: 'user', content, ooc_note: oocNote };
         this.els.msgInput.value = '';
         this.els.oocInput.value = '';
+        this.appendMessage({ role: 'user', content, ooc_note: oocNote });
         const userBubbleWrapper = this.appendMessage(userMsgObj);
         
         this.isGenerating = true;
@@ -490,7 +492,8 @@ class RoleplayChatHandler {
         const aiBubbleWrapper = this.appendMessage(aiMsgObj);
         const contentEl = aiBubbleWrapper.querySelector('.chat-bubble');
         const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
-        
+        const nameEl = aiBubbleWrapper.querySelector('.chat-bubble-name');
+
         try {
             const res = await window.authFetch(`/api/chats/${this.activeChatId}/message`, {
                 method: 'POST',
@@ -529,7 +532,7 @@ class RoleplayChatHandler {
                             }
                             if (data.assistant_message_id) {
                                 aiMsgObj.id = data.assistant_message_id;
-                                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, aiBubbleWrapper.querySelector('.chat-bubble-name'));
+                                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameEl);
                             }
                         } else if (data.type === 'chunk') {
                             fullText += data.content;
@@ -543,7 +546,6 @@ class RoleplayChatHandler {
                             console.error("LLM Error:", data.message);
                             contentEl.innerHTML += `<br><span style="color:var(--error)">[Error: ${data.message}]</span>`;
                         }
-                    }
                 }
             }
         } catch (e) {
