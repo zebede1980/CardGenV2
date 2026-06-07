@@ -18,7 +18,21 @@ def get_current_user(x_user_id: int = Header(None)):
         raise HTTPException(status_code=401, detail="User ID header missing")
     return x_user_id
 
-def build_chat_prompt(chat: models.RoleplayChat, db: Session):
+def get_default_system_prompt() -> str:
+    """Builds the default system prompt modularly."""
+    modules = [
+        # Core Roleplay Rules
+        "You are an expert roleplay AI. Your job is to portray the character(s) described in the provided cards, maintaining their distinct personalities, speech patterns, and backgrounds.",
+        "Follow the user's lead and build upon their actions. Do NOT speak, think, or perform actions for the user.",
+        # Rich UI Elements
+        "RICH UI ELEMENTS:\nYou have the ability to embed rich graphical elements into the chat using specific XML tags. Use them when appropriate to enhance the immersion:",
+        "- When a character sends a text message or phone chat, use: <text-message sender=\"Name\">message content</text-message>",
+        "- When showing health, stamina, or any progress, use: <stat-bar name=\"Health\" value=\"80\" max=\"100\" />",
+        "- When a new objective or quest is received, use: <task title=\"Objective Name\">Description of the task</task>"
+    ]
+    return "\n\n".join(modules)
+
+def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None):
     messages = []
     
     system_parts = []
@@ -55,7 +69,15 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session):
         content = msg.content
         if msg.ooc_note:
             content += f"\n\n[OOC Note to AI: {msg.ooc_note}]"
+            
+        # If it's a group chat, prefix assistant messages with their name
+        if msg.role == "assistant" and msg.character_name and len(chat.characters) > 1:
+            content = f"{msg.character_name}: {content}"
+            
         messages.append({"role": msg.role, "content": content})
+        
+    if speaker_name and len(chat.characters) > 1:
+        messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message, just write the dialogue and actions."})
         
     return messages
 
@@ -198,7 +220,7 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
     new_chat = models.RoleplayChat(
         user_id=user_id,
         title=chat_in.title,
-        system_prompt=chat_in.system_prompt,
+        system_prompt=chat_in.system_prompt.strip() if chat_in.system_prompt else get_default_system_prompt(),
     )
     db.add(new_chat)
     db.flush() # Flush to get the new chat ID
@@ -261,24 +283,72 @@ async def send_message(
     if not settings.api_key:
         raise HTTPException(status_code=400, detail="API key not configured.")
         
+    # Determine speaker
+    speaker_name = req.character_name
+    
+    if not speaker_name and chat.characters:
+        if len(chat.characters) == 1:
+            speaker_name = chat.characters[0].name
+        else:
+            # Route to the most appropriate character
+            history_text = ""
+            recent_msgs = sorted(chat.messages, key=lambda m: m.created_at)[-5:]
+            for m in recent_msgs:
+                name = m.character_name or ("User" if m.role == "user" else "Assistant")
+                history_text += f"{name}: {m.content}\n"
+            if req.content:
+                history_text += f"User: {req.content}"
+            
+            char_names = [c.name for c in chat.characters]
+            route_prompt = (
+                f"Based on the following chat history, which of these characters is most likely to speak next? "
+                f"Options: {', '.join(char_names)}. "
+                "Output ONLY the character's exact name, nothing else.\n\n"
+                f"History:\n{history_text}"
+            )
+            
+            llm = LLMService(settings)
+            try:
+                route_msgs = [
+                    {"role": "system", "content": "You are a dialogue router."},
+                    {"role": "user", "content": route_prompt}
+                ]
+                name_response = []
+                async for chunk in llm.generate(route_msgs, stream=False):
+                    name_response.append(chunk)
+                
+                chosen = "".join(name_response).strip()
+                for cn in char_names:
+                    if cn.lower() in chosen.lower():
+                        speaker_name = cn
+                        break
+                if not speaker_name:
+                    speaker_name = char_names[0]
+            except Exception as e:
+                print(f"Routing error: {e}")
+                speaker_name = char_names[0]
+            finally:
+                await llm.close()
+
     # 1. Save User Message
-    user_msg = models.ChatMessage(
-        chat_id=chat_id,
-        role="user",
-        content=req.content,
-        ooc_note=req.ooc_note
-    )
-    db.add(user_msg)
-    db.commit()
+    if req.content or req.ooc_note:
+        user_msg = models.ChatMessage(
+            chat_id=chat_id,
+            role="user",
+            content=req.content,
+            ooc_note=req.ooc_note
+        )
+        db.add(user_msg)
+        db.commit()
     
     # 2. Build Prompt Context (Ensuring strict caching order)
-    prompt_messages = build_chat_prompt(chat, db)
+    prompt_messages = build_chat_prompt(chat, db, speaker_name)
     
     # 3. Create Placeholder Assistant Message
     assistant_msg = models.ChatMessage(
         chat_id=chat_id,
         role="assistant",
-        character_name=req.character_name,
+        character_name=speaker_name,
         content=""
     )
     db.add(assistant_msg)
@@ -287,6 +357,7 @@ async def send_message(
     
     # 4. Setup Background Detached Generation & Queue
     queue = asyncio.Queue()
+    queue.put_nowait({"type": "metadata", "character_name": speaker_name})
     
     async def generate_task():
         llm = LLMService(settings)
@@ -330,6 +401,9 @@ async def send_message(
                 if isinstance(item, Exception):
                     yield f"data: {json.dumps({'type': 'error', 'message': str(item)})}\n\n"
                     break
+                if isinstance(item, dict):
+                    yield f"data: {json.dumps(item)}\n\n"
+                    continue
                 yield f"data: {json.dumps({'type': 'chunk', 'content': item})}\n\n"
                 
             yield f"data: {json.dumps({'type': 'done'})}\n\n"

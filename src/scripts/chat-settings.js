@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+const initChatSettings = () => {
     const settingsBtn = document.getElementById('chat-settings-btn');
     const modal = document.getElementById('chat-settings-modal');
     const closeBtn = document.getElementById('chat-settings-close-btn');
@@ -60,4 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
             saveBtn.textContent = 'Save Settings';
         }
     });
-});
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initChatSettings);
+} else {
+    initChatSettings();
+}

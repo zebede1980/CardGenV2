@@ -8,8 +8,11 @@ class RoleplayChatHandler {
         this.isGenerating = false;
         this.chats = [];
         
-        // Wait for DOM to fully load before binding
-        document.addEventListener('DOMContentLoaded', () => this.init());
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
+        }
     }
 
     init() {
@@ -73,6 +76,7 @@ class RoleplayChatHandler {
             oocToggleBtn: document.getElementById('chat-toggle-ooc-btn'),
             oocContainer: document.getElementById('chat-ooc-container'),
             oocInput: document.getElementById('chat-ooc-input'),
+            speakerSelect: document.getElementById('chat-speaker-select'),
             
             newModal: document.getElementById('chat-new-modal'),
             newCloseBtn: document.getElementById('chat-new-close-btn'),
@@ -252,6 +256,22 @@ class RoleplayChatHandler {
             this.els.activeTitle.textContent = chat.title;
             this.els.activeChars.textContent = chat.characters.map(c => c.name).join(', ') || 'No characters linked';
             
+            if (this.els.speakerSelect) {
+                if (chat.characters.length > 1) {
+                    this.els.speakerSelect.innerHTML = '<option value="">🤖 Auto (Router)</option>';
+                    chat.characters.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.name;
+                        opt.textContent = c.name;
+                        this.els.speakerSelect.appendChild(opt);
+                    });
+                    this.els.speakerSelect.style.display = 'block';
+                } else {
+                    this.els.speakerSelect.style.display = 'none';
+                    this.els.speakerSelect.innerHTML = '';
+                }
+            }
+
             this.els.timeline.innerHTML = '';
             chat.messages.forEach(msg => this.appendMessage(msg));
             
@@ -328,6 +348,11 @@ class RoleplayChatHandler {
         
         if (!content && !oocNote) return;
         
+        let characterName = null;
+        if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
+            characterName = this.els.speakerSelect.value || null;
+        }
+        
         // 1. Optimistic UI update
         this.els.msgInput.value = '';
         this.els.oocInput.value = '';
@@ -337,7 +362,7 @@ class RoleplayChatHandler {
         this.els.sendBtn.disabled = true;
         
         // 2. Create empty AI bubble for streaming
-        const aiBubble = this.appendMessage({ role: 'assistant', character_name: 'Generating...', content: '' });
+        const aiBubble = this.appendMessage({ role: 'assistant', character_name: characterName || 'Routing...', content: '' });
         const contentEl = aiBubble.querySelector('.chat-bubble');
         const nameEl = aiBubble.querySelector('.chat-bubble-name');
         
@@ -345,7 +370,7 @@ class RoleplayChatHandler {
             const res = await window.authFetch(`/api/chats/${this.activeChatId}/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content, ooc_note: oocNote })
+                body: JSON.stringify({ content, ooc_note: oocNote, character_name: characterName })
             });
             
             if (!res.ok) throw new Error("API Request Failed");
@@ -368,10 +393,14 @@ class RoleplayChatHandler {
                         const dataStr = line.slice(6);
                         const data = JSON.parse(dataStr);
                         
-                        if (data.type === 'chunk') {
+                        if (data.type === 'metadata' && data.character_name) {
+                            nameEl.textContent = data.character_name;
+                        } else if (data.type === 'chunk') {
                             fullText += data.content;
                             contentEl.innerHTML = this.formatMessage(fullText);
-                            nameEl.textContent = 'Assistant'; // Update name once stream starts
+                            if (nameEl.textContent === 'Routing...' || nameEl.textContent === 'Generating...') {
+                                nameEl.textContent = 'Assistant'; // Fallback
+                            }
                             this.scrollToBottom();
                         } else if (data.type === 'error') {
                             console.error("LLM Error:", data.message);

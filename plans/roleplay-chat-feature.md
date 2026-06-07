@@ -116,15 +116,15 @@ New tables to be added to `storywriterbackend/app/models.py`:
 - [ ] **Frontend:** Build chat sidebar (list sessions) and main chat window (message bubbles, input area).
 
 ### Phase 2: System Prompts, Caching & Rich Elements
-- [ ] **Frontend/Backend:** Add a "Chat Settings" drawer to edit System Prompts and Generation Settings (Temp, Model - e.g., GLM 5.1, DeepSeekv4Pro via nano-gpt.com).
-- [ ] **Backend:** Implement the strict Prompt Builder order (System -> Card -> Lorebook -> History) to guarantee Prefix Caching hits.
-- [ ] **Frontend:** Build a custom Markdown/UI parser for chat bubbles to render embedded graphical elements (simulated phone text messages, health bars, task progress).
-- [ ] **Backend:** Create default system prompt templates that explicitly encourage the LLM to output these custom UI tags.
+- [x] **Frontend/Backend:** Add a "Chat Settings" drawer to edit System Prompts and Generation Settings (Temp, Model - e.g., GLM 5.1, DeepSeekv4Pro via nano-gpt.com).
+- [x] **Backend:** Implement the strict Prompt Builder order (System -> Card -> Lorebook -> History) to guarantee Prefix Caching hits.
+- [x] **Frontend:** Build a custom Markdown/UI parser for chat bubbles to render embedded graphical elements (simulated phone text messages, health bars, task progress).
+- [x] **Backend:** Create default system prompt templates that explicitly encourage the LLM to output these custom UI tags.
 
 ### Phase 3: Group Chats
-- [ ] **Frontend:** Update "New Chat" modal to allow selecting multiple characters.
-- [ ] **Backend:** Update Context Builder to inject multiple character cards. 
-- [ ] **Frontend:** Add UI controls to manually trigger a specific character to reply, or let them reply automatically.
+- [x] **Frontend:** Update "New Chat" modal to allow selecting multiple characters.
+- [x] **Backend:** Update Context Builder to inject multiple character cards. 
+- [x] **Frontend:** Add UI controls to manually trigger a specific character to reply, or let them reply automatically.
 
 ### Phase 4: Evolving Memory
 - [x] **Backend:** Implement the `Rolling Summary` threshold.
