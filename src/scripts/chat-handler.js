@@ -418,6 +418,9 @@ class RoleplayChatHandler {
         }
         
         window.addEventListener('resize', () => this.adjustChatLayout());
+        
+        document.addEventListener('visibilitychange', () => this.syncOnWake());
+        window.addEventListener('focus', () => this.syncOnWake());
     }
 
     updateOocBadge() {
@@ -448,6 +451,36 @@ class RoleplayChatHandler {
             viewChat.style.height = `${availableHeight}px`;
         } else {
             viewChat.style.height = '';
+        }
+    }
+
+    async syncOnWake() {
+        if (document.visibilityState !== 'visible') return;
+        
+        this.loadSessionList(); // Refresh the sidebar in case external changes occurred
+        
+        if (!this.activeChatId) return;
+
+        if (!this.isGenerating) {
+            this.selectChat(this.activeChatId);
+            return;
+        }
+
+        try {
+            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
+            if (!res.ok) return;
+            const chat = await res.json();
+            
+            const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
+            const dbCount = chat.messages ? chat.messages.length : 0;
+            
+            // If the DB has caught up to the DOM's optimistic bubble count, the background task finished while asleep
+            if (dbCount >= domCount) {
+                if (this.abortController) this.abortController.abort(); // Safely kill the hung/stale socket
+                this.selectChat(this.activeChatId);
+            }
+        } catch (e) {
+            console.error("Failed to sync chat on wake", e);
         }
     }
 
