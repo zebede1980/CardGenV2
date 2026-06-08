@@ -122,7 +122,7 @@ class RoleplayChatHandler {
         });
     }
 
-    async openNewChatModal() {
+    async openNewChatModal(preselectCardId = null) {
         this.newChatSelectedCards = [];
         this.renderNewChatSelectedChars();
         this.els.newTitle.value = '';
@@ -133,6 +133,13 @@ class RoleplayChatHandler {
             const res = await window.authFetch('/api/sw/cards/');
             if (res.ok) {
                 this.availableCards = await res.json();
+                if (preselectCardId) {
+                    const card = this.availableCards.find(c => String(c.id) === String(preselectCardId));
+                    if (card) {
+                        this.newChatSelectedCards.push(card);
+                        this.renderNewChatSelectedChars();
+                    }
+                }
             } else {
                 this.availableCards = [];
             }
