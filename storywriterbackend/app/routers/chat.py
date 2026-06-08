@@ -9,14 +9,9 @@ from app.database import get_db, SessionLocal
 from app import models, schemas
 from app.services.llm_service import LLMService
 from app.routers.settings import get_or_create_settings
+from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/chats", tags=["chats"])
-
-# Extract the X-User-Id header forwarded by our proxy server
-def get_current_user(x_user_id: str = Header(None)):
-    if x_user_id is None:
-        raise HTTPException(status_code=401, detail="User ID header missing")
-    return x_user_id
 
 def get_default_system_prompt() -> str:
     """Builds the default system prompt modularly."""
@@ -81,11 +76,11 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         
     return messages
 
-async def summarize_chat_task(chat_id: str, user_id: str):
+async def summarize_chat_task(chat_id: str, user_id: int):
     with SessionLocal() as bg_db:
         chat = bg_db.query(models.RoleplayChat).filter(
             models.RoleplayChat.id == chat_id,
-            models.RoleplayChat.user_id == user_id
+            models.RoleplayChat.user_id == str(user_id)
         ).first()
         if not chat: return
         
@@ -139,11 +134,11 @@ async def summarize_chat_task(chat_id: str, user_id: str):
         finally:
             await llm.close()
 
-async def extract_chat_memory_task(chat_id: str, user_id: str):
+async def extract_chat_memory_task(chat_id: str, user_id: int):
     with SessionLocal() as bg_db:
         chat = bg_db.query(models.RoleplayChat).filter(
             models.RoleplayChat.id == chat_id,
-            models.RoleplayChat.user_id == user_id
+            models.RoleplayChat.user_id == str(user_id)
         ).first()
         if not chat: return
         
@@ -209,16 +204,16 @@ async def extract_chat_memory_task(chat_id: str, user_id: str):
             await llm.close()
 
 @router.get("/", response_model=List[schemas.RoleplayChatOut])
-def list_chats(db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
+def list_chats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return db.query(models.RoleplayChat)\
-        .filter(models.RoleplayChat.user_id == user_id)\
+        .filter(models.RoleplayChat.user_id == str(current_user.id))\
         .order_by(models.RoleplayChat.updated_at.desc())\
         .all()
 
 @router.post("/", response_model=schemas.RoleplayChatDetailOut)
-def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
+def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     new_chat = models.RoleplayChat(
-        user_id=user_id,
+        user_id=str(current_user.id),
         title=chat_in.title,
         system_prompt=chat_in.system_prompt.strip() if chat_in.system_prompt else get_default_system_prompt(),
     )
@@ -235,15 +230,15 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
     return new_chat
 
 @router.get("/{chat_id}", response_model=schemas.RoleplayChatDetailOut)
-def get_chat(chat_id: str, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
-    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
+def get_chat(chat_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     return chat
 
 @router.patch("/{chat_id}", response_model=schemas.RoleplayChatOut)
-def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
-    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
+def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     
@@ -257,8 +252,8 @@ def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session =
     return chat
 
 @router.delete("/{chat_id}")
-def delete_chat(chat_id: str, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
-    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
+def delete_chat(chat_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     db.delete(chat)
@@ -266,8 +261,8 @@ def delete_chat(chat_id: str, db: Session = Depends(get_db), user_id: str = Depe
     return {"success": True}
 
 @router.patch("/{chat_id}/messages/{message_id}", response_model=schemas.ChatMessageOut)
-def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessageUpdate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
-    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
+def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessageUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.chat_id == chat_id).first()
@@ -280,8 +275,8 @@ def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessa
     return msg
 
 @router.delete("/{chat_id}/messages/{message_id}")
-def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
-    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
+def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.chat_id == chat_id).first()
@@ -297,16 +292,16 @@ async def send_message(
     chat_id: str,
     req: schemas.SendMessageRequest,
     db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user)
 ):
     chat = db.query(models.RoleplayChat).filter(
         models.RoleplayChat.id == chat_id, 
-        models.RoleplayChat.user_id == user_id
+        models.RoleplayChat.user_id == str(current_user.id)
     ).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
         
-    settings = get_or_create_settings(db, user_id)
+    settings = get_or_create_settings(db, current_user.id)
     if not settings.api_key:
         raise HTTPException(status_code=400, detail="API key not configured.")
         
@@ -419,10 +414,10 @@ async def send_message(
     asyncio.create_task(generate_task())
     
     # Launch background summarization for future turns
-    asyncio.create_task(summarize_chat_task(chat_id, user_id))
+    asyncio.create_task(summarize_chat_task(chat_id, current_user.id))
     
     # Launch background auto-fact extraction
-    asyncio.create_task(extract_chat_memory_task(chat_id, user_id))
+    asyncio.create_task(extract_chat_memory_task(chat_id, current_user.id))
     
     # 5. SSE Generator for frontend
     async def sse_generator():
