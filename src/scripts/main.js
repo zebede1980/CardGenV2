@@ -1190,6 +1190,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         [data-theme="dark"] button:not(.btn-primary):not(.btn-secondary):not(.btn-stop):not([style*="background: none"]):not([style*="background:none"]):hover {
             background: var(--surface-muted, #111820);
         }
+
+          /* Form inputs need explicit color assignment to avoid black text on dark backgrounds */
+          input, textarea, select, .content-box, .input {
+              color: var(--text-primary);
+          }
     `;
   document.head.appendChild(style);
 

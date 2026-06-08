@@ -706,15 +706,15 @@ class RoleplayChatHandler {
         }
         
         let contentStr = msg.content || '';
-        if (msg.ooc_note) {
-            if (contentStr) {
-                contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
-            } else {
-                contentStr = `*[OOC: ${msg.ooc_note}]*`;
-            }
-        }
-        
         bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
+        
+        if (msg.ooc_note) {
+            const oocEl = document.createElement('details');
+            oocEl.style.marginTop = '0.5rem';
+            oocEl.style.fontSize = '0.85rem';
+            oocEl.innerHTML = `<summary style="cursor: pointer; opacity: 0.7; font-weight: 500;">OOC Instruction</summary><div style="margin-top: 0.25rem; font-style: italic; opacity: 0.8; padding-left: 0.5rem; border-left: 2px solid var(--border);">${this.escapeHtml(msg.ooc_note)}</div>`;
+            bubbleEl.appendChild(oocEl);
+        }
         
         
         const avatarEl = document.createElement('div');
@@ -871,12 +871,14 @@ class RoleplayChatHandler {
                 });
                 if (res.ok) {
                     msg.content = newContent;
-                    let contentStr = msg.content;
+                    bubbleEl.innerHTML = this.formatMessage(msg.content, msg.character_name);
                     if (msg.ooc_note) {
-                        if (contentStr) contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
-                        else contentStr = `*[OOC: ${msg.ooc_note}]*`;
+                        const oocEl = document.createElement('details');
+                        oocEl.style.marginTop = '0.5rem';
+                        oocEl.style.fontSize = '0.85rem';
+                        oocEl.innerHTML = `<summary style="cursor: pointer; opacity: 0.7; font-weight: 500;">OOC Instruction</summary><div style="margin-top: 0.25rem; font-style: italic; opacity: 0.8; padding-left: 0.5rem; border-left: 2px solid var(--border);">${this.escapeHtml(msg.ooc_note)}</div>`;
+                        bubbleEl.appendChild(oocEl);
                     }
-                    bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
                 } else {
                     alert('Failed to save message');
                     saveBtn.disabled = false;
