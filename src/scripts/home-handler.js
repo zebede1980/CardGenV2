@@ -267,12 +267,31 @@ class HomeHandler {
                     const res = await window.authFetch('/api/sw/chats/');
                     if (res.ok) {
                         const allChats = await res.json();
-                        const relevantChats = allChats.filter(c => c.characters && c.characters.some(ch => String(ch.id) === String(card.id)));
+                        allChats.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
                         
-                        if (relevantChats.length > 0) {
+                        let foundChatId = null;
+                        
+                        for (const c of allChats) {
+                            if (c.characters) {
+                                if (c.characters.some(ch => String(ch.id) === String(card.id))) {
+                                    foundChatId = c.id;
+                                    break;
+                                }
+                            } else {
+                                const detailRes = await window.authFetch(`/api/sw/chats/${c.id}`);
+                                if (detailRes.ok) {
+                                    const detail = await detailRes.json();
+                                    if (detail.characters && detail.characters.some(ch => String(ch.id) === String(card.id))) {
+                                        foundChatId = c.id;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (foundChatId) {
                             // Resume latest chat containing this character
-                            relevantChats.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-                            await window.roleplayChatHandler.selectChat(relevantChats[0].id);
+                            await window.roleplayChatHandler.selectChat(foundChatId);
                         } else {
                             // No history found, start a new chat with character pre-populated
                             await window.roleplayChatHandler.openNewChatModal(card.id);

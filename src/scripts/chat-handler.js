@@ -7,6 +7,7 @@ class RoleplayChatHandler {
         this.activeChatId = null;
         this.isGenerating = false;
         this.chats = [];
+        this.availablePersonas = [];
         
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
@@ -19,6 +20,7 @@ class RoleplayChatHandler {
         this.bindElements();
         this.bindEvents();
         this.setupTabIntegration();
+        this.loadPersonas();
     }
 
     setupTabIntegration() {
@@ -42,6 +44,7 @@ class RoleplayChatHandler {
                 tabChat.className = 'btn-primary';
                 
                 this.loadSessionList();
+                this.loadPersonas();
             });
             
             // Hide chat view when other tabs are clicked
@@ -85,6 +88,7 @@ class RoleplayChatHandler {
             newAddCharBtn: document.getElementById('chat-new-add-char-btn'),
             newSysPrompt: document.getElementById('chat-new-system-prompt'),
             createSubmitBtn: document.getElementById('chat-create-submit-btn'),
+            userPersonaSelect: document.getElementById('chat-user-persona-select'),
         };
     }
 
@@ -120,6 +124,15 @@ class RoleplayChatHandler {
                 this.sendMessage();
             }
         });
+        
+        if (this.els.userPersonaSelect) {
+            this.els.userPersonaSelect.addEventListener('change', (e) => {
+                localStorage.setItem('chatgen_active_user_persona', e.target.value);
+                if (this.activeChatId) {
+                    this.selectChat(this.activeChatId);
+                }
+            });
+        }
     }
 
     async openNewChatModal(preselectCardId = null) {
@@ -303,6 +316,39 @@ class RoleplayChatHandler {
         });
     }
 
+    async loadPersonas() {
+        if (!window.characterStorage) {
+            setTimeout(() => this.loadPersonas(), 200);
+            return;
+        }
+        try {
+            const allCards = await window.characterStorage.listCards();
+            this.availablePersonas = allCards;
+            
+            if (this.els.userPersonaSelect) {
+                const currentVal = localStorage.getItem('chatgen_active_user_persona') || '';
+                
+                this.els.userPersonaSelect.innerHTML = '<option value="">User (Default)</option>';
+                this.availablePersonas.forEach(card => {
+                    const opt = document.createElement('option');
+                    opt.value = card.id;
+                    const charName = card.characterName || (card.character && card.character.name) || card.name || 'Unnamed';
+                    opt.textContent = charName;
+                    this.els.userPersonaSelect.appendChild(opt);
+                });
+                
+                if (this.availablePersonas.some(c => String(c.id) === String(currentVal))) {
+                    this.els.userPersonaSelect.value = currentVal;
+                } else {
+                    this.els.userPersonaSelect.value = '';
+                    localStorage.removeItem('chatgen_active_user_persona');
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load personas", e);
+        }
+    }
+
     async selectChat(chatId) {
         this.activeChatId = chatId;
         
@@ -372,6 +418,12 @@ class RoleplayChatHandler {
         return null;
     }
 
+    getUserPersonaData() {
+        const id = localStorage.getItem('chatgen_active_user_persona');
+        if (!id || !this.availablePersonas) return null;
+        return this.availablePersonas.find(c => String(c.id) === String(id)) || null;
+    }
+
     appendMessage(msg) {
         const placeholder = this.els.timeline.querySelector('.chat-placeholder');
         if (placeholder) placeholder.remove();
@@ -432,8 +484,27 @@ class RoleplayChatHandler {
         avatarEl.style.fontWeight = 'bold';
         
         if (msg.role === 'user') {
-            avatarEl.textContent = 'U';
-            avatarEl.style.fontSize = '1.5rem';
+            if (userPersona) {
+                const avatarUrl = this.getAvatarUrl(userName, userPersona.id);
+                if (avatarUrl) {
+                    avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-user-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
+                    const imgEl = avatarEl.querySelector('img');
+                    if (imgEl) {
+                        imgEl.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (window.app && window.app.openGallery) {
+                                window.app.openGallery([{ url: avatarUrl, label: userName }]);
+                            }
+                        });
+                    }
+                } else {
+                    avatarEl.textContent = userName.substring(0, 2).toUpperCase();
+                    avatarEl.style.fontSize = '1.2rem';
+                }
+            } else {
+                avatarEl.textContent = 'U';
+                avatarEl.style.fontSize = '1.5rem';
+            }
         } else {
             const avatarUrl = this.getAvatarUrl(msg.character_name, msg.character_card_id);
             if (avatarUrl) {
@@ -596,7 +667,9 @@ class RoleplayChatHandler {
             charName = this.activeChatCharacters[0].name;
         }
         charName = charName || "Character";
-        const userName = "User"; // We'll upgrade this when user avatars are added!
+        
+        const userPersona = this.getUserPersonaData();
+        const userName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || "User") : "User";
         
         parsed = parsed.replace(/\{\{char\}\}/gi, charName);
         parsed = parsed.replace(/\{\{user\}\}/gi, userName);

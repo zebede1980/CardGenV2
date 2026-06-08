@@ -1602,7 +1602,13 @@
                           <h2 id="chat-active-title" style="margin: 0; font-size: 1.25rem;">Select a Chat</h2>
                           <span id="chat-active-characters" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
                         </div>
-                        <div class="chat-header-actions">
+                        <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                              <span style="font-size: 0.85rem; color: var(--text-secondary);">Playing as:</span>
+                              <select id="chat-user-persona-select" class="content-box" style="padding: 0.3rem 0.5rem; max-width: 150px; font-size: 0.85rem;">
+                                  <option value="">User (Default)</option>
+                              </select>
+                          </div>
                           <button id="chat-settings-btn" class="btn-outline btn-small">⚙️ Settings</button>
                         </div>
                       </div>
