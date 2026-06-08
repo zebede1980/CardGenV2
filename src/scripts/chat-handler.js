@@ -448,32 +448,17 @@ class RoleplayChatHandler {
             return;
         }
 
-        // On mobile, use CSS-driven height; on desktop, compute a comfortable fit
-        if (window.innerWidth <= 768) {
-            // Let the flex layout handle it naturally — clear any JS-set height
-            viewChat.style.height = '';
-            viewChat.style.maxHeight = '';
-            // Ensure .main fills remaining space in the flex column
-            const mainEl = document.querySelector('.main');
-            if (mainEl && viewChat.style.display !== 'none') {
-                mainEl.style.flex = '1';
-                mainEl.style.minHeight = '0';
-                mainEl.style.display = 'flex';
-                mainEl.style.flexDirection = 'column';
-            }
-            return;
-        }
+        // Clear any JS-set height and let CSS flex chain handle it naturally
+        viewChat.style.height = '';
+        viewChat.style.maxHeight = '';
 
-        // Desktop: compute explicit height
-        const rect = viewChat.getBoundingClientRect();
-        const footer = document.querySelector('.footer');
-        const footerHeight = footer ? footer.offsetHeight : 40;
-        const containerGap = 18; // .container gap ~1.1rem
-        const availableHeight = window.innerHeight - rect.top - footerHeight - containerGap;
-        if (availableHeight > 200) {
-            viewChat.style.height = `${availableHeight}px`;
-        } else {
-            viewChat.style.height = '';
+        // Ensure .main fills remaining space in the flex column
+        const mainEl = document.querySelector('.main');
+        if (mainEl && viewChat.style.display !== 'none') {
+            mainEl.style.flex = '1';
+            mainEl.style.minHeight = '0';
+            mainEl.style.display = 'flex';
+            mainEl.style.flexDirection = 'column';
         }
     }
 
