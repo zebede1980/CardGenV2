@@ -305,13 +305,20 @@ class RoleplayChatHandler {
             input.style.color = 'var(--text-primary)';
             input.style.fontFamily = 'inherit';
             input.style.fontSize = '0.85rem';
-            input.style.resize = 'vertical';
+            input.style.resize = 'none';
+            input.style.overflowY = 'hidden';
             input.style.minHeight = '3rem';
             input.style.outline = 'none';
             input.style.padding = '0';
             input.addEventListener('change', (e) => {
                 this.systemPromptSegments[i] = e.target.value;
             });
+
+            const autoSize = () => {
+                input.style.height = 'auto';
+                input.style.height = (input.scrollHeight) + 'px';
+            };
+            input.addEventListener('input', autoSize);
             
             const delBtn = document.createElement('button');
             delBtn.innerHTML = '🗑️';
@@ -327,6 +334,9 @@ class RoleplayChatHandler {
             row.appendChild(input);
             row.appendChild(delBtn);
             this.els.globalPromptSegments.appendChild(row);
+
+            // Set initial size after appending to DOM so scrollHeight is correct
+            setTimeout(autoSize, 0);
         });
     }
 
