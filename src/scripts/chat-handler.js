@@ -20,6 +20,7 @@ class RoleplayChatHandler {
         this.injectSettingsModal();
         this.setupSidebarToggle();
         this.bindElements();
+        this.fixMobileLayout();
         this.bindEvents();
         this.setupTabIntegration();
         this.loadPersonas();
@@ -134,6 +135,64 @@ class RoleplayChatHandler {
         }
     }
 
+    fixMobileLayout() {
+        if (!document.getElementById('chat-mobile-fixes')) {
+            const style = document.createElement('style');
+            style.id = 'chat-mobile-fixes';
+            style.textContent = `
+                /* Make the root chat view a fixed height flex container to prevent scrolling off-screen */
+                #view-roleplaychat:not([style*="display: none"]) {
+                    display: flex !important;
+                }
+                
+                #view-roleplaychat {
+                    height: calc(100dvh - 75px); /* Subtract approximate top nav height */
+                    overflow: hidden;
+                    box-sizing: border-box;
+                }
+                
+                @media (max-width: 768px) {
+                    #view-roleplaychat {
+                        flex-direction: column !important;
+                    }
+                    
+                    /* Constrain sidebar height on mobile so the chat area is still reachable */
+                    #view-roleplaychat > .sidebar, 
+                    #view-roleplaychat > aside {
+                        max-height: 25vh;
+                        width: 100% !important;
+                        border-right: none !important;
+                        border-bottom: 1px solid var(--border);
+                        flex-shrink: 0;
+                    }
+                    
+                    /* Always show message actions on mobile (since no hover) */
+                    .chat-message-actions {
+                        opacity: 1 !important;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // The parent of the timeline is the right-side main chat column
+        if (this.els.timeline && this.els.timeline.parentElement) {
+            const mainArea = this.els.timeline.parentElement;
+            mainArea.style.flex = '1';
+            mainArea.style.display = 'flex';
+            mainArea.style.flexDirection = 'column';
+            mainArea.style.minWidth = '0';
+            mainArea.style.height = '100%';
+            mainArea.style.overflow = 'hidden';
+            
+            // The timeline takes all remaining space and handles the scrolling
+            this.els.timeline.style.flex = '1 1 0%';
+            this.els.timeline.style.overflowY = 'auto';
+            this.els.timeline.style.minHeight = '0';
+            this.els.timeline.style.paddingBottom = '1rem';
+        }
+    }
+
     setupTabIntegration() {
         const tabCardGen = document.getElementById('tab-cardgen');
         const tabStoryWriter = document.getElementById('tab-storywriter');
@@ -151,7 +210,7 @@ class RoleplayChatHandler {
                 if (tabCardGen) tabCardGen.className = 'btn-outline';
                 if (tabStoryWriter) tabStoryWriter.className = 'btn-outline';
                 
-                viewChat.style.display = 'block';
+                viewChat.style.display = 'flex';
                 tabChat.className = 'btn-primary';
                 
                 this.loadSessionList();
