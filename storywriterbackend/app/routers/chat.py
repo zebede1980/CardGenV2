@@ -18,7 +18,7 @@ def get_default_system_prompt() -> str:
     modules = [
         # Core Roleplay Rules
         "You are an expert roleplay AI. Your job is to portray the character(s) described in the provided cards, maintaining their distinct personalities, speech patterns, and backgrounds.",
-        "Follow the user's lead and build upon their actions. Do NOT speak, think, or perform actions for the user.",
+        "Follow the user's lead and build upon their actions. You must NEVER speak, think, or dictate actions for the user.",
         # Rich UI Elements
         "RICH UI ELEMENTS:\nYou have the ability to embed rich graphical elements into the chat using specific XML tags. Use them when appropriate to enhance the immersion:",
         "- When a character sends a text message or phone chat, use: <text-message sender=\"Name\">message content</text-message>",
@@ -64,7 +64,10 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
             continue
         content = msg.content
         if msg.ooc_note:
-            content += f"\n\n[OOC Note to AI: {msg.ooc_note}]"
+            if content:
+                content += f"\n\n[OOC Note to AI: {msg.ooc_note}]"
+            else:
+                content = f"[OOC Note to AI: {msg.ooc_note}]"
             
         # If it's a group chat, prefix assistant messages with their name
         if msg.role == "assistant" and msg.character_name and len(chat.characters) > 1:

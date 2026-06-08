@@ -401,9 +401,19 @@ class RoleplayChatHandler {
         const bubbleEl = document.createElement('div');
         bubbleEl.className = 'chat-bubble';
         
+        if (msg.role === 'user') {
+            bubbleEl.style.backgroundColor = 'var(--surface-color)';
+            bubbleEl.style.color = 'var(--text-primary)';
+            bubbleEl.style.border = '1px solid var(--border)';
+        }
+        
         let contentStr = msg.content || '';
         if (msg.ooc_note) {
-            contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
+            if (contentStr) {
+                contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
+            } else {
+                contentStr = `*[OOC: ${msg.ooc_note}]*`;
+            }
         }
         
         bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
@@ -542,7 +552,10 @@ class RoleplayChatHandler {
                 if (res.ok) {
                     msg.content = newContent;
                     let contentStr = msg.content;
-                    if (msg.ooc_note) contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
+                    if (msg.ooc_note) {
+                        if (contentStr) contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
+                        else contentStr = `*[OOC: ${msg.ooc_note}]*`;
+                    }
                     bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
                 } else {
                     alert('Failed to save message');
@@ -630,9 +643,11 @@ class RoleplayChatHandler {
         if (!this.activeChatId || this.isGenerating) return;
         
         const content = this.els.msgInput.value.trim();
-        const oocNote = this.els.oocInput.value.trim();
+        let oocNote = this.els.oocInput.value.trim();
         
-        if (!content && !oocNote) return;
+        if (!content && !oocNote) {
+            oocNote = "Please continue the story.";
+        }
         
         let characterName = null;
         if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
