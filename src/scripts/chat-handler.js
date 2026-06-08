@@ -94,12 +94,15 @@ class RoleplayChatHandler {
         modal.style.display = 'none';
         modal.style.zIndex = '2000';
         modal.innerHTML = `
-            <div class="api-settings-modal" style="max-width: 600px; width: 90%; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="api-settings-modal" style="max-width: 600px; width: 90%; max-height: 90vh; height: auto; display: flex; flex-direction: column; transition: max-width 0.2s ease, width 0.2s ease, height 0.2s ease;">
                 <div class="modal-header">
                     <h2 class="modal-title">⚙️ Global Chat Settings</h2>
-                    <button id="chat-global-settings-close" class="modal-close">×</button>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button id="chat-global-settings-maximize" class="btn-outline btn-small" style="border:none; padding: 0.2rem 0.5rem; font-size: 1.2rem; min-height: unset; height: auto;" title="Maximize">⛶</button>
+                        <button id="chat-global-settings-close" class="modal-close">×</button>
+                    </div>
                 </div>
-                <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
+                <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column;">
                     <div class="form-group">
                         <label>Max Input Tokens (Context Window)</label>
                         <input type="number" id="chat-global-max-input" class="content-box" style="width: 100%;">
@@ -120,7 +123,7 @@ class RoleplayChatHandler {
                     <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new chat.</p>
                     
-                    <div id="chat-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; max-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
+                    <div id="chat-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; flex: 1; min-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
                         <!-- Segments injected here -->
                     </div>
                     
@@ -298,6 +301,8 @@ class RoleplayChatHandler {
             
             globalSettingsBtn: document.getElementById('chat-open-global-settings'),
             globalSettingsModal: document.getElementById('chat-global-settings-modal'),
+            globalSettingsMaxBtn: document.getElementById('chat-global-settings-maximize'),
+            globalSettingsContent: document.querySelector('#chat-global-settings-modal .api-settings-modal'),
             globalSettingsClose: document.getElementById('chat-global-settings-close'),
             globalMaxInput: document.getElementById('chat-global-max-input'),
             globalMaxOutput: document.getElementById('chat-global-max-output'),
@@ -341,6 +346,9 @@ class RoleplayChatHandler {
         
         if (this.els.globalSettingsBtn) {
             this.els.globalSettingsBtn.addEventListener('click', () => this.openGlobalSettings());
+        }
+        if (this.els.globalSettingsMaxBtn) {
+            this.els.globalSettingsMaxBtn.addEventListener('click', () => this.toggleGlobalSettingsMaximize());
         }
         if (this.els.globalSettingsClose) {
             this.els.globalSettingsClose.addEventListener('click', () => this.els.globalSettingsModal.style.display = 'none');
@@ -399,6 +407,29 @@ class RoleplayChatHandler {
         this.renderSystemPromptSegments();
         
         this.els.globalSettingsModal.style.display = 'flex';
+    }
+
+    toggleGlobalSettingsMaximize() {
+        const content = this.els.globalSettingsContent;
+        const btn = this.els.globalSettingsMaxBtn;
+        
+        if (!content.classList.contains('maximized')) {
+            content.classList.add('maximized');
+            content.style.maxWidth = '95vw';
+            content.style.width = '95vw';
+            content.style.height = '95vh';
+            content.style.maxHeight = '95vh';
+            btn.innerHTML = '🗗';
+            btn.title = 'Restore';
+        } else {
+            content.classList.remove('maximized');
+            content.style.maxWidth = '600px';
+            content.style.width = '90%';
+            content.style.height = 'auto';
+            content.style.maxHeight = '90vh';
+            btn.innerHTML = '⛶';
+            btn.title = 'Maximize';
+        }
     }
 
     renderSystemPromptSegments() {
