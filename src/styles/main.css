@@ -2487,7 +2487,6 @@ textarea.content-box {
     flex-direction: column;
     gap: 1rem;
     min-height: 0;
-    scroll-behavior: smooth;
 }
 
 .chat-placeholder {
@@ -2862,5 +2861,10 @@ textarea.content-box {
     /* Character name in bubble actions shorter */
     .chat-bubble-name {
         font-size: 0.72rem;
+    }
+
+    /* Ensure the chat view fills available height on mobile without overlapping footer */
+    #view-roleplaychat:not([style*="display: none"]) {
+        height: auto !important;
     }
 }

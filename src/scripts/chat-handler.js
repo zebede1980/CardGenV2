@@ -234,22 +234,28 @@ class RoleplayChatHandler {
             }
         }
 
+        // Impersonate button
+        if (!document.getElementById('chat-impersonate-btn')) {
+            const impBtn = document.createElement('button');
+            impBtn.id = 'chat-impersonate-btn';
+            impBtn.className = 'btn-outline';
+            impBtn.innerHTML = '🎭 Impersonate';
+            impBtn.title = 'Make the AI write from your perspective';
+            impBtn.style.marginLeft = '0.5rem';
+            impBtn.style.flexShrink = '0';
+            impBtn.addEventListener('click', () => this.sendMessage({ impersonate: true }));
+            const stopBtn = document.getElementById('chat-stop-btn');
+            if (stopBtn && stopBtn.parentNode) {
+                stopBtn.parentNode.insertBefore(impBtn, stopBtn.nextSibling);
+            }
+        }
+
         // Scroll-to-bottom FAB
         const fab = document.getElementById('chat-scroll-bottom-btn');
         if (fab) {
             fab.addEventListener('click', () => {
                 this.els.timeline.scrollTop = this.els.timeline.scrollHeight;
                 fab.style.display = 'none';
-            });
-        }
-
-        // Show/hide FAB based on scroll position
-        if (this.els.timeline) {
-            this.els.timeline.addEventListener('scroll', () => {
-                if (this._isNearBottom()) {
-                    const f = document.getElementById('chat-scroll-bottom-btn');
-                    if (f) f.style.display = 'none';
-                }
             });
         }
 
@@ -264,6 +270,15 @@ class RoleplayChatHandler {
 
         // Initial layout adjustment
         this.adjustChatLayout();
+    }
+
+    _resetMainLayout() {
+        const mainEl = document.querySelector('.main');
+        if (!mainEl) return;
+        mainEl.style.flex = '';
+        mainEl.style.minHeight = '';
+        mainEl.style.display = '';
+        mainEl.style.flexDirection = '';
     }
 
     setupTabIntegration() {
@@ -294,19 +309,14 @@ class RoleplayChatHandler {
                 setTimeout(() => this.adjustChatLayout(), 10);
             });
             
-            // Hide chat view when other tabs are clicked
-            if (tabCardGen) {
-                tabCardGen.addEventListener('click', () => {
-                    viewChat.style.display = 'none';
-                    tabChat.className = 'btn-outline';
-                });
-            }
-            if (tabStoryWriter) {
-                tabStoryWriter.addEventListener('click', () => {
-                    viewChat.style.display = 'none';
-                    tabChat.className = 'btn-outline';
-                });
-            }
+            // Hide chat view and reset layout when other tabs are clicked
+            const leaveChat = () => {
+                viewChat.style.display = 'none';
+                tabChat.className = 'btn-outline';
+                this._resetMainLayout();
+            };
+            if (tabCardGen) tabCardGen.addEventListener('click', leaveChat);
+            if (tabStoryWriter) tabStoryWriter.addEventListener('click', leaveChat);
         }
     }
 
@@ -438,15 +448,28 @@ class RoleplayChatHandler {
             return;
         }
 
-        // CSS flex handles height now; this is a fallback
-        const rect = viewChat.getBoundingClientRect();
-        const apiStatus = document.getElementById('api-status');
-        let footerHeight = 40;
-        if (apiStatus) {
-            const footer = apiStatus.closest('footer') || apiStatus.parentElement;
-            if (footer) footerHeight = footer.offsetHeight;
+        // On mobile, use CSS-driven height; on desktop, compute a comfortable fit
+        if (window.innerWidth <= 768) {
+            // Let the flex layout handle it naturally — clear any JS-set height
+            viewChat.style.height = '';
+            viewChat.style.maxHeight = '';
+            // Ensure .main fills remaining space in the flex column
+            const mainEl = document.querySelector('.main');
+            if (mainEl && viewChat.style.display !== 'none') {
+                mainEl.style.flex = '1';
+                mainEl.style.minHeight = '0';
+                mainEl.style.display = 'flex';
+                mainEl.style.flexDirection = 'column';
+            }
+            return;
         }
-        const availableHeight = window.innerHeight - rect.top - footerHeight - 10;
+
+        // Desktop: compute explicit height
+        const rect = viewChat.getBoundingClientRect();
+        const footer = document.querySelector('.footer');
+        const footerHeight = footer ? footer.offsetHeight : 40;
+        const containerGap = 18; // .container gap ~1.1rem
+        const availableHeight = window.innerHeight - rect.top - footerHeight - containerGap;
         if (availableHeight > 200) {
             viewChat.style.height = `${availableHeight}px`;
         } else {
@@ -898,7 +921,6 @@ class RoleplayChatHandler {
             this.adjustChatLayout();
         }
         
-        setTimeout(() => this.scrollToBottom(), 50);
     }
 
     async selectChat(chatId) {
@@ -954,9 +976,6 @@ class RoleplayChatHandler {
             
             this.els.msgInput.disabled = false;
             this.els.sendBtn.disabled = false;
-            
-            // Initial scroll
-            setTimeout(() => this.scrollToBottom(), 50);
         } catch (e) {
             console.error("Failed to load chat details", e);
         }
@@ -1279,20 +1298,9 @@ class RoleplayChatHandler {
         return parsed;
     }
 
-    _isNearBottom() {
-        const t = this.els.timeline;
-        return t.scrollHeight - t.scrollTop - t.clientHeight < 150;
-    }
-
     scrollToBottom() {
-        if (this._isNearBottom() || this.isGenerating) {
-            this.els.timeline.scrollTop = this.els.timeline.scrollHeight;
-            const fab = document.getElementById('chat-scroll-bottom-btn');
-            if (fab) fab.style.display = 'none';
-        } else {
-            const fab = document.getElementById('chat-scroll-bottom-btn');
-            if (fab) fab.style.display = 'flex';
-        }
+        // No automatic scrolling — user controls scroll position manually.
+        // The floating ↓ button is always available to jump to the bottom.
     }
 
     stopGeneration() {
@@ -1302,24 +1310,33 @@ class RoleplayChatHandler {
         }
         this.isGenerating = false;
         this.els.sendBtn.style.display = '';
+        const impBtn = document.getElementById('chat-impersonate-btn');
+        if (impBtn) impBtn.style.display = '';
         const stopBtn = document.getElementById('chat-stop-btn');
         if (stopBtn) stopBtn.style.display = 'none';
         this.els.sendBtn.disabled = false;
         this.els.msgInput.focus();
     }
 
-    async sendMessage() {
+    async sendMessage(options = {}) {
         if (!this.activeChatId || this.isGenerating) return;
 
-        const content = this.els.msgInput.value.trim();
+        let content = this.els.msgInput.value.trim();
         let oocNote = this.els.oocInput.value.trim();
+        const isImpersonate = options && options.impersonate === true;
 
-        if (!content && !oocNote) {
+        if (isImpersonate) {
+            oocNote = (oocNote ? oocNote + ' | ' : '') + 'CRITICAL INSTRUCTION: Write the next response entirely from the perspective of {{user}}. Roleplay as {{user}} and describe their actions and dialogue. Do NOT speak for the AI character.';
+            if (!content) content = '(Please generate my next response)';
+        } else if (!content && !oocNote) {
             oocNote = 'Please continue the story.';
         }
 
         let characterName = null;
-        if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
+        if (isImpersonate) {
+            const userPersona = this.getUserPersonaData();
+            characterName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || 'User') : 'User';
+        } else if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
             characterName = this.els.speakerSelect.value || null;
         }
 
@@ -1332,6 +1349,8 @@ class RoleplayChatHandler {
 
         this.isGenerating = true;
         this.els.sendBtn.style.display = 'none';
+        const impBtn = document.getElementById('chat-impersonate-btn');
+        if (impBtn) impBtn.style.display = 'none';
         const stopBtn = document.getElementById('chat-stop-btn');
         if (stopBtn) stopBtn.style.display = '';
 
@@ -1437,6 +1456,8 @@ class RoleplayChatHandler {
             this.isGenerating = false;
             this.abortController = null;
             this.els.sendBtn.style.display = '';
+            const impBtn = document.getElementById('chat-impersonate-btn');
+            if (impBtn) impBtn.style.display = '';
             const stopBtn2 = document.getElementById('chat-stop-btn');
             if (stopBtn2) stopBtn2.style.display = 'none';
             this.els.sendBtn.disabled = false;
