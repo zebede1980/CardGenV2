@@ -185,8 +185,6 @@ class RoleplayChatHandler {
                 }
                 
                 #view-roleplaychat {
-                    height: calc(100vh - 85px);
-                    height: calc(100dvh - 85px); /* Subtract approximate top nav height */
                     overflow: hidden;
                     box-sizing: border-box;
                     width: 100%;
@@ -207,8 +205,6 @@ class RoleplayChatHandler {
                 @media (max-width: 768px) {
                     #view-roleplaychat {
                         flex-direction: column !important;
-                        height: calc(100vh - 130px) !important; /* Extra room for wrapped nav tabs */
-                        height: calc(100dvh - 130px) !important;
                     }
                     
                     #chat-fullscreen-toggle {
@@ -271,11 +267,15 @@ class RoleplayChatHandler {
                 if (tabCardGen) tabCardGen.className = 'btn-outline';
                 if (tabStoryWriter) tabStoryWriter.className = 'btn-outline';
                 
+                const resultSection = document.querySelector('.result-section');
+                if (resultSection) resultSection.style.display = 'none';
+                
                 viewChat.style.display = 'flex';
                 tabChat.className = 'btn-primary';
                 
                 this.loadSessionList();
                 this.loadPersonas();
+                setTimeout(() => this.adjustChatLayout(), 10);
             });
             
             // Hide chat view when other tabs are clicked
@@ -394,6 +394,30 @@ class RoleplayChatHandler {
                 }
             });
         }
+        
+        window.addEventListener('resize', () => this.adjustChatLayout());
+    }
+
+    adjustChatLayout() {
+        const viewChat = document.getElementById('view-roleplaychat');
+        if (!viewChat || viewChat.style.display === 'none') return;
+        
+        if (viewChat.classList.contains('chat-fullscreen')) {
+            viewChat.style.height = ''; 
+            return;
+        }
+
+        const rect = viewChat.getBoundingClientRect();
+        const apiStatus = document.getElementById('api-status');
+        let footerHeight = 40; 
+        
+        if (apiStatus) {
+            const footer = apiStatus.closest('footer') || apiStatus.parentElement;
+            if (footer) footerHeight = footer.offsetHeight;
+        }
+        
+        const availableHeight = window.innerHeight - rect.top - footerHeight - 10;
+        viewChat.style.height = availableHeight > 200 ? `${availableHeight}px` : '600px'; 
     }
 
     openGlobalSettings() {
@@ -804,6 +828,8 @@ class RoleplayChatHandler {
             // Restore sidebar state
             if (sidebar) sidebar.style.display = this.preFsSidebarDisplay !== undefined ? this.preFsSidebarDisplay : '';
             if (sidebarToggle) sidebarToggle.style.display = '';
+            
+            this.adjustChatLayout();
         }
         
         setTimeout(() => this.scrollToBottom(), 50);
