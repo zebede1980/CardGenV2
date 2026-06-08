@@ -159,7 +159,7 @@ class RoleplayChatHandler {
                     max-width: 100vw;
                 }
                 
-                .chat-fullscreen {
+                #view-roleplaychat.chat-fullscreen {
                     position: fixed !important;
                     top: 0 !important;
                     left: 0 !important;
@@ -169,6 +169,7 @@ class RoleplayChatHandler {
                     z-index: 9999 !important;
                     background: var(--bg-page) !important;
                     padding: 0.25rem !important; /* Maximise mobile screen space */
+                    box-sizing: border-box !important;
                 }
                 
                 #chat-fullscreen-toggle {
