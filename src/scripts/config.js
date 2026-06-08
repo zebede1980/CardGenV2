@@ -50,8 +50,10 @@ class Config {
         temperature: 0.8,
         repetitionPenalty: 1.0,
         systemPromptSegments: [
+          "Stay in character at all times. Respond as your character.",
           "Write actions in *italics* and speech in \"quotes\".",
-          "Stay in character at all times."
+          "Do not narrate the user's actions or speak for the user.",
+          "Do not break character or refer to yourself as an AI model."
         ]
       },
     };

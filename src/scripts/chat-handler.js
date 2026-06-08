@@ -18,10 +18,57 @@ class RoleplayChatHandler {
 
     init() {
         this.injectSettingsModal();
+        this.setupSidebarToggle();
         this.bindElements();
         this.bindEvents();
         this.setupTabIntegration();
         this.loadPersonas();
+    }
+
+    setupSidebarToggle() {
+        const titleEl = document.getElementById('chat-active-title');
+        const sessionList = document.getElementById('chat-session-list');
+        const newBtn = document.getElementById('chat-new-btn');
+        if (!titleEl || !sessionList) return;
+
+        // Safely locate the sidebar container by finding the common ancestor of the list and the 'New Chat' button
+        let sidebar = sessionList.closest('.sidebar, aside');
+        if (!sidebar && newBtn) {
+            let curr = sessionList;
+            while (curr && curr !== document.body) {
+                if (curr.contains(newBtn)) {
+                    sidebar = curr;
+                    break;
+                }
+                curr = curr.parentElement;
+            }
+        }
+        if (!sidebar) sidebar = sessionList.parentElement;
+
+        const header = titleEl.parentElement;
+
+        if (!document.getElementById('chat-sidebar-toggle')) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.id = 'chat-sidebar-toggle';
+            toggleBtn.className = 'btn-outline';
+            toggleBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-right: 0.75rem; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem;';
+            toggleBtn.innerHTML = '◀';
+            toggleBtn.title = 'Toggle Chat Sidebar';
+
+            toggleBtn.addEventListener('click', () => {
+                if (sidebar.style.display === 'none') {
+                    sidebar.style.display = '';
+                    toggleBtn.innerHTML = '◀';
+                } else {
+                    sidebar.style.display = 'none';
+                    toggleBtn.innerHTML = '▶';
+                }
+            });
+
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            header.insertBefore(toggleBtn, header.firstChild);
+        }
     }
 
     injectSettingsModal() {
@@ -59,7 +106,7 @@ class RoleplayChatHandler {
                     <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new chat.</p>
                     
-                    <div id="chat-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+                    <div id="chat-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; max-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
                         <!-- Segments injected here -->
                     </div>
                     
@@ -248,22 +295,36 @@ class RoleplayChatHandler {
             row.style.background = 'var(--surface-color)';
             row.style.border = '1px solid var(--border)';
             row.style.borderRadius = '0.4rem';
+            row.style.alignItems = 'flex-start';
             
-            const text = document.createElement('span');
-            text.textContent = seg;
-            text.style.flex = '1';
+            const input = document.createElement('textarea');
+            input.value = seg;
+            input.style.flex = '1';
+            input.style.background = 'transparent';
+            input.style.border = 'none';
+            input.style.color = 'var(--text-primary)';
+            input.style.fontFamily = 'inherit';
+            input.style.fontSize = '0.85rem';
+            input.style.resize = 'vertical';
+            input.style.minHeight = '3rem';
+            input.style.outline = 'none';
+            input.style.padding = '0';
+            input.addEventListener('change', (e) => {
+                this.systemPromptSegments[i] = e.target.value;
+            });
             
             const delBtn = document.createElement('button');
             delBtn.innerHTML = '🗑️';
             delBtn.style.background = 'none';
             delBtn.style.border = 'none';
             delBtn.style.cursor = 'pointer';
+            delBtn.style.padding = '0.2rem';
             delBtn.onclick = () => {
                 this.systemPromptSegments.splice(i, 1);
                 this.renderSystemPromptSegments();
             };
             
-            row.appendChild(text);
+            row.appendChild(input);
             row.appendChild(delBtn);
             this.els.globalPromptSegments.appendChild(row);
         });
