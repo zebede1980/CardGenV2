@@ -20,68 +20,101 @@ class RoleplayChatHandler {
         this.injectSettingsModal();
         this.setupSidebarToggle();
         this.bindElements();
-        this.fixMobileLayout();
+        this.fixLayout();
         this.bindEvents();
         this.setupTabIntegration();
         this.loadPersonas();
     }
 
+    /* ── Sidebar Toggle (with mobile drawer support) ──────────────────────── */
     setupSidebarToggle() {
         const titleEl = document.getElementById('chat-active-title');
         const sessionList = document.getElementById('chat-session-list');
         const newBtn = document.getElementById('chat-new-btn');
         if (!titleEl || !sessionList) return;
 
-        // Safely locate the sidebar container by finding the common ancestor of the list and the 'New Chat' button
-        let sidebar = sessionList.closest('.sidebar, aside');
-        if (!sidebar && newBtn) {
-            let curr = sessionList;
-            while (curr && curr !== document.body) {
-                if (curr.contains(newBtn)) {
-                    sidebar = curr;
-                    break;
-                }
-                curr = curr.parentElement;
-            }
-        }
-        if (!sidebar) sidebar = sessionList.parentElement;
-
+        const sidebar = sessionList.closest('.chat-sidebar');
+        if (!sidebar) return;
         sidebar.id = 'chat-sidebar-container';
 
-        const header = titleEl.parentElement;
+        const header = titleEl.closest('.chat-header');
+        if (!header) return;
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+
+        // Create sidebar backdrop for mobile overlay
+        if (!document.getElementById('chat-sidebar-backdrop')) {
+            const backdrop = document.createElement('div');
+            backdrop.id = 'chat-sidebar-backdrop';
+            backdrop.className = 'chat-sidebar-backdrop';
+            backdrop.addEventListener('click', () => this.closeMobileSidebar());
+            document.getElementById('view-roleplaychat').appendChild(backdrop);
+        }
 
         if (!document.getElementById('chat-sidebar-toggle')) {
             const toggleBtn = document.createElement('button');
             toggleBtn.id = 'chat-sidebar-toggle';
             toggleBtn.className = 'btn-outline';
-            toggleBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-right: 0.75rem; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem;';
-            toggleBtn.innerHTML = '◀';
-            toggleBtn.title = 'Toggle Chat Sidebar';
+            toggleBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem; flex-shrink: 0;';
+            toggleBtn.innerHTML = '☰';
+            toggleBtn.title = 'Chats';
 
             toggleBtn.addEventListener('click', () => {
-                if (sidebar.style.display === 'none') {
-                    sidebar.style.display = '';
-                    toggleBtn.innerHTML = '◀';
+                if (window.innerWidth <= 768) {
+                    this.toggleMobileSidebar();
                 } else {
-                    sidebar.style.display = 'none';
-                    toggleBtn.innerHTML = '▶';
+                    this.toggleDesktopSidebar();
                 }
             });
 
-            header.style.display = 'flex';
-            header.style.alignItems = 'center';
             header.insertBefore(toggleBtn, header.firstChild);
-            
+            this.sidebarToggleBtn = toggleBtn;
+
+            // Fullscreen toggle
             if (!document.getElementById('chat-fullscreen-toggle')) {
                 const fsBtn = document.createElement('button');
                 fsBtn.id = 'chat-fullscreen-toggle';
                 fsBtn.className = 'btn-outline';
-                fsBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-left: auto; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem; font-size: 1.2rem;';
+                fsBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-left: auto; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem; font-size: 1.2rem; flex-shrink: 0;';
                 fsBtn.innerHTML = '⛶';
                 fsBtn.title = 'Toggle Fullscreen';
                 fsBtn.addEventListener('click', () => this.toggleFullscreen());
                 header.appendChild(fsBtn);
             }
+        }
+    }
+
+    toggleMobileSidebar() {
+        const sidebar = document.getElementById('chat-sidebar-container');
+        const backdrop = document.getElementById('chat-sidebar-backdrop');
+        if (!sidebar) return;
+
+        if (sidebar.classList.contains('mobile-drawer-open')) {
+            this.closeMobileSidebar();
+        } else {
+            sidebar.classList.add('mobile-drawer-open');
+            if (backdrop) backdrop.classList.add('active');
+            if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '✕';
+        }
+    }
+
+    closeMobileSidebar() {
+        const sidebar = document.getElementById('chat-sidebar-container');
+        const backdrop = document.getElementById('chat-sidebar-backdrop');
+        if (sidebar) sidebar.classList.remove('mobile-drawer-open');
+        if (backdrop) backdrop.classList.remove('active');
+        if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '☰';
+    }
+
+    toggleDesktopSidebar() {
+        const sidebar = document.getElementById('chat-sidebar-container');
+        if (!sidebar) return;
+        if (sidebar.style.display === 'none') {
+            sidebar.style.display = '';
+            if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '◀';
+        } else {
+            sidebar.style.display = 'none';
+            if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '▶';
         }
     }
 
@@ -155,112 +188,82 @@ class RoleplayChatHandler {
         }
     }
 
-    fixMobileLayout() {
-        if (!document.getElementById('chat-mobile-fixes')) {
+    fixLayout() {
+        // Prevent global horizontal overflow
+        if (!document.getElementById('chat-global-fixes')) {
             const style = document.createElement('style');
-            style.id = 'chat-mobile-fixes';
+            style.id = 'chat-global-fixes';
             style.textContent = `
-                /* Fix global horizontal scrolling */
-                html, body {
-                    overflow-x: hidden;
-                    max-width: 100vw;
-                }
-                
-                #view-roleplaychat.chat-fullscreen {
-                    position: fixed !important;
-                    top: 0 !important;
-                    left: 0 !important;
-                    width: 100vw !important;
-                    height: 100vh !important;
-                    height: 100dvh !important;
-                    z-index: 9999 !important;
-                    background: var(--bg-page) !important;
-                    padding: 0.25rem !important; /* Maximise mobile screen space */
-                    box-sizing: border-box !important;
-                }
-                
-                #chat-fullscreen-toggle {
-                    display: none !important; /* Hide button on desktop */
-                }
-                
-                /* Make the root chat view a fixed height flex container to prevent scrolling off-screen */
-                #view-roleplaychat:not([style*="display: none"]) {
-                    display: flex !important;
-                }
-                
-                #view-roleplaychat {
-                    overflow: hidden;
-                    box-sizing: border-box;
-                    width: 100%;
-                    max-width: 100vw;
-                }
-                
-                #chat-timeline ~ div {
-                    flex-shrink: 0;
-                }
-                
-                .chat-bubble pre {
-                    max-width: 100%;
-                    overflow-x: auto;
-                    white-space: pre-wrap;
-                    word-wrap: break-word;
-                }
-                
-                .chat-bubble-wrapper .chat-message-actions {
-                    opacity: 0;
-                    transition: opacity 0.2s ease;
-                }
-                
-                .chat-bubble-wrapper:hover .chat-message-actions {
-                    opacity: 1;
-                }
-                
-                @media (max-width: 768px) {
-                    #view-roleplaychat {
-                        flex-direction: column !important;
-                    }
-                    
-                    #chat-fullscreen-toggle {
-                        display: flex !important; /* Only show button on mobile screens */
-                    }
-                    
-                    
-                    /* Constrain sidebar height on mobile so the chat area is still reachable */
-                    #chat-sidebar-container {
-                        max-height: 25vh !important;
-                        width: 100% !important;
-                        border-right: none !important;
-                        border-bottom: 1px solid var(--border);
-                        flex-shrink: 0;
-                        overflow-y: auto;
-                    }
-                    
-                    /* Always show message actions on mobile (since no hover) */
-                    .chat-message-actions {
-                        opacity: 1 !important;
-                    }
-                }
+                html, body { overflow-x: hidden; max-width: 100vw; }
             `;
             document.head.appendChild(style);
         }
 
-        // The parent of the timeline is the right-side main chat column
+        // Ensure the chat view uses flex layout properly
+        const viewChat = document.getElementById('view-roleplaychat');
+        if (viewChat) {
+            viewChat.style.display = 'flex';
+        }
+
+        // The parent of the timeline is the .chat-main column
         if (this.els.timeline && this.els.timeline.parentElement) {
             const mainArea = this.els.timeline.parentElement;
-            mainArea.style.flex = '1 1 auto';
+            mainArea.style.flex = '1';
             mainArea.style.display = 'flex';
             mainArea.style.flexDirection = 'column';
             mainArea.style.minWidth = '0';
-            mainArea.style.minHeight = '0'; // Crucial to prevent content pushing timeline out of bounds
-            mainArea.style.height = '100%';
+            mainArea.style.minHeight = '0';
             mainArea.style.overflow = 'hidden';
-            
-            // The timeline takes all remaining space and handles the scrolling
+
             this.els.timeline.style.flex = '1 1 0%';
             this.els.timeline.style.overflowY = 'auto';
-            this.els.timeline.style.minHeight = '0'; // Allow it to shrink
-            this.els.timeline.style.paddingBottom = '1rem';
+            this.els.timeline.style.minHeight = '0';
         }
+
+        // Stop button (injected once)
+        if (!document.getElementById('chat-stop-btn')) {
+            const stopBtn = document.createElement('button');
+            stopBtn.id = 'chat-stop-btn';
+            stopBtn.className = 'btn-stop';
+            stopBtn.textContent = '⏹ Stop';
+            stopBtn.style.display = 'none';
+            stopBtn.addEventListener('click', () => this.stopGeneration());
+            const sendBtn = document.getElementById('chat-send-btn');
+            if (sendBtn && sendBtn.parentNode) {
+                sendBtn.parentNode.insertBefore(stopBtn, sendBtn.nextSibling);
+            }
+        }
+
+        // Scroll-to-bottom FAB
+        const fab = document.getElementById('chat-scroll-bottom-btn');
+        if (fab) {
+            fab.addEventListener('click', () => {
+                this.els.timeline.scrollTop = this.els.timeline.scrollHeight;
+                fab.style.display = 'none';
+            });
+        }
+
+        // Show/hide FAB based on scroll position
+        if (this.els.timeline) {
+            this.els.timeline.addEventListener('scroll', () => {
+                if (this._isNearBottom()) {
+                    const f = document.getElementById('chat-scroll-bottom-btn');
+                    if (f) f.style.display = 'none';
+                }
+            });
+        }
+
+        // Touch device detection for always-visible message actions
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            document.documentElement.classList.add('touch-device');
+            const style = document.createElement('style');
+            style.id = 'chat-touch-fixes';
+            style.textContent = `.touch-device .chat-bubble-wrapper .chat-message-actions { opacity: 1 !important; }`;
+            document.head.appendChild(style);
+        }
+
+        // Initial layout adjustment
+        this.adjustChatLayout();
     }
 
     setupTabIntegration() {
@@ -381,8 +384,10 @@ class RoleplayChatHandler {
         this.els.oocToggleBtn.addEventListener('click', () => {
             const isHidden = this.els.oocContainer.style.display === 'none';
             this.els.oocContainer.style.display = isHidden ? 'block' : 'none';
-            if(isHidden) this.els.oocInput.focus();
+            if (isHidden) this.els.oocInput.focus();
         });
+        
+        this.els.oocInput.addEventListener('input', () => this.updateOocBadge());
         
         this.els.sendBtn.addEventListener('click', () => this.sendMessage());
         
@@ -390,6 +395,9 @@ class RoleplayChatHandler {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.sendMessage();
+            } else if (e.key === 'Escape') {
+                this.els.msgInput.blur();
+                this.closeMobileSidebar();
             }
         });
         
@@ -412,26 +420,35 @@ class RoleplayChatHandler {
         window.addEventListener('resize', () => this.adjustChatLayout());
     }
 
+    updateOocBadge() {
+        if (!this.els.oocToggleBtn || !this.els.oocInput) return;
+        const hasContent = this.els.oocInput.value.trim().length > 0;
+        this.els.oocToggleBtn.classList.toggle('has-ooc', hasContent);
+    }
+
     adjustChatLayout() {
         const viewChat = document.getElementById('view-roleplaychat');
         if (!viewChat || viewChat.style.display === 'none') return;
-        
+
         if (viewChat.classList.contains('chat-fullscreen')) {
-            viewChat.style.height = ''; 
+            viewChat.style.height = '';
             return;
         }
 
+        // CSS flex handles height now; this is a fallback
         const rect = viewChat.getBoundingClientRect();
         const apiStatus = document.getElementById('api-status');
-        let footerHeight = 40; 
-        
+        let footerHeight = 40;
         if (apiStatus) {
             const footer = apiStatus.closest('footer') || apiStatus.parentElement;
             if (footer) footerHeight = footer.offsetHeight;
         }
-        
         const availableHeight = window.innerHeight - rect.top - footerHeight - 10;
-        viewChat.style.height = availableHeight > 200 ? `${availableHeight}px` : '600px'; 
+        if (availableHeight > 200) {
+            viewChat.style.height = `${availableHeight}px`;
+        } else {
+            viewChat.style.height = '';
+        }
     }
 
     openGlobalSettings() {
@@ -823,27 +840,27 @@ class RoleplayChatHandler {
         const chatView = document.getElementById('view-roleplaychat');
         const fsBtn = document.getElementById('chat-fullscreen-toggle');
         const sidebar = document.getElementById('chat-sidebar-container');
-        const sidebarToggle = document.getElementById('chat-sidebar-toggle');
+        const backdrop = document.getElementById('chat-sidebar-backdrop');
         
         if (!chatView) return;
 
         if (!chatView.classList.contains('chat-fullscreen')) {
             chatView.classList.add('chat-fullscreen');
-            fsBtn.innerHTML = '✖';
-            fsBtn.title = 'Exit Fullscreen';
+            if (fsBtn) { fsBtn.innerHTML = '✖'; fsBtn.title = 'Exit Fullscreen'; }
             
-            // Store previous sidebar state
+            // Close mobile sidebar if open
+            this.closeMobileSidebar();
+            // Hide sidebar and backdrop
             this.preFsSidebarDisplay = sidebar ? sidebar.style.display : '';
             if (sidebar) sidebar.style.display = 'none';
-            if (sidebarToggle) sidebarToggle.style.display = 'none';
+            if (backdrop) backdrop.style.display = 'none';
         } else {
             chatView.classList.remove('chat-fullscreen');
-            fsBtn.innerHTML = '⛶';
-            fsBtn.title = 'Toggle Fullscreen';
+            if (fsBtn) { fsBtn.innerHTML = '⛶'; fsBtn.title = 'Fullscreen'; }
             
-            // Restore sidebar state
+            // Restore sidebar
             if (sidebar) sidebar.style.display = this.preFsSidebarDisplay !== undefined ? this.preFsSidebarDisplay : '';
-            if (sidebarToggle) sidebarToggle.style.display = '';
+            if (backdrop) backdrop.style.display = '';
             
             this.adjustChatLayout();
         }
@@ -854,14 +871,9 @@ class RoleplayChatHandler {
     async selectChat(chatId) {
         this.activeChatId = chatId;
         
-        // Mobile UI improvement: auto-collapse sidebar when a chat is selected
+        // Auto-close mobile sidebar drawer when a chat is selected
         if (window.innerWidth <= 768) {
-            const sidebar = document.getElementById('chat-sidebar-container');
-            const toggleBtn = document.getElementById('chat-sidebar-toggle');
-            if (sidebar && toggleBtn && sidebar.style.display !== 'none') {
-                sidebar.style.display = 'none';
-                toggleBtn.innerHTML = '▶';
-            }
+            this.closeMobileSidebar();
         }
         
         document.querySelectorAll('.chat-session-item').forEach(el => {
@@ -936,90 +948,76 @@ class RoleplayChatHandler {
         return this.availablePersonas.find(c => String(c.id) === String(id)) || null;
     }
 
+    /**
+     * Generate a deterministic colour from a string (for character accent in group chats)
+     */
+    _charColor(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            hash = hash & hash;
+        }
+        const h = Math.abs(hash) % 360;
+        return `hsl(${h}, 55%, 45%)`;
+    }
+
     appendMessage(msg) {
         const placeholder = this.els.timeline.querySelector('.chat-placeholder');
         if (placeholder) placeholder.remove();
-        
+
         const wrapper = document.createElement('div');
         wrapper.className = `chat-bubble-wrapper ${msg.role}`;
-        wrapper.style.display = 'flex';
-        wrapper.style.gap = '10px';
-        wrapper.style.marginBottom = '1rem';
-        wrapper.style.width = '100%';
-        wrapper.style.boxSizing = 'border-box';
-        if (msg.role === 'user') {
-            wrapper.style.flexDirection = 'row-reverse';
-        }
-        
+
         let displayCharName = msg.character_name;
         if ((!displayCharName || displayCharName === 'Routing...') && this.activeChatCharacters && this.activeChatCharacters.length === 1) {
             displayCharName = this.activeChatCharacters[0].name;
         }
+        const charName = displayCharName || 'Assistant';
 
+        // ── Name row with timestamp ──
         const nameEl = document.createElement('div');
         nameEl.className = 'chat-bubble-name';
-        nameEl.style.display = 'flex';
-        nameEl.style.justifyContent = 'space-between';
-        nameEl.style.alignItems = 'center';
-        nameEl.style.width = '100%';
-        nameEl.style.marginBottom = '0.25rem';
-        
+
         const nameText = document.createElement('span');
         nameText.className = 'chat-bubble-name-text';
-        nameText.style.fontWeight = '600';
-        nameText.style.fontSize = '0.85rem';
-        nameText.style.color = 'var(--text-secondary)';
-        
-        // Clear any stray text nodes and only show name for AI to prevent duplication
-        nameEl.innerHTML = '';
-        nameText.textContent = msg.role === 'user' ? '' : (displayCharName || 'Assistant');
+        nameText.textContent = msg.role === 'user' ? '' : charName;
         nameEl.appendChild(nameText);
-        
+
+        // Timestamp
+        if (msg.created_at) {
+            const timeEl = document.createElement('span');
+            timeEl.className = 'chat-bubble-time';
+            timeEl.textContent = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            nameEl.appendChild(timeEl);
+        }
+
+        // ── Bubble ──
         const bubbleEl = document.createElement('div');
         bubbleEl.className = 'chat-bubble';
-        bubbleEl.style.padding = '0.75rem 1rem';
-        bubbleEl.style.borderRadius = '0.75rem';
-        bubbleEl.style.maxWidth = '100%';
-        bubbleEl.style.wordBreak = 'break-word';
-        
-        if (msg.role === 'user') {
-            bubbleEl.style.backgroundColor = 'var(--surface-color)';
-            bubbleEl.style.color = 'var(--text-primary)';
-            bubbleEl.style.border = '1px solid var(--border)';
-            bubbleEl.style.borderBottomRightRadius = '0';
-        } else {
-            bubbleEl.style.backgroundColor = 'var(--bg-tertiary, rgba(0,0,0,0.1))';
-            bubbleEl.style.color = 'var(--text-primary)';
-            bubbleEl.style.border = '1px solid var(--border)';
-            bubbleEl.style.borderBottomLeftRadius = '0';
+
+        // Character accent colour for group chats
+        if (msg.role !== 'user' && charName && this.activeChatCharacters && this.activeChatCharacters.length > 1) {
+            bubbleEl.setAttribute('data-char-accent', charName);
+            bubbleEl.style.borderLeftColor = this._charColor(charName);
         }
-        
+
         let contentStr = msg.content || '';
         bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
-        
+
         if (msg.ooc_note) {
             const oocEl = document.createElement('details');
             oocEl.style.marginTop = '0.5rem';
-            oocEl.style.fontSize = '0.85rem';
+            oocEl.style.fontSize = '0.82rem';
             oocEl.innerHTML = `<summary style="cursor: pointer; opacity: 0.7; font-weight: 500;">OOC Instruction</summary><div style="margin-top: 0.25rem; font-style: italic; opacity: 0.8; padding-left: 0.5rem; border-left: 2px solid var(--border);">${this.escapeHtml(msg.ooc_note)}</div>`;
             bubbleEl.appendChild(oocEl);
         }
-        
-        
+
+        // ── Avatar ──
         const avatarEl = document.createElement('div');
-        avatarEl.style.width = '64px';
-        avatarEl.style.height = '64px';
-        avatarEl.style.flexShrink = '0';
-        avatarEl.style.borderRadius = '0.5rem';
-        avatarEl.style.overflow = 'hidden';
-        avatarEl.style.backgroundColor = 'var(--surface-color)';
-        avatarEl.style.display = 'flex';
-        avatarEl.style.alignItems = 'center';
-        avatarEl.style.justifyContent = 'center';
-        avatarEl.style.fontWeight = 'bold';
-        
+        avatarEl.className = 'chat-avatar-container';
+
         const userPersona = this.getUserPersonaData();
-        const userName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || "User") : "User";
+        const userName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || 'User') : 'User';
 
         if (msg.role === 'user') {
             if (userPersona) {
@@ -1037,49 +1035,47 @@ class RoleplayChatHandler {
                     }
                 } else {
                     avatarEl.textContent = userName.substring(0, 2).toUpperCase();
-                    avatarEl.style.fontSize = '1.2rem';
+                    avatarEl.style.fontSize = 'calc(var(--chat-avatar-size) * 0.35)';
                 }
             } else {
                 avatarEl.textContent = 'U';
-                avatarEl.style.fontSize = '1.5rem';
+                avatarEl.style.fontSize = 'calc(var(--chat-avatar-size) * 0.4)';
             }
         } else {
-            const avatarUrl = this.getAvatarUrl(displayCharName, msg.character_card_id);
+            const avatarUrl = this.getAvatarUrl(charName, msg.character_card_id);
             if (avatarUrl) {
                 avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
                 const imgEl = avatarEl.querySelector('img');
-                imgEl.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (window.app && window.app.openGallery) {
-                        window.app.openGallery([{ url: avatarUrl, label: displayCharName || 'Character' }]);
-                    }
-                });
+                if (imgEl) {
+                    imgEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (window.app && window.app.openGallery) {
+                            window.app.openGallery([{ url: avatarUrl, label: charName }]);
+                        }
+                    });
+                }
             } else {
-                avatarEl.textContent = (displayCharName || 'AI').substring(0, 2).toUpperCase();
+                avatarEl.textContent = charName.substring(0, 2).toUpperCase();
+                avatarEl.style.fontSize = 'calc(var(--chat-avatar-size) * 0.35)';
             }
         }
-        
+
+        // ── Content column ──
         const contentCol = document.createElement('div');
-        contentCol.style.display = 'flex';
-        contentCol.style.flexDirection = 'column';
-        contentCol.style.width = '100%';
-        contentCol.style.maxWidth = 'calc(100% - 74px)';
-        contentCol.style.minWidth = '0'; // CRITICAL: allows flex child to shrink below its content's intrinsic width
-        contentCol.style.alignItems = msg.role === 'user' ? 'flex-end' : 'flex-start';
-        
+        contentCol.className = 'chat-bubble-content-col';
         contentCol.appendChild(nameEl);
         contentCol.appendChild(bubbleEl);
-        
+
         wrapper.appendChild(avatarEl);
         wrapper.appendChild(contentCol);
-        
+
         if (msg.id) {
             this.attachMessageActions(wrapper, msg, bubbleEl, nameEl);
         }
-        
+
         this.els.timeline.appendChild(wrapper);
         this.scrollToBottom();
-        
+
         return wrapper;
     }
 
@@ -1250,83 +1246,113 @@ class RoleplayChatHandler {
         return parsed;
     }
 
+    _isNearBottom() {
+        const t = this.els.timeline;
+        return t.scrollHeight - t.scrollTop - t.clientHeight < 150;
+    }
+
     scrollToBottom() {
-        this.els.timeline.scrollTop = this.els.timeline.scrollHeight;
+        if (this._isNearBottom() || this.isGenerating) {
+            this.els.timeline.scrollTop = this.els.timeline.scrollHeight;
+            const fab = document.getElementById('chat-scroll-bottom-btn');
+            if (fab) fab.style.display = 'none';
+        } else {
+            const fab = document.getElementById('chat-scroll-bottom-btn');
+            if (fab) fab.style.display = 'flex';
+        }
+    }
+
+    stopGeneration() {
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+        this.isGenerating = false;
+        this.els.sendBtn.style.display = '';
+        const stopBtn = document.getElementById('chat-stop-btn');
+        if (stopBtn) stopBtn.style.display = 'none';
+        this.els.sendBtn.disabled = false;
+        this.els.msgInput.focus();
     }
 
     async sendMessage() {
         if (!this.activeChatId || this.isGenerating) return;
-        
+
         const content = this.els.msgInput.value.trim();
         let oocNote = this.els.oocInput.value.trim();
-        
+
         if (!content && !oocNote) {
-            oocNote = "Please continue the story.";
+            oocNote = 'Please continue the story.';
         }
-        
+
         let characterName = null;
         if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
             characterName = this.els.speakerSelect.value || null;
         }
-        
-        // 1. Optimistic UI update
-        const userMsgObj = { role: 'user', content, ooc_note: oocNote };
+
+        // Optimistic UI update
+        const userMsgObj = { role: 'user', content, ooc_note: oocNote, created_at: new Date().toISOString() };
         this.els.msgInput.value = '';
         this.els.oocInput.value = '';
-        const userBubbleWrapper = this.appendMessage(userMsgObj);
-        
+        this.updateOocBadge();
+        this.appendMessage(userMsgObj);
+
         this.isGenerating = true;
-        this.els.sendBtn.disabled = true;
-        
-        // 2. Create empty AI bubble for streaming
+        this.els.sendBtn.style.display = 'none';
+        const stopBtn = document.getElementById('chat-stop-btn');
+        if (stopBtn) stopBtn.style.display = '';
+
+        // Create empty AI bubble for streaming
         const aiMsgObj = { role: 'assistant', character_name: characterName || 'Routing...', content: '' };
         const aiBubbleWrapper = this.appendMessage(aiMsgObj);
         const contentEl = aiBubbleWrapper.querySelector('.chat-bubble');
         const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
-        const nameEl = aiBubbleWrapper.querySelector('.chat-bubble-name');
+
+        this.abortController = new AbortController();
 
         try {
-            const payload = { 
-                content, 
-                ooc_note: oocNote, 
-                character_name: characterName 
+            const payload = {
+                content,
+                ooc_note: oocNote,
+                character_name: characterName
             };
-            
+
             if (window.config) {
-                payload.max_input_tokens = window.config.get("chat.maxInputTokens");
-                payload.max_output_tokens = window.config.get("chat.maxOutputTokens");
-                payload.temperature = window.config.get("chat.temperature");
-                payload.repetition_penalty = window.config.get("chat.repetitionPenalty");
+                payload.max_input_tokens = window.config.get('chat.maxInputTokens');
+                payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
+                payload.temperature = window.config.get('chat.temperature');
+                payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
             }
-            
+
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: this.abortController.signal
             });
-            
-            if (!res.ok) throw new Error("API Request Failed");
-            
+
+            if (!res.ok) throw new Error('API Request Failed');
+
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
-            let buffer = "";
-            let fullText = "";
-            
+            let buffer = '';
+            let fullText = '';
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                
+
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n\n');
-                buffer = lines.pop(); // Keep the last partial line in the buffer
-                
+                buffer = lines.pop();
+
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         const dataStr = line.slice(6);
                         if (dataStr.trim() === '[DONE]') continue;
                         try {
                             const data = JSON.parse(dataStr);
-                            
+
                             if (data.type === 'metadata') {
                                 if (data.character_name) {
                                     nameTextEl.textContent = data.character_name;
@@ -1340,16 +1366,18 @@ class RoleplayChatHandler {
                                         if (imgEl) {
                                             imgEl.src = avatarUrl;
                                         } else {
-                                            const avatarDiv = aiBubbleWrapper.querySelector('div:first-child');
-                                            avatarDiv.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
-                                            const newImgEl = avatarDiv.querySelector('img');
-                                            if (newImgEl) {
-                                                newImgEl.addEventListener('click', (e) => {
-                                                    e.stopPropagation();
-                                                    if (window.app && window.app.openGallery) {
-                                                        window.app.openGallery([{ url: avatarUrl, label: data.character_name || 'Character' }]);
-                                                    }
-                                                });
+                                            const avatarDiv = aiBubbleWrapper.querySelector('.chat-avatar-container');
+                                            if (avatarDiv) {
+                                                avatarDiv.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
+                                                const newImgEl = avatarDiv.querySelector('img');
+                                                if (newImgEl) {
+                                                    newImgEl.addEventListener('click', (e) => {
+                                                        e.stopPropagation();
+                                                        if (window.app && window.app.openGallery) {
+                                                            window.app.openGallery([{ url: avatarUrl, label: data.character_name || 'Character' }]);
+                                                        }
+                                                    });
+                                                }
                                             }
                                         }
                                     }
@@ -1359,19 +1387,25 @@ class RoleplayChatHandler {
                                 aiMsgObj.content = fullText;
                                 contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
                             } else if (data.type === 'error') {
-                                console.error("Chat generation error:", data.message);
+                                console.error('Chat generation error:', data.message);
                                 contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
                             }
                         } catch (err) {
-                            console.warn("Failed to parse chat SSE stream data:", dataStr, err);
+                            console.warn('Failed to parse chat SSE stream data:', dataStr, err);
                         }
                     }
                 }
             }
         } catch (e) {
-            console.error("Stream error", e);
+            if (e.name !== 'AbortError') {
+                console.error('Stream error', e);
+            }
         } finally {
             this.isGenerating = false;
+            this.abortController = null;
+            this.els.sendBtn.style.display = '';
+            const stopBtn2 = document.getElementById('chat-stop-btn');
+            if (stopBtn2) stopBtn2.style.display = 'none';
             this.els.sendBtn.disabled = false;
             this.els.msgInput.focus();
         }
