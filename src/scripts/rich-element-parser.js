@@ -10,26 +10,40 @@ class RichElementParser {
         let parsedText = text;
 
         // 1. Text Message Tags: <text-message sender="Alice">Hello</text-message>
-        const textMessageRegex = /<text-message\s+sender="([^"]+)">([\s\S]*?)<\/text-message>/gi;
+        const textMessageRegex = /<text-message\s+sender=["']([^"']+)["']>([\s\S]*?)<\/text-message>/gi;
         parsedText = parsedText.replace(textMessageRegex, (match, sender, content) => {
-            return `\n<div class="rich-text-message">\n  <div class="rich-text-sender">${this.escapeHtml(sender)}</div>\n  <div class="rich-text-content">${this.escapeHtml(content.trim())}</div>\n</div>\n`;
+            return `\n<div class="rich-text-message" style="margin: 0.75rem 0;">\n  <div class="rich-text-sender" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">📱 ${this.escapeHtml(sender)}</div>\n  <div class="rich-text-content" style="background: var(--surface-color, #2a2a35); padding: 0.5rem 0.75rem; border-radius: 0.5rem; display: inline-block; border: 1px solid var(--border, #3a3a4a); font-size: 0.9rem;">${this.escapeHtml(content.trim())}</div>\n</div>\n`;
         });
 
         // 2. Stat Bar Tags: <stat-bar name="Health" value="80" max="100" />
-        const statBarRegex = /<stat-bar\s+name="([^"]+)"\s+value="(\d+)"(?:\s+max="(\d+)")?\s*\/?>(?:<\/stat-bar>)?/gi;
-        parsedText = parsedText.replace(statBarRegex, (match, name, value, max) => {
-            const maxValue = max || "100";
-            const valNum = parseInt(value, 10) || 0;
-            const maxNum = parseInt(maxValue, 10) || 100;
-            const percentage = Math.min(100, Math.max(0, (valNum / maxNum) * 100));
+        // We match continuous blocks of stat-bar tags to group them in a single UI box
+        const statBarBlockRegex = /(?:<stat-bar\b[^>]*>(?:<\/stat-bar>)?\s*)+/gi;
+        parsedText = parsedText.replace(statBarBlockRegex, (blockMatch) => {
+            const innerRegex = /<stat-bar([^>]+)>(?:<\/stat-bar>)?/gi;
+            let barsHtml = '';
+            let match;
             
-            return `\n<div class="rich-stat-bar-container">\n  <div class="rich-stat-bar-label">\n    <span class="rich-stat-name">${this.escapeHtml(name)}</span>\n    <span class="rich-stat-value">${valNum} / ${maxNum}</span>\n  </div>\n  <div class="rich-stat-bar-track">\n    <div class="rich-stat-bar-fill" style="width: ${percentage}%;"></div>\n  </div>\n</div>\n`;
+            while ((match = innerRegex.exec(blockMatch)) !== null) {
+                const attrs = match[1];
+                const nameMatch = attrs.match(/name=["']([^"']+)["']/i);
+                const valueMatch = attrs.match(/value="'["']/i);
+                const maxMatch = attrs.match(/max="'["']/i);
+                
+                const name = nameMatch ? nameMatch[1] : "Stat";
+                const valNum = valueMatch ? parseInt(valueMatch[1], 10) : 0;
+                const maxNum = maxMatch ? parseInt(maxMatch[1], 10) : 100;
+                const percentage = Math.min(100, Math.max(0, (valNum / maxNum) * 100));
+                
+                barsHtml += `\n  <div class="rich-stat-bar-container">\n    <div class="rich-stat-bar-label" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">\n      <span class="rich-stat-name">${this.escapeHtml(name)}</span>\n      <span class="rich-stat-value" style="font-size: 0.75rem; color: var(--text-secondary);">${valNum} / ${maxNum}</span>\n    </div>\n    <div class="rich-stat-bar-track" style="width: 100%; height: 8px; background: var(--surface-color, #2a2a35); border-radius: 4px; overflow: hidden; border: 1px solid var(--border, #3a3a4a);">\n      <div class="rich-stat-bar-fill" style="width: ${percentage}%; height: 100%; background: var(--accent, #3b82f6); transition: width 0.3s ease;"></div>\n    </div>\n  </div>`;
+            }
+            
+            return `\n<div class="rich-stat-group" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-tertiary, #1e1e2e); padding: 0.75rem; border-radius: 0.5rem; margin: 0.75rem 0; border: 1px solid var(--border, #3a3a4a);">${barsHtml}\n</div>\n`;
         });
 
         // 3. Task / Objective Tags: <task title="New Objective">Find the key.</task>
-        const taskRegex = /<task\s+title="([^"]+)">([\s\S]*?)<\/task>/gi;
+        const taskRegex = /<task\s+title=["']([^"']+)["']>([\s\S]*?)<\/task>/gi;
         parsedText = parsedText.replace(taskRegex, (match, title, desc) => {
-            return `\n<div class="rich-task-box">\n  <div class="rich-task-title">📌 ${this.escapeHtml(title)}</div>\n  <div class="rich-task-desc">${this.escapeHtml(desc.trim())}</div>\n</div>\n`;
+            return `\n<div class="rich-task-box" style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 0.75rem; margin: 0.75rem 0; border-radius: 0.25rem;">\n  <div class="rich-task-title" style="font-weight: 600; color: #f59e0b; font-size: 0.9rem; margin-bottom: 0.25rem;">📌 ${this.escapeHtml(title)}</div>\n  <div class="rich-task-desc" style="font-size: 0.85rem; color: var(--text-secondary);">${this.escapeHtml(desc.trim())}</div>\n</div>\n`;
         });
 
         return parsedText;
