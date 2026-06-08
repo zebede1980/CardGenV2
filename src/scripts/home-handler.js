@@ -198,11 +198,19 @@ class HomeHandler {
                     <img src="${imgSrc}" alt="${this.escapeHtml(cardName)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width: 100%; height: 100%; object-fit: cover;">
                 </div>
                 <h3 style="margin: 0; font-size: 1.2rem; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(cardName)}">${this.escapeHtml(cardName)}</h3>
-                <div style="display: flex; gap: 0.5rem; width: 100%; margin-top: auto;">
-                    <button class="btn-small btn-outline edit-btn" style="flex: 1; border-radius: 0.4rem; padding: 0.5rem;">✏️ Edit</button>
-                    <button class="btn-small btn-primary chat-btn" style="flex: 1; border-radius: 0.4rem; padding: 0.5rem;">💬 Chat</button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; width: 100%; margin-top: auto;">
+                    <button class="btn-small btn-outline info-btn" style="border-radius: 0.4rem; padding: 0.5rem;">ℹ️ Info</button>
+                    <button class="btn-small btn-outline edit-btn" style="border-radius: 0.4rem; padding: 0.5rem;">✏️ Edit</button>
+                    <button class="btn-small btn-primary story-btn" style="border-radius: 0.4rem; padding: 0.5rem;">📖 Story</button>
+                    <button class="btn-small btn-primary chat-btn" style="border-radius: 0.4rem; padding: 0.5rem;">💬 Chat</button>
                 </div>
             `;
+
+            // Info Button: Uses existing gallery mode info modal
+            tile.querySelector('.info-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (window.cardGallery) window.cardGallery.showInfo(card);
+            });
 
             // Edit Button: Swaps to CardGen tab and directly invokes the load logic
             tile.querySelector('.edit-btn').addEventListener('click', async (e) => {
@@ -216,6 +224,34 @@ class HomeHandler {
                     targetEl.dataset.id = String(card.id);
                     await window.app.handleLibraryCardClick({ target: targetEl });
                 }
+            });
+
+            // Story Button: Swaps to Story tab, auto-creates a story if needed, and attaches character
+            tile.querySelector('.story-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tabStory = document.getElementById('tab-storywriter');
+                if (tabStory) tabStory.click();
+                
+                setTimeout(() => {
+                    const listView = document.getElementById('sw-list-view');
+                    // If on the list view, auto-create a new story
+                    if (listView && listView.style.display !== 'none') {
+                        const titleInput = document.getElementById('sw-new-title');
+                        const createBtn = document.getElementById('sw-create-btn');
+                        if (titleInput && createBtn) {
+                            titleInput.value = `Tale of ${cardName}`;
+                            createBtn.click();
+                        }
+                    }
+                    // Attach the character by triggering the selector
+                    setTimeout(() => {
+                        const swSelect = document.getElementById('sw-add-card-select');
+                        if (swSelect) {
+                            swSelect.value = card.id;
+                            swSelect.dispatchEvent(new Event('change'));
+                        }
+                    }, 300);
+                }, 100);
             });
             
             // Chat Button: Swaps to Chat tab and fetches history to resume or start a new chat
