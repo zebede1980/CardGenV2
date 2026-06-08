@@ -483,6 +483,9 @@ class RoleplayChatHandler {
         avatarEl.style.justifyContent = 'center';
         avatarEl.style.fontWeight = 'bold';
         
+        const userPersona = this.getUserPersonaData();
+        const userName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || "User") : "User";
+
         if (msg.role === 'user') {
             if (userPersona) {
                 const avatarUrl = this.getAvatarUrl(userName, userPersona.id);
