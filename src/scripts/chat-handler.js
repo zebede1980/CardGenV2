@@ -168,7 +168,11 @@ class RoleplayChatHandler {
                     height: 100dvh !important;
                     z-index: 9999 !important;
                     background: var(--bg-page) !important;
-                    padding: 0.5rem !important;
+                    padding: 0.25rem !important; /* Maximise mobile screen space */
+                }
+                
+                #chat-fullscreen-toggle {
+                    display: none !important; /* Hide button on desktop */
                 }
                 
                 /* Make the root chat view a fixed height flex container to prevent scrolling off-screen */
@@ -202,6 +206,11 @@ class RoleplayChatHandler {
                         height: calc(100vh - 130px) !important; /* Extra room for wrapped nav tabs */
                         height: calc(100dvh - 130px) !important;
                     }
+                    
+                    #chat-fullscreen-toggle {
+                        display: flex !important; /* Only show button on mobile screens */
+                    }
+                    
                     
                     /* Constrain sidebar height on mobile so the chat area is still reachable */
                     #chat-sidebar-container {
