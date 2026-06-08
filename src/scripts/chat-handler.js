@@ -46,6 +46,8 @@ class RoleplayChatHandler {
         }
         if (!sidebar) sidebar = sessionList.parentElement;
 
+        sidebar.id = 'chat-sidebar-container';
+
         const header = titleEl.parentElement;
 
         if (!document.getElementById('chat-sidebar-toggle')) {
@@ -140,30 +142,52 @@ class RoleplayChatHandler {
             const style = document.createElement('style');
             style.id = 'chat-mobile-fixes';
             style.textContent = `
+                /* Fix global horizontal scrolling */
+                html, body {
+                    overflow-x: hidden;
+                    max-width: 100vw;
+                }
+                
                 /* Make the root chat view a fixed height flex container to prevent scrolling off-screen */
                 #view-roleplaychat:not([style*="display: none"]) {
                     display: flex !important;
                 }
                 
                 #view-roleplaychat {
+                    height: calc(100vh - 75px);
                     height: calc(100dvh - 75px); /* Subtract approximate top nav height */
                     overflow: hidden;
                     box-sizing: border-box;
+                    width: 100%;
+                    max-width: 100vw;
+                }
+                
+                #chat-timeline ~ div {
+                    flex-shrink: 0;
+                }
+                
+                .chat-bubble pre {
+                    max-width: 100%;
+                    overflow-x: auto;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
                 }
                 
                 @media (max-width: 768px) {
                     #view-roleplaychat {
                         flex-direction: column !important;
+                        height: calc(100vh - 65px);
+                        height: calc(100dvh - 65px);
                     }
                     
                     /* Constrain sidebar height on mobile so the chat area is still reachable */
-                    #view-roleplaychat > .sidebar, 
-                    #view-roleplaychat > aside {
-                        max-height: 25vh;
+                    #chat-sidebar-container {
+                        max-height: 20vh !important;
                         width: 100% !important;
                         border-right: none !important;
                         border-bottom: 1px solid var(--border);
                         flex-shrink: 0;
+                        overflow-y: auto;
                     }
                     
                     /* Always show message actions on mobile (since no hover) */
@@ -892,6 +916,7 @@ class RoleplayChatHandler {
         contentCol.style.display = 'flex';
         contentCol.style.flexDirection = 'column';
         contentCol.style.maxWidth = 'calc(100% - 74px)';
+        contentCol.style.minWidth = '0'; // CRITICAL: allows flex child to shrink below its content's intrinsic width
         if (msg.role === 'user') contentCol.style.alignItems = 'flex-end';
         
         contentCol.appendChild(nameEl);
