@@ -154,8 +154,8 @@ class RoleplayChatHandler {
                 }
                 
                 #view-roleplaychat {
-                    height: calc(100vh - 75px);
-                    height: calc(100dvh - 75px); /* Subtract approximate top nav height */
+                    height: calc(100vh - 85px);
+                    height: calc(100dvh - 85px); /* Subtract approximate top nav height */
                     overflow: hidden;
                     box-sizing: border-box;
                     width: 100%;
@@ -176,8 +176,8 @@ class RoleplayChatHandler {
                 @media (max-width: 768px) {
                     #view-roleplaychat {
                         flex-direction: column !important;
-                        height: calc(100vh - 65px);
-                        height: calc(100dvh - 65px);
+                        height: calc(100vh - 130px) !important; /* Extra room for wrapped nav tabs */
+                        height: calc(100dvh - 130px) !important;
                     }
                     
                     /* Constrain sidebar height on mobile so the chat area is still reachable */
@@ -202,17 +202,18 @@ class RoleplayChatHandler {
         // The parent of the timeline is the right-side main chat column
         if (this.els.timeline && this.els.timeline.parentElement) {
             const mainArea = this.els.timeline.parentElement;
-            mainArea.style.flex = '1';
+            mainArea.style.flex = '1 1 auto';
             mainArea.style.display = 'flex';
             mainArea.style.flexDirection = 'column';
             mainArea.style.minWidth = '0';
+            mainArea.style.minHeight = '0'; // Crucial to prevent content pushing timeline out of bounds
             mainArea.style.height = '100%';
             mainArea.style.overflow = 'hidden';
             
             // The timeline takes all remaining space and handles the scrolling
             this.els.timeline.style.flex = '1 1 0%';
             this.els.timeline.style.overflowY = 'auto';
-            this.els.timeline.style.minHeight = '0';
+            this.els.timeline.style.minHeight = '0'; // Allow it to shrink
             this.els.timeline.style.paddingBottom = '1rem';
         }
     }
@@ -716,6 +717,16 @@ class RoleplayChatHandler {
 
     async selectChat(chatId) {
         this.activeChatId = chatId;
+        
+        // Mobile UI improvement: auto-collapse sidebar when a chat is selected
+        if (window.innerWidth <= 768) {
+            const sidebar = document.getElementById('chat-sidebar-container');
+            const toggleBtn = document.getElementById('chat-sidebar-toggle');
+            if (sidebar && toggleBtn && sidebar.style.display !== 'none') {
+                sidebar.style.display = 'none';
+                toggleBtn.innerHTML = '▶';
+            }
+        }
         
         document.querySelectorAll('.chat-session-item').forEach(el => {
             if(el.dataset.id === chatId) {

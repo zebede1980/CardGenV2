@@ -70,11 +70,36 @@ class HomeHandler {
         // 2. Add a "Home" button to the main navbar
         const navTabs = tabCardGen?.parentNode;
         if (navTabs) {
+            navTabs.classList.add('app-nav-tabs');
             const tabHome = document.createElement('button');
             tabHome.id = 'tab-home';
             tabHome.className = 'btn-primary';
             tabHome.innerHTML = '🏠 Home';
             navTabs.insertBefore(tabHome, tabCardGen);
+            
+            // Inject mobile fix for nav tabs to ensure they wrap properly
+            if (!document.getElementById('nav-tabs-mobile-fix')) {
+                const style = document.createElement('style');
+                style.id = 'nav-tabs-mobile-fix';
+                style.textContent = `
+                    .app-nav-tabs {
+                        display: flex !important;
+                        flex-wrap: wrap !important;
+                        gap: 0.5rem;
+                        justify-content: center;
+                    }
+                    @media (max-width: 768px) {
+                        #tab-home, #tab-cardgen, #tab-storywriter, #tab-roleplaychat {
+                            flex: 1 1 40% !important; /* Creates a 2x2 grid */
+                            padding: 0.6rem 0.5rem !important;
+                            font-size: 0.85rem !important;
+                            margin: 0 !important;
+                            text-align: center;
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
         }
     }
 
