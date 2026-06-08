@@ -26,15 +26,26 @@ class RichElementParser {
             while ((match = innerRegex.exec(blockMatch)) !== null) {
                 const attrs = match[1];
                 const nameMatch = attrs.match(/name=["']([^"']+)["']/i);
-                const valueMatch = attrs.match(/value="'["']/i);
-                const maxMatch = attrs.match(/max="'["']/i);
+                const valueMatch = attrs.match(/value=["']([^"']+)["']/i);
+                const maxMatch = attrs.match(/max=["']([^"']+)["']/i);
                 
                 const name = nameMatch ? nameMatch[1] : "Stat";
-                const valNum = valueMatch ? parseInt(valueMatch[1], 10) : 0;
-                const maxNum = maxMatch ? parseInt(maxMatch[1], 10) : 100;
-                const percentage = Math.min(100, Math.max(0, (valNum / maxNum) * 100));
+                const rawValue = valueMatch ? valueMatch[1] : "";
+                const rawMax = maxMatch ? maxMatch[1] : null;
                 
-                barsHtml += `\n  <div class="rich-stat-bar-container">\n    <div class="rich-stat-bar-label" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">\n      <span class="rich-stat-name">${this.escapeHtml(name)}</span>\n      <span class="rich-stat-value" style="font-size: 0.75rem; color: var(--text-secondary);">${valNum} / ${maxNum}</span>\n    </div>\n    <div class="rich-stat-bar-track" style="width: 100%; height: 8px; background: var(--surface-color, #2a2a35); border-radius: 4px; overflow: hidden; border: 1px solid var(--border, #3a3a4a);">\n      <div class="rich-stat-bar-fill" style="width: ${percentage}%; height: 100%; background: var(--accent, #3b82f6); transition: width 0.3s ease;"></div>\n    </div>\n  </div>`;
+                // Decide between numerical progress bar or text status badge
+                const isNumeric = rawMax !== null || (/^-?\d+(\.\d+)?%?$/.test(rawValue.trim()));
+                
+                if (isNumeric) {
+                    const valNum = parseFloat(rawValue) || 0;
+                    const maxNum = rawMax ? parseFloat(rawMax) : 100;
+                    const percentage = Math.min(100, Math.max(0, (valNum / maxNum) * 100));
+                    const displayValue = rawMax ? `${rawValue} / ${rawMax}` : rawValue;
+                    
+                    barsHtml += `\n  <div class="rich-stat-bar-container">\n    <div class="rich-stat-bar-label" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">\n      <span class="rich-stat-name">${this.escapeHtml(name)}</span>\n      <span class="rich-stat-value" style="font-size: 0.75rem; color: var(--text-secondary);">${this.escapeHtml(displayValue)}</span>\n    </div>\n    <div class="rich-stat-bar-track" style="width: 100%; height: 8px; background: var(--surface-color, #2a2a35); border-radius: 4px; overflow: hidden; border: 1px solid var(--border, #3a3a4a);">\n      <div class="rich-stat-bar-fill" style="width: ${percentage}%; height: 100%; background: var(--accent, #3b82f6); transition: width 0.3s ease;"></div>\n    </div>\n  </div>`;
+                } else {
+                    barsHtml += `\n  <div class="rich-stat-text-row" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; padding: 0.1rem 0;">\n    <span class="rich-stat-name" style="font-weight: 600; color: var(--text-secondary);">${this.escapeHtml(name)}</span>\n    <span class="rich-stat-value" style="color: var(--text-primary); background: var(--surface-color, #2a2a35); padding: 0.2rem 0.6rem; border-radius: 0.25rem; border: 1px solid var(--border, #3a3a4a);">${this.escapeHtml(rawValue)}</span>\n  </div>`;
+                }
             }
             
             return `\n<div class="rich-stat-group" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-tertiary, #1e1e2e); padding: 0.75rem; border-radius: 0.5rem; margin: 0.75rem 0; border: 1px solid var(--border, #3a3a4a);">${barsHtml}\n</div>\n`;

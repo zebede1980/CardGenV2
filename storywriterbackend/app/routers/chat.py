@@ -22,7 +22,8 @@ def get_default_system_prompt() -> str:
         # Rich UI Elements
         "RICH UI ELEMENTS:\nYou have the ability to embed rich graphical elements into the chat using specific XML tags. Use them when appropriate to enhance the immersion:",
         "- When a character sends a text message or phone chat, use: <text-message sender=\"Name\">message content</text-message>",
-        "- When showing health, stamina, or any progress, use: <stat-bar name=\"Health\" value=\"80\" max=\"100\" />",
+        "- When showing health, stamina, or numerical progress, use: <stat-bar name=\"Health\" value=\"80\" max=\"100\" />",
+        "- When showing a text status, state, or location, use: <stat-bar name=\"Extraction\" value=\"In Progress\" />",
         "- When a new objective or quest is received, use: <task title=\"Objective Name\">Description of the task</task>"
     ]
     return "\n\n".join(modules)
