@@ -71,6 +71,17 @@ class RoleplayChatHandler {
             header.style.display = 'flex';
             header.style.alignItems = 'center';
             header.insertBefore(toggleBtn, header.firstChild);
+            
+            if (!document.getElementById('chat-fullscreen-toggle')) {
+                const fsBtn = document.createElement('button');
+                fsBtn.id = 'chat-fullscreen-toggle';
+                fsBtn.className = 'btn-outline';
+                fsBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-left: auto; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem; font-size: 1.2rem;';
+                fsBtn.innerHTML = '⛶';
+                fsBtn.title = 'Toggle Fullscreen';
+                fsBtn.addEventListener('click', () => this.toggleFullscreen());
+                header.appendChild(fsBtn);
+            }
         }
     }
 
@@ -146,6 +157,18 @@ class RoleplayChatHandler {
                 html, body {
                     overflow-x: hidden;
                     max-width: 100vw;
+                }
+                
+                .chat-fullscreen {
+                    position: fixed !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    height: 100dvh !important;
+                    z-index: 9999 !important;
+                    background: var(--bg-page) !important;
+                    padding: 0.5rem !important;
                 }
                 
                 /* Make the root chat view a fixed height flex container to prevent scrolling off-screen */
@@ -713,6 +736,36 @@ class RoleplayChatHandler {
         } catch (e) {
             console.error("Failed to load personas", e);
         }
+    }
+
+    toggleFullscreen() {
+        const chatView = document.getElementById('view-roleplaychat');
+        const fsBtn = document.getElementById('chat-fullscreen-toggle');
+        const sidebar = document.getElementById('chat-sidebar-container');
+        const sidebarToggle = document.getElementById('chat-sidebar-toggle');
+        
+        if (!chatView) return;
+
+        if (!chatView.classList.contains('chat-fullscreen')) {
+            chatView.classList.add('chat-fullscreen');
+            fsBtn.innerHTML = '✖';
+            fsBtn.title = 'Exit Fullscreen';
+            
+            // Store previous sidebar state
+            this.preFsSidebarDisplay = sidebar ? sidebar.style.display : '';
+            if (sidebar) sidebar.style.display = 'none';
+            if (sidebarToggle) sidebarToggle.style.display = 'none';
+        } else {
+            chatView.classList.remove('chat-fullscreen');
+            fsBtn.innerHTML = '⛶';
+            fsBtn.title = 'Toggle Fullscreen';
+            
+            // Restore sidebar state
+            if (sidebar) sidebar.style.display = this.preFsSidebarDisplay !== undefined ? this.preFsSidebarDisplay : '';
+            if (sidebarToggle) sidebarToggle.style.display = '';
+        }
+        
+        setTimeout(() => this.scrollToBottom(), 50);
     }
 
     async selectChat(chatId) {
