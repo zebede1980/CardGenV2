@@ -340,7 +340,10 @@ class RoleplayChatHandler {
             }
 
             this.els.timeline.innerHTML = '';
-            chat.messages.forEach(msg => this.appendMessage(msg));
+            
+            // Ensure messages are sorted chronologically (oldest first)
+            const sortedMessages = (chat.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            sortedMessages.forEach(msg => this.appendMessage(msg));
             
             if(chat.messages.length === 0) {
                 this.els.timeline.innerHTML = '<div class="chat-placeholder"><p>No messages yet. Send a greeting!</p></div>';
@@ -403,7 +406,7 @@ class RoleplayChatHandler {
             contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
         }
         
-        bubbleEl.innerHTML = this.formatMessage(contentStr);
+        bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
         
         
         const avatarEl = document.createElement('div');
@@ -540,7 +543,7 @@ class RoleplayChatHandler {
                     msg.content = newContent;
                     let contentStr = msg.content;
                     if (msg.ooc_note) contentStr += `\n\n*[OOC: ${msg.ooc_note}]*`;
-                    bubbleEl.innerHTML = this.formatMessage(contentStr);
+                    bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
                 } else {
                     alert('Failed to save message');
                     saveBtn.disabled = false;
@@ -570,19 +573,51 @@ class RoleplayChatHandler {
         }
     }
 
-    formatMessage(text) {
+    formatMessage(text, characterName = null) {
         if (!text) return "";
         let parsed = text;
         
+        let charName = characterName;
+        // Fallback for user messages in a 1-on-1 chat
+        if (!charName && this.activeChatCharacters && this.activeChatCharacters.length === 1) {
+            charName = this.activeChatCharacters[0].name;
+        }
+        charName = charName || "Character";
+        const userName = "User"; // We'll upgrade this when user avatars are added!
+        
+        parsed = parsed.replace(/\{\{char\}\}/gi, charName);
+        parsed = parsed.replace(/\{\{user\}\}/gi, userName);
+
+        // 1. Temporarily extract Rich XML tags to protect their inner attributes from being formatted
+        const richTags = [];
+        const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
+        
+        const extractTag = (match) => {
+            richTags.push(match);
+            return `%%RICH_TAG_${richTags.length - 1}%%`;
+        };
+        
+        parsed = parsed.replace(/<text-message[\s\S]*?<\/text-message>/gi, extractTag);
+        parsed = parsed.replace(/<task[\s\S]*?<\/task>/gi, extractTag);
+        parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
+
+        // 2. Safely escape the remaining text
+        parsed = this.escapeHtml(parsed);
+
+        // 3. Apply Markdown & Aesthetics
+        parsed = parsed.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        parsed = parsed.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+        parsed = parsed.replace(/&quot;([\s\S]*?)&quot;/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">&quot;$1&quot;</span>');
+        parsed = parsed.replace(/“([\s\S]*?)”/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">“$1”</span>');
+        parsed = parsed.replace(/^&gt; (.*)$/gm, '<blockquote style="border-left: 3px solid var(--accent); padding-left: 0.75rem; margin: 0.5rem 0; color: var(--text-secondary); font-style: italic;">$1</blockquote>');
+
+        // 4. Restore the Rich XML tags
+        parsed = parsed.replace(placeholderRegex, (match, index) => richTags[index]);
+
         if (window.RichElementParser) {
-            // Parse custom UI XML elements into HTML
             parsed = window.RichElementParser.parse(parsed);
-        } else {
-            // Basic escape if parser is missing
-            parsed = parsed.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
         
-        // Convert remaining double-newlines to paragraph breaks
         parsed = parsed.replace(/\n/g, '<br>');
         return parsed;
     }
@@ -679,7 +714,7 @@ class RoleplayChatHandler {
                             } else if (data.type === 'chunk') {
                                 fullText += data.content;
                                 aiMsgObj.content = fullText;
-                                contentEl.innerHTML = this.formatMessage(fullText);
+                                contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
                                 this.scrollToBottom();
                             } else if (data.type === 'error') {
                                 console.error("Chat generation error:", data.message);
