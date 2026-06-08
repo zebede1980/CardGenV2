@@ -573,6 +573,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       text = this.chatTester._replaceMacros(text);
     }
 
+    // Strip CJK characters if enabled in settings
+    if (window.config && window.config.get("chat.filterCJK")) {
+        text = text.replace(/[\u2E80-\u2FD5\u3190-\u319f\u3400-\u4DBF\u4E00-\u9FCC\uF900-\uFAAD\uAC00-\uD7A3]/g, '');
+    }
+
     // Escape HTML
     let html = escapeHtml(text);
 

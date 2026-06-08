@@ -49,11 +49,13 @@ class Config {
         maxOutputTokens: 1024,
         temperature: 0.8,
         repetitionPenalty: 1.0,
+        filterCJK: false,
         systemPromptSegments: [
           "Stay in character at all times. Respond as your character.",
           "Write actions in *italics* and speech in \"quotes\".",
           "Do not narrate the user's actions or speak for the user.",
-          "Do not break character or refer to yourself as an AI model."
+          "Do not break character or refer to yourself as an AI model.",
+          "Respond exclusively in English. Do not output any Chinese or Korean characters."
         ]
       },
     };

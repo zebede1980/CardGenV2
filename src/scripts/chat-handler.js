@@ -119,6 +119,10 @@ class RoleplayChatHandler {
                         <label>Repetition Penalty</label>
                         <input type="number" step="0.05" id="chat-global-rep-penalty" class="content-box" style="width: 100%;">
                     </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+                        <input type="checkbox" id="chat-global-filter-cjk" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
+                        <label for="chat-global-filter-cjk" style="margin: 0; cursor: pointer;">Filter out Chinese/Korean characters (GLM bleed fix)</label>
+                    </div>
                     
                     <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new chat.</p>
@@ -308,6 +312,7 @@ class RoleplayChatHandler {
             globalMaxOutput: document.getElementById('chat-global-max-output'),
             globalTemp: document.getElementById('chat-global-temperature'),
             globalRepPen: document.getElementById('chat-global-rep-penalty'),
+            globalFilterCJK: document.getElementById('chat-global-filter-cjk'),
             globalPromptSegments: document.getElementById('chat-global-prompt-segments'),
             globalNewSegment: document.getElementById('chat-global-new-segment'),
             globalAddSegmentBtn: document.getElementById('chat-global-add-segment'),
@@ -426,6 +431,7 @@ class RoleplayChatHandler {
         this.els.globalMaxOutput.value = window.config.get("chat.maxOutputTokens") ?? 1024;
         this.els.globalTemp.value = window.config.get("chat.temperature") ?? 0.8;
         this.els.globalRepPen.value = window.config.get("chat.repetitionPenalty") ?? 1.0;
+        this.els.globalFilterCJK.checked = window.config.get("chat.filterCJK") ?? false;
         
         this.systemPromptSegments = [...(window.config.get("chat.systemPromptSegments") || [])];
         this.renderSystemPromptSegments();
@@ -575,6 +581,7 @@ class RoleplayChatHandler {
         window.config.set("chat.maxOutputTokens", parseInt(this.els.globalMaxOutput.value) || 1024);
         window.config.set("chat.temperature", parseFloat(this.els.globalTemp.value) || 0.8);
         window.config.set("chat.repetitionPenalty", parseFloat(this.els.globalRepPen.value) || 1.0);
+        window.config.set("chat.filterCJK", this.els.globalFilterCJK.checked);
         window.config.set("chat.systemPromptSegments", this.systemPromptSegments);
         
         this.els.globalSettingsModal.style.display = 'none';
@@ -1198,6 +1205,11 @@ class RoleplayChatHandler {
         
         parsed = parsed.replace(/\{\{char\}\}/gi, charName);
         parsed = parsed.replace(/\{\{user\}\}/gi, userName);
+
+        // Strip CJK characters if enabled in settings
+        if (window.config && window.config.get("chat.filterCJK")) {
+            parsed = parsed.replace(/[\u2E80-\u2FD5\u3190-\u319f\u3400-\u4DBF\u4E00-\u9FCC\uF900-\uFAAD\uAC00-\uD7A3]/g, '');
+        }
 
         // 1. Temporarily extract Rich XML tags to protect their inner attributes from being formatted
         const richTags = [];

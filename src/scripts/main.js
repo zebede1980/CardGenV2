@@ -709,6 +709,11 @@ class CharacterGeneratorApp {
       }
       this.showDropImportModal(file);
     });
+    
+    // Inject API Logs UI
+    if (typeof this.injectTechLogsUI === 'function') {
+        this.injectTechLogsUI();
+    }
   }
 
   async checkAPIStatus() {

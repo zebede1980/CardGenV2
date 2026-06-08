@@ -246,4 +246,134 @@ Object.assign(CharacterGeneratorApp.prototype, {
     });
   },
 
+  injectTechLogsUI() {
+    if (document.getElementById('tech-logs-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'tech-logs-modal';
+    modal.className = 'modal-overlay';
+    modal.style.display = 'none';
+    modal.style.zIndex = '3000';
+    modal.innerHTML = `
+      <div class="api-settings-modal" style="max-width: 1100px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h2 class="modal-title">🛠️ API Request Logs</h2>
+          <button id="tech-logs-close-btn" class="modal-close">×</button>
+        </div>
+        <div class="modal-body" style="flex: 1; display: flex; flex-direction: row; overflow: hidden; padding: 0; flex-wrap: wrap;">
+          <div id="tech-logs-list" style="flex: 1 1 250px; max-width: 350px; border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface-muted); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No logs available.</div>
+          </div>
+          <div id="tech-logs-details" style="flex: 2 1 400px; overflow-y: auto; padding: 1.5rem; background: var(--bg-page);">
+            <div style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">Select a request to view details</div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('tech-logs-close-btn').addEventListener('click', () => modal.style.display = 'none');
+    modal.addEventListener('click', (e) => { if(e.target === modal) modal.style.display = 'none'; });
+
+    const apiStatus = document.getElementById('api-status');
+    if (apiStatus && apiStatus.parentElement) {
+        const btn = document.createElement('button');
+        btn.id = 'open-tech-logs-btn';
+        btn.className = 'btn-outline btn-small';
+        btn.innerHTML = '🛠️ API Logs';
+        btn.style.marginLeft = '1rem';
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openTechLogsModal();
+        });
+        apiStatus.parentElement.appendChild(btn);
+    }
+  },
+
+  openTechLogsModal() {
+    const modal = document.getElementById('tech-logs-modal');
+    if (!modal) return;
+    this.renderTechLogsList();
+    modal.style.display = 'flex';
+  },
+
+  renderTechLogsList() {
+    const listEl = document.getElementById('tech-logs-list');
+    if (!listEl) return;
+    
+    const logs = window.apiHandler ? window.apiHandler.requestLogs : [];
+    if (!logs || logs.length === 0) {
+        listEl.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No requests recorded yet.</div>`;
+        return;
+    }
+
+    listEl.innerHTML = '';
+    logs.forEach(log => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding: 0.75rem; background: var(--surface-color); border: 1px solid var(--border); border-radius: 0.4rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem; transition: border-color 0.2s;';
+        item.onmouseenter = () => item.style.borderColor = 'var(--accent)';
+        item.onmouseleave = () => item.style.borderColor = 'var(--border)';
+        
+        const timeStr = new Date(log.timestamp).toLocaleTimeString();
+        let statusColor = log.status === 200 ? 'var(--success)' : 'var(--error)';
+        if (log.status === 'pending') statusColor = 'var(--warning)';
+
+        item.innerHTML = `
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary);">
+                <span>${timeStr}</span>
+                <span style="color: ${statusColor}; font-weight: bold;">${log.status}</span>
+            </div>
+            <div style="font-weight: 600; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${escapeHtml(log.endpoint)}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                ${escapeHtml(log.model || 'Unknown model')} • ${(log.duration/1000).toFixed(2)}s
+            </div>
+        `;
+        
+        item.addEventListener('click', () => {
+            document.querySelectorAll('#tech-logs-list > div').forEach(el => el.style.borderLeft = '');
+            item.style.borderLeft = '3px solid var(--accent)';
+            this.showTechLogDetails(log);
+        });
+        
+        listEl.appendChild(item);
+    });
+  },
+
+  showTechLogDetails(log) {
+    const detailsEl = document.getElementById('tech-logs-details');
+    if (!detailsEl) return;
+
+    const reqStr = JSON.stringify(log.request, null, 2);
+    const resStr = typeof log.response === 'object' ? JSON.stringify(log.response, null, 2) : log.response;
+    
+    let usageHtml = '';
+    if (log.usage) {
+        usageHtml = `
+        <div style="display: flex; gap: 1rem; margin-bottom: 1rem; background: var(--surface-color); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border); font-size: 0.85rem; flex-wrap: wrap;">
+            <div><strong style="color:var(--text-secondary);">Prompt Tokens:</strong> ${log.usage.prompt_tokens || 0}</div>
+            <div><strong style="color:var(--text-secondary);">Completion:</strong> ${log.usage.completion_tokens || 0}</div>
+            <div><strong style="color:var(--text-secondary);">Total:</strong> ${log.usage.total_tokens || 0}</div>
+            ${log.usage.prompt_cache_hit_tokens ? `<div><strong style="color:var(--success);">Cache Hits:</strong> ${log.usage.prompt_cache_hit_tokens}</div>` : ''}
+        </div>`;
+    }
+
+    detailsEl.innerHTML = `
+      <h3 style="margin-top:0; margin-bottom: 1rem;">Request Details</h3>
+      <div style="display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1rem; font-size: 0.85rem; margin-bottom: 1.5rem; color: var(--text-primary);">
+        <div style="color: var(--text-secondary);">Endpoint:</div><div>${escapeHtml(log.endpoint)}</div>
+        <div style="color: var(--text-secondary);">Model:</div><div>${escapeHtml(log.model || 'N/A')}</div>
+        <div style="color: var(--text-secondary);">Status:</div><div><strong style="color: ${log.status === 200 ? 'var(--success)' : (log.status === 'pending' ? 'var(--warning)' : 'var(--error)')}">${escapeHtml(log.status)}</strong></div>
+        <div style="color: var(--text-secondary);">Duration:</div><div>${(log.duration/1000).toFixed(2)}s</div>
+      </div>
+      ${usageHtml}
+      
+      <h4 style="margin: 1.5rem 0 0.5rem 0;">Request Payload</h4>
+      <pre style="background: var(--surface-strong, #111820); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border); overflow-x: auto; font-size: 0.8rem; margin-bottom: 1.5rem;"><code>${escapeHtml(reqStr)}</code></pre>
+      
+      <h4 style="margin: 1.5rem 0 0.5rem 0;">Response Payload</h4>
+      <pre style="background: var(--surface-strong, #111820); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border); overflow-x: auto; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word;"><code>${escapeHtml(resStr || 'No response recorded yet')}</code></pre>
+    `;
+  }
 });
