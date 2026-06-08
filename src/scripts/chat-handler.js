@@ -437,9 +437,13 @@ class RoleplayChatHandler {
             wrapper.style.flexDirection = 'row-reverse';
         }
         
+        let displayCharName = msg.character_name;
+        if ((!displayCharName || displayCharName === 'Routing...') && this.activeChatCharacters && this.activeChatCharacters.length === 1) {
+            displayCharName = this.activeChatCharacters[0].name;
+        }
+
         const nameEl = document.createElement('div');
         nameEl.className = 'chat-bubble-name';
-        nameEl.textContent = msg.role === 'user' ? 'You' : (msg.character_name || 'Assistant');
         nameEl.style.display = 'flex';
         nameEl.style.justifyContent = 'space-between';
         nameEl.style.alignItems = 'center';
@@ -447,7 +451,7 @@ class RoleplayChatHandler {
         
         const nameText = document.createElement('span');
         nameText.className = 'chat-bubble-name-text';
-        nameText.textContent = msg.role === 'user' ? 'You' : (msg.character_name || 'Assistant');
+        nameText.textContent = msg.role === 'user' ? 'You' : (displayCharName || 'Assistant');
         nameEl.appendChild(nameText);
         
         const bubbleEl = document.createElement('div');
@@ -509,18 +513,18 @@ class RoleplayChatHandler {
                 avatarEl.style.fontSize = '1.5rem';
             }
         } else {
-            const avatarUrl = this.getAvatarUrl(msg.character_name, msg.character_card_id);
+            const avatarUrl = this.getAvatarUrl(displayCharName, msg.character_card_id);
             if (avatarUrl) {
                 avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
                 const imgEl = avatarEl.querySelector('img');
                 imgEl.addEventListener('click', (e) => {
                     e.stopPropagation();
                     if (window.app && window.app.openGallery) {
-                        window.app.openGallery([{ url: avatarUrl, label: msg.character_name || 'Character' }]);
+                        window.app.openGallery([{ url: avatarUrl, label: displayCharName || 'Character' }]);
                     }
                 });
             } else {
-                avatarEl.textContent = (msg.character_name || 'AI').substring(0, 2).toUpperCase();
+                avatarEl.textContent = (displayCharName || 'AI').substring(0, 2).toUpperCase();
             }
         }
         
