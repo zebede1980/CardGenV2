@@ -44,6 +44,16 @@ class Config {
         username: "",
         password: "",
       },
+      chat: {
+        maxInputTokens: 8192,
+        maxOutputTokens: 1024,
+        temperature: 0.8,
+        repetitionPenalty: 1.0,
+        systemPromptSegments: [
+          "Write actions in *italics* and speech in \"quotes\".",
+          "Stay in character at all times."
+        ]
+      },
     };
   }
 

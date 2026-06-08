@@ -17,10 +17,74 @@ class RoleplayChatHandler {
     }
 
     init() {
+        this.injectSettingsModal();
         this.bindElements();
         this.bindEvents();
         this.setupTabIntegration();
         this.loadPersonas();
+    }
+
+    injectSettingsModal() {
+        if (document.getElementById('chat-global-settings-modal')) return;
+        
+        const modal = document.createElement('div');
+        modal.id = 'chat-global-settings-modal';
+        modal.className = 'modal-overlay';
+        modal.style.display = 'none';
+        modal.style.zIndex = '2000';
+        modal.innerHTML = `
+            <div class="api-settings-modal" style="max-width: 600px; width: 90%; max-height: 90vh; display: flex; flex-direction: column;">
+                <div class="modal-header">
+                    <h2 class="modal-title">⚙️ Global Chat Settings</h2>
+                    <button id="chat-global-settings-close" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
+                    <div class="form-group">
+                        <label>Max Input Tokens (Context Window)</label>
+                        <input type="number" id="chat-global-max-input" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Output Tokens</label>
+                        <input type="number" id="chat-global-max-output" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Temperature</label>
+                        <input type="number" step="0.1" id="chat-global-temperature" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Repetition Penalty</label>
+                        <input type="number" step="0.05" id="chat-global-rep-penalty" class="content-box" style="width: 100%;">
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new chat.</p>
+                    
+                    <div id="chat-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+                        <!-- Segments injected here -->
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="chat-global-new-segment" class="content-box" style="flex: 1;" placeholder="New prompt segment...">
+                        <button id="chat-global-add-segment" class="btn-primary">Add</button>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+                        <button id="chat-global-save-btn" class="btn-primary">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        const newBtn = document.getElementById('chat-new-btn');
+        if (newBtn && newBtn.parentNode) {
+            const settingsBtn = document.createElement('button');
+            settingsBtn.id = 'chat-open-global-settings';
+            settingsBtn.className = 'btn-outline';
+            settingsBtn.innerHTML = '⚙️ Settings';
+            settingsBtn.style.marginLeft = '0.5rem';
+            newBtn.parentNode.insertBefore(settingsBtn, newBtn.nextSibling);
+        }
     }
 
     setupTabIntegration() {
@@ -68,6 +132,18 @@ class RoleplayChatHandler {
             sessionList: document.getElementById('chat-session-list'),
             newBtn: document.getElementById('chat-new-btn'),
             
+            globalSettingsBtn: document.getElementById('chat-open-global-settings'),
+            globalSettingsModal: document.getElementById('chat-global-settings-modal'),
+            globalSettingsClose: document.getElementById('chat-global-settings-close'),
+            globalMaxInput: document.getElementById('chat-global-max-input'),
+            globalMaxOutput: document.getElementById('chat-global-max-output'),
+            globalTemp: document.getElementById('chat-global-temperature'),
+            globalRepPen: document.getElementById('chat-global-rep-penalty'),
+            globalPromptSegments: document.getElementById('chat-global-prompt-segments'),
+            globalNewSegment: document.getElementById('chat-global-new-segment'),
+            globalAddSegmentBtn: document.getElementById('chat-global-add-segment'),
+            globalSaveBtn: document.getElementById('chat-global-save-btn'),
+
             activeTitle: document.getElementById('chat-active-title'),
             activeChars: document.getElementById('chat-active-characters'),
             
@@ -98,6 +174,19 @@ class RoleplayChatHandler {
         this.els.newBtn.addEventListener('click', () => this.openNewChatModal());
         this.els.newCloseBtn.addEventListener('click', () => this.closeNewChatModal());
         this.els.createSubmitBtn.addEventListener('click', () => this.createNewChat());
+        
+        if (this.els.globalSettingsBtn) {
+            this.els.globalSettingsBtn.addEventListener('click', () => this.openGlobalSettings());
+        }
+        if (this.els.globalSettingsClose) {
+            this.els.globalSettingsClose.addEventListener('click', () => this.els.globalSettingsModal.style.display = 'none');
+        }
+        if (this.els.globalAddSegmentBtn) {
+            this.els.globalAddSegmentBtn.addEventListener('click', () => this.addSystemPromptSegment());
+        }
+        if (this.els.globalSaveBtn) {
+            this.els.globalSaveBtn.addEventListener('click', () => this.saveGlobalSettings());
+        }
         
         if (this.els.newAddCharBtn) {
             this.els.newAddCharBtn.addEventListener('click', () => this.openGalleryForNewChat());
@@ -135,11 +224,84 @@ class RoleplayChatHandler {
         }
     }
 
+    openGlobalSettings() {
+        if (!window.config) return;
+        this.els.globalMaxInput.value = window.config.get("chat.maxInputTokens") ?? 8192;
+        this.els.globalMaxOutput.value = window.config.get("chat.maxOutputTokens") ?? 1024;
+        this.els.globalTemp.value = window.config.get("chat.temperature") ?? 0.8;
+        this.els.globalRepPen.value = window.config.get("chat.repetitionPenalty") ?? 1.0;
+        
+        this.systemPromptSegments = [...(window.config.get("chat.systemPromptSegments") || [])];
+        this.renderSystemPromptSegments();
+        
+        this.els.globalSettingsModal.style.display = 'flex';
+    }
+
+    renderSystemPromptSegments() {
+        this.els.globalPromptSegments.innerHTML = '';
+        this.systemPromptSegments.forEach((seg, i) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'center';
+            row.style.padding = '0.5rem';
+            row.style.background = 'var(--surface-color)';
+            row.style.border = '1px solid var(--border)';
+            row.style.borderRadius = '0.4rem';
+            
+            const text = document.createElement('span');
+            text.textContent = seg;
+            text.style.flex = '1';
+            
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '🗑️';
+            delBtn.style.background = 'none';
+            delBtn.style.border = 'none';
+            delBtn.style.cursor = 'pointer';
+            delBtn.onclick = () => {
+                this.systemPromptSegments.splice(i, 1);
+                this.renderSystemPromptSegments();
+            };
+            
+            row.appendChild(text);
+            row.appendChild(delBtn);
+            this.els.globalPromptSegments.appendChild(row);
+        });
+    }
+
+    addSystemPromptSegment() {
+        const val = this.els.globalNewSegment.value.trim();
+        if (val) {
+            this.systemPromptSegments.push(val);
+            this.els.globalNewSegment.value = '';
+            this.renderSystemPromptSegments();
+        }
+    }
+
+    saveGlobalSettings() {
+        window.config.set("chat.maxInputTokens", parseInt(this.els.globalMaxInput.value) || 8192);
+        window.config.set("chat.maxOutputTokens", parseInt(this.els.globalMaxOutput.value) || 1024);
+        window.config.set("chat.temperature", parseFloat(this.els.globalTemp.value) || 0.8);
+        window.config.set("chat.repetitionPenalty", parseFloat(this.els.globalRepPen.value) || 1.0);
+        window.config.set("chat.systemPromptSegments", this.systemPromptSegments);
+        
+        this.els.globalSettingsModal.style.display = 'none';
+        
+        if (window.app && window.app.showNotification) {
+            window.app.showNotification("Global chat settings saved", "success");
+        } else {
+            alert("Settings saved!");
+        }
+    }
+
     async openNewChatModal(preselectCardId = null) {
         this.newChatSelectedCards = [];
         this.renderNewChatSelectedChars();
         this.els.newTitle.value = '';
-        this.els.newSysPrompt.value = '';
+        
+        const segments = window.config?.get("chat.systemPromptSegments") || [];
+        this.els.newSysPrompt.value = segments.join("\n\n");
+        
         this.els.newModal.classList.add('show');
         
         try {
@@ -433,6 +595,8 @@ class RoleplayChatHandler {
         wrapper.style.display = 'flex';
         wrapper.style.gap = '10px';
         wrapper.style.marginBottom = '1rem';
+        wrapper.style.width = '100%';
+        wrapper.style.boxSizing = 'border-box';
         if (msg.role === 'user') {
             wrapper.style.flexDirection = 'row-reverse';
         }
@@ -448,19 +612,36 @@ class RoleplayChatHandler {
         nameEl.style.justifyContent = 'space-between';
         nameEl.style.alignItems = 'center';
         nameEl.style.width = '100%';
+        nameEl.style.marginBottom = '0.25rem';
         
         const nameText = document.createElement('span');
         nameText.className = 'chat-bubble-name-text';
-        nameText.textContent = msg.role === 'user' ? 'You' : (displayCharName || 'Assistant');
+        nameText.style.fontWeight = '600';
+        nameText.style.fontSize = '0.85rem';
+        nameText.style.color = 'var(--text-secondary)';
+        
+        // Clear any stray text nodes and only show name for AI to prevent duplication
+        nameEl.innerHTML = '';
+        nameText.textContent = msg.role === 'user' ? '' : (displayCharName || 'Assistant');
         nameEl.appendChild(nameText);
         
         const bubbleEl = document.createElement('div');
         bubbleEl.className = 'chat-bubble';
+        bubbleEl.style.padding = '0.75rem 1rem';
+        bubbleEl.style.borderRadius = '0.75rem';
+        bubbleEl.style.maxWidth = '100%';
+        bubbleEl.style.wordBreak = 'break-word';
         
         if (msg.role === 'user') {
             bubbleEl.style.backgroundColor = 'var(--surface-color)';
             bubbleEl.style.color = 'var(--text-primary)';
             bubbleEl.style.border = '1px solid var(--border)';
+            bubbleEl.style.borderBottomRightRadius = '0';
+        } else {
+            bubbleEl.style.backgroundColor = 'var(--bg-tertiary, rgba(0,0,0,0.1))';
+            bubbleEl.style.color = 'var(--text-primary)';
+            bubbleEl.style.border = '1px solid var(--border)';
+            bubbleEl.style.borderBottomLeftRadius = '0';
         }
         
         let contentStr = msg.content || '';
@@ -751,10 +932,23 @@ class RoleplayChatHandler {
         const nameEl = aiBubbleWrapper.querySelector('.chat-bubble-name');
 
         try {
+            const payload = { 
+                content, 
+                ooc_note: oocNote, 
+                character_name: characterName 
+            };
+            
+            if (window.config) {
+                payload.max_input_tokens = window.config.get("chat.maxInputTokens");
+                payload.max_output_tokens = window.config.get("chat.maxOutputTokens");
+                payload.temperature = window.config.get("chat.temperature");
+                payload.repetition_penalty = window.config.get("chat.repetitionPenalty");
+            }
+            
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content, ooc_note: oocNote, character_name: characterName })
+                body: JSON.stringify(payload)
             });
             
             if (!res.ok) throw new Error("API Request Failed");
