@@ -314,6 +314,7 @@ class RoleplayChatHandler {
             
             this.els.activeTitle.textContent = chat.title;
             this.els.activeChars.textContent = chat.characters.map(c => c.name).join(', ') || 'No characters linked';
+            this.activeChatCharacters = chat.characters || [];
             
             if (this.els.speakerSelect) {
                 if (chat.characters.length > 1) {
@@ -348,12 +349,31 @@ class RoleplayChatHandler {
         }
     }
 
+    getAvatarUrl(characterName, cardId = null) {
+        let id = cardId;
+        if (!id && this.activeChatCharacters) {
+            const char = this.activeChatCharacters.find(c => c.name === characterName);
+            if (char) id = char.id;
+        }
+        if (id) {
+            const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || "";
+            return `/api/storage/cards/thumbnail?cardId=${id}&token=${token}`;
+        }
+        return null;
+    }
+
     appendMessage(msg) {
         const placeholder = this.els.timeline.querySelector('.chat-placeholder');
         if (placeholder) placeholder.remove();
         
         const wrapper = document.createElement('div');
         wrapper.className = `chat-bubble-wrapper ${msg.role}`;
+        wrapper.style.display = 'flex';
+        wrapper.style.gap = '10px';
+        wrapper.style.marginBottom = '1rem';
+        if (msg.role === 'user') {
+            wrapper.style.flexDirection = 'row-reverse';
+        }
         
         const nameEl = document.createElement('div');
         nameEl.className = 'chat-bubble-name';
@@ -378,8 +398,40 @@ class RoleplayChatHandler {
         
         bubbleEl.innerHTML = this.formatMessage(contentStr);
         
-        wrapper.appendChild(nameEl);
-        wrapper.appendChild(bubbleEl);
+        const avatarEl = document.createElement('div');
+        avatarEl.style.width = '40px';
+        avatarEl.style.height = '40px';
+        avatarEl.style.flexShrink = '0';
+        avatarEl.style.borderRadius = '50%';
+        avatarEl.style.overflow = 'hidden';
+        avatarEl.style.backgroundColor = 'var(--surface-color)';
+        avatarEl.style.display = 'flex';
+        avatarEl.style.alignItems = 'center';
+        avatarEl.style.justifyContent = 'center';
+        avatarEl.style.fontWeight = 'bold';
+        
+        if (msg.role === 'user') {
+            avatarEl.textContent = 'U';
+        } else {
+            const avatarUrl = this.getAvatarUrl(msg.character_name, msg.character_card_id);
+            if (avatarUrl) {
+                avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;">`;
+            } else {
+                avatarEl.textContent = (msg.character_name || 'AI').substring(0, 2).toUpperCase();
+            }
+        }
+        
+        const contentCol = document.createElement('div');
+        contentCol.style.display = 'flex';
+        contentCol.style.flexDirection = 'column';
+        contentCol.style.maxWidth = 'calc(100% - 50px)';
+        if (msg.role === 'user') contentCol.style.alignItems = 'flex-end';
+        
+        contentCol.appendChild(nameEl);
+        contentCol.appendChild(bubbleEl);
+        
+        wrapper.appendChild(avatarEl);
+        wrapper.appendChild(contentCol);
         
         if (msg.id) {
             this.attachMessageActions(wrapper, msg, bubbleEl, nameEl);
@@ -583,6 +635,15 @@ class RoleplayChatHandler {
                             if (data.character_name) {
                                 nameTextEl.textContent = data.character_name;
                                 aiMsgObj.character_name = data.character_name;
+                            }
+                            if (data.character_card_id) {
+                                aiMsgObj.character_card_id = data.character_card_id;
+                                const avatarUrl = this.getAvatarUrl(data.character_name, data.character_card_id);
+                                if (avatarUrl) {
+                                    const imgEl = aiBubbleWrapper.querySelector('.chat-avatar-char-img');
+                                    if (imgEl) imgEl.src = avatarUrl;
+                                    else aiBubbleWrapper.querySelector('div:first-child').innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;">`;
+                                }
                             }
                             if (data.user_message_id) {
                                 userMsgObj.id = data.user_message_id;

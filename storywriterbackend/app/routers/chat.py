@@ -225,6 +225,30 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
         link = models.ChatCharacterLink(chat_id=new_chat.id, card_id=card_id)
         db.add(link)
         
+    # If it's a single-character chat, auto-start with their first message
+    if len(chat_in.card_ids) == 1:
+        card = db.query(models.CharacterCard).filter(models.CharacterCard.id == chat_in.card_ids[0]).first()
+        if card and card.first_mes:
+            first_msg = models.ChatMessage(
+                chat_id=new_chat.id,
+                role="assistant",
+                character_name=card.name,
+                content=card.first_mes
+            )
+            db.add(first_msg)
+            
+            # Expose alternate greetings via a UI-only system message
+            if card.alternate_greetings and isinstance(card.alternate_greetings, list) and len(card.alternate_greetings) > 0:
+                alt_text = "\n\n---\n\n".join([f"**Option {i+1}**:\n{g}" for i, g in enumerate(card.alternate_greetings)])
+                system_note = models.ChatMessage(
+                    chat_id=new_chat.id,
+                    role="system",
+                    content=f"💡 **Alternate Greetings Available**\nYou can edit the starting message above to replace it with one of these options if you prefer:\n\n{alt_text}",
+                    is_summarized=True,
+                    is_extracted=True
+                )
+                db.add(system_note)
+
     db.commit()
     db.refresh(new_chat)
     return new_chat
@@ -378,11 +402,20 @@ async def send_message(
     db.commit()
     assistant_msg_id = assistant_msg.id
     
+    # Find the matching card ID for the speaker (to help the UI load thumbnails)
+    speaker_card_id = None
+    if chat.characters:
+        for c in chat.characters:
+            if c.name == speaker_name:
+                speaker_card_id = c.id
+                break
+
     # 4. Setup Background Detached Generation & Queue
     queue = asyncio.Queue()
     queue.put_nowait({
         "type": "metadata", 
         "character_name": speaker_name,
+        "character_card_id": speaker_card_id,
         "user_message_id": user_msg.id if user_msg else None,
         "assistant_message_id": assistant_msg_id
     })
