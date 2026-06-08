@@ -206,6 +206,15 @@ class RoleplayChatHandler {
                     word-wrap: break-word;
                 }
                 
+                .chat-bubble-wrapper .chat-message-actions {
+                    opacity: 0;
+                    transition: opacity 0.2s ease;
+                }
+                
+                .chat-bubble-wrapper:hover .chat-message-actions {
+                    opacity: 1;
+                }
+                
                 @media (max-width: 768px) {
                     #view-roleplaychat {
                         flex-direction: column !important;
@@ -1053,9 +1062,10 @@ class RoleplayChatHandler {
         const contentCol = document.createElement('div');
         contentCol.style.display = 'flex';
         contentCol.style.flexDirection = 'column';
+        contentCol.style.width = '100%';
         contentCol.style.maxWidth = 'calc(100% - 74px)';
         contentCol.style.minWidth = '0'; // CRITICAL: allows flex child to shrink below its content's intrinsic width
-        if (msg.role === 'user') contentCol.style.alignItems = 'flex-end';
+        contentCol.style.alignItems = msg.role === 'user' ? 'flex-end' : 'flex-start';
         
         contentCol.appendChild(nameEl);
         contentCol.appendChild(bubbleEl);
@@ -1080,11 +1090,6 @@ class RoleplayChatHandler {
         actionsEl.className = 'chat-message-actions';
         actionsEl.style.display = 'flex';
         actionsEl.style.gap = '0.5rem';
-        actionsEl.style.opacity = '0';
-        actionsEl.style.transition = 'opacity 0.2s';
-
-        wrapper.addEventListener('mouseenter', () => actionsEl.style.opacity = '1');
-        wrapper.addEventListener('mouseleave', () => actionsEl.style.opacity = '0');
 
         const editBtn = document.createElement('button');
         editBtn.className = 'chat-action-btn';
