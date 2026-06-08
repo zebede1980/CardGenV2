@@ -182,7 +182,7 @@ class RoleplayChatHandler {
                     
                     /* Constrain sidebar height on mobile so the chat area is still reachable */
                     #chat-sidebar-container {
-                        max-height: 20vh !important;
+                        max-height: 25vh !important;
                         width: 100% !important;
                         border-right: none !important;
                         border-bottom: 1px solid var(--border);
