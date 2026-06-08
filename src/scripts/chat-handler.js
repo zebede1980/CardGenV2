@@ -405,11 +405,12 @@ class RoleplayChatHandler {
         
         bubbleEl.innerHTML = this.formatMessage(contentStr);
         
+        
         const avatarEl = document.createElement('div');
-        avatarEl.style.width = '40px';
-        avatarEl.style.height = '40px';
+        avatarEl.style.width = '64px';
+        avatarEl.style.height = '64px';
         avatarEl.style.flexShrink = '0';
-        avatarEl.style.borderRadius = '50%';
+        avatarEl.style.borderRadius = '0.5rem';
         avatarEl.style.overflow = 'hidden';
         avatarEl.style.backgroundColor = 'var(--surface-color)';
         avatarEl.style.display = 'flex';
@@ -419,10 +420,18 @@ class RoleplayChatHandler {
         
         if (msg.role === 'user') {
             avatarEl.textContent = 'U';
+            avatarEl.style.fontSize = '1.5rem';
         } else {
             const avatarUrl = this.getAvatarUrl(msg.character_name, msg.character_card_id);
             if (avatarUrl) {
-                avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;">`;
+                avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
+                const imgEl = avatarEl.querySelector('img');
+                imgEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (window.app && window.app.openGallery) {
+                        window.app.openGallery([{ url: avatarUrl, label: msg.character_name || 'Character' }]);
+                    }
+                });
             } else {
                 avatarEl.textContent = (msg.character_name || 'AI').substring(0, 2).toUpperCase();
             }
@@ -431,7 +440,7 @@ class RoleplayChatHandler {
         const contentCol = document.createElement('div');
         contentCol.style.display = 'flex';
         contentCol.style.flexDirection = 'column';
-        contentCol.style.maxWidth = 'calc(100% - 50px)';
+        contentCol.style.maxWidth = 'calc(100% - 74px)';
         if (msg.role === 'user') contentCol.style.alignItems = 'flex-end';
         
         contentCol.appendChild(nameEl);
@@ -636,41 +645,48 @@ class RoleplayChatHandler {
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         const dataStr = line.slice(6);
-                        const data = JSON.parse(dataStr);
-                        
-                        if (data.type === 'metadata') {
-                            if (data.character_name) {
-                                nameTextEl.textContent = data.character_name;
-                                aiMsgObj.character_name = data.character_name;
-                            }
-                            if (data.character_card_id) {
-                                aiMsgObj.character_card_id = data.character_card_id;
-                                const avatarUrl = this.getAvatarUrl(data.character_name, data.character_card_id);
-                                if (avatarUrl) {
-                                    const imgEl = aiBubbleWrapper.querySelector('.chat-avatar-char-img');
-                                    if (imgEl) imgEl.src = avatarUrl;
-                                    else aiBubbleWrapper.querySelector('div:first-child').innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;">`;
+                        if (dataStr.trim() === '[DONE]') continue;
+                        try {
+                            const data = JSON.parse(dataStr);
+                            
+                            if (data.type === 'metadata') {
+                                if (data.character_name) {
+                                    nameTextEl.textContent = data.character_name;
+                                    aiMsgObj.character_name = data.character_name;
                                 }
+                                if (data.character_card_id) {
+                                    aiMsgObj.character_card_id = data.character_card_id;
+                                    const avatarUrl = this.getAvatarUrl(data.character_name, data.character_card_id);
+                                    if (avatarUrl) {
+                                        const imgEl = aiBubbleWrapper.querySelector('.chat-avatar-char-img');
+                                        if (imgEl) {
+                                            imgEl.src = avatarUrl;
+                                        } else {
+                                            const avatarDiv = aiBubbleWrapper.querySelector('div:first-child');
+                                            avatarDiv.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
+                                            const newImgEl = avatarDiv.querySelector('img');
+                                            if (newImgEl) {
+                                                newImgEl.addEventListener('click', (e) => {
+                                                    e.stopPropagation();
+                                                    if (window.app && window.app.openGallery) {
+                                                        window.app.openGallery([{ url: avatarUrl, label: data.character_name || 'Character' }]);
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (data.type === 'chunk') {
+                                fullText += data.content;
+                                aiMsgObj.content = fullText;
+                                contentEl.innerHTML = this.formatMessage(fullText);
+                                this.scrollToBottom();
+                            } else if (data.type === 'error') {
+                                console.error("Chat generation error:", data.message);
+                                contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
                             }
-                            if (data.user_message_id) {
-                                userMsgObj.id = data.user_message_id;
-                                this.attachMessageActions(userBubbleWrapper, userMsgObj, userBubbleWrapper.querySelector('.chat-bubble'), userBubbleWrapper.querySelector('.chat-bubble-name'));
-                            }
-                            if (data.assistant_message_id) {
-                                aiMsgObj.id = data.assistant_message_id;
-                                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameEl);
-                            }
-                        } else if (data.type === 'chunk') {
-                            fullText += data.content;
-                            aiMsgObj.content = fullText; // Keep it continuously updated for editing
-                            contentEl.innerHTML = this.formatMessage(fullText);
-                            if (nameTextEl.textContent === 'Routing...' || nameTextEl.textContent === 'Generating...') {
-                                nameTextEl.textContent = 'Assistant'; // Fallback
-                            }
-                            this.scrollToBottom();
-                        } else if (data.type === 'error') {
-                            console.error("LLM Error:", data.message);
-                            contentEl.innerHTML += `<br><span style="color:var(--error)">[Error: ${data.message}]</span>`;
+                        } catch (err) {
+                            console.warn("Failed to parse chat SSE stream data:", dataStr, err);
                         }
                     }
                 }
