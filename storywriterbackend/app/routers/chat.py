@@ -13,7 +13,7 @@ from app.routers.settings import get_or_create_settings
 router = APIRouter(prefix="/chats", tags=["chats"])
 
 # Extract the X-User-Id header forwarded by our proxy server
-def get_current_user(x_user_id: int = Header(None)):
+def get_current_user(x_user_id: str = Header(None)):
     if x_user_id is None:
         raise HTTPException(status_code=401, detail="User ID header missing")
     return x_user_id
@@ -81,7 +81,7 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         
     return messages
 
-async def summarize_chat_task(chat_id: str, user_id: int):
+async def summarize_chat_task(chat_id: str, user_id: str):
     with SessionLocal() as bg_db:
         chat = bg_db.query(models.RoleplayChat).filter(
             models.RoleplayChat.id == chat_id,
@@ -139,7 +139,7 @@ async def summarize_chat_task(chat_id: str, user_id: int):
         finally:
             await llm.close()
 
-async def extract_chat_memory_task(chat_id: str, user_id: int):
+async def extract_chat_memory_task(chat_id: str, user_id: str):
     with SessionLocal() as bg_db:
         chat = bg_db.query(models.RoleplayChat).filter(
             models.RoleplayChat.id == chat_id,
@@ -209,14 +209,14 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
             await llm.close()
 
 @router.get("/", response_model=List[schemas.RoleplayChatOut])
-def list_chats(db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def list_chats(db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     return db.query(models.RoleplayChat)\
         .filter(models.RoleplayChat.user_id == user_id)\
         .order_by(models.RoleplayChat.updated_at.desc())\
         .all()
 
 @router.post("/", response_model=schemas.RoleplayChatDetailOut)
-def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     new_chat = models.RoleplayChat(
         user_id=user_id,
         title=chat_in.title,
@@ -235,14 +235,14 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
     return new_chat
 
 @router.get("/{chat_id}", response_model=schemas.RoleplayChatDetailOut)
-def get_chat(chat_id: str, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def get_chat(chat_id: str, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     return chat
 
 @router.patch("/{chat_id}", response_model=schemas.RoleplayChatOut)
-def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -257,7 +257,7 @@ def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session =
     return chat
 
 @router.delete("/{chat_id}")
-def delete_chat(chat_id: str, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def delete_chat(chat_id: str, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -266,7 +266,7 @@ def delete_chat(chat_id: str, db: Session = Depends(get_db), user_id: int = Depe
     return {"success": True}
 
 @router.patch("/{chat_id}/messages/{message_id}", response_model=schemas.ChatMessageOut)
-def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessageUpdate, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessageUpdate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -280,7 +280,7 @@ def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessa
     return msg
 
 @router.delete("/{chat_id}/messages/{message_id}")
-def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == user_id).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -297,7 +297,7 @@ async def send_message(
     chat_id: str,
     req: schemas.SendMessageRequest,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user)
+    user_id: str = Depends(get_current_user)
 ):
     chat = db.query(models.RoleplayChat).filter(
         models.RoleplayChat.id == chat_id, 
