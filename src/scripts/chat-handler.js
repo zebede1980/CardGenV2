@@ -296,7 +296,55 @@ class RoleplayChatHandler {
             row.style.border = '1px solid var(--border)';
             row.style.borderRadius = '0.4rem';
             row.style.alignItems = 'flex-start';
+            row.style.gap = '0.5rem';
+            row.draggable = true;
             
+            const dragHandle = document.createElement('div');
+            dragHandle.innerHTML = '☰';
+            dragHandle.style.cursor = 'grab';
+            dragHandle.style.color = 'var(--text-secondary)';
+            dragHandle.style.paddingTop = '0.2rem';
+            dragHandle.style.userSelect = 'none';
+            dragHandle.title = 'Drag to reorder';
+            
+            row.addEventListener('dragstart', (e) => {
+                this.draggedSegmentIndex = i;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', i);
+                setTimeout(() => row.style.opacity = '0.4', 0);
+            });
+            
+            row.addEventListener('dragend', () => {
+                row.style.opacity = '1';
+                this.draggedSegmentIndex = null;
+                Array.from(this.els.globalPromptSegments.children).forEach(r => r.style.boxShadow = '');
+            });
+            
+            row.addEventListener('dragover', (e) => {
+                e.preventDefault(); // Necessary to allow dropping
+                if (this.draggedSegmentIndex !== null && this.draggedSegmentIndex !== i) {
+                    if (this.draggedSegmentIndex < i) {
+                        row.style.boxShadow = '0 2px 0 var(--accent)';
+                    } else {
+                        row.style.boxShadow = '0 -2px 0 var(--accent)';
+                    }
+                }
+            });
+            
+            row.addEventListener('dragleave', () => {
+                row.style.boxShadow = '';
+            });
+            
+            row.addEventListener('drop', (e) => {
+                e.preventDefault();
+                row.style.boxShadow = '';
+                if (this.draggedSegmentIndex !== null && this.draggedSegmentIndex !== i) {
+                    const draggedItem = this.systemPromptSegments.splice(this.draggedSegmentIndex, 1)[0];
+                    this.systemPromptSegments.splice(i, 0, draggedItem);
+                    this.renderSystemPromptSegments();
+                }
+            });
+
             const input = document.createElement('textarea');
             input.value = seg;
             input.style.flex = '1';
@@ -331,6 +379,7 @@ class RoleplayChatHandler {
                 this.renderSystemPromptSegments();
             };
             
+            row.appendChild(dragHandle);
             row.appendChild(input);
             row.appendChild(delBtn);
             this.els.globalPromptSegments.appendChild(row);
@@ -1077,7 +1126,6 @@ class RoleplayChatHandler {
                                 fullText += data.content;
                                 aiMsgObj.content = fullText;
                                 contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
-                                this.scrollToBottom();
                             } else if (data.type === 'error') {
                                 console.error("Chat generation error:", data.message);
                                 contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
