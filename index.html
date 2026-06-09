@@ -6,6 +6,67 @@
         <title>SillyTavern Character Generator</title>
         <link rel="icon" type="image/png" href="favicon.png" />
         <link rel="stylesheet" href="src/styles/main.css?v=20260513" />
+        <style>
+            /* API Log Popup Styles */
+            .api-log-entry {
+                background: var(--surface-color);
+                border: 1px solid var(--border);
+                border-radius: 0.5rem;
+                margin-bottom: 1rem;
+                overflow: hidden;
+            }
+            .api-log-header {
+                display: flex;
+                justify-content: space-between;
+                padding: 0.5rem 0.75rem;
+                background: var(--surface-strong);
+                border-bottom: 1px solid var(--border);
+                font-size: 0.85rem;
+            }
+            .api-log-ts {
+                color: var(--text-secondary);
+            }
+            .api-log-endpoint {
+                font-weight: 600;
+                color: var(--text-primary);
+            }
+            .api-log-content {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 1px;
+                background: var(--border);
+            }
+            .api-log-col {
+                background: var(--surface-color);
+                padding: 0.75rem;
+                display: flex;
+                flex-direction: column;
+            }
+            .api-log-copy-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.5rem;
+            }
+            .api-log-copy-header h4 {
+                margin: 0;
+                font-size: 0.9rem;
+            }
+            .api-log-col pre {
+                background: var(--surface-muted);
+                border: 1px solid var(--border);
+                border-radius: 0.375rem;
+                padding: 0.75rem;
+                margin: 0;
+                font-family: 'IBM Plex Mono', monospace;
+                font-size: 0.8rem;
+                white-space: pre-wrap;
+                word-break: break-all;
+                overflow: auto;
+                max-height: 400px;
+                flex-grow: 1;
+            }
+        </style>
         <script>
             // Apply saved theme before first paint so the login overlay
             // never flashes with the wrong colour scheme.
@@ -2497,5 +2558,63 @@
             </div>
           </div>
         </div>
+
+        <script>
+            // Intercept authFetch calls to extract backend API logs for the API Logs popup
+            document.addEventListener("DOMContentLoaded", () => {
+                if (typeof window.authFetch === 'function') {
+                    const originalAuthFetch = window.authFetch;
+                    window.authFetch = async function(...args) {
+                        const response = await originalAuthFetch.apply(this, args);
+                        const contentType = response.headers.get("content-type") || "";
+                        
+                        // Intercept JSON responses (e.g., Image Gen)
+                        if (contentType.includes("application/json")) {
+                            const cloned = response.clone();
+                            cloned.json().then(data => {
+                                if (data && data.api_log) {
+                                    console.log("Backend API Log:", data.api_log);
+                                    // TODO: Call your actual api.js logging method here:
+                                    // if (window.apiHandler) window.apiHandler.addLog(data.api_log);
+                                }
+                            }).catch(() => {});
+                            return response;
+                        }
+                        
+                        // Intercept SSE Stream responses (e.g., Chat Gen)
+                        if (contentType.includes("text/event-stream")) {
+                            const cloned = response.clone();
+                            const reader = cloned.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = "";
+                            (async () => {
+                                try {
+                                    while (true) {
+                                        const { done, value } = await reader.read();
+                                        if (done) break;
+                                        buffer += decoder.decode(value, { stream: true });
+                                        const lines = buffer.split('\n');
+                                        buffer = lines.pop(); // keep remainder
+                                        for (const line of lines) {
+                                            if (line.startsWith('data: ')) {
+                                                try {
+                                                    const data = JSON.parse(line.substring(6));
+                                                    if (data.type === 'api_log') {
+                                                        console.log("Backend SSE API Log:", data.log);
+                                                        // TODO: Call your actual api.js logging method here:
+                                                        // if (window.apiHandler) window.apiHandler.addLog(data.log);
+                                                    }
+                                                } catch (e) {}
+                                            }
+                                        }
+                                    }
+                                } catch (e) {}
+                            })();
+                        }
+                        return response;
+                    };
+                }
+            });
+        </script>
     </body>
 </html>

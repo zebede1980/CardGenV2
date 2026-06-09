@@ -391,7 +391,7 @@ async def generate_scene_image(
     finally:
         await llm.close()
         
- async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         if params.base_url and params.api_key:
             # Configured OpenAI-compatible API
             endpoint = params.base_url
@@ -456,7 +456,12 @@ async def generate_scene_image(
             
     return {
         "imageUrl": image_url,
-        "prompt": image_prompt
+        "prompt": image_prompt,
+        "api_log": {
+            "endpoint": "Generate Scene Image (Roleplay Chat)",
+            "request": {"model": getattr(settings, 'model', 'unknown'), "messages": messages},
+            "response": image_prompt
+        }
     }
 
 @router.post("/{chat_id}/message")
@@ -476,6 +481,9 @@ async def send_message(
     settings = get_or_create_settings(db, current_user.id)
     if not settings.api_key:
         raise HTTPException(status_code=400, detail="API key not configured.")
+        
+    # Setup queue early to capture routing logs
+    queue = asyncio.Queue()
         
     # Determine speaker
     speaker_name = req.character_name
@@ -507,11 +515,29 @@ async def send_message(
                     {"role": "system", "content": "You are a dialogue router."},
                     {"role": "user", "content": route_prompt}
                 ]
+                
+                queue.put_nowait({
+                    "type": "api_log",
+                    "log": {
+                        "endpoint": "Chat Speaker Routing",
+                        "request": {"model": getattr(settings, 'model', 'unknown'), "messages": route_msgs}
+                    }
+                })
+                
                 name_response = []
                 async for chunk in llm.generate(route_msgs, stream=False):
                     name_response.append(chunk)
                 
                 chosen = "".join(name_response).strip()
+                
+                queue.put_nowait({
+                    "type": "api_log",
+                    "log": {
+                        "endpoint": "Chat Speaker Routing",
+                        "response": chosen
+                    }
+                })
+                
                 for cn in char_names:
                     if cn.lower() in chosen.lower():
                         speaker_name = cn
@@ -559,7 +585,14 @@ async def send_message(
                 break
 
     # 4. Setup Background Detached Generation & Queue
-    queue = asyncio.Queue()
+    queue.put_nowait({
+        "type": "api_log",
+        "log": {
+            "endpoint": "Roleplay Chat Generation",
+            "request": {"model": getattr(settings, 'model', 'unknown'), "messages": prompt_messages}
+        }
+    })
+    
     queue.put_nowait({
         "type": "metadata", 
         "character_name": speaker_name,
@@ -577,6 +610,14 @@ async def send_message(
                 await queue.put(chunk)
                 
             full_content = "".join(content_parts)
+            
+            await queue.put({
+                "type": "api_log",
+                "log": {
+                    "endpoint": "Roleplay Chat Generation",
+                    "response": full_content
+                }
+            })
             
             # Persist to DB in detached session
             with SessionLocal() as bg_db:
