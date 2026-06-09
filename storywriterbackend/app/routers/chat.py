@@ -32,7 +32,7 @@ def get_default_system_prompt() -> str:
     ]
     return "\n\n".join(modules)
 
-def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None):
+def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None):
     messages = []
     
     system_parts = []
@@ -63,6 +63,7 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     # 4. Chat History
     import re as _re
     _scene_image_re = _re.compile(r'\s*<scene-image\s+[^>]*/?>\s*|</scene-image>\s*', _re.IGNORECASE)
+    history_messages = []
     for msg in sorted(chat.messages, key=lambda m: m.created_at):
         if msg.is_summarized:
             continue
@@ -84,8 +85,20 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         if msg.role == "assistant" and msg.character_name and len(chat.characters) > 1:
             content = f"{msg.character_name}: {content}"
             
-        messages.append({"role": msg.role, "content": content})
+        history_messages.append({"role": msg.role, "content": content})
         
+    # 5. Truncate history to fit within max_input_tokens if provided
+    if max_input_tokens:
+        def estimate_tokens(msg_list):
+            return sum(len(m.get("content", "")) // 4 for m in msg_list)
+            
+        system_tokens = estimate_tokens(messages)
+        # Always keep at least the very last message
+        while history_messages and (estimate_tokens(history_messages) + system_tokens > max_input_tokens) and len(history_messages) > 1:
+            history_messages.pop(0)
+            
+    messages.extend(history_messages)
+    
     if speaker_name and len(chat.characters) > 1:
         messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message, just write the dialogue and actions."})
         
@@ -570,7 +583,7 @@ async def send_message(
         db.commit()
     
     # 2. Build Prompt Context (Ensuring strict caching order)
-    prompt_messages = build_chat_prompt(chat, db, speaker_name)
+    prompt_messages = build_chat_prompt(chat, db, speaker_name, getattr(req, 'max_input_tokens', None))
     
     # 3. Create Placeholder Assistant Message
     assistant_msg = models.ChatMessage(
