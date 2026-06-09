@@ -437,9 +437,11 @@ class RoleplayChatHandler {
         
         if (this.els.userPersonaSelect) {
             this.els.userPersonaSelect.addEventListener('change', (e) => {
-                localStorage.setItem('chatgen_active_user_persona', e.target.value);
                 if (this.activeChatId) {
+                    localStorage.setItem(`chatgen_persona_${this.activeChatId}`, e.target.value);
                     this.selectChat(this.activeChatId);
+                } else {
+                    localStorage.setItem('chatgen_active_user_persona', e.target.value);
                 }
             });
         }
@@ -868,7 +870,13 @@ class RoleplayChatHandler {
         }
         try {
             const allCards = await window.characterStorage.listCards();
-            this.availablePersonas = allCards;
+            this.availablePersonas = allCards.filter(c => c.isPermanent);
+            
+            this.availablePersonas.sort((a, b) => {
+                const nameA = (a.characterName || (a.character && a.character.name) || a.name || 'Unnamed').toLowerCase();
+                const nameB = (b.characterName || (b.character && b.character.name) || b.name || 'Unnamed').toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
             
             if (this.els.userPersonaSelect) {
                 const currentVal = localStorage.getItem('chatgen_active_user_persona') || '';
@@ -882,11 +890,18 @@ class RoleplayChatHandler {
                     this.els.userPersonaSelect.appendChild(opt);
                 });
                 
-                if (this.availablePersonas.some(c => String(c.id) === String(currentVal))) {
-                    this.els.userPersonaSelect.value = currentVal;
+                let activeId = currentVal;
+                if (this.activeChatId) {
+                    activeId = localStorage.getItem(`chatgen_persona_${this.activeChatId}`) || currentVal;
+                }
+                
+                if (this.availablePersonas.some(c => String(c.id) === String(activeId))) {
+                    this.els.userPersonaSelect.value = activeId;
                 } else {
                     this.els.userPersonaSelect.value = '';
-                    localStorage.removeItem('chatgen_active_user_persona');
+                    if (!this.activeChatId) {
+                        localStorage.removeItem('chatgen_active_user_persona');
+                    }
                 }
             }
         } catch (e) {
@@ -966,6 +981,15 @@ class RoleplayChatHandler {
                 }
             }
 
+            if (this.els.userPersonaSelect) {
+                const savedPersona = localStorage.getItem(`chatgen_persona_${chatId}`) || localStorage.getItem('chatgen_active_user_persona') || '';
+                if (this.availablePersonas && this.availablePersonas.some(c => String(c.id) === String(savedPersona))) {
+                    this.els.userPersonaSelect.value = savedPersona;
+                } else {
+                    this.els.userPersonaSelect.value = '';
+                }
+            }
+
             this.els.timeline.innerHTML = '';
             
             // Ensure messages are sorted chronologically (oldest first)
@@ -997,7 +1021,13 @@ class RoleplayChatHandler {
     }
 
     getUserPersonaData() {
-        const id = localStorage.getItem('chatgen_active_user_persona');
+        let id = null;
+        if (this.activeChatId) {
+            id = localStorage.getItem(`chatgen_persona_${this.activeChatId}`);
+        }
+        if (!id) {
+            id = localStorage.getItem('chatgen_active_user_persona');
+        }
         if (!id || !this.availablePersonas) return null;
         return this.availablePersonas.find(c => String(c.id) === String(id)) || null;
     }
