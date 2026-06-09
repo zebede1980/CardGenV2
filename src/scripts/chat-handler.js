@@ -1171,6 +1171,12 @@ class RoleplayChatHandler {
         actionsEl.style.display = 'flex';
         actionsEl.style.gap = '0.5rem';
 
+        const genImageBtn = document.createElement('button');
+        genImageBtn.className = 'chat-action-btn';
+        genImageBtn.innerHTML = '🖼️ Gen Image';
+        genImageBtn.title = 'Generate a scene image based on this message';
+        genImageBtn.onclick = () => this.handleGenerateSceneImage(msg.id, wrapper, bubbleEl);
+
         const editBtn = document.createElement('button');
         editBtn.className = 'chat-action-btn';
         editBtn.innerHTML = '✏️ Edit';
@@ -1181,10 +1187,54 @@ class RoleplayChatHandler {
         delBtn.innerHTML = '🗑️';
         delBtn.onclick = () => this.deleteMessage(msg.id, wrapper);
 
+        actionsEl.appendChild(genImageBtn);
         actionsEl.appendChild(editBtn);
         actionsEl.appendChild(delBtn);
 
         nameEl.appendChild(actionsEl);
+    }
+
+    async handleGenerateSceneImage(messageId, wrapper, bubbleEl) {
+        if (!this.activeChatId) return;
+
+        // Inject loading spinner inside the bubble
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'chat-scene-image-loading';
+        loadingDiv.innerHTML = `
+            <div class="loading-spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+            <span>Visualizing scene...</span>
+        `;
+        loadingDiv.id = `loading-image-${messageId}`;
+        bubbleEl.appendChild(loadingDiv);
+        this.scrollToBottom();
+
+        try {
+            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${messageId}/generate-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(errText);
+            }
+            
+            loadingDiv.remove();
+            // Refresh the message context directly from the DB to sync the newly appended XML tag
+            const msgRes = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
+            if (msgRes.ok) {
+                const chat = await msgRes.json();
+                const updatedMsg = chat.messages.find(m => m.id === messageId);
+                if (updatedMsg) {
+                    bubbleEl.innerHTML = this.formatMessage(updatedMsg.content, updatedMsg.character_name);
+                    this.scrollToBottom();
+                }
+            }
+        } catch (error) {
+            console.error('Image generation error:', error);
+            loadingDiv.innerHTML = `<span style="color: var(--error);">⚠️ ${this.escapeHtml(error.message)}</span>`;
+            setTimeout(() => loadingDiv.remove(), 4000);
+        }
     }
 
     async editMessage(msg, bubbleEl) {
@@ -1308,6 +1358,7 @@ class RoleplayChatHandler {
         parsed = parsed.replace(/<text-message[\s\S]*?<\/text-message>/gi, extractTag);
         parsed = parsed.replace(/<task[\s\S]*?<\/task>/gi, extractTag);
         parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
+        parsed = parsed.replace(/<scene-image[\s\S]*?(?:\/>|<\/scene-image>|>)/gi, extractTag);
 
         // 2. Safely escape the remaining text
         parsed = this.escapeHtml(parsed);
@@ -1321,6 +1372,16 @@ class RoleplayChatHandler {
 
         // 4. Restore the Rich XML tags
         parsed = parsed.replace(placeholderRegex, (match, index) => richTags[index]);
+
+        // Process <scene-image> tags
+        parsed = parsed.replace(/<scene-image\s+src="([^"]+)"\s+prompt="([^"]*)"\s*(?:><\/scene-image>|\/>)/g, (match, url, prompt) => {
+            return `
+                <div class="chat-scene-image-wrapper" onclick="if(window.app && window.app.openGallery) window.app.openGallery([{url: '${url}', prompt: decodeURIComponent('${encodeURIComponent(prompt)}'), label: 'Chat Scene'}]);">
+                    <img src="${url}" alt="Generated Scene" class="chat-scene-image">
+                    <div class="gallery-trigger-overlay">🔍</div>
+                </div>
+            `;
+        });
 
         if (window.RichElementParser) {
             parsed = window.RichElementParser.parse(parsed);

@@ -2367,6 +2367,62 @@ textarea.content-box {
     color: var(--text-primary);
 }
 
+/* Scene Image Loading State */
+.chat-scene-image-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+    background: var(--surface-muted);
+    border: 1px dashed var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    max-width: fit-content;
+}
+
+/* Scene Image Rendering */
+.chat-scene-image-wrapper {
+    position: relative;
+    margin-top: 0.75rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    cursor: zoom-in;
+    max-width: 350px;
+    border: 1px solid var(--border);
+    background: var(--surface-color);
+}
+
+.chat-scene-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.chat-scene-image-wrapper .gallery-trigger-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    backdrop-filter: blur(2px);
+}
+
+.chat-scene-image-wrapper:hover .gallery-trigger-overlay {
+    opacity: 1;
+}
+
 /* ==========================================================================
    ROLEPLAY CHAT UI
    ========================================================================== */
@@ -2866,5 +2922,8 @@ textarea.content-box {
     /* Ensure the chat view fills available height on mobile without overlapping footer */
     #view-roleplaychat:not([style*="display: none"]) {
         height: auto !important;
+    }
+    .chat-scene-image-wrapper {
+        max-width: 100%;
     }
 }

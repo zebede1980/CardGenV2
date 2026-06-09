@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from typing import List
 import asyncio
 import json
+import httpx
+import base64
+import urllib.parse
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
@@ -314,6 +317,96 @@ def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get
     db.delete(msg)
     db.commit()
     return {"success": True}
+
+@router.post("/{chat_id}/messages/{message_id}/generate-image")
+async def generate_scene_image(
+    chat_id: str,
+    message_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+        
+    target_message = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.chat_id == chat_id).first()
+    if not target_message:
+        raise HTTPException(status_code=404, detail="Message not found")
+        
+    # Get the target message and the 3 preceding messages for context window
+    recent_messages = db.query(models.ChatMessage).filter(
+        models.ChatMessage.chat_id == chat_id,
+        models.ChatMessage.created_at <= target_message.created_at
+    ).order_by(models.ChatMessage.created_at.desc()).limit(4).all()
+    recent_messages.reverse()
+    
+    char_context = ""
+    for c in chat.characters:
+        char_context += f"Name: {c.name}\nAppearance & Style: {c.description}\n\n"
+        
+    system_prompt = (
+        "You are an expert image prompt generator for Stable Diffusion/Midjourney. "
+        "Write a highly descriptive, comma-separated image prompt that captures the current scene. "
+        "Focus strictly on visual elements: character appearance, clothing, lighting, camera angle, action, and environment. "
+        "If the User's appearance is unknown, use a First-Person Point of View (POV) looking at the other characters. "
+        "Respond ONLY with the final prompt, no conversational filler."
+    )
+    
+    user_prompt = f"CHARACTER DESCRIPTIONS:\n{char_context}"
+    if chat.summary:
+        user_prompt += f"SCENE SUMMARY:\n{chat.summary}\n\n"
+        
+    user_prompt += "RECENT CHAT HISTORY:\n"
+    for msg in recent_messages:
+        role = "AI" if msg.role == "assistant" else "User"
+        name = msg.character_name if msg.character_name else role
+        user_prompt += f"{name}: {msg.content}\n"
+        
+    user_prompt += "\nCreate a visually striking image prompt for the very last message in the history."
+    
+    settings = get_or_create_settings(db, current_user.id)
+    if not settings.api_key:
+        raise HTTPException(status_code=400, detail="API key not configured.")
+        
+    llm = LLMService(settings)
+    try:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        content_parts = []
+        async for chunk in llm.generate(messages, stream=False):
+            content_parts.append(chunk)
+        image_prompt = "".join(content_parts).strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM Prompt Generation failed: {str(e)}")
+    finally:
+        await llm.close()
+        
+    # Bypass node proxy, hit Pollinations directly 
+    encoded_prompt = urllib.parse.quote(image_prompt)
+    pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?model=flux&width=1024&height=768&nologo=true"
+    
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            img_res = await client.get(pollinations_url)
+            img_res.raise_for_status()
+            
+            img_b64 = base64.b64encode(img_res.content).decode("utf-8")
+            mime_type = img_res.headers.get("content-type", "image/jpeg")
+            image_url = f"data:{mime_type};base64,{img_b64}"
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
+            
+    xml_tag = f'\n\n<scene-image src="{image_url}" prompt="{image_prompt}"></scene-image>'
+    target_message.content += xml_tag
+    db.commit()
+            
+    return {
+        "imageUrl": image_url,
+        "prompt": image_prompt
+    }
 
 @router.post("/{chat_id}/message")
 async def send_message(
