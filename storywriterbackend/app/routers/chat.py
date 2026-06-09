@@ -61,12 +61,19 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         messages.append({"role": "system", "content": "\n\n".join(system_parts)})
         
     # 4. Chat History
+    import re as _re
+    _scene_image_re = _re.compile(r'\s*<scene-image\s+[^>]*/?>\s*|</scene-image>\s*', _re.IGNORECASE)
     for msg in sorted(chat.messages, key=lambda m: m.created_at):
         if msg.is_summarized:
             continue
         if not msg.content and msg.role == "assistant":
             continue
         content = msg.content
+        # Strip <scene-image> tags (contain base64 data URIs) — they bloat the context
+        # and confuse LLM providers. The visual content is for the user, not the AI.
+        content = _scene_image_re.sub('', content).strip()
+        if not content and msg.role == "assistant":
+            continue  # skip messages that were only a scene image
         if msg.ooc_note:
             if content:
                 content += f"\n\n[OOC Note to AI: {msg.ooc_note}]"
