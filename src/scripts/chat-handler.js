@@ -1197,6 +1197,13 @@ class RoleplayChatHandler {
     async handleGenerateSceneImage(messageId, wrapper, bubbleEl) {
         if (!this.activeChatId) return;
 
+        // Gather Configured Image Settings
+        const base_url = window.config?.get("api.image.baseUrl") || null;
+        const api_key = window.config?.get("api.image.apiKey") || null;
+        const models = window.config?.get("api.image.models") || [];
+        const model = models.length > 0 ? models[0] : null; // Use the first selected model
+        const size = window.config?.get("api.image.size") || "1024x1024";
+
         // Inject loading spinner inside the bubble
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'chat-scene-image-loading';
@@ -1211,7 +1218,8 @@ class RoleplayChatHandler {
         try {
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${messageId}/generate-image`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ base_url, api_key, model, size })
             });
 
             if (!res.ok) {

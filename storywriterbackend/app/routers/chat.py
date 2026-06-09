@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 import asyncio
 import json
 import httpx
@@ -318,10 +319,17 @@ def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get
     db.commit()
     return {"success": True}
 
+class ImageGenParams(BaseModel):
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    size: Optional[str] = "1024x1024"
+
 @router.post("/{chat_id}/messages/{message_id}/generate-image")
 async def generate_scene_image(
     chat_id: str,
     message_id: str,
+    params: ImageGenParams,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -383,21 +391,64 @@ async def generate_scene_image(
     finally:
         await llm.close()
         
-    # Bypass node proxy, hit Pollinations directly 
-    encoded_prompt = urllib.parse.quote(image_prompt)
-    pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?model=flux&width=1024&height=768&nologo=true"
-    
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        try:
-            img_res = await client.get(pollinations_url)
-            img_res.raise_for_status()
-            
-            img_b64 = base64.b64encode(img_res.content).decode("utf-8")
-            mime_type = img_res.headers.get("content-type", "image/jpeg")
-            image_url = f"data:{mime_type};base64,{img_b64}"
-            
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
+ async with httpx.AsyncClient(timeout=120.0) as client:
+        if params.base_url and params.api_key:
+            # Configured OpenAI-compatible API
+            endpoint = params.base_url
+            if not endpoint.endswith("/images/generations"):
+                endpoint = f"{endpoint.rstrip('/')}/images/generations"
+                
+            headers = {
+                "Authorization": f"Bearer {params.api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "prompt": image_prompt,
+                "response_format": "b64_json",
+                "size": params.size or "1024x1024"
+            }
+            if params.model:
+                payload["model"] = params.model
+                
+            try:
+                img_res = await client.post(endpoint, headers=headers, json=payload)
+                img_res.raise_for_status()
+                res_data = img_res.json()
+                
+                if "data" in res_data and len(res_data["data"]) > 0:
+                    first_res = res_data["data"][0]
+                    if "b64_json" in first_res and first_res["b64_json"]:
+                        img_b64 = first_res["b64_json"]
+                        image_url = f"data:image/png;base64,{img_b64}"
+                    elif "url" in first_res and first_res["url"]:
+                        # Fallback for APIs that ignore response_format
+                        dl_res = await client.get(first_res["url"])
+                        dl_res.raise_for_status()
+                        img_b64 = base64.b64encode(dl_res.content).decode("utf-8")
+                        mime_type = dl_res.headers.get("content-type", "image/png")
+                        image_url = f"data:{mime_type};base64,{img_b64}"
+                    else:
+                        raise Exception("No image data found in response")
+                else:
+                    raise Exception("Invalid API response format")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Image API generation failed: {str(e)}")
+        else:
+            # Fallback to Pollinations directly
+            encoded_prompt = urllib.parse.quote(image_prompt)
+            pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=768&nologo=true"
+            if params.model:
+                pollinations_url += f"&model={urllib.parse.quote(params.model)}"
+                
+            try:
+                img_res = await client.get(pollinations_url)
+                img_res.raise_for_status()
+                
+                img_b64 = base64.b64encode(img_res.content).decode("utf-8")
+                mime_type = img_res.headers.get("content-type", "image/jpeg")
+                image_url = f"data:{mime_type};base64,{img_b64}"
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Pollinations generation failed: {str(e)}")
             
     xml_tag = f'\n\n<scene-image src="{image_url}" prompt="{image_prompt}"></scene-image>'
     target_message.content += xml_tag

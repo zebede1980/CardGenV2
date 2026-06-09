@@ -2484,7 +2484,10 @@
               <label class="label">Chat Title</label>
               <input type="text" id="chat-settings-title" class="content-box" style="width:100%; margin-bottom: 1rem;" />
               
-              <label class="label">System Prompt (Jailbreaks, Rules)</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <label class="label" style="margin: 0;">System Prompt (Jailbreaks, Rules)</label>
+                <button type="button" class="btn-small btn-outline" onclick="roleplayChatHandler.resetToGlobalSystemPrompt('chat-settings-system-prompt')" title="Reset this chat's system prompt to the global baseline configured in settings">🔄 Reset to Global</button>
+              </div>
               <textarea id="chat-settings-system-prompt" class="content-box" rows="5" style="width:100%; margin-bottom: 0.5rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>
               <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
                 This prompt is injected at the very beginning of the context window.
