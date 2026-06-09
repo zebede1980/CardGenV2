@@ -1565,6 +1565,14 @@ class RoleplayChatHandler {
             this.els.msgInput.focus();
         }
     }
+
+    /* ── Reset chat's system prompt to global baseline ────────────────────── */
+    resetToGlobalSystemPrompt(textareaId) {
+        const textarea = document.getElementById(textareaId);
+        if (!textarea) return;
+        const segments = window.config?.get("chat.systemPromptSegments") || [];
+        textarea.value = segments.join("\n\n");
+    }
 }
 
 // Initialize Handler globally
