@@ -8,6 +8,7 @@ class RoleplayChatHandler {
         this.isGenerating = false;
         this.chats = [];
         this.availablePersonas = [];
+        this._personasLoaded = false;
         
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
@@ -437,11 +438,13 @@ class RoleplayChatHandler {
         
         if (this.els.userPersonaSelect) {
             this.els.userPersonaSelect.addEventListener('change', (e) => {
+                const val = e.target.value;
                 if (this.activeChatId) {
-                    localStorage.setItem(`chatgen_persona_${this.activeChatId}`, e.target.value);
+                    localStorage.setItem(`chatgen_persona_${this.activeChatId}`, val);
+                    localStorage.setItem('chatgen_active_user_persona', val);
                     this.selectChat(this.activeChatId);
                 } else {
-                    localStorage.setItem('chatgen_active_user_persona', e.target.value);
+                    localStorage.setItem('chatgen_active_user_persona', val);
                 }
             });
         }
@@ -906,6 +909,8 @@ class RoleplayChatHandler {
             }
         } catch (e) {
             console.error("Failed to load personas", e);
+        } finally {
+            this._personasLoaded = true;
         }
     }
 
@@ -955,6 +960,13 @@ class RoleplayChatHandler {
                 el.classList.remove('active');
             }
         });
+        
+        // Prevent race condition: wait for personas to load before rendering messages
+        let waitCount = 0;
+        while (!this._personasLoaded && waitCount < 20) {
+            await new Promise(r => setTimeout(r, 100));
+            waitCount++;
+        }
         
         try {
             const res = await window.authFetch(`/api/sw/chats/${chatId}`);
@@ -1421,6 +1433,13 @@ class RoleplayChatHandler {
 
     async sendMessage(options = {}) {
         if (!this.activeChatId || this.isGenerating) return;
+
+        // Force save current persona to this chat whenever a message is sent
+        if (this.els.userPersonaSelect) {
+            const selectedPersona = this.els.userPersonaSelect.value;
+            localStorage.setItem(`chatgen_persona_${this.activeChatId}`, selectedPersona);
+            localStorage.setItem('chatgen_active_user_persona', selectedPersona);
+        }
 
         let content = this.els.msgInput.value.trim();
         let oocNote = this.els.oocInput.value.trim();

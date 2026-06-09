@@ -136,9 +136,10 @@ async def summarize_chat_task(chat_id: str, user_id: int):
         prompt = (
             "Summarize the following chat history concisely. "
             "Focus on key events, decisions, and character developments. "
+            "Keep the final summary well-organized and strictly under 500 words."
         )
         if chat.summary:
-            prompt += f"Incorporate this into the existing summary seamlessly.\n\nExisting Summary:\n{chat.summary}\n\nNew History to add:\n{combined_text}"
+            prompt += f"\n\nIncorporate the new history into the existing summary seamlessly.\n\nExisting Summary:\n{chat.summary}\n\nNew History to add:\n{combined_text}"
         else:
             prompt += f"\n\nChat History:\n{combined_text}"
             
@@ -189,20 +190,30 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
             text_parts.append(f"{name}: {m.content}")
         combined_text = "\n".join(text_parts)
         
+        active_memories = bg_db.query(models.ChatMemory).filter(
+            models.ChatMemory.chat_id == chat_id,
+            models.ChatMemory.is_active == True
+        ).all()
+        
+        existing_facts_text = "\n".join([f"- {m.fact}" for m in active_memories]) if active_memories else "None."
+        
         prompt = (
-            "Extract new, permanent facts from the following chat history. "
-            "Focus on physical items acquired/lost, permanent physical changes, "
-            "major relationship shifts, or new locations discovered. "
-            "Ignore minor conversation details, feelings, or temporary states. "
-            "Output each fact on a new line starting with a dash (-). "
-            "If there are no new permanent facts, output nothing."
-            f"\n\nChat History:\n{combined_text}"
+            "You are managing a dynamic 'Memory Book' (encyclopedia) of permanent facts for a roleplay.\n"
+            "Review the 'New Chat History' and update the 'Current Facts' accordingly.\n\n"
+            "RULES:\n"
+            "1. Add new permanent facts (e.g., items acquired/lost, physical changes, major relationship shifts, key locations).\n"
+            "2. Update or remove any existing facts that are now obsolete or contradicted.\n"
+            "3. Ignore minor conversation details, feelings, or temporary states.\n"
+            "4. You MUST output the COMPLETE, fully updated list of facts, each on a new line starting with a dash (-). "
+            "If no changes are needed, simply output the Current Facts exactly as they are.\n"
+            f"\nCurrent Facts:\n{existing_facts_text}\n"
+            f"\nNew Chat History:\n{combined_text}"
         )
             
         llm = LLMService(settings)
         try:
             messages = [
-                {"role": "system", "content": "You are an AI data extractor. Extract concise permanent facts."},
+                {"role": "system", "content": "You are an AI data extractor. Maintain a concise list of permanent facts."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -214,14 +225,20 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
             if full_response:
                 # Parse facts that start with a dash
                 facts = [line.strip().lstrip('-').strip() for line in full_response.split('\n') if line.strip().startswith('-')]
-                for fact in facts:
-                    if fact:
-                        new_memory = models.ChatMemory(
-                            chat_id=chat_id,
-                            fact=fact,
-                            is_active=True
-                        )
-                        bg_db.add(new_memory)
+                
+                # Only update if we successfully parsed facts (avoids wiping memories if LLM gives a weird conversational response)
+                if facts:
+                    for m in active_memories:
+                        m.is_active = False
+                    
+                    for fact in facts:
+                        if fact:
+                            new_memory = models.ChatMemory(
+                                chat_id=chat_id,
+                                fact=fact,
+                                is_active=True
+                            )
+                            bg_db.add(new_memory)
                         
             for m in unextracted:
                 m.is_extracted = True
