@@ -260,11 +260,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
           <h2 class="modal-title">🛠️ API Request Logs</h2>
           <button id="tech-logs-close-btn" class="modal-close">×</button>
         </div>
-        <div class="modal-body" style="flex: 1; min-height: 0; display: flex; flex-direction: row; overflow: hidden; padding: 0; flex-wrap: wrap;">
+        <div class="modal-body" style="flex: 1; min-height: 0; display: flex; flex-direction: row; overflow-y: auto; overflow-x: hidden; padding: 0; flex-wrap: wrap;">
           <div id="tech-logs-list" style="flex: 1 1 250px; max-width: 350px; border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface-muted); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
             <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No logs available.</div>
           </div>
-          <div id="tech-logs-details" style="flex: 2 1 400px; min-height: 0; overflow: hidden; padding: 1rem 1.5rem; background: var(--bg-page); display: flex; flex-direction: column;">
+          <div id="tech-logs-details" style="flex: 2 1 400px; min-height: 0; overflow-y: auto; padding: 1rem 1.5rem; background: var(--bg-page); display: flex; flex-direction: column;">
             <div style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">Select a request to view details</div>
           </div>
         </div>
@@ -369,8 +369,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       </div>
       ${usageHtml}
       
-      <div style="display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 0.75rem;">
-        <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+      <div style="display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); flex: 1; min-height: 300px; gap: 0.75rem;">
+        <div style="display: flex; flex-direction: column; min-height: 0;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
             <h4 style="margin: 0;">Request Payload</h4>
             <button class="btn-outline btn-small tech-log-copy-btn" data-target="tech-log-req" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;">📋 Copy</button>
@@ -378,7 +378,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           <pre id="tech-log-req" style="flex: 1; min-height: 0; background: var(--surface-strong, #111820); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border); overflow: auto; font-size: 0.8rem; margin: 0; white-space: pre-wrap; word-break: break-all;"><code>${escapeHtml(reqStr)}</code></pre>
         </div>
         
-        <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <div style="display: flex; flex-direction: column; min-height: 0;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
             <h4 style="margin: 0;">Response Payload</h4>
             <button class="btn-outline btn-small tech-log-copy-btn" data-target="tech-log-res" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;">📋 Copy</button>
