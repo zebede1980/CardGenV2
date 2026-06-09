@@ -59,7 +59,7 @@ class HomeHandler {
                     <input type="text" id="home-search" class="content-box" placeholder="Search characters..." style="max-width: 300px; padding: 0.6rem 1rem;">
                 </div>
                 
-                <div id="home-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;">
+                <div id="home-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1.5rem;">
                     <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 3rem;">Loading library...</div>
                 </div>
             </div>

@@ -24,7 +24,7 @@ class CardGallery {
                     <button id="card-gallery-close" class="modal-close">×</button>
                 </div>
                 <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; background: var(--bg-page, #1e1e2e);">
-                    <div id="card-gallery-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.5rem;">
+                    <div id="card-gallery-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 1.5rem;">
                     </div>
                 </div>
             </div>

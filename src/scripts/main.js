@@ -1200,6 +1200,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           input, textarea, select, .content-box, .input {
               color: var(--text-primary);
           }
+
+          /* Global Mobile Layout Fixes */
+          html, body { max-width: 100%; overflow-x: hidden; }
+          *, *::before, *::after { box-sizing: border-box; }
+          .container, .main, #app-root { max-width: 100%; }
+          textarea, input { max-width: 100%; }
     `;
   document.head.appendChild(style);
 

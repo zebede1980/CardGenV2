@@ -41,6 +41,22 @@ class RoleplayChatHandler {
         if (!header) return;
         header.style.display = 'flex';
         header.style.alignItems = 'center';
+        header.style.gap = '0.5rem';
+
+        if (titleEl.parentElement && titleEl.parentElement !== header) {
+            titleEl.parentElement.style.flex = '1';
+            titleEl.parentElement.style.minWidth = '0';
+        }
+        titleEl.style.whiteSpace = 'nowrap';
+        titleEl.style.overflow = 'hidden';
+        titleEl.style.textOverflow = 'ellipsis';
+
+        const charsEl = document.getElementById('chat-active-characters');
+        if (charsEl) {
+            charsEl.style.whiteSpace = 'nowrap';
+            charsEl.style.overflow = 'hidden';
+            charsEl.style.textOverflow = 'ellipsis';
+        }
 
         // Create sidebar backdrop for mobile overlay
         if (!document.getElementById('chat-sidebar-backdrop')) {
@@ -194,7 +210,8 @@ class RoleplayChatHandler {
             const style = document.createElement('style');
             style.id = 'chat-global-fixes';
             style.textContent = `
-                html, body { overflow-x: hidden; max-width: 100vw; }
+                html, body { overflow-x: hidden; max-width: 100%; }
+                *, *::before, *::after { box-sizing: border-box; }
             `;
             document.head.appendChild(style);
         }
