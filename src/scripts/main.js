@@ -1202,10 +1202,42 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
 
           /* Global Mobile Layout Fixes */
-          html, body { max-width: 100%; overflow-x: hidden; }
+          html, body { max-width: 100vw; overflow-x: hidden; margin: 0; padding: 0; }
           *, *::before, *::after { box-sizing: border-box; }
-          .container, .main, #app-root { max-width: 100%; }
-          textarea, input { max-width: 100%; }
+          .container, .main, #app-root, #view-cardgen { max-width: 100%; }
+          
+          @media (max-width: 768px) {
+              /* Force all elements inside the generator to respect screen width */
+              #view-cardgen * {
+                  max-width: 100% !important;
+              }
+              
+              /* Ensure main sections can shrink and don't push off-screen */
+              #view-cardgen, #view-cardgen .form-section, #view-cardgen .result-section, #view-cardgen .content-box {
+                  width: 100% !important;
+                  min-width: 0 !important;
+                  box-sizing: border-box !important;
+              }
+              
+              #view-cardgen textarea, #view-cardgen input, #view-cardgen select {
+                  width: 100%;
+              }
+              
+              #view-cardgen img, #view-cardgen video, #view-cardgen canvas {
+                  height: auto;
+              }
+              
+              /* Break long unbroken strings */
+              #view-cardgen p, #view-cardgen div, #view-cardgen span, #view-cardgen pre, #view-cardgen code, #view-cardgen button, #view-cardgen label {
+                  overflow-wrap: break-word;
+                  word-wrap: break-word;
+              }
+              
+              /* Stack flex containers that are side-by-side on desktop */
+              #view-cardgen div[style*="display: flex"], #view-cardgen div[style*="display:flex"] {
+                  flex-wrap: wrap !important;
+              }
+          }
     `;
   document.head.appendChild(style);
 
