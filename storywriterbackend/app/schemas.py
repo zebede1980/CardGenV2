@@ -186,3 +186,7 @@ class SendMessageRequest(BaseModel):
     content: str
     ooc_note: Optional[str] = ""
     character_name: Optional[str] = None
+    max_input_tokens: Optional[int] = None
+    max_output_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    repetition_penalty: Optional[float] = None

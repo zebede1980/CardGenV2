@@ -608,11 +608,16 @@ async def send_message(
         "assistant_message_id": assistant_msg_id
     })
     
+    # Capture per-request overrides from the frontend (global chat settings)
+    gen_max_tokens = req.max_output_tokens
+    gen_temperature = req.temperature
+    gen_repetition_penalty = req.repetition_penalty
+
     async def generate_task():
         llm = LLMService(settings)
         try:
             content_parts = []
-            async for chunk in llm.generate(prompt_messages, stream=True):
+            async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
                 content_parts.append(chunk)
                 await queue.put(chunk)
                 

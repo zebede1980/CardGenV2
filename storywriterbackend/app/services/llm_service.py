@@ -13,7 +13,7 @@ class LLMService:
         self.finish_reason: Optional[str] = None
         self.client = httpx.AsyncClient(timeout=120.0)
 
-    async def generate(self, messages: list, stream: bool = False) -> AsyncGenerator[str, None]:
+    async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None) -> AsyncGenerator[str, None]:
         url = f"{self.api_base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -22,10 +22,12 @@ class LLMService:
         payload = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
+            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
+            "temperature": temperature if temperature is not None else self.temperature,
             "stream": stream,
         }
+        if repetition_penalty is not None:
+            payload["repetition_penalty"] = repetition_penalty
         if stream:
             self.finish_reason = None
             async with self.client.stream("POST", url, headers=headers, json=payload) as response:
