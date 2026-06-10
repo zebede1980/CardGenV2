@@ -2927,3 +2927,409 @@ textarea.content-box {
         max-width: 100%;
     }
 }
+
+/* ==========================================================================
+   ROLEPLAY CHAT - IMMERSIVE MOBILE FULLSCREEN OPTIMISATIONS (iPhone / iPad)
+   ========================================================================== */
+@media (max-width: 1024px) {
+    /* Full-screen wrapper - edge-to-edge with no padding or borders */
+    #view-roleplaychat.chat-fullscreen {
+        padding: 0 !important;
+        background: var(--bg-page) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-container {
+        border: none !important;
+        border-radius: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-main {
+        border-radius: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+
+    /* Immersive, Safe-Area-Aware Header */
+    #view-roleplaychat.chat-fullscreen .chat-header {
+        padding: calc(0.6rem + env(safe-area-inset-top, 0px)) 0.75rem 0.6rem !important;
+        background: var(--surface) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-bottom: 1px solid var(--border) !important;
+        gap: 0.5rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-header-info {
+        min-width: 0;
+        flex: 1;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-active-title {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 40vw;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-active-characters {
+        font-size: 0.75rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+        max-width: 40vw;
+    }
+
+    /* Compact header actions for mobile */
+    #view-roleplaychat.chat-fullscreen .chat-header-actions {
+        gap: 0.4rem !important;
+    }
+
+    /* Hide the "Playing as:" text label to save horizontal space */
+    #view-roleplaychat.chat-fullscreen .chat-header-actions div > span {
+        display: none !important;
+    }
+
+    /* Compact rounded persona select dropdown */
+    #view-roleplaychat.chat-fullscreen #chat-user-persona-select {
+        max-width: 105px !important;
+        border-radius: 20px !important;
+        padding: 0.25rem 1.5rem 0.25rem 0.5rem !important;
+        font-size: 0.78rem !important;
+        height: 32px !important;
+        background-position: right 0.4rem center !important;
+    }
+
+    /* Make Settings Button a circular gear icon */
+    #view-roleplaychat.chat-fullscreen #chat-settings-btn {
+        font-size: 0 !important;
+        width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: 1px solid var(--border) !important;
+        background: var(--surface-muted) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-settings-btn::before {
+        content: '⚙️';
+        font-size: 1.05rem !important;
+    }
+
+    /* Close/Exit button styled beautifully */
+    #view-roleplaychat.chat-fullscreen #chat-fullscreen-toggle {
+        font-size: 0.95rem !important;
+        width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        border-radius: 50% !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+        margin-left: 0.2rem !important;
+    }
+
+    /* Timeline & Message bubbles */
+    #view-roleplaychat.chat-fullscreen .chat-timeline {
+        padding: 1rem 0.75rem calc(1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+        background: var(--bg-page) !important;
+        gap: 0.85rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper {
+        max-width: 90% !important;
+        gap: 8px !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user {
+        max-width: 86% !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-avatar-container {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 50% !important; /* Circular avatars for a modern chat feel */
+        box-shadow: var(--shadow-sm);
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble {
+        border-radius: 18px !important;
+        padding: 0.7rem 0.95rem !important;
+        font-size: 0.95rem !important;
+        line-height: 1.5 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+    }
+
+    /* User messages styling - accent background, white text */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user .chat-bubble {
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-bottom-right-radius: 4px !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user .chat-bubble * {
+        color: #ffffff !important;
+    }
+
+    /* Resolve quotes color mismatch inside user bubbles */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user .chat-bubble span[style*="color"] {
+        color: #ffe0b2 !important; /* Warm gold/peach for readability on accent bg */
+        font-weight: 600 !important;
+    }
+
+    /* Assistant messages styling - surface background */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.assistant .chat-bubble {
+        background: var(--surface-strong) !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border) !important;
+        border-bottom-left-radius: 4px !important;
+    }
+
+    /* Group chat indicator bar */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.assistant .chat-bubble[data-char-accent] {
+        border-left-width: 4px !important;
+    }
+
+    /* Message Header: align name and time nicely, keep actions pushed right */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-name {
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        gap: 0.4rem !important;
+        font-size: 0.75rem !important;
+        margin-bottom: 0.15rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble-name-text {
+        font-weight: 700 !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble-time {
+        margin-right: auto !important; /* Push everything else (actions) to the far right */
+        opacity: 0.75 !important;
+    }
+
+    /* Touch-friendly, compact message action buttons */
+    #view-roleplaychat.chat-fullscreen .chat-message-actions {
+        opacity: 0.85 !important;
+        margin-left: auto !important;
+        gap: 0.25rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-message-actions .chat-action-btn {
+        padding: 0.2rem 0.4rem !important;
+        font-size: 0.72rem !important;
+        border-radius: 6px !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-secondary) !important;
+        min-height: unset !important;
+        height: auto !important;
+    }
+
+    /* Input area - sleek floating capsule design */
+    #view-roleplaychat.chat-fullscreen .chat-input-area {
+        padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom, 0px)) !important;
+        background: var(--surface) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    /* OOC Note Row */
+    #view-roleplaychat.chat-fullscreen .chat-ooc-container {
+        margin-bottom: 0.25rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-ooc-input {
+        border-radius: 12px !important;
+        padding: 0.4rem 0.75rem !important;
+        font-size: 0.88rem !important;
+        background: var(--surface-muted) !important;
+        border: 1px dashed var(--border-strong) !important;
+    }
+
+    /* Grid layout for input controls row */
+    #view-roleplaychat.chat-fullscreen .chat-input-controls {
+        display: grid !important;
+        grid-template-columns: auto 1fr auto auto !important;
+        grid-template-rows: auto auto !important;
+        gap: 0.4rem !important;
+        align-items: end !important;
+        width: 100% !important;
+    }
+
+    /* Character router speaker select on its own full-width row */
+    #view-roleplaychat.chat-fullscreen #chat-speaker-select {
+        grid-row: 1 !important;
+        grid-column: 1 / span 4 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        height: 34px !important;
+        font-size: 0.85rem !important;
+        padding: 0.25rem 0.5rem !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-speaker-select[style*="display: none"] {
+        display: none !important;
+    }
+
+    /* Mask icon for OOC toggle button */
+    #view-roleplaychat.chat-fullscreen #chat-toggle-ooc-btn {
+        grid-row: 2 !important;
+        grid-column: 1 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: 1px solid var(--border) !important;
+        background: var(--surface-muted) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-toggle-ooc-btn::before {
+        content: '🎭';
+        font-size: 1.2rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-toggle-ooc-btn.has-ooc::after {
+        top: 4px !important;
+        right: 4px !important;
+        width: 8px !important;
+        height: 8px !important;
+    }
+
+    /* Capsule Textarea */
+    #view-roleplaychat.chat-fullscreen #chat-message-input {
+        grid-row: 2 !important;
+        grid-column: 2 !important;
+        border-radius: 20px !important;
+        padding: 0.6rem 0.95rem !important;
+        font-size: 16px !important; /* Prevent iOS Safari auto-zoom on focus */
+        line-height: 1.3 !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+        min-height: 42px !important;
+        max-height: 120px !important;
+    }
+
+    /* Edit mode textarea inside messages */
+    #view-roleplaychat.chat-fullscreen .chat-bubble textarea {
+        font-size: 16px !important; /* Prevent iOS Safari auto-zoom when editing a message */
+        border-radius: 8px !important;
+        padding: 0.5rem !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    /* Impersonate button as circular button */
+    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn {
+        grid-row: 2 !important;
+        grid-column: 3 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: 1px solid var(--border) !important;
+        background: var(--surface-muted) !important;
+        margin: 0 !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn::before {
+        content: '👤';
+        font-size: 1.15rem !important;
+    }
+
+    /* Send button as circular capsule */
+    #view-roleplaychat.chat-fullscreen #chat-send-btn {
+        grid-row: 2 !important;
+        grid-column: 4 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: none !important;
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 8px rgba(14, 122, 138, 0.3) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-send-btn::before {
+        content: '➤';
+        font-size: 1.1rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-send-btn:disabled {
+        background: var(--border) !important;
+        box-shadow: none !important;
+        opacity: 0.6 !important;
+    }
+
+    /* Stop button as circular capsule */
+    #view-roleplaychat.chat-fullscreen #chat-stop-btn {
+        grid-row: 2 !important;
+        grid-column: 4 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: none !important;
+        background: var(--error) !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 8px rgba(201, 61, 74, 0.3) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-stop-btn::before {
+        content: '⏹';
+        font-size: 1.1rem !important;
+    }
+
+    /* Position Scroll-to-bottom FAB above the input area */
+    #view-roleplaychat.chat-fullscreen .chat-scroll-bottom-btn {
+        bottom: calc(65px + env(safe-area-inset-bottom, 0px)) !important;
+        right: 16px !important;
+        background: var(--surface) !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        box-shadow: var(--shadow-md) !important;
+        width: 36px !important;
+        height: 36px !important;
+    }
+}
