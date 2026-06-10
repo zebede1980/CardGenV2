@@ -1689,7 +1689,12 @@
                           <select id="chat-speaker-select" class="content-box" style="display: none; max-width: 140px; padding: 0.5rem;"></select>
                           <button id="chat-toggle-ooc-btn" class="btn-outline" title="Toggle OOC Note">🎭 OOC</button>
                           <textarea id="chat-message-input" class="content-box" rows="1" placeholder="Type your message... (Shift+Enter for newline)" disabled></textarea>
-                          <button id="chat-send-btn" class="btn-primary" disabled>Send</button>
+                          <button id="roleplay-send-btn" class="btn-primary" disabled>Send</button>
+                          <button id="roleplay-stop-btn" class="btn-stop" style="display: none;">
+                              <div class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem; display: inline-block; vertical-align: middle;"></div>
+                              <span style="vertical-align: middle;">Stop Generating</span>
+                          </button>
+                          <button id="roleplay-impersonate-btn" class="btn-outline" title="Make the AI write from your perspective">🎭 Impersonate</button>
                         </div>
                       </div>
                     </div>

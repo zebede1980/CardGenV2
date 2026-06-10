@@ -238,35 +238,7 @@ class RoleplayChatHandler {
             this.els.timeline.style.minHeight = '0';
         }
 
-        // Stop button (injected once)
-        if (!document.getElementById('chat-stop-btn')) {
-            const stopBtn = document.createElement('button');
-            stopBtn.id = 'chat-stop-btn';
-            stopBtn.className = 'btn-stop';
-            stopBtn.textContent = '⏹ Stop';
-            stopBtn.style.display = 'none';
-            stopBtn.addEventListener('click', () => this.stopGeneration());
-            const sendBtn = document.getElementById('chat-send-btn');
-            if (sendBtn && sendBtn.parentNode) {
-                sendBtn.parentNode.insertBefore(stopBtn, sendBtn.nextSibling);
-            }
-        }
 
-        // Impersonate button
-        if (!document.getElementById('chat-impersonate-btn')) {
-            const impBtn = document.createElement('button');
-            impBtn.id = 'chat-impersonate-btn';
-            impBtn.className = 'btn-outline';
-            impBtn.innerHTML = '🎭 Impersonate';
-            impBtn.title = 'Make the AI write from your perspective';
-            impBtn.style.marginLeft = '0.5rem';
-            impBtn.style.flexShrink = '0';
-            impBtn.addEventListener('click', () => this.sendMessage({ impersonate: true }));
-            const stopBtn = document.getElementById('chat-stop-btn');
-            if (stopBtn && stopBtn.parentNode) {
-                stopBtn.parentNode.insertBefore(impBtn, stopBtn.nextSibling);
-            }
-        }
 
         // Scroll-to-bottom FAB
         const fab = document.getElementById('chat-scroll-bottom-btn');
@@ -364,7 +336,9 @@ class RoleplayChatHandler {
             timeline: document.getElementById('chat-timeline'),
             
             msgInput: document.getElementById('chat-message-input'),
-            sendBtn: document.getElementById('chat-send-btn'),
+            sendBtn: document.getElementById('roleplay-send-btn'),
+            stopBtn: document.getElementById('roleplay-stop-btn'),
+            impBtn: document.getElementById('roleplay-impersonate-btn'),
             
             oocToggleBtn: document.getElementById('chat-toggle-ooc-btn'),
             oocContainer: document.getElementById('chat-ooc-container'),
@@ -418,6 +392,14 @@ class RoleplayChatHandler {
         this.els.oocInput.addEventListener('input', () => this.updateOocBadge());
         
         this.els.sendBtn.addEventListener('click', () => this.sendMessage());
+        
+        if (this.els.stopBtn) {
+            this.els.stopBtn.addEventListener('click', () => this.stopGeneration());
+        }
+        
+        if (this.els.impBtn) {
+            this.els.impBtn.addEventListener('click', () => this.sendMessage({ impersonate: true }));
+        }
         
         this.els.msgInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1439,10 +1421,8 @@ class RoleplayChatHandler {
         }
         this.isGenerating = false;
         this.els.sendBtn.style.display = '';
-        const impBtn = document.getElementById('chat-impersonate-btn');
-        if (impBtn) impBtn.style.display = '';
-        const stopBtn = document.getElementById('chat-stop-btn');
-        if (stopBtn) stopBtn.style.display = 'none';
+        if (this.els.impBtn) this.els.impBtn.style.display = '';
+        if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
         this.els.sendBtn.disabled = false;
         this.els.msgInput.focus();
     }
@@ -1485,10 +1465,8 @@ class RoleplayChatHandler {
 
         this.isGenerating = true;
         this.els.sendBtn.style.display = 'none';
-        const impBtn = document.getElementById('chat-impersonate-btn');
-        if (impBtn) impBtn.style.display = 'none';
-        const stopBtn = document.getElementById('chat-stop-btn');
-        if (stopBtn) stopBtn.style.display = '';
+        if (this.els.impBtn) this.els.impBtn.style.display = 'none';
+        if (this.els.stopBtn) this.els.stopBtn.style.display = '';
 
         // Create empty AI bubble for streaming
         const aiMsgObj = { role: 'assistant', character_name: characterName || 'Routing...', content: '' };
@@ -1592,10 +1570,8 @@ class RoleplayChatHandler {
             this.isGenerating = false;
             this.abortController = null;
             this.els.sendBtn.style.display = '';
-            const impBtn = document.getElementById('chat-impersonate-btn');
-            if (impBtn) impBtn.style.display = '';
-            const stopBtn2 = document.getElementById('chat-stop-btn');
-            if (stopBtn2) stopBtn2.style.display = 'none';
+            if (this.els.impBtn) this.els.impBtn.style.display = '';
+            if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
             this.els.sendBtn.disabled = false;
             this.els.msgInput.focus();
         }
