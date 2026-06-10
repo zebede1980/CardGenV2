@@ -2937,6 +2937,9 @@ textarea.content-box {
     #view-roleplaychat.chat-fullscreen {
         padding: 0 !important;
         background: var(--bg-page) !important;
+        height: 100dvh !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
 
     #view-roleplaychat.chat-fullscreen .chat-container {
@@ -2944,12 +2947,18 @@ textarea.content-box {
         border-radius: 0 !important;
         height: 100% !important;
         max-height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
     }
 
     #view-roleplaychat.chat-fullscreen .chat-main {
         border-radius: 0 !important;
         height: 100% !important;
         max-height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
     }
 
     /* Immersive, Safe-Area-Aware Header */
@@ -3046,6 +3055,10 @@ textarea.content-box {
         padding: 1rem 0.75rem calc(1.5rem + env(safe-area-inset-bottom, 0px)) !important;
         background: var(--bg-page) !important;
         gap: 0.85rem !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important; /* smooth kinetic scrolling for iOS */
+        flex: 1 1 0% !important;
+        min-height: 0 !important;
     }
 
     #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper {
