@@ -2944,6 +2944,12 @@ html.chat-scroll-locked, body.chat-scroll-locked {
 @media (max-width: 1024px) {
     /* Full-screen wrapper - edge-to-edge with no padding or borders */
     #view-roleplaychat.chat-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 9999 !important;
         padding: 0 !important;
         background: var(--bg-page) !important;
         height: 100vh !important;
@@ -2955,6 +2961,7 @@ html.chat-scroll-locked, body.chat-scroll-locked {
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
+        overscroll-behavior: none !important;
     }
 
     #view-roleplaychat.chat-fullscreen .chat-container {

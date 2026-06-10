@@ -925,9 +925,6 @@ class RoleplayChatHandler {
         if (!chatView.classList.contains('chat-fullscreen')) {
             chatView.classList.add('chat-fullscreen');
             if (fsBtn) { fsBtn.innerHTML = '✖'; fsBtn.title = 'Exit Fullscreen'; }
-            document.documentElement.classList.add('chat-scroll-locked');
-            document.body.classList.add('chat-scroll-locked');
-            document.body.style.overflow = 'hidden';
             
             // Close mobile sidebar if open
             this.closeMobileSidebar();
@@ -938,9 +935,6 @@ class RoleplayChatHandler {
         } else {
             chatView.classList.remove('chat-fullscreen');
             if (fsBtn) { fsBtn.innerHTML = '⛶'; fsBtn.title = 'Fullscreen'; }
-            document.documentElement.classList.remove('chat-scroll-locked');
-            document.body.classList.remove('chat-scroll-locked');
-            document.body.style.overflow = '';
             
             // Restore sidebar
             if (sidebar) sidebar.style.display = this.preFsSidebarDisplay !== undefined ? this.preFsSidebarDisplay : '';
