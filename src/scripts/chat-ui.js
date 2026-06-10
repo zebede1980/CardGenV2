@@ -60,6 +60,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
     modal.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
 
+    // ── Mobile enhancements ──────────────────────────────────────────────────
+    const isMobile = window.innerWidth <= 768;
+
+    // Touch-device class — show Edit/Delete actions without hover
+    if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+      modal.classList.add("chat-touch-device");
+    }
+
+    // Collapse param toolbars on mobile by default
+    if (isMobile) {
+      modal.classList.add("chat-mobile-params-collapsed");
+    } else {
+      modal.classList.remove("chat-mobile-params-collapsed");
+    }
+
+    // iOS Safari viewport height fallback — set CSS variable
+    this._chatMobileVhUpdate = () => {
+      document.documentElement.style.setProperty(
+        "--chat-mobile-vh",
+        window.innerHeight + "px"
+      );
+    };
+    this._chatMobileVhUpdate();
+    window.addEventListener("resize", this._chatMobileVhUpdate);
+
     // Focus input
     const input = document.getElementById("chat-input");
     if (input) setTimeout(() => input.focus(), 100);
@@ -73,8 +98,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.chatTester.saveCurrentSlot();
     }
     modal.classList.remove("show");
+    modal.classList.remove("chat-mobile-params-collapsed");
+    modal.classList.remove("chat-touch-device");
     modal.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
+
+    // Clean up mobile viewport listener
+    if (this._chatMobileVhUpdate) {
+      window.removeEventListener("resize", this._chatMobileVhUpdate);
+      this._chatMobileVhUpdate = null;
+      document.documentElement.style.removeProperty("--chat-mobile-vh");
+    }
   },
 
   /* ── Chat Slots ─────────────────────────────────────────────────────────── */

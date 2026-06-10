@@ -2266,3 +2266,325 @@ textarea.content-box {
 #sw-tts-volume {
     accent-color: var(--accent);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MOBILE CHAT MODAL — Immersive roleplay experience for iPhone / iPad
+   All rules scoped to #chat-tester-modal so desktop + other modals are untouched
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+    /* ── 1. Full-viewport modal ─────────────────────────────────────────────── */
+
+    #chat-tester-modal.modal-overlay {
+        padding: 0;
+    }
+
+    #chat-tester-modal .api-settings-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh;
+        height: var(--chat-mobile-vh, 100vh); /* fallback for older Safari */
+        max-height: 100dvh !important;
+        border-radius: 0 !important;
+        border: none !important;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* ── 2. Compact sticky header ───────────────────────────────────────────── */
+
+    #chat-tester-modal .modal-header {
+        padding: 0.5rem 0.75rem;
+        gap: 0.4rem;
+        min-height: 44px;
+        flex-shrink: 0;
+        padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+    }
+
+    #chat-tester-modal .modal-title {
+        font-size: 0.88rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        flex-shrink: 1;
+    }
+
+    #chat-tester-modal #chat-tester-char-name {
+        display: inline;
+    }
+
+    #chat-tester-modal .chat-header-slot-row {
+        gap: 0.25rem !important;
+        margin-left: auto !important;
+        margin-right: 0.25rem !important;
+        flex-shrink: 0;
+    }
+
+    #chat-tester-modal #chat-slot-select {
+        max-width: 90px !important;
+        font-size: 0.7rem;
+    }
+
+    #chat-tester-modal .chat-header-slot-row .btn-small {
+        padding: 0.25rem 0.4rem;
+        font-size: 0.72rem;
+        min-width: 0;
+    }
+
+    #chat-tester-modal .modal-close {
+        width: 30px;
+        height: 30px;
+        font-size: 1.15rem;
+        flex-shrink: 0;
+    }
+
+    /* ── 3. Messages area ───────────────────────────────────────────────────── */
+
+    #chat-tester-modal .modal-body {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        min-height: 0;
+    }
+
+    #chat-tester-modal .chat-messages {
+        flex: 1;
+        padding: 0.6rem 0.5rem;
+        gap: 0.5rem;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+
+    #chat-tester-modal .chat-message {
+        max-width: 98%;
+    }
+
+    #chat-tester-modal .chat-message-inner {
+        gap: 0.4rem;
+        align-items: flex-start;
+    }
+
+    #chat-tester-modal .chat-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 0.62rem;
+        flex-shrink: 0;
+    }
+
+    #chat-tester-modal .chat-message-name {
+        font-size: 0.7rem;
+        padding: 0 0.15rem;
+    }
+
+    #chat-tester-modal .chat-message-content {
+        padding: 0.5rem 0.7rem;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        border-radius: var(--radius-md);
+    }
+
+    #chat-tester-modal .chat-message-user .chat-message-content {
+        border-bottom-right-radius: 0.2rem;
+    }
+
+    #chat-tester-modal .chat-message-character .chat-message-content {
+        border-bottom-left-radius: 0.2rem;
+    }
+
+    /* Always show actions on touch — no hover on mobile */
+    #chat-tester-modal .chat-message .chat-message-actions {
+        opacity: 0.6;
+        padding: 0.1rem 0.15rem;
+    }
+
+    #chat-tester-modal .chat-action-btn {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.45rem;
+        min-height: 26px;
+        min-width: 40px;
+    }
+
+    /* ── 4. Swipe bar — larger touch targets ────────────────────────────────── */
+
+    #chat-tester-modal .chat-swipe-bar {
+        margin-left: 2rem;
+        gap: 0.5rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    #chat-tester-modal .chat-swipe-btn {
+        min-width: 36px;
+        min-height: 30px;
+        font-size: 0.8rem;
+        padding: 0.2rem 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* ── 5. Input area — fixed bottom with safe-area ────────────────────────── */
+
+    #chat-tester-modal .chat-input-area {
+        flex-shrink: 0;
+        padding: 0.5rem 0.5rem;
+        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--border);
+        gap: 0.35rem;
+    }
+
+    #chat-tester-modal .chat-input-row {
+        gap: 0.4rem;
+    }
+
+    /* 16px font prevents iOS Safari auto-zoom on focus */
+    #chat-tester-modal .chat-input {
+        font-size: 16px;
+        padding: 0.5rem 0.65rem;
+        min-height: 44px;
+        border-radius: var(--radius-sm);
+        line-height: 1.35;
+    }
+
+    #chat-tester-modal .chat-send-btn {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.5rem;
+        font-size: 1.1rem;
+        border-radius: var(--radius-sm);
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* ── 6. Toolbar — compact layout ────────────────────────────────────────── */
+
+    #chat-tester-modal .chat-toolbar {
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        padding: 0;
+    }
+
+    #chat-tester-modal .chat-toolbar-left {
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        flex: 1;
+        min-width: 0;
+    }
+
+    #chat-tester-modal .chat-persona-input {
+        width: 80px;
+        font-size: 0.75rem;
+        padding: 0.2rem 0.4rem;
+        min-height: 30px;
+    }
+
+    #chat-tester-modal .chat-persona-select {
+        font-size: 0.7rem;
+        max-width: 80px !important;
+        min-height: 30px;
+    }
+
+    #chat-tester-modal .chat-token-count {
+        font-size: 0.68rem;
+    }
+
+    #chat-tester-modal .chat-toolbar-right {
+        gap: 0.25rem;
+        flex-wrap: wrap;
+    }
+
+    #chat-tester-modal .chat-toolbar-right .btn-outline,
+    #chat-tester-modal .chat-toolbar-right .btn-small {
+        font-size: 0.72rem;
+        padding: 0.3rem 0.5rem;
+        min-height: 30px;
+        border-radius: var(--radius-sm);
+    }
+
+    /* ── 7. Params — collapsed by default on mobile ─────────────────────────── */
+
+    #chat-tester-modal.chat-mobile-params-collapsed .chat-toolbar-params {
+        display: none !important;
+    }
+
+    #chat-tester-modal .chat-toolbar-params {
+        gap: 0.5rem 0.75rem;
+        padding: 0.4rem 0;
+    }
+
+    #chat-tester-modal .chat-param-label {
+        font-size: 0.72rem;
+        gap: 0.25rem;
+        flex: 0 0 auto;
+    }
+
+    #chat-tester-modal .chat-param-slider {
+        width: 60px;
+    }
+
+    #chat-tester-modal .chat-param-number {
+        width: 55px;
+        font-size: 0.72rem;
+        padding: 0.15rem 0.25rem;
+    }
+
+    /* Export menu - position above the button properly on mobile */
+    #chat-tester-modal #chat-export-menu {
+        right: 0;
+        left: auto;
+        min-width: 140px;
+    }
+
+    /* ── 8. Lorebook highlight — slightly larger on mobile for readability ──── */
+
+    #chat-tester-modal .lorebook-highlight {
+        padding: 0.05rem 0.15rem;
+        border-radius: 3px;
+    }
+
+    /* ── 9. Typing indicator ────────────────────────────────────────────────── */
+
+    #chat-tester-modal .chat-typing-dots {
+        padding: 0.4rem 0.6rem;
+    }
+
+    #chat-tester-modal .chat-typing-dots span {
+        width: 7px;
+        height: 7px;
+    }
+
+    /* ── 10. Code blocks — prevent overflow on narrow screens ────────────── */
+
+    #chat-tester-modal .chat-message-content pre.chat-code-block {
+        font-size: 0.76rem;
+        padding: 0.4rem 0.5rem;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    #chat-tester-modal .chat-message-content code.chat-inline-code {
+        font-size: 0.8em;
+    }
+
+    #chat-tester-modal .chat-message-content blockquote.chat-blockquote {
+        padding-left: 0.5rem;
+        font-size: 0.88rem;
+    }
+}
+
+/* Touch-device override — show message actions always (applied via JS) */
+#chat-tester-modal.chat-touch-device .chat-message-actions {
+    opacity: 0.55 !important;
+    transition: opacity 120ms;
+}
+
+#chat-tester-modal.chat-touch-device .chat-message-actions:active {
+    opacity: 1 !important;
+}

@@ -585,6 +585,12 @@ class CharacterGeneratorApp {
     const chatAdvancedParams = document.getElementById("chat-advanced-params");
     if (chatAdvancedToggle && chatAdvancedParams) {
       chatAdvancedToggle.addEventListener("click", () => {
+        // On mobile: toggle ALL param rows via the collapse class
+        const modal = document.getElementById("chat-tester-modal");
+        if (modal && window.innerWidth <= 768) {
+          modal.classList.toggle("chat-mobile-params-collapsed");
+        }
+        // Desktop: toggle only the advanced row (always runs so desktop is unchanged)
         const hidden = chatAdvancedParams.style.display === "none";
         chatAdvancedParams.style.display = hidden ? "flex" : "none";
       });
