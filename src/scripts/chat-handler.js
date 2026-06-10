@@ -1461,7 +1461,7 @@ class RoleplayChatHandler {
         this.els.msgInput.value = '';
         this.els.oocInput.value = '';
         this.updateOocBadge();
-        this.appendMessage(userMsgObj, true);
+        const userBubbleWrapper = this.appendMessage(userMsgObj, true);
 
         this.isGenerating = true;
         this.els.sendBtn.style.display = 'none';
@@ -1574,6 +1574,23 @@ class RoleplayChatHandler {
             if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
             this.els.sendBtn.disabled = false;
             this.els.msgInput.focus();
+
+            // Background fetch to assign server-generated IDs to new messages so action buttons work
+            window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(res => res.json()).then(chat => {
+                if (chat && chat.messages && this.activeChatId === chat.id) {
+                    const serverMessages = chat.messages;
+                    const lastUser = serverMessages.slice().reverse().find(m => m.role === 'user');
+                    if (lastUser && userBubbleWrapper && !userMsgObj.id) {
+                        userMsgObj.id = lastUser.id;
+                        this.attachMessageActions(userBubbleWrapper, userMsgObj, userBubbleWrapper.querySelector('.chat-bubble'), userBubbleWrapper.querySelector('.chat-bubble-name'));
+                    }
+                    const lastAi = serverMessages[serverMessages.length - 1];
+                    if (lastAi && lastAi.role !== 'user' && !aiMsgObj.id) {
+                        aiMsgObj.id = lastAi.id;
+                        this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
+                    }
+                }
+            }).catch(e => console.error("Error fetching updated chat", e));
         }
     }
 
