@@ -2778,11 +2778,20 @@ textarea.content-box {
     top: 0 !important;
     left: 0 !important;
     width: 100vw !important;
+    height: 100vh !important;
     height: 100dvh !important;
     z-index: 9999 !important;
     background: var(--bg-page) !important;
     padding: 0.25rem !important;
     box-sizing: border-box !important;
+}
+
+html.chat-scroll-locked, body.chat-scroll-locked {
+    overflow: hidden !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2937,8 +2946,11 @@ textarea.content-box {
     #view-roleplaychat.chat-fullscreen {
         padding: 0 !important;
         background: var(--bg-page) !important;
+        height: 100vh !important;
         height: 100dvh !important;
+        min-height: 100vh !important;
         min-height: 100dvh !important;
+        max-height: 100vh !important;
         max-height: 100dvh !important;
         display: flex !important;
         flex-direction: column !important;
