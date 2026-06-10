@@ -1008,10 +1008,12 @@ class RoleplayChatHandler {
             
             // Ensure messages are sorted chronologically (oldest first)
             const sortedMessages = (chat.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            sortedMessages.forEach(msg => this.appendMessage(msg));
+            sortedMessages.forEach(msg => this.appendMessage(msg, false));
             
             if(chat.messages.length === 0) {
                 this.els.timeline.innerHTML = '<div class="chat-placeholder"><p>No messages yet. Send a greeting!</p></div>';
+            } else {
+                setTimeout(() => this.scrollToBottom(false), 50);
             }
             
             this.els.msgInput.disabled = false;
@@ -1059,7 +1061,7 @@ class RoleplayChatHandler {
         return `hsl(${h}, 55%, 45%)`;
     }
 
-    appendMessage(msg) {
+    appendMessage(msg, alignToTop = false) {
         const placeholder = this.els.timeline.querySelector('.chat-placeholder');
         if (placeholder) placeholder.remove();
 
@@ -1172,7 +1174,9 @@ class RoleplayChatHandler {
         }
 
         this.els.timeline.appendChild(wrapper);
-        this.scrollToBottom();
+        if (alignToTop) {
+            this.scrollToMessage(wrapper);
+        }
 
         return wrapper;
     }
@@ -1413,9 +1417,21 @@ class RoleplayChatHandler {
         return parsed;
     }
 
-    scrollToBottom() {
-        // No automatic scrolling — user controls scroll position manually.
-        // The floating ↓ button is always available to jump to the bottom.
+    scrollToBottom(smooth = false) {
+        if (this.els.timeline) {
+            this.els.timeline.scrollTo({
+                top: this.els.timeline.scrollHeight,
+                behavior: smooth ? 'smooth' : 'auto'
+            });
+        }
+    }
+
+    scrollToMessage(element) {
+        if (!element || !this.els.timeline) return;
+        this.els.timeline.scrollTo({
+            top: element.offsetTop,
+            behavior: 'smooth'
+        });
     }
 
     stopGeneration() {
@@ -1467,7 +1483,7 @@ class RoleplayChatHandler {
         this.els.msgInput.value = '';
         this.els.oocInput.value = '';
         this.updateOocBadge();
-        this.appendMessage(userMsgObj);
+        this.appendMessage(userMsgObj, true);
 
         this.isGenerating = true;
         this.els.sendBtn.style.display = 'none';
@@ -1478,7 +1494,7 @@ class RoleplayChatHandler {
 
         // Create empty AI bubble for streaming
         const aiMsgObj = { role: 'assistant', character_name: characterName || 'Routing...', content: '' };
-        const aiBubbleWrapper = this.appendMessage(aiMsgObj);
+        const aiBubbleWrapper = this.appendMessage(aiMsgObj, true);
         const contentEl = aiBubbleWrapper.querySelector('.chat-bubble');
         const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
 

@@ -2536,6 +2536,7 @@ textarea.content-box {
 }
 
 .chat-timeline {
+    position: relative;
     flex: 1 1 0%;
     overflow-y: auto;
     padding: 1rem 1rem 1.5rem;
