@@ -16,9 +16,9 @@ class HomeHandler {
         this.injectHTML();
         this.bindEvents();
         
-        // Wait briefly for library/storage to be initialized, then load the gallery
+        // Wait briefly for library/storage to be initialized and app authenticated, then load the gallery
         const checkStorage = setInterval(() => {
-            if (window.characterStorage) {
+            if (window.characterStorage && window.app) {
                 clearInterval(checkStorage);
                 this.loadCards();
             }
