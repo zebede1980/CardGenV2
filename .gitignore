@@ -164,6 +164,7 @@ api-keys.json
 proxy/data/config.json
 proxy/data/cards.json
 proxy/data/prompts.json
+proxy/data/users.json
 
 # Build artifacts
 build/
