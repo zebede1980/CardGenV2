@@ -65,6 +65,116 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (input) setTimeout(() => input.focus(), 100);
   },
 
+  /**
+   * Launch a roleplay chat with the currently loaded character.
+   * - Switches to the Roleplay Chat tab.
+   * - If an existing chat session matches the character name, offers to
+   *   continue it or start a new one.
+   * - Otherwise opens the New Chat modal pre-filled with the character name.
+   */
+  async handleChatWithChar() {
+    if (!this.currentCharacter) {
+      this.showNotification("Generate or import a character first.", "warning");
+      return;
+    }
+
+    const charName = this.currentCharacter.name || "Character";
+    const handler = window.roleplayChatHandler;
+
+    if (!handler) {
+      this.showNotification("Roleplay Chat module not loaded.", "error");
+      return;
+    }
+
+    // 1. Switch to the Roleplay Chat tab
+    const tabChat = document.getElementById("tab-roleplaychat");
+    if (tabChat) tabChat.click();
+
+    // Give the tab a moment to render
+    await new Promise(r => setTimeout(r, 80));
+
+    // 2. Load the session list so we can inspect existing chats
+    await handler.loadSessionList();
+
+    // 3. Look for any existing chat whose title matches the character name
+    const existing = (handler.chats || []).find(
+      c => c.title && c.title.toLowerCase() === charName.toLowerCase()
+    );
+
+    if (existing) {
+      // Show a styled inline dialog — avoid using window.confirm so it renders nicely
+      const overlay = document.createElement("div");
+      overlay.id = "chat-with-char-dialog";
+      overlay.style.cssText = `
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(0,0,0,0.55); display: flex;
+        align-items: center; justify-content: center;
+      `;
+      overlay.innerHTML = `
+        <div style="
+          background: var(--surface-color); border: 1px solid var(--border);
+          border-radius: 0.75rem; padding: 2rem; max-width: 420px; width: 90%;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+          display: flex; flex-direction: column; gap: 1.25rem;
+        ">
+          <h3 style="margin:0; font-size: 1.1rem;">🎭 Chat with ${charName}</h3>
+          <p style="margin:0; color: var(--text-secondary); font-size: 0.9rem;">
+            A chat session named <strong>${charName}</strong> already exists.
+            Would you like to continue it or start a fresh one?
+          </p>
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+            <button id="cwc-continue-btn" class="btn-primary" style="flex:1; min-width:120px;">
+              ▶ Continue
+            </button>
+            <button id="cwc-new-btn" class="btn-outline" style="flex:1; min-width:120px;">
+              ✨ New Chat
+            </button>
+            <button id="cwc-cancel-btn" class="btn-secondary" style="flex:1; min-width:120px;">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      await new Promise(resolve => {
+        overlay.querySelector("#cwc-continue-btn").addEventListener("click", () => {
+          document.body.removeChild(overlay);
+          handler.selectChat(existing.id);
+          resolve("continue");
+        });
+        overlay.querySelector("#cwc-new-btn").addEventListener("click", async () => {
+          document.body.removeChild(overlay);
+          await this._openNewChatForChar(charName, handler);
+          resolve("new");
+        });
+        overlay.querySelector("#cwc-cancel-btn").addEventListener("click", () => {
+          document.body.removeChild(overlay);
+          resolve("cancel");
+        });
+      });
+    } else {
+      // No existing session — open the New Chat modal directly
+      await this._openNewChatForChar(charName, handler);
+    }
+  },
+
+  /**
+   * Open the Roleplay Chat "New Chat" modal pre-filled with this character.
+   */
+  async _openNewChatForChar(charName, handler) {
+    // Use the card's saved library ID if available, otherwise null
+    const cardId = this.currentCharacter?.id ?? null;
+    await handler.openNewChatModal(cardId);
+
+    // Pre-fill the title field with the character's name
+    const titleInput = document.getElementById("chat-new-title");
+    if (titleInput && !titleInput.value) {
+      titleInput.value = charName;
+    }
+  },
+
   closeChatTester() {
     const modal = document.getElementById("chat-tester-modal");
     if (!modal) return;

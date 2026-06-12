@@ -547,7 +547,7 @@ class CharacterGeneratorApp {
     const chatExportBtn = document.getElementById("chat-export-btn");
     const chatPersonaInput = document.getElementById("chat-persona-name");
 
-    if (testChatBtn) testChatBtn.addEventListener("click", () => this.openChatTester());
+    if (testChatBtn) testChatBtn.addEventListener("click", () => this.handleChatWithChar());
     if (chatTesterModalCloseBtn) chatTesterModalCloseBtn.addEventListener("click", () => this.closeChatTester());
     if (chatTesterModal) chatTesterModal.addEventListener("click", (e) => { if (e.target === chatTesterModal) this.closeChatTester(); });
     if (chatSendBtn) chatSendBtn.addEventListener("click", () => this.handleChatSend());
