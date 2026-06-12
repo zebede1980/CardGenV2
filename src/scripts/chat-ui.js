@@ -68,9 +68,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
   /**
    * Launch a roleplay chat with the currently loaded character.
    * - Switches to the Roleplay Chat tab.
-   * - If an existing chat session matches the character name, offers to
-   *   continue it or start a new one.
-   * - Otherwise opens the New Chat modal pre-filled with the character name.
+   * - Checks all existing chats for one that already has this character attached.
+   * - If found, offers to Continue or start a New Chat.
+   * - Otherwise opens the New Chat modal with the character pre-attached.
    */
   async handleChatWithChar() {
     if (!this.currentCharacter) {
@@ -93,16 +93,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Give the tab a moment to render
     await new Promise(r => setTimeout(r, 80));
 
-    // 2. Load the session list so we can inspect existing chats
-    await handler.loadSessionList();
+    // 2. Fetch all chats from the server and find the most recent one
+    //    that has this character attached (matched by name)
+    let existingChatId = null;
+    try {
+      const res = await window.authFetch("/api/sw/chats/");
+      if (res.ok) {
+        const allChats = await res.json();
+        // Sort newest first so we resume the most recent session
+        allChats.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
 
-    // 3. Look for any existing chat whose title matches the character name
-    const existing = (handler.chats || []).find(
-      c => c.title && c.title.toLowerCase() === charName.toLowerCase()
-    );
+        for (const c of allChats) {
+          const chars = c.characters || [];
+          if (chars.some(ch => (ch.name || "").toLowerCase() === charName.toLowerCase())) {
+            existingChatId = c.id;
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("handleChatWithChar: failed to fetch chats", err);
+    }
 
-    if (existing) {
-      // Show a styled inline dialog — avoid using window.confirm so it renders nicely
+    if (existingChatId) {
+      // Show a styled "Continue or New?" dialog
       const overlay = document.createElement("div");
       overlay.id = "chat-with-char-dialog";
       overlay.style.cssText = `
@@ -119,7 +133,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         ">
           <h3 style="margin:0; font-size: 1.1rem;">🎭 Chat with ${charName}</h3>
           <p style="margin:0; color: var(--text-secondary); font-size: 0.9rem;">
-            A chat session named <strong>${charName}</strong> already exists.
+            A chat with <strong>${charName}</strong> already exists.
             Would you like to continue it or start a fresh one?
           </p>
           <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
@@ -141,7 +155,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       await new Promise(resolve => {
         overlay.querySelector("#cwc-continue-btn").addEventListener("click", () => {
           document.body.removeChild(overlay);
-          handler.selectChat(existing.id);
+          handler.loadSessionList().then(() => handler.selectChat(existingChatId));
           resolve("continue");
         });
         overlay.querySelector("#cwc-new-btn").addEventListener("click", async () => {
@@ -155,23 +169,39 @@ Object.assign(CharacterGeneratorApp.prototype, {
         });
       });
     } else {
-      // No existing session — open the New Chat modal directly
+      // No existing session — open the New Chat modal with the character attached
       await this._openNewChatForChar(charName, handler);
     }
   },
 
   /**
-   * Open the Roleplay Chat "New Chat" modal pre-filled with this character.
+   * Open the Roleplay Chat "New Chat" modal with this character pre-attached.
+   * Matches the character to the server-side card list by name (avoiding
+   * the local IndexedDB ID vs server ID mismatch).
    */
   async _openNewChatForChar(charName, handler) {
-    // Use the card's saved library ID if available, otherwise null
-    const cardId = this.currentCharacter?.id ?? null;
-    await handler.openNewChatModal(cardId);
+    // Open the modal with no preset; it will load availableCards from the server
+    await handler.openNewChatModal(null);
 
-    // Pre-fill the title field with the character's name
+    // Pre-fill the chat title with the character name
     const titleInput = document.getElementById("chat-new-title");
     if (titleInput && !titleInput.value) {
       titleInput.value = charName;
+    }
+
+    // Find the matching server-side card by name and pre-select it
+    const availableCards = handler.availableCards || [];
+    const matchedCard = availableCards.find(
+      c => (c.name || "").toLowerCase() === charName.toLowerCase()
+    );
+
+    if (matchedCard) {
+      if (!handler.newChatSelectedCards) handler.newChatSelectedCards = [];
+      const alreadySelected = handler.newChatSelectedCards.some(c => c.id === matchedCard.id);
+      if (!alreadySelected) {
+        handler.newChatSelectedCards.push(matchedCard);
+        handler.renderNewChatSelectedChars();
+      }
     }
   },
 
