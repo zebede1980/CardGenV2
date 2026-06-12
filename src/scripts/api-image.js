@@ -142,46 +142,78 @@ Object.assign(APIHandler.prototype, {
 
   async truncateImagePrompt(prompt) {
     const MAX_LENGTH = 1000;
+    // Target 800 chars so that style tags (~200 chars) still fit within the 1200 total limit
+    const AI_TARGET = 800;
+
     if (prompt.length <= MAX_LENGTH) return prompt;
 
-    console.log(`🔧 Image prompt too long (${prompt.length} chars). Using AI to shorten to ${MAX_LENGTH} chars...`);
+    console.log(`🔧 Image prompt too long (${prompt.length} chars). Using AI to shorten to ${AI_TARGET} chars...`);
 
-    const model = this.config.get("api.text.model");
-    const data = {
-      model: model,
+    const buildShortenRequest = (target, text) => ({
+      model: this.config.get("api.text.model"),
       messages: [
         {
           role: "user",
-          content: `The following image generation prompt is too long. Shorten it to under 600 characters while keeping all the specific visual details: physical appearance, outfit, expression, and setting. Remove only filler words and redundancy. Do NOT add explanations, just output the shortened prompt directly.
-
-Original prompt:
-${prompt}
-
-Shortened prompt:`,
+          content: `Rewrite the following image generation prompt so it is under ${target} characters total. Preserve the most visually important details: subject, physical appearance, outfit, expression, and setting. Cut filler words, repetition, and anything non-visual. Output ONLY the rewritten prompt — no explanation, no preamble, no labels.\n\nOriginal prompt:\n${text}\n\nRewritten prompt (under ${target} characters):`,
         },
       ],
-      max_tokens: 500,
-      temperature: 0.3,
+      // 220 tokens ≈ 880 chars — gives a hard ceiling that prevents the model exceeding the limit
+      max_tokens: 220,
+      temperature: 0.2,
       stream: false,
+    });
+
+    const tryShorten = async (target, text) => {
+      const result = await this.makeRequest("/api/text/chat/completions", buildShortenRequest(target, text), false, false);
+      return this.processNormalResponse(result).trim();
     };
 
     try {
-      const result = await this.makeRequest("/api/text/chat/completions", data, false, false);
-      const finalPrompt = this.processNormalResponse(result).trim();
-      console.log(`✅ Shortened prompt to ${finalPrompt.length} characters`);
+      // First pass: target AI_TARGET chars
+      let shortened = await tryShorten(AI_TARGET, prompt);
+      console.log(`🔍 First pass: ${shortened.length} chars`);
 
-      if (!finalPrompt || finalPrompt.length === 0) {
-        console.warn("⚠️ AI returned empty shortened prompt, using fallback truncation");
-        return prompt.substring(0, MAX_LENGTH - 3) + "...";
+      if (!shortened || shortened.length === 0) {
+        console.warn("⚠️ AI returned empty prompt on first pass, trying fallback truncation");
+        return prompt.substring(0, MAX_LENGTH).trim();
       }
-      if (finalPrompt.length > MAX_LENGTH) {
-        console.warn("⚠️ AI shortened prompt still too long, applying final truncation");
-        return finalPrompt.substring(0, MAX_LENGTH - 3) + "...";
+
+      if (shortened.length <= MAX_LENGTH) {
+        console.log(`✅ Shortened successfully to ${shortened.length} chars`);
+        return shortened;
       }
-      return finalPrompt;
+
+      // Second pass: still too long — retry with a tighter target and the already-shortened text
+      console.warn(`⚠️ First pass still ${shortened.length} chars. Retrying with stricter target...`);
+      const strictTarget = Math.floor(MAX_LENGTH * 0.75); // 750 chars
+      let retry = await tryShorten(strictTarget, shortened);
+      console.log(`🔍 Second pass: ${retry.length} chars`);
+
+      if (retry && retry.length > 0 && retry.length <= MAX_LENGTH) {
+        console.log(`✅ Shortened on second pass to ${retry.length} chars`);
+        return retry;
+      }
+
+      // Last resort: trim at a sentence boundary to avoid mid-word cuts
+      console.warn(`⚠️ AI still over limit after two passes (${retry?.length ?? "?"}). Trimming at sentence boundary.`);
+      const candidate = (retry && retry.length > 0) ? retry : shortened;
+      const trimmed = candidate.substring(0, MAX_LENGTH);
+      const lastPeriod = trimmed.lastIndexOf(".");
+      const lastComma = trimmed.lastIndexOf(",");
+      const cutPoint = lastPeriod > MAX_LENGTH * 0.6
+        ? lastPeriod + 1
+        : lastComma > MAX_LENGTH * 0.6
+          ? lastComma
+          : MAX_LENGTH;
+      return trimmed.substring(0, cutPoint).trim();
+
     } catch (error) {
-      console.error("❌ AI shortening failed, falling back to mechanical truncation:", error);
-      return prompt.substring(0, MAX_LENGTH - 3) + "...";
+      console.error("❌ AI shortening failed, falling back to sentence-boundary truncation:", error);
+      const trimmed = prompt.substring(0, MAX_LENGTH);
+      const lastPeriod = trimmed.lastIndexOf(".");
+      return lastPeriod > MAX_LENGTH * 0.6
+        ? trimmed.substring(0, lastPeriod + 1).trim()
+        : trimmed.trim();
     }
   },
 
