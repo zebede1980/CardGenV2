@@ -398,7 +398,7 @@ class RoleplayChatHandler {
         }
         
         if (this.els.impBtn) {
-            this.els.impBtn.addEventListener('click', () => this.sendMessage({ impersonate: true }));
+            this.els.impBtn.addEventListener('click', () => this.sendImpersonateMessage());
         }
         
         this.els.msgInput.addEventListener('keydown', (e) => {
@@ -1427,7 +1427,99 @@ class RoleplayChatHandler {
         this.els.msgInput.focus();
     }
 
+    async sendImpersonateMessage() {
+        if (!this.activeChatId || this.isGenerating) return;
+
+        const draftContent = this.els.msgInput.value.trim();
+        const oocNote = this.els.oocInput.value.trim();
+
+        // Show a loading state on the impersonate button
+        const impBtn = this.els.impBtn;
+        const originalLabel = impBtn ? impBtn.innerHTML : '';
+        if (impBtn) {
+            impBtn.disabled = true;
+            impBtn.innerHTML = '⏳ Generating...';
+        }
+        if (this.els.sendBtn) this.els.sendBtn.disabled = true;
+
+        this.abortController = new AbortController();
+        let generatedText = '';
+
+        try {
+            const payload = {
+                content: draftContent,
+                ooc_note: oocNote || '',
+                impersonate: true,
+            };
+
+            if (window.config) {
+                payload.max_input_tokens  = window.config.get('chat.maxInputTokens');
+                payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
+                payload.temperature       = window.config.get('chat.temperature');
+                payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
+            }
+
+            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: this.abortController.signal,
+            });
+
+            if (!res.ok) throw new Error('Impersonate API request failed');
+
+            const reader  = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    const dataStr = line.slice(6);
+                    if (dataStr.trim() === '[DONE]') continue;
+                    try {
+                        const data = JSON.parse(dataStr);
+                        if (data.type === 'chunk') {
+                            generatedText += data.content;
+                            // Stream text into the input field live
+                            this.els.msgInput.value = generatedText;
+                            // Auto-resize the textarea if possible
+                            this.els.msgInput.dispatchEvent(new Event('input'));
+                        } else if (data.type === 'error') {
+                            console.error('Impersonate stream error:', data.message);
+                        }
+                    } catch (err) {
+                        console.warn('Failed to parse impersonate SSE data:', dataStr, err);
+                    }
+                }
+            }
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                console.error('Impersonate stream error', e);
+            }
+        } finally {
+            this.abortController = null;
+            if (impBtn) {
+                impBtn.disabled = false;
+                impBtn.innerHTML = originalLabel;
+            }
+            if (this.els.sendBtn) this.els.sendBtn.disabled = false;
+            this.els.msgInput.focus();
+            // Place cursor at end of generated text
+            const len = this.els.msgInput.value.length;
+            this.els.msgInput.setSelectionRange(len, len);
+        }
+    }
+
     async sendMessage(options = {}) {
+
         if (!this.activeChatId || this.isGenerating) return;
 
         // Force save current persona to this chat whenever a message is sent
@@ -1439,20 +1531,13 @@ class RoleplayChatHandler {
 
         let content = this.els.msgInput.value.trim();
         let oocNote = this.els.oocInput.value.trim();
-        const isImpersonate = options && options.impersonate === true;
 
-        if (isImpersonate) {
-            oocNote = (oocNote ? oocNote + ' | ' : '') + 'CRITICAL INSTRUCTION: Write the next response entirely from the perspective of {{user}}. Roleplay as {{user}} and describe their actions and dialogue. Do NOT speak for the AI character.';
-            if (!content) content = '(Please generate my next response)';
-        } else if (!content && !oocNote) {
+        if (!content && !oocNote) {
             oocNote = 'Please continue the story.';
         }
 
         let characterName = null;
-        if (isImpersonate) {
-            const userPersona = this.getUserPersonaData();
-            characterName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || 'User') : 'User';
-        } else if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
+        if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
             characterName = this.els.speakerSelect.value || null;
         }
 

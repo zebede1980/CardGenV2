@@ -41,10 +41,6 @@ class StoryOut(BaseModel):
     class Config:
         from_attributes = True
 
-class StoryDetailOut(StoryOut):
-    segments: List["StorySegmentOut"] = []
-    cards: List["StoryCardOut"] = []
-
 class StorySegmentCreate(BaseModel):
     content: str
     order_index: int
@@ -67,6 +63,10 @@ class StoryCardOut(BaseModel):
     card: CharacterCardOut
     class Config:
         from_attributes = True
+
+class StoryDetailOut(StoryOut):
+    segments: List[StorySegmentOut] = []
+    cards: List[StoryCardOut] = []
 
 class SteeringInstructionCreate(BaseModel):
     instruction: str
@@ -190,3 +190,4 @@ class SendMessageRequest(BaseModel):
     max_output_tokens: Optional[int] = None
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
+    impersonate: Optional[bool] = False

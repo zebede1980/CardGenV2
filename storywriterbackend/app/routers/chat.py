@@ -587,6 +587,69 @@ async def send_message(
             finally:
                 await llm.close()
 
+    # ── Impersonate Mode ────────────────────────────────────────────────────
+    # In impersonate mode we DON'T save any messages to the DB.  We build a
+    # prompt that uses the existing chat history as context but appends a
+    # special instruction asking the LLM to write *as the user*, not as the
+    # character.  The response is streamed back to the frontend which drops
+    # it directly into the user's input field.
+    if req.impersonate:
+        # Build the normal context from existing history (no new user msg saved)
+        prompt_messages = build_chat_prompt(chat, db, None, getattr(req, 'max_input_tokens', None))
+
+        # Append the user's draft text (if any) as context, then the key instruction
+        impersonate_instruction = (
+            "IMPORTANT: Your next task is to write the USER's next message, not the AI character's reply. "
+            "Write a natural, first-person response or action from the user's point of view. "
+            "Do NOT speak or act as any of the characters in the scene. "
+            "Keep it concise and in the style of what the user would realistically say or do next."
+        )
+        if req.content:
+            impersonate_instruction = f"The user has provided this draft to work from: \"{req.content}\"\n\n" + impersonate_instruction
+        if req.ooc_note:
+            impersonate_instruction = f"Additional context: {req.ooc_note}\n\n" + impersonate_instruction
+
+        prompt_messages.append({"role": "user", "content": impersonate_instruction})
+
+        queue.put_nowait({"type": "metadata", "character_name": None, "character_card_id": None, "user_message_id": None, "assistant_message_id": None})
+
+        gen_max_tokens = req.max_output_tokens
+        gen_temperature = req.temperature
+        gen_repetition_penalty = req.repetition_penalty
+
+        async def impersonate_generate_task():
+            llm = LLMService(settings)
+            try:
+                async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
+                    await queue.put(chunk)
+                await queue.put(None)
+            except Exception as e:
+                await queue.put(e)
+            finally:
+                await llm.close()
+
+        asyncio.create_task(impersonate_generate_task())
+
+        async def sse_generator_imp():
+            try:
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    if isinstance(item, Exception):
+                        yield f"data: {json.dumps({'type': 'error', 'message': str(item)})}\n\n"
+                        break
+                    if isinstance(item, dict):
+                        yield f"data: {json.dumps(item)}\n\n"
+                        continue
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': item})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            except asyncio.CancelledError:
+                pass
+
+        return StreamingResponse(sse_generator_imp(), media_type="text/event-stream")
+    # ────────────────────────────────────────────────────────────────────────
+
     # 1. Save User Message
     user_msg = None
     if req.content or req.ooc_note:
