@@ -2935,7 +2935,12 @@ html.chat-scroll-locked, body.chat-scroll-locked {
             order: 3;
         }
         #chat-send-btn,
-        #chat-stop-btn {
+        #roleplay-send-btn,
+        #chat-stop-btn,
+        #roleplay-stop-btn {
+            order: 4;
+        }
+        #roleplay-impersonate-btn {
             order: 4;
         }
     }
@@ -3308,7 +3313,7 @@ html.chat-scroll-locked, body.chat-scroll-locked {
     }
 
     /* Impersonate button as circular button */
-    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn {
+    #view-roleplaychat.chat-fullscreen #roleplay-impersonate-btn {
         grid-row: 2 !important;
         grid-column: 3 !important;
         font-size: 0 !important;
@@ -3325,13 +3330,13 @@ html.chat-scroll-locked, body.chat-scroll-locked {
         margin: 0 !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn::before {
+    #view-roleplaychat.chat-fullscreen #roleplay-impersonate-btn::before {
         content: '👤';
         font-size: 1.15rem !important;
     }
 
     /* Send button as circular capsule */
-    #view-roleplaychat.chat-fullscreen #chat-send-btn {
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn {
         grid-row: 2 !important;
         grid-column: 4 !important;
         font-size: 0 !important;
@@ -3349,19 +3354,19 @@ html.chat-scroll-locked, body.chat-scroll-locked {
         box-shadow: 0 2px 8px rgba(14, 122, 138, 0.3) !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-send-btn::before {
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn::before {
         content: '➤';
         font-size: 1.1rem !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-send-btn:disabled {
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn:disabled {
         background: var(--border) !important;
         box-shadow: none !important;
         opacity: 0.6 !important;
     }
 
     /* Stop button as circular capsule */
-    #view-roleplaychat.chat-fullscreen #chat-stop-btn {
+    #view-roleplaychat.chat-fullscreen #roleplay-stop-btn {
         grid-row: 2 !important;
         grid-column: 4 !important;
         font-size: 0 !important;
@@ -3379,7 +3384,7 @@ html.chat-scroll-locked, body.chat-scroll-locked {
         box-shadow: 0 2px 8px rgba(201, 61, 74, 0.3) !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-stop-btn::before {
+    #view-roleplaychat.chat-fullscreen #roleplay-stop-btn::before {
         content: '⏹';
         font-size: 1.1rem !important;
     }
