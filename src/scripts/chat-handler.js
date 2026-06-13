@@ -1189,7 +1189,174 @@ class RoleplayChatHandler {
         actionsEl.appendChild(editBtn);
         actionsEl.appendChild(delBtn);
 
+        // Regen button — only on assistant messages, visibility managed by _updateRegenButtons()
+        if (msg.role === 'assistant') {
+            const regenBtn = document.createElement('button');
+            regenBtn.className = 'chat-action-btn chat-regen-btn';
+            regenBtn.innerHTML = '🔄 Regen';
+            regenBtn.title = 'Regenerate this response';
+            regenBtn.style.display = 'none'; // hidden by default; _updateRegenButtons shows it on the last AI msg
+            regenBtn.onclick = () => this.regenerateLastMessage(msg.id, wrapper);
+            actionsEl.appendChild(regenBtn);
+        }
+
         nameEl.appendChild(actionsEl);
+
+        // Refresh which assistant bubble shows the Regen button
+        this._updateRegenButtons();
+    }
+
+    /** Ensure only the last assistant bubble's Regen button is visible */
+    _updateRegenButtons() {
+        const allAssistantWrappers = Array.from(
+            this.els.timeline.querySelectorAll('.chat-bubble-wrapper.assistant')
+        );
+        allAssistantWrappers.forEach((w, idx) => {
+            const btn = w.querySelector('.chat-regen-btn');
+            if (!btn) return;
+            btn.style.display = (idx === allAssistantWrappers.length - 1) ? '' : 'none';
+        });
+    }
+
+    /**
+     * Delete the last AI message from the server then generate a brand-new response
+     * in its place — without sending any new user message.
+     */
+    async regenerateLastMessage(messageId, wrapper) {
+        if (!this.activeChatId || this.isGenerating) return;
+
+        // 1. Delete the existing assistant message from the server
+        try {
+            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${messageId}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) {
+                console.error('Failed to delete message before regen');
+                return;
+            }
+        } catch (e) {
+            console.error('Regen delete error', e);
+            return;
+        }
+
+        // 2. Remove the bubble from the DOM
+        wrapper.remove();
+        this._updateRegenButtons();
+
+        // 3. Determine speaker for this chat
+        let characterName = null;
+        if (this.els.speakerSelect && this.els.speakerSelect.style.display !== 'none') {
+            characterName = this.els.speakerSelect.value || null;
+        }
+
+        // 4. Stream a fresh AI response (no new user message)
+        this.isGenerating = true;
+        this.els.sendBtn.style.display = 'none';
+        if (this.els.impBtn) this.els.impBtn.style.display = 'none';
+        if (this.els.stopBtn) this.els.stopBtn.style.display = '';
+
+        const aiMsgObj = { role: 'assistant', character_name: characterName || 'Routing...', content: '' };
+        const aiBubbleWrapper = this.appendMessage(aiMsgObj, true);
+        const contentEl = aiBubbleWrapper.querySelector('.chat-bubble');
+        const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
+
+        this.abortController = new AbortController();
+
+        try {
+            const payload = {
+                content: '',          // no new user text
+                ooc_note: '',
+                character_name: characterName
+            };
+
+            if (window.config) {
+                payload.max_input_tokens  = window.config.get('chat.maxInputTokens');
+                payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
+                payload.temperature       = window.config.get('chat.temperature');
+                payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
+            }
+
+            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: this.abortController.signal
+            });
+
+            if (!res.ok) throw new Error('Regen API Request Failed');
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullText = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    const dataStr = line.slice(6);
+                    if (dataStr.trim() === '[DONE]') continue;
+                    try {
+                        const data = JSON.parse(dataStr);
+                        if (data.type === 'metadata') {
+                            if (data.character_name) {
+                                nameTextEl.textContent = data.character_name;
+                                aiMsgObj.character_name = data.character_name;
+                            }
+                            if (data.character_card_id) {
+                                aiMsgObj.character_card_id = data.character_card_id;
+                                const avatarUrl = this.getAvatarUrl(data.character_name, data.character_card_id);
+                                if (avatarUrl) {
+                                    const avatarDiv = aiBubbleWrapper.querySelector('.chat-avatar-container');
+                                    if (avatarDiv) {
+                                        avatarDiv.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
+                                    }
+                                }
+                            }
+                            // user_message_id will be null since we sent empty content/ooc_note
+                        } else if (data.type === 'chunk') {
+                            fullText += data.content;
+                            aiMsgObj.content = fullText;
+                            contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
+                        } else if (data.type === 'error') {
+                            console.error('Regen generation error:', data.message);
+                            contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
+                        }
+                    } catch (err) {
+                        console.warn('Failed to parse regen SSE data:', dataStr, err);
+                    }
+                }
+            }
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                console.error('Regen stream error', e);
+            }
+        } finally {
+            this.isGenerating = false;
+            this.abortController = null;
+            this.els.sendBtn.style.display = '';
+            if (this.els.impBtn) this.els.impBtn.style.display = '';
+            if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
+            this.els.sendBtn.disabled = false;
+            this.els.msgInput.focus();
+
+            // Assign server-generated ID so subsequent action buttons work
+            window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(r => r.json()).then(chat => {
+                if (chat && chat.messages && this.activeChatId === chat.id) {
+                    const lastAi = chat.messages.slice().reverse().find(m => m.role === 'assistant');
+                    if (lastAi && !aiMsgObj.id) {
+                        aiMsgObj.id = lastAi.id;
+                        this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
+                    }
+                }
+            }).catch(e => console.error('Error fetching chat after regen', e));
+        }
     }
 
     async handleGenerateSceneImage(messageId, wrapper, bubbleEl) {
@@ -1674,6 +1841,8 @@ class RoleplayChatHandler {
                         aiMsgObj.id = lastAi.id;
                         this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
                     }
+                    // Keep regen button on the correct (last) AI bubble
+                    this._updateRegenButtons();
                 }
             }).catch(e => console.error("Error fetching updated chat", e));
         }

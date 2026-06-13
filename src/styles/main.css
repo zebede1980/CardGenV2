@@ -1447,6 +1447,29 @@ textarea.content-box {
     border-color: var(--accent);
 }
 
+/* Regen button — amber tint to stand out from other actions */
+.chat-regen-btn {
+    color: #b45309;
+    border-color: #d97706;
+}
+
+.chat-regen-btn:hover {
+    background: #d97706 !important;
+    border-color: #b45309 !important;
+    color: #fff !important;
+}
+
+[data-theme="dark"] .chat-regen-btn {
+    color: #fbbf24;
+    border-color: #d97706;
+}
+
+[data-theme="dark"] .chat-regen-btn:hover {
+    background: #d97706 !important;
+    border-color: #b45309 !important;
+    color: #fff !important;
+}
+
 /* Swipe bar */
 .chat-swipe-bar {
     display: flex;
