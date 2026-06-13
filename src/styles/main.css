@@ -439,7 +439,7 @@ textarea.content-box {
 .image-preview .content-box {
     min-height: 330px;
     padding: 0.75rem;
-    background: linear-gradient(160deg, #f9fdff 0%, #eff6ff 100%);
+    background: linear-gradient(160deg, var(--surface-muted) 0%, var(--accent-soft) 100%);
 }
 
 .content-box {
