@@ -265,12 +265,10 @@ class AdventureHandler {
         if (!text) return "";
         let parsed = this.escapeHtml(text);
         
-        // Apply Markdown & Aesthetics
         parsed = parsed.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
         parsed = parsed.replace(/\*([^*]+)\*/g, "<em>$1</em>");
         parsed = parsed.replace(/&quot;([\s\S]*?)&quot;/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">&quot;$1&quot;</span>');
         parsed = parsed.replace(/“([\s\S]*?)”/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">“$1”</span>');
-        parsed = parsed.replace(/"([\s\S]*?)"/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">"$1"</span>');
         
         return parsed.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>');
     }
