@@ -106,7 +106,7 @@ class AdventureHandler {
 
     async loadSessionList() {
         try {
-            const sessions = await authFetch('/api/adventures/');
+            const sessions = await authFetch('/api/sw/adventures/');
             const data = await sessions.json();
             
             this.listContainer.innerHTML = '';
@@ -130,7 +130,7 @@ class AdventureHandler {
                 li.querySelector('.resume-btn').addEventListener('click', () => this.resumeSession(sess.id));
                 li.querySelector('.delete-btn').addEventListener('click', async () => {
                     if(confirm("Delete this adventure?")) {
-                        await authFetch('/api/adventures/' + sess.id, { method: 'DELETE' });
+                        await authFetch('/api/sw/adventures/' + sess.id, { method: 'DELETE' });
                         this.loadSessionList();
                     }
                 });
@@ -147,7 +147,7 @@ class AdventureHandler {
         const cards = this.selectedCharacters;
         
         try {
-            const res = await authFetch('/api/adventures/', {
+            const res = await authFetch('/api/sw/adventures/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -177,7 +177,7 @@ class AdventureHandler {
 
     async resumeSession(id) {
         try {
-            const res = await authFetch('/api/adventures/' + id);
+            const res = await authFetch('/api/sw/adventures/' + id);
             const data = await res.json();
             
             this.currentSessionId = data.id;
@@ -284,7 +284,7 @@ class AdventureHandler {
         let accumulatedText = "";
         
         try {
-            const res = await authFetch(`/api/adventures/${this.currentSessionId}/action`, {
+            const res = await authFetch(`/api/sw/adventures/${this.currentSessionId}/action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
