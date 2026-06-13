@@ -31,6 +31,7 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session):
     if session_data.summary:
         system_parts.append(f"Story Summary:\n{session_data.summary}")
         
+    system_parts.append(
         "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n"
         "First, write the next segment of the story naturally. You control all characters and the world itself.\n"
         "Then, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n"
