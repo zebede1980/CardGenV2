@@ -161,10 +161,18 @@ class RoleplayChatCreate(BaseModel):
     title: str
     system_prompt: str = ""
     card_ids: List[int] = []
+    user_persona_name: str = "User"
+    user_persona_age: str = ""
+    user_persona_gender: str = ""
+    user_persona_detail: str = ""
 
 class RoleplayChatUpdate(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
+    user_persona_name: Optional[str] = None
+    user_persona_age: Optional[str] = None
+    user_persona_gender: Optional[str] = None
+    user_persona_detail: Optional[str] = None
 
 class RoleplayChatOut(BaseModel):
     id: str
@@ -172,6 +180,10 @@ class RoleplayChatOut(BaseModel):
     title: str
     system_prompt: str
     summary: str
+    user_persona_name: str
+    user_persona_age: str
+    user_persona_gender: str
+    user_persona_detail: str
     created_at: datetime
     updated_at: datetime
     class Config:

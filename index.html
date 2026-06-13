@@ -1647,12 +1647,7 @@
                           <span id="chat-active-characters" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
                         </div>
                         <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
-                          <div style="display: flex; align-items: center; gap: 0.5rem;">
-                              <span style="font-size: 0.85rem; color: var(--text-secondary);">Playing as:</span>
-                              <select id="chat-user-persona-select" class="content-box" style="padding: 0.3rem 0.5rem; max-width: 150px; font-size: 0.85rem;">
-                                  <option value="">User (Default)</option>
-                              </select>
-                          </div>
+
                           <button id="chat-settings-btn" class="btn-outline btn-small">⚙️ Settings</button>
                         </div>
                       </div>
@@ -2514,6 +2509,30 @@
                   <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
               </div>
               <button id="chat-new-add-char-btn" class="btn-outline btn-small" style="width: 100%; margin-bottom: 1rem;">🖼️ Add Character from Gallery</button>
+
+              <label class="label">User Persona</label>
+              <div style="margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--surface-muted);">
+                  <div style="display: flex; gap: 1rem; margin-bottom: 0.75rem;">
+                      <label style="cursor:pointer; display:flex; align-items:center; gap:0.25rem;"><input type="radio" name="chat_user_persona_type" value="manual" checked> Manual Entry</label>
+                      <label style="cursor:pointer; display:flex; align-items:center; gap:0.25rem;"><input type="radio" name="chat_user_persona_type" value="card"> Select Card</label>
+                  </div>
+                  
+                  <div id="chat-new-persona-manual">
+                      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                          <input type="text" id="chat-new-persona-name" class="content-box" style="flex:2;" placeholder="Name (e.g. User)" />
+                          <input type="text" id="chat-new-persona-age" class="content-box" style="flex:1;" placeholder="Age" />
+                          <input type="text" id="chat-new-persona-gender" class="content-box" style="flex:1;" placeholder="Gender" />
+                      </div>
+                      <textarea id="chat-new-persona-detail" class="content-box" rows="2" style="width:100%;" placeholder="Basic Detail (appearance, background...)"></textarea>
+                  </div>
+                  
+                  <div id="chat-new-persona-card" style="display: none;">
+                      <div style="display: flex; align-items: center; gap: 0.5rem;">
+                          <span id="chat-new-persona-card-name" style="flex:1; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">No card selected</span>
+                          <button id="chat-new-persona-pick-btn" class="btn-outline btn-small">Pick Card</button>
+                      </div>
+                  </div>
+              </div>
 
               <label class="label">Custom System Prompt (Optional)</label>
               <textarea id="chat-new-system-prompt" class="content-box" rows="3" style="width:100%; margin-bottom: 1rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>

@@ -40,6 +40,17 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if chat.system_prompt:
         system_parts.append(chat.system_prompt)
         
+    # User Persona
+    if chat.user_persona_name:
+        persona_str = f"User Persona:\nName: {chat.user_persona_name}"
+        if chat.user_persona_age:
+            persona_str += f"\nAge: {chat.user_persona_age}"
+        if chat.user_persona_gender:
+            persona_str += f"\nGender: {chat.user_persona_gender}"
+        if chat.user_persona_detail:
+            persona_str += f"\nDetails: {chat.user_persona_detail}"
+        system_parts.append(persona_str)
+        
     # 2. Character Cards
     for card in chat.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
@@ -261,6 +272,10 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
         user_id=str(current_user.id),
         title=chat_in.title,
         system_prompt=chat_in.system_prompt.strip() if chat_in.system_prompt else get_default_system_prompt(),
+        user_persona_name=chat_in.user_persona_name,
+        user_persona_age=chat_in.user_persona_age,
+        user_persona_gender=chat_in.user_persona_gender,
+        user_persona_detail=chat_in.user_persona_detail
     )
     db.add(new_chat)
     db.flush() # Flush to get the new chat ID

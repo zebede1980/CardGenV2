@@ -352,7 +352,14 @@ class RoleplayChatHandler {
             newAddCharBtn: document.getElementById('chat-new-add-char-btn'),
             newSysPrompt: document.getElementById('chat-new-system-prompt'),
             createSubmitBtn: document.getElementById('chat-create-submit-btn'),
-            userPersonaSelect: document.getElementById('chat-user-persona-select'),
+            newPersonaManual: document.getElementById('chat-new-persona-manual'),
+            newPersonaCard: document.getElementById('chat-new-persona-card'),
+            newPersonaName: document.getElementById('chat-new-persona-name'),
+            newPersonaAge: document.getElementById('chat-new-persona-age'),
+            newPersonaGender: document.getElementById('chat-new-persona-gender'),
+            newPersonaDetail: document.getElementById('chat-new-persona-detail'),
+            newPersonaCardName: document.getElementById('chat-new-persona-card-name'),
+            newPersonaPickBtn: document.getElementById('chat-new-persona-pick-btn'),
         };
     }
 
@@ -381,6 +388,31 @@ class RoleplayChatHandler {
         
         if (this.els.newAddCharBtn) {
             this.els.newAddCharBtn.addEventListener('click', () => this.openGalleryForNewChat());
+        }
+        
+        const personaRadios = document.querySelectorAll('input[name="chat_user_persona_type"]');
+        personaRadios.forEach(r => r.addEventListener('change', (e) => {
+            if (e.target.value === 'manual') {
+                this.els.newPersonaManual.style.display = 'block';
+                this.els.newPersonaCard.style.display = 'none';
+            } else {
+                this.els.newPersonaManual.style.display = 'none';
+                this.els.newPersonaCard.style.display = 'block';
+            }
+        }));
+        
+        if (this.els.newPersonaPickBtn) {
+            this.els.newPersonaPickBtn.addEventListener('click', () => {
+                if (!window.cardGallery) return alert("Gallery module not loaded.");
+                window.cardGallery.open(this.availableCards || [], (cardId) => {
+                    const card = (this.availableCards || []).find(c => c.id === cardId);
+                    if (card) {
+                        this.userPersonaSelectedCard = card;
+                        this.els.newPersonaCardName.textContent = card.name || 'Unnamed';
+                        this.els.newPersonaCardName.style.color = 'var(--text-primary)';
+                    }
+                });
+            });
         }
         
         this.els.oocToggleBtn.addEventListener('click', () => {
@@ -418,18 +450,7 @@ class RoleplayChatHandler {
             }
         });
         
-        if (this.els.userPersonaSelect) {
-            this.els.userPersonaSelect.addEventListener('change', (e) => {
-                const val = e.target.value;
-                if (this.activeChatId) {
-                    localStorage.setItem(`chatgen_persona_${this.activeChatId}`, val);
-                    localStorage.setItem('chatgen_active_user_persona', val);
-                    this.selectChat(this.activeChatId);
-                } else {
-                    localStorage.setItem('chatgen_active_user_persona', val);
-                }
-            });
-        }
+
         
         window.addEventListener('resize', () => this.adjustChatLayout());
         
@@ -669,6 +690,18 @@ class RoleplayChatHandler {
         this.renderNewChatSelectedChars();
         this.els.newTitle.value = '';
         
+        this.userPersonaSelectedCard = null;
+        this.els.newPersonaName.value = '';
+        this.els.newPersonaAge.value = '';
+        this.els.newPersonaGender.value = '';
+        this.els.newPersonaDetail.value = '';
+        this.els.newPersonaCardName.textContent = 'No card selected';
+        this.els.newPersonaCardName.style.color = 'var(--text-secondary)';
+        const radioManual = document.querySelector('input[name="chat_user_persona_type"][value="manual"]');
+        if (radioManual) radioManual.checked = true;
+        if (this.els.newPersonaManual) this.els.newPersonaManual.style.display = 'block';
+        if (this.els.newPersonaCard) this.els.newPersonaCard.style.display = 'none';
+        
         const segments = window.config?.get("chat.systemPromptSegments") || [];
         this.els.newSysPrompt.value = segments.join("\n\n");
         
@@ -759,14 +792,43 @@ class RoleplayChatHandler {
         const sysPrompt = this.els.newSysPrompt.value.trim();
         const cardIds = (this.newChatSelectedCards || []).map(c => c.id);
         
+        let userPersonaName = "User";
+        let userPersonaAge = "";
+        let userPersonaGender = "";
+        let userPersonaDetail = "";
+        
+        const typeEl = document.querySelector('input[name="chat_user_persona_type"]:checked');
+        const pType = typeEl ? typeEl.value : 'manual';
+        
+        if (pType === 'manual') {
+            userPersonaName = this.els.newPersonaName.value.trim() || "User";
+            userPersonaAge = this.els.newPersonaAge.value.trim();
+            userPersonaGender = this.els.newPersonaGender.value.trim();
+            userPersonaDetail = this.els.newPersonaDetail.value.trim();
+        } else if (pType === 'card' && this.userPersonaSelectedCard) {
+            userPersonaName = this.userPersonaSelectedCard.name || "User";
+            userPersonaDetail = [this.userPersonaSelectedCard.description, this.userPersonaSelectedCard.personality]
+                .filter(x => x).join('\n\n');
+        }
+        
         try {
             this.els.createSubmitBtn.disabled = true;
             this.els.createSubmitBtn.textContent = 'Creating...';
             
+            const payload = { 
+                title, 
+                system_prompt: sysPrompt, 
+                card_ids: cardIds,
+                user_persona_name: userPersonaName,
+                user_persona_age: userPersonaAge,
+                user_persona_gender: userPersonaGender,
+                user_persona_detail: userPersonaDetail
+            };
+            
             const res = await window.authFetch('/api/sw/chats/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, system_prompt: sysPrompt, card_ids: cardIds })
+                body: JSON.stringify(payload)
             });
             
             if (res.ok) {
