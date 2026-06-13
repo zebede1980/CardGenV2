@@ -188,6 +188,7 @@ class AdventureHandler {
             
             this.selectedCharacters = [];
             this.renderSelectedCharacters();
+            this.renderActiveCharacters(data.characters);
             this.startingScenario.value = '';
             
             await this.sendAction("", "system"); // Trigger the first generation
@@ -208,6 +209,8 @@ class AdventureHandler {
             
             this.storyArea.innerHTML = '';
             this.optionsArea.innerHTML = '';
+            
+            this.renderActiveCharacters(data.characters);
             
             let lastAssistantOptions = null;
             
@@ -239,6 +242,31 @@ class AdventureHandler {
         } catch (e) {
             alert("Failed to load adventure: " + e.message);
         }
+    }
+
+    renderActiveCharacters(characters) {
+        const container = document.getElementById('adv-active-characters');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        if (!characters || characters.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'flex';
+        characters.forEach(char => {
+            const charName = char.characterName || (char.character && char.character.name) || char.name || 'Unknown';
+            const charAvatar = char.avatar || 'assets/default-avatar.png'; // Fallback if no avatar
+            
+            const badge = document.createElement('div');
+            badge.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 0.25rem;';
+            badge.innerHTML = `
+                <img src="${charAvatar}" alt="${charName}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent);">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); max-width: 60px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${charName}</span>
+            `;
+            container.appendChild(badge);
+        });
     }
 
     appendStorySegment(htmlContent) {
