@@ -165,6 +165,7 @@ class RoleplayChatCreate(BaseModel):
     user_persona_age: str = ""
     user_persona_gender: str = ""
     user_persona_detail: str = ""
+    user_persona_card_id: Optional[int] = None
 
 class RoleplayChatUpdate(BaseModel):
     title: Optional[str] = None
@@ -173,6 +174,7 @@ class RoleplayChatUpdate(BaseModel):
     user_persona_age: Optional[str] = None
     user_persona_gender: Optional[str] = None
     user_persona_detail: Optional[str] = None
+    user_persona_card_id: Optional[int] = None
 
 class RoleplayChatOut(BaseModel):
     id: str
@@ -184,6 +186,7 @@ class RoleplayChatOut(BaseModel):
     user_persona_age: str
     user_persona_gender: str
     user_persona_detail: str
+    user_persona_card_id: Optional[int]
     created_at: datetime
     updated_at: datetime
     class Config:

@@ -101,6 +101,8 @@ def run_migrations():
             conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_gender VARCHAR NOT NULL DEFAULT ''"))
         if not _column_exists(conn, "roleplay_chats", "user_persona_detail"):
             conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_detail TEXT NOT NULL DEFAULT ''"))
+        if not _column_exists(conn, "roleplay_chats", "user_persona_card_id"):
+            conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_card_id INTEGER"))
 
 def init_db():
     run_migrations()

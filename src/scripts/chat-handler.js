@@ -797,6 +797,8 @@ class RoleplayChatHandler {
         let userPersonaGender = "";
         let userPersonaDetail = "";
         
+        let userPersonaCardId = null;
+        
         const typeEl = document.querySelector('input[name="chat_user_persona_type"]:checked');
         const pType = typeEl ? typeEl.value : 'manual';
         
@@ -809,6 +811,7 @@ class RoleplayChatHandler {
             userPersonaName = this.userPersonaSelectedCard.name || "User";
             userPersonaDetail = [this.userPersonaSelectedCard.description, this.userPersonaSelectedCard.personality]
                 .filter(x => x).join('\n\n');
+            userPersonaCardId = this.userPersonaSelectedCard.id;
         }
         
         try {
@@ -822,7 +825,8 @@ class RoleplayChatHandler {
                 user_persona_name: userPersonaName,
                 user_persona_age: userPersonaAge,
                 user_persona_gender: userPersonaGender,
-                user_persona_detail: userPersonaDetail
+                user_persona_detail: userPersonaDetail,
+                user_persona_card_id: userPersonaCardId
             };
             
             const res = await window.authFetch('/api/sw/chats/', {
@@ -1079,15 +1083,14 @@ class RoleplayChatHandler {
     }
 
     getUserPersonaData() {
-        let id = null;
-        if (this.activeChatId) {
-            id = localStorage.getItem(`chatgen_persona_${this.activeChatId}`);
-        }
-        if (!id) {
-            id = localStorage.getItem('chatgen_active_user_persona');
-        }
-        if (!id || !this.availablePersonas) return null;
-        return this.availablePersonas.find(c => String(c.id) === String(id)) || null;
+        if (!this.activeChatId || !this.chats) return null;
+        const chat = this.chats.find(c => c.id === this.activeChatId);
+        if (!chat) return null;
+        
+        return {
+            name: chat.user_persona_name || 'User',
+            id: chat.user_persona_card_id || null
+        };
     }
 
     /**
@@ -1116,13 +1119,16 @@ class RoleplayChatHandler {
         }
         const charName = displayCharName || 'Assistant';
 
+        const userPersona = this.getUserPersonaData();
+        const userName = userPersona ? (userPersona.name || 'User') : 'User';
+
         // ── Name row with timestamp ──
         const nameEl = document.createElement('div');
         nameEl.className = 'chat-bubble-name';
 
         const nameText = document.createElement('span');
         nameText.className = 'chat-bubble-name-text';
-        nameText.textContent = msg.role === 'user' ? '' : charName;
+        nameText.textContent = msg.role === 'user' ? userName : charName;
         nameEl.appendChild(nameText);
 
         // Timestamp
@@ -1157,9 +1163,6 @@ class RoleplayChatHandler {
         // ── Avatar ──
         const avatarEl = document.createElement('div');
         avatarEl.className = 'chat-avatar-container';
-
-        const userPersona = this.getUserPersonaData();
-        const userName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || 'User') : 'User';
 
         if (msg.role === 'user') {
             if (userPersona) {

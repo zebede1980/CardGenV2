@@ -275,7 +275,8 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
         user_persona_name=chat_in.user_persona_name,
         user_persona_age=chat_in.user_persona_age,
         user_persona_gender=chat_in.user_persona_gender,
-        user_persona_detail=chat_in.user_persona_detail
+        user_persona_detail=chat_in.user_persona_detail,
+        user_persona_card_id=chat_in.user_persona_card_id
     )
     db.add(new_chat)
     db.flush() # Flush to get the new chat ID

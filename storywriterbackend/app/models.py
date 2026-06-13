@@ -114,6 +114,7 @@ class RoleplayChat(Base):
     user_persona_age = Column(String, default="")
     user_persona_gender = Column(String, default="")
     user_persona_detail = Column(Text, default="")
+    user_persona_card_id = Column(Integer, ForeignKey("character_cards.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
