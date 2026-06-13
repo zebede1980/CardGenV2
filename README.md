@@ -125,6 +125,24 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
   - **Google Cloud TTS**: Supports both Standard and Premium (Neural2 / WaveNet) voices via Google API key.
 - **Mobile/iOS Native Support**: Integrates with the HTML5 Media Session API, allowing uninterrupted background audio playback and lock-screen controls (Pause, Skip, Stop) on mobile devices.
 
+### Roleplay Chat (Multi-Character & Dynamic Memory) *(new)*
+- **Immersive Multi-Character Sessions**: Create chat sessions containing one or multiple characters simultaneously.
+- **Dialogue Auto-Routing**: In group chats, the AI automatically routes responses to the most appropriate character based on the conversation context, or you can manually select the next speaker using the dropdown.
+- **Dynamic Context Window Management**:
+  - **Auto-Summarization**: Older chat history is periodically compiled in the background into a running "Story Summary" to conserve context space and prevent memory drift.
+  - **Auto-Fact Extraction (Memory Book)**: An AI background task scans history every 10 messages to maintain a checklist of permanent facts (items gained/lost, locations, relationship shifts), injecting them into future turns.
+- **User Personas**: Choose to roleplay using a custom text-based persona or pick an existing character card from your library to represent yourself.
+- **Steering & Impersonation**:
+  - **OOC Notes**: Inline Out-of-Character director notes let you guide character actions, tone, or scene progression.
+  - **Impersonate Mode**: Have the AI write a draft response for you, which streams directly into your input area for editing before sending.
+- **Inline Scene Image Generation**: Generate visual scene illustrations directly in the chat. The system analyzes recent context and character cards to create prompts and displays generated images inline.
+- **Rich UI Component Rendering**: Supports interactive graphical elements rendered beautifully in the timeline:
+  - `<text-message>`: Styled smartphone/SMS messages.
+  - `<stat-bar>`: Progress indicators, health bars, or states (e.g., Health: 80/100, Quest: Active).
+  - `<task>`: Clear, styled quest or objective checklists.
+- **Alternate Greeting Switcher**: In single-character chats, select and apply alternate greetings defined in the character card directly.
+- **Modular System Prompts**: Global settings allow you to drag-and-drop, edit, and add custom prompt segments that are combined into a system prompt for new chat sessions.
+
 ### SillyTavern Bridge
 - Configure a SillyTavern base URL in API Settings to connect directly to a running ST instance.
 - **Test Connection** — verifies connectivity and reports how many characters are in ST.
@@ -257,6 +275,43 @@ INTERNAL_API_SECRET=another-long-random-string
 BRAVE_SEARCH_API_KEY=your-brave-search-api-key
 ```
 
+### Authentication & Access Control
+
+The application contains a built-in user authentication system. Each registered user has their own independent workspace, which includes:
+- Personal API settings (`config.json`)
+- Saved cards (`cards.json`) and prompts (`prompts.json`)
+- Chat history, story history, and personas
+
+#### 1. First-Time Setup (Creating Your Account)
+On a fresh install, there are no users in the database, and registrations are disabled by default. Follow these steps to set up your first user:
+1. In your `.env` file, set:
+   ```env
+   ALLOW_REGISTRATION=true
+   ```
+2. Restart the application to apply the environment configuration:
+   ```bash
+   docker compose up -d --build
+   ```
+3. Open the web interface, click **Sign Up** in the login window overlay, and create your account.
+
+#### 2. Creating the Special "admin" Account
+It is highly recommended that you register the username **`admin`** (case-insensitive) as your very first account.
+- The `admin` username is treated specially by the proxy server.
+- Only the `admin` user has administrative privileges to change other users' passwords in the app.
+- When logged in as `admin`, the **Change Password** dialog (accessed from the user profile bar) will display an extra **Target Username (Admin Only)** input field. This allows you to reset or update any other user's password directly without knowing their current password.
+
+#### 3. Disabling Public Registrations
+Once your user account(s) have been successfully registered:
+1. Edit your `.env` file and set registration back to `false`:
+   ```env
+   ALLOW_REGISTRATION=false
+   ```
+2. Restart the proxy service:
+   ```bash
+   docker compose restart proxy
+   ```
+   This will completely disable the registration endpoint and hide the **Sign Up** link, ensuring your instance is private and secure.
+
 ### In-App API Settings
 
 All settings are saved server-side to `proxy/data/config.json` via `POST /api/config` and also mirrored to `localStorage`. They persist across page reloads and container restarts.
@@ -373,6 +428,22 @@ Use this when you want an accurate card based on a real person or an established
 4. Edit, revise, or remaster the card as needed.
 5. Click **Push to SillyTavern** to send it back — it will update the original slot (or create a new character if you choose).
 
+### Roleplay Chat Workflow
+
+1. Click the **💬 Roleplay Chat** tab at the top of the interface.
+2. Click **➕ New Chat** to configure a new session.
+3. In the setup modal:
+   - Enter a **Title** for the session.
+   - Click **Add Character** to select one or more character cards from your saved library.
+   - Select your **User Persona**: choose **Manual** to fill in a quick name/age/gender/details description, or **Card** to select an existing card from your library to represent you.
+   - (Optional) Customize the starting **System Prompt** (pre-loaded with your default segments).
+   - Click **Create Chat**.
+4. Single-character sessions will automatically start with the character's first message (or alternate greetings displayed as a system note).
+5. In multi-character sessions, the AI will automatically route responses to the most logical speaker. You can override this or force a reply from a specific character using the **Speaker Select** dropdown next to the send button.
+6. Use **Impersonate** (user-ghost icon) to draft a response from the user's perspective, or use **OOC** (Out-of-Character) notes to instruct the AI directly.
+7. Click **Generate Image** (image icon) on any message to create a visual illustration of the scene.
+8. Customize settings like Max Input/Output tokens, Temperature, Repetition Penalty, and reorder modular system prompt segments globally by clicking **⚙️ Settings** in the chat sidebar.
+
 ---
 
 ## Card Design Philosophy
@@ -451,30 +522,38 @@ src/
   scripts/
     main.js                  — App controller and event binding
     app-ui.js                — UI helpers (notifications, streaming, state buttons)
+    api.js                   — APIHandler base (request, streaming, retry, abort)
+    api-character.js         — Character generation, revision, and field-regeneration prompts
+    api-image.js             — Image generation methods
+    api-lorebook.js          — Lorebook/alt-greeting/consistency/card-scan API methods
+    auth.js                  — Client-side authentication
+    config.js                — Config management (localStorage + server sync)
+    storage.js               — Server-side library storage (cards and prompts)
     character-generator.js   — Character prompt templates and response parsing
     character-search.js      — Web search orchestration (Brave Search API)
     character-display.js     — Field display, edit, reset, import, remaster, tags
     revision-handler.js      — AI revision, reduce bloat, consistency check/auto-fix
     alt-greetings-handler.js — Alternate greetings CRUD and AI generation
     lorebook-handler.js      — Lorebook CRUD, AI topic/entry generation, lore elevation modal
+    lorebook-generator.js    — Lorebook AI generation (standalone module)
     library-handler.js       — Save/load/delete prompts & cards; snapshot to history
     image-handler.js         — Image generate/upload, reference image, model fetch
     image-generator.js       — Image prompt generation logic
     image-gallery.js         — Full-screen lightbox for generated images
-    lorebook-generator.js    — Lorebook AI generation (standalone module)
     st-handler.js            — SillyTavern bridge (browse, load, push characters)
-    chat-tester.js           — Chat simulation with adjustable parameters
-    chat-ui.js               — Chat toolbar, transcript modal, lorebook highlights
-    png-encoder.js           — Embed chara_card_v2 metadata into PNG files
-    batch-generator.js       — Batch comparison grid (Generate 4 variants)
-    url-import.js            — Import characters from JanitorAI / Chub.ai URLs
-    api.js                   — APIHandler base (request, streaming, retry, abort)
-    api-character.js         — Character generation, revision, and field-regeneration prompts
-    api-image.js             — Image generation methods
-    api-lorebook.js          — Lorebook/alt-greeting/consistency/card-scan API methods
-    config.js                — Config management (localStorage + server sync)
-    storage.js               — Server-side library storage (cards and prompts)
-    auth.js                  — Client-side authentication
+    chat-handler.js          — Roleplay Chat frontend controller and state manager (Multi-Character / settings / OOC / images)
+    chat-settings.js         — Roleplay Chat configuration settings dialog helpers
+    chat-tester.js           — Chat tester utility for single-character simulation with custom settings
+    chat-ui.js               — Chat timeline rendering, message actions, and XML rich components
+    rich-element-parser.js   — Parser for embedding graphical XML components like phone chats, task cards, and stat-bars
+    png-encoder.js           — Embed Spec V2 character card metadata into PNG files
+    batch-generator.js       — Parallel variant comparison grid (Generate 4 cards at once)
+    url-import.js            — Scraping/importing characters from JanitorAI and Chub.ai URLs
+    gallery-mode.js          — Controls character library gallery mode UI
+    home-handler.js          — Handles homepage landing layout and character gallery preview
+    inspire-me.js            — "Inspire Me" randomized character generator
+    storywriter.js           — Full Story Writer UI workspace and client controller
+    sanitize.js              — Security utility for sanitizing text inputs
  styles/
     main.css                 — Application styles
 proxy/
