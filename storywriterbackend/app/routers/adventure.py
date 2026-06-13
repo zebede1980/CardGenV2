@@ -37,7 +37,7 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
         
     system_parts.append(
         "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n"
-        "First, write the next segment of the story naturally. You control all characters and the world itself.\n"
+        "First, write the next segment of the story naturally in structured paragraphs, using markdown for bolding and italics. You control all characters and the world itself.\n"
         "Then, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n"
         "The choices should dictate what happens next in the scene, rather than just being a single character's dialogue or action. For example, an option could be 'Lightning strikes the tree', or 'A stranger interrupts', or 'The characters find a hidden trapdoor'.\n"
         "Format the choices EXACTLY like this at the very end of your response:\n"
