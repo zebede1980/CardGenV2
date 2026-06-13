@@ -244,6 +244,12 @@ class AdventureHandler {
         }
     }
 
+    getAvatarUrl(cardId) {
+        if (!cardId) return 'assets/default-avatar.png';
+        const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || "";
+        return `/api/storage/cards/thumbnail?cardId=${cardId}&token=${token}`;
+    }
+
     renderActiveCharacters(characters) {
         const container = document.getElementById('adv-active-characters');
         if (!container) return;
@@ -257,12 +263,12 @@ class AdventureHandler {
         container.style.display = 'flex';
         characters.forEach(char => {
             const charName = char.characterName || (char.character && char.character.name) || char.name || 'Unknown';
-            const charAvatar = char.avatar || 'assets/default-avatar.png'; // Fallback if no avatar
+            const charAvatar = this.getAvatarUrl(char.id);
             
             const badge = document.createElement('div');
             badge.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 0.25rem;';
             badge.innerHTML = `
-                <img src="${charAvatar}" alt="${charName}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent);">
+                <img src="${charAvatar}" alt="${charName}" onerror="this.src='assets/default-avatar.png'" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent);">
                 <span style="font-size: 0.75rem; color: var(--text-secondary); max-width: 60px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${charName}</span>
             `;
             container.appendChild(badge);

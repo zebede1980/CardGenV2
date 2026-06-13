@@ -35,17 +35,26 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if getattr(session_data, "system_prompt", None):
         system_parts.append(session_data.system_prompt)
         
-    system_parts.append(
-        "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n"
+    prompt_base = [
+        "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n",
         "First, write the next segment of the story naturally in structured paragraphs, using markdown for bolding and italics. You control all characters and the world itself.\n"
-        "Then, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n"
-        "The choices should dictate what happens next in the scene, rather than just being a single character's dialogue or action. For example, an option could be 'Lightning strikes the tree', or 'A stranger interrupts', or 'The characters find a hidden trapdoor'.\n"
-        "Format the choices EXACTLY like this at the very end of your response:\n"
-        "[OPTION 1] First choice here\n"
-        "[OPTION 2] Second choice here\n"
-        "[OPTION 3] Third choice here\n"
+    ]
+    
+    if session_data.characters:
+        char_names = ", ".join([c.name for c in session_data.characters])
+        prompt_base.append(f"You MUST include and actively involve ALL {len(session_data.characters)} characters ({char_names}) in the story and scene. Do not leave anyone out.\n")
+        
+    prompt_base.extend([
+        "Then, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n",
+        "The choices should dictate what happens next in the scene, rather than just being a single character's dialogue or action. For example, an option could be 'Lightning strikes the tree', or 'A stranger interrupts', or 'The characters find a hidden trapdoor'.\n",
+        "Format the choices EXACTLY like this at the very end of your response:\n",
+        "[OPTION 1] First choice here\n",
+        "[OPTION 2] Second choice here\n",
+        "[OPTION 3] Third choice here\n",
         "[OPTION 4] Fourth choice here"
-    )
+    ])
+    
+    system_parts.append("".join(prompt_base))
         
     messages.append({"role": "system", "content": "\n\n".join(system_parts)})
     
