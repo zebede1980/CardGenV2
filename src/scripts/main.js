@@ -39,6 +39,25 @@ class CharacterGeneratorApp {
       localStorage.removeItem("charGeneratorConfig");
     }
     await this.config.waitForConfig();
+
+    // Patch displayCharacter to load image prompt fields
+    const origDisplay = this.displayCharacter;
+    if (origDisplay && !this._displayCharacterPatched) {
+      this.displayCharacter = function(...args) {
+        origDisplay.apply(this, args);
+        const customPromptInput = document.getElementById("custom-image-prompt");
+        const promptGuidanceInput = document.getElementById("prompt-guidance");
+        if (customPromptInput) {
+            customPromptInput.value = this.currentCharacter?.imagePrompt || "";
+            if (window.updatePromptCharCount) window.updatePromptCharCount();
+        }
+        if (promptGuidanceInput) {
+            promptGuidanceInput.value = this.currentCharacter?.imageGuidance || "";
+        }
+      };
+      this._displayCharacterPatched = true;
+    }
+
     await this.ensureStorageReady();
     this.config.saveToForm();
     this.initTheme();
@@ -242,6 +261,20 @@ class CharacterGeneratorApp {
       if (this.currentCharacter) this.currentCharacter.creatorNotes = creatorNotesTextarea.value;
     });
 
+    const customImagePrompt = document.getElementById("custom-image-prompt");
+    if (customImagePrompt) {
+      customImagePrompt.addEventListener("input", () => {
+        if (this.currentCharacter) this.currentCharacter.imagePrompt = customImagePrompt.value;
+      });
+    }
+
+    const promptGuidance = document.getElementById("prompt-guidance");
+    if (promptGuidance) {
+      promptGuidance.addEventListener("input", () => {
+        if (this.currentCharacter) this.currentCharacter.imageGuidance = promptGuidance.value;
+      });
+    }
+
     // Debug mode
     const debugModeCheckbox = document.getElementById("debug-mode");
     if (debugModeCheckbox) {
@@ -318,6 +351,8 @@ class CharacterGeneratorApp {
     if (clearPromptsBtn) clearPromptsBtn.addEventListener("click", () => this.handleClearPrompts());
     const migrateCardsBtn = document.getElementById("migrate-cards-btn");
     if (migrateCardsBtn) migrateCardsBtn.addEventListener("click", () => this.handleMigrateCards());
+    const galleryCardsBtn = document.getElementById("gallery-cards-btn");
+    if (galleryCardsBtn) galleryCardsBtn.addEventListener("click", () => this.handleOpenLibraryGallery());
 
     // SillyTavern bridge
     const refreshSTBtn = document.getElementById("refresh-st-library-btn");
@@ -512,7 +547,7 @@ class CharacterGeneratorApp {
     const chatExportBtn = document.getElementById("chat-export-btn");
     const chatPersonaInput = document.getElementById("chat-persona-name");
 
-    if (testChatBtn) testChatBtn.addEventListener("click", () => this.openChatTester());
+    if (testChatBtn) testChatBtn.addEventListener("click", () => this.handleChatWithChar());
     if (chatTesterModalCloseBtn) chatTesterModalCloseBtn.addEventListener("click", () => this.closeChatTester());
     if (chatTesterModal) chatTesterModal.addEventListener("click", (e) => { if (e.target === chatTesterModal) this.closeChatTester(); });
     if (chatSendBtn) chatSendBtn.addEventListener("click", () => this.handleChatSend());
@@ -680,6 +715,11 @@ class CharacterGeneratorApp {
       }
       this.showDropImportModal(file);
     });
+    
+    // Inject API Logs UI
+    if (typeof this.injectTechLogsUI === 'function') {
+        this.injectTechLogsUI();
+    }
   }
 
   async checkAPIStatus() {
@@ -837,6 +877,9 @@ class CharacterGeneratorApp {
     ["description-prompt", "personality-prompt", "scenario-prompt", "first-message-prompt", "example-messages-prompt"]
       .forEach((id) => { const el = document.getElementById(id); if (el) el.value = ""; });
 
+    const guidanceInput = document.getElementById("prompt-guidance");
+    if (guidanceInput) guidanceInput.value = "";
+
     const imageContent = document.getElementById("image-content");
     if (imageContent) {
       imageContent.innerHTML = `<div class="image-placeholder"><div class="loading-spinner"></div></div>`;
@@ -963,11 +1006,13 @@ class CharacterGeneratorApp {
 
           if (customPromptTextarea && referenceDescription && !customPromptTextarea.value.trim()) {
             customPromptTextarea.value = `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`;
+            this.currentCharacter.imagePrompt = customPromptTextarea.value;
             window.updatePromptCharCount();
           }
 
           if (customPromptTextarea && window.apiHandler.lastGeneratedImagePrompt) {
             customPromptTextarea.value = window.apiHandler.lastGeneratedImagePrompt;
+            this.currentCharacter.imagePrompt = window.apiHandler.lastGeneratedImagePrompt;
             window.updatePromptCharCount();
           } else if (!hasReferenceImage && customPromptTextarea && !customPromptTextarea.value.trim()) {
             try {
@@ -980,6 +1025,7 @@ class CharacterGeneratorApp {
                 this.currentCharacter.description, this.currentCharacter.name,
               );
             }
+            this.currentCharacter.imagePrompt = customPromptTextarea.value;
             window.updatePromptCharCount();
           }
         }
@@ -1155,6 +1201,49 @@ document.addEventListener("DOMContentLoaded", async () => {
         [data-theme="dark"] button:not(.btn-primary):not(.btn-secondary):not(.btn-stop):not([style*="background: none"]):not([style*="background:none"]):hover {
             background: var(--surface-muted, #111820);
         }
+
+          /* Form inputs need explicit color assignment to avoid black text on dark backgrounds */
+          input, textarea, select, .content-box, .input {
+              color: var(--text-primary);
+          }
+
+          /* Global Mobile Layout Fixes */
+          html, body { max-width: 100vw; overflow-x: hidden; margin: 0; padding: 0; }
+          *, *::before, *::after { box-sizing: border-box; }
+          .container, .main, #app-root, #view-cardgen { max-width: 100%; }
+          
+          @media (max-width: 768px) {
+              /* Force all elements inside the generator to respect screen width */
+              #view-cardgen * {
+                  max-width: 100% !important;
+              }
+              
+              /* Ensure main sections can shrink and don't push off-screen */
+              #view-cardgen, #view-cardgen .form-section, #view-cardgen .result-section, #view-cardgen .content-box {
+                  width: 100% !important;
+                  min-width: 0 !important;
+                  box-sizing: border-box !important;
+              }
+              
+              #view-cardgen textarea, #view-cardgen input, #view-cardgen select {
+                  width: 100%;
+              }
+              
+              #view-cardgen img, #view-cardgen video, #view-cardgen canvas {
+                  height: auto;
+              }
+              
+              /* Break long unbroken strings */
+              #view-cardgen p, #view-cardgen div, #view-cardgen span, #view-cardgen pre, #view-cardgen code, #view-cardgen button, #view-cardgen label {
+                  overflow-wrap: break-word;
+                  word-wrap: break-word;
+              }
+              
+              /* Stack flex containers that are side-by-side on desktop */
+              #view-cardgen div[style*="display: flex"], #view-cardgen div[style*="display:flex"] {
+                  flex-wrap: wrap !important;
+              }
+          }
     `;
   document.head.appendChild(style);
 

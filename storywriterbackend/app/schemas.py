@@ -41,10 +41,6 @@ class StoryOut(BaseModel):
     class Config:
         from_attributes = True
 
-class StoryDetailOut(StoryOut):
-    segments: List["StorySegmentOut"] = []
-    cards: List["StoryCardOut"] = []
-
 class StorySegmentCreate(BaseModel):
     content: str
     order_index: int
@@ -67,6 +63,10 @@ class StoryCardOut(BaseModel):
     card: CharacterCardOut
     class Config:
         from_attributes = True
+
+class StoryDetailOut(StoryOut):
+    segments: List[StorySegmentOut] = []
+    cards: List[StoryCardOut] = []
 
 class SteeringInstructionCreate(BaseModel):
     instruction: str
@@ -131,3 +131,78 @@ class EditSegmentRequest(BaseModel):
 
 class SummaryRequest(BaseModel):
     story_id: int
+
+class ChatMessageOut(BaseModel):
+    id: str
+    chat_id: str
+    role: str
+    character_name: Optional[str] = None
+    content: str
+    ooc_note: str
+    is_summarized: bool = False
+    is_extracted: bool = False
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ChatMemoryOut(BaseModel):
+    id: str
+    chat_id: str
+    fact: str
+    is_active: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ChatMessageUpdate(BaseModel):
+    content: str
+
+class RoleplayChatCreate(BaseModel):
+    title: str
+    system_prompt: str = ""
+    card_ids: List[int] = []
+    user_persona_name: str = "User"
+    user_persona_age: str = ""
+    user_persona_gender: str = ""
+    user_persona_detail: str = ""
+    user_persona_card_id: Optional[int] = None
+
+class RoleplayChatUpdate(BaseModel):
+    title: Optional[str] = None
+    system_prompt: Optional[str] = None
+    user_persona_name: Optional[str] = None
+    user_persona_age: Optional[str] = None
+    user_persona_gender: Optional[str] = None
+    user_persona_detail: Optional[str] = None
+    user_persona_card_id: Optional[int] = None
+
+class RoleplayChatOut(BaseModel):
+    id: str
+    user_id: int
+    title: str
+    system_prompt: str
+    summary: str
+    user_persona_name: str
+    user_persona_age: str
+    user_persona_gender: str
+    user_persona_detail: str
+    user_persona_card_id: Optional[int]
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class RoleplayChatDetailOut(RoleplayChatOut):
+    messages: List[ChatMessageOut] = []
+    memories: List[ChatMemoryOut] = []
+    characters: List[CharacterCardOut] = []
+
+class SendMessageRequest(BaseModel):
+    content: str
+    ooc_note: Optional[str] = ""
+    character_name: Optional[str] = None
+    max_input_tokens: Optional[int] = None
+    max_output_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+    impersonate: Optional[bool] = False

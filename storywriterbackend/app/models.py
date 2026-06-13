@@ -3,6 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
+import uuid
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./storywriter.db")
 
@@ -96,3 +97,51 @@ class SteeringInstruction(Base):
     story_id = Column(Integer, ForeignKey("stories.id"), nullable=False)
     instruction = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class ChatCharacterLink(Base):
+    __tablename__ = "chat_character_links"
+    chat_id = Column(String(36), ForeignKey("roleplay_chats.id", ondelete="CASCADE"), primary_key=True)
+    card_id = Column(Integer, ForeignKey("character_cards.id", ondelete="CASCADE"), primary_key=True)
+
+class RoleplayChat(Base):
+    __tablename__ = "roleplay_chats"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False, default="New Chat")
+    system_prompt = Column(Text, default="")
+    summary = Column(Text, default="")
+    user_persona_name = Column(String, default="User")
+    user_persona_age = Column(String, default="")
+    user_persona_gender = Column(String, default="")
+    user_persona_detail = Column(Text, default="")
+    user_persona_card_id = Column(Integer, ForeignKey("character_cards.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan")
+    memories = relationship("ChatMemory", back_populates="chat", cascade="all, delete-orphan")
+    characters = relationship("CharacterCard", secondary="chat_character_links")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    chat_id = Column(String(36), ForeignKey("roleplay_chats.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, nullable=False)  # user, assistant, system
+    character_name = Column(String, nullable=True)  # To identify who spoke in group chats
+    content = Column(Text, default="")
+    ooc_note = Column(Text, default="")  # Hidden instruction sent alongside the message
+    is_summarized = Column(Boolean, default=False)
+    is_extracted = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    chat = relationship("RoleplayChat", back_populates="messages")
+
+class ChatMemory(Base):
+    __tablename__ = "chat_memories"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    chat_id = Column(String(36), ForeignKey("roleplay_chats.id", ondelete="CASCADE"), nullable=False)
+    fact = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    chat = relationship("RoleplayChat", back_populates="memories")

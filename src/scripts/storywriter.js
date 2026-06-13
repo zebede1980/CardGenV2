@@ -350,10 +350,13 @@ class StoryWriterApp {
         this.ttsPlayer = null;       // Active TTSPlayer instance (null when TTS disabled)
         this.ttsSettings = {};       // Cached TTS settings from backend
         this.currentPlayingSegmentId = null; // Track which segment is currently playing
+        this.abortController = null; // Used to abort LLM generation fetches
 
-        document.addEventListener('DOMContentLoaded', () => {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.bindEvents());
+        } else {
             this.bindEvents();
-        });
+        }
     }
 
     bindEvents() {
@@ -855,6 +858,24 @@ class StoryWriterApp {
             select.appendChild(opt);
         });
         select.disabled = available.length === 0;
+
+        let galleryBtn = document.getElementById('sw-add-card-gallery-btn');
+        if (!galleryBtn) {
+            galleryBtn = document.createElement('button');
+            galleryBtn.id = 'sw-add-card-gallery-btn';
+            galleryBtn.className = 'btn-small btn-outline';
+            galleryBtn.textContent = '🖼️ Gallery';
+            galleryBtn.style.marginLeft = '0.5rem';
+            galleryBtn.addEventListener('click', () => {
+                if (window.cardGallery) {
+                    window.cardGallery.open(available, (cardId) => {
+                        this.attachCard(cardId);
+                    });
+                }
+            });
+            select.parentNode.insertBefore(galleryBtn, select.nextSibling);
+        }
+        galleryBtn.disabled = available.length === 0;
     }
 
     async attachCard(cardId) {
@@ -1172,7 +1193,8 @@ class StoryWriterApp {
 
     async generateNext() {
         if (this.isFetchingLLM || !this.story) return;
-        const steering = document.getElementById('sw-steering').value.trim();
+        const steeringInput = document.getElementById('sw-steering');
+        const steering = steeringInput.value.trim();
         const btn = document.getElementById('sw-generate-btn');
         const area = document.getElementById('sw-story-area');
 
@@ -1181,6 +1203,7 @@ class StoryWriterApp {
         btn.disabled = true;
         const stopBtn = document.getElementById('sw-stop-btn');
         if (stopBtn) stopBtn.style.display = 'inline-block';
+        this.abortController = new AbortController();
 
         // ── Set up TTS if enabled ──────────────────────────────────────────────
         const ttsEnabled = document.getElementById('sw-tts-enabled')?.checked || false;
@@ -1253,7 +1276,8 @@ class StoryWriterApp {
             const res = await window.authFetch('/api/sw/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ story_id: this.story.id, steering: steering || null })
+                body: JSON.stringify({ story_id: this.story.id, steering: steering || null }),
+                signal: this.abortController.signal
             });
 
             if (!res.ok) {
@@ -1318,7 +1342,9 @@ class StoryWriterApp {
                 remaining.forEach(s => this.ttsPlayer.enqueue(s));
             }
 
-            document.getElementById('sw-steering').value = '';
+            if (steeringInput.value.trim() === steering) {
+                steeringInput.value = '';
+            }
             await this.refreshWorkspace();
         } catch (e) {
             console.error(e);
@@ -1335,6 +1361,7 @@ class StoryWriterApp {
             }
         } finally {
             this.isFetchingLLM = false;
+            this.abortController = null;
             btn.textContent = 'Generate Next';
             btn.disabled = false;
             if (stopBtn) stopBtn.style.display = 'none';
@@ -1357,7 +1384,10 @@ class StoryWriterApp {
             console.debug('[StoryWriter] Stop generation triggered');
             const stopBtn = document.getElementById('sw-stop-btn');
             if (stopBtn) stopBtn.dataset.aborted = "true";
-            if (window.apiHandler) window.apiHandler.stopGeneration();
+            if (this.abortController) {
+                this.abortController.abort();
+                this.abortController = null;
+            }
         }
     }
 }

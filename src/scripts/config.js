@@ -44,6 +44,20 @@ class Config {
         username: "",
         password: "",
       },
+      chat: {
+        maxInputTokens: 8192,
+        maxOutputTokens: 1024,
+        temperature: 0.8,
+        repetitionPenalty: 1.0,
+        filterCJK: false,
+        systemPromptSegments: [
+          "Stay in character at all times. Respond as your character.",
+          "Write actions in *italics* and speech in \"quotes\".",
+          "Do not narrate the user's actions or speak for the user.",
+          "Do not break character or refer to yourself as an AI model.",
+          "Respond exclusively in English. Do not output any Chinese or Korean characters."
+        ]
+      },
     };
   }
 
@@ -185,74 +199,71 @@ class Config {
   }
 
   saveToForm() {
-    // Wait for DOM to be ready
-    setTimeout(() => {
-      // Save text API to form
-      const textBaseUrl = document.getElementById("text-api-base");
-      const textApiKey = document.getElementById("text-api-key");
-      const textModel = document.getElementById("text-model");
-      const visionModel = document.getElementById("vision-model");
+    // Save text API to form
+    const textBaseUrl = document.getElementById("text-api-base");
+    const textApiKey = document.getElementById("text-api-key");
+    const textModel = document.getElementById("text-model");
+    const visionModel = document.getElementById("vision-model");
 
-      if (textBaseUrl) textBaseUrl.value = this.config.api.text.baseUrl || "";
-      if (textApiKey) textApiKey.value = this.config.api.text.apiKey || "";
-      if (textModel) textModel.value = this.config.api.text.model || "";
-      if (visionModel)
-        visionModel.value = this.config.api.text.visionModel || "";
+    if (textBaseUrl) textBaseUrl.value = this.config.api.text.baseUrl || "";
+    if (textApiKey) textApiKey.value = this.config.api.text.apiKey || "";
+    if (textModel) textModel.value = this.config.api.text.model || "";
+    if (visionModel)
+      visionModel.value = this.config.api.text.visionModel || "";
 
-      // Save image API to form
-      const imageBaseUrl = document.getElementById("image-api-base");
-      const imageApiKey = document.getElementById("image-api-key");
-      const imageSize = document.getElementById("image-size");
-      const imageStyle = document.getElementById("image-style");
+    // Save image API to form
+    const imageBaseUrl = document.getElementById("image-api-base");
+    const imageApiKey = document.getElementById("image-api-key");
+    const imageSize = document.getElementById("image-size");
+    const imageStyle = document.getElementById("image-style");
 
-      if (imageBaseUrl)
-        imageBaseUrl.value = this.config.api.image.baseUrl || "";
-      if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
-      if (imageSize) imageSize.value = this.config.api.image.size || "";
-      if (imageStyle) imageStyle.value = this.config.api.image.style || "";
+    if (imageBaseUrl)
+      imageBaseUrl.value = this.config.api.image.baseUrl || "";
+    if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
+    if (imageSize) imageSize.value = this.config.api.image.size || "";
+    if (imageStyle) imageStyle.value = this.config.api.image.style || "";
 
-      // Save creator to form
-      const creatorName = document.getElementById("creator-name");
-      if (creatorName) creatorName.value = this.config.app.creator || "";
+    // Save creator to form
+    const creatorName = document.getElementById("creator-name");
+    if (creatorName) creatorName.value = this.config.app.creator || "";
 
-      // Save SillyTavern settings to form
-      const stBaseUrl = document.getElementById("st-base-url");
-      if (stBaseUrl) stBaseUrl.value = this.config.st?.baseUrl || "";
-      const stUsername = document.getElementById("st-username");
-      if (stUsername) stUsername.value = this.config.st?.username || "";
-      const stPassword = document.getElementById("st-password");
-      if (stPassword) stPassword.value = this.config.st?.password || "";
-      
-      const imageModelsContainer = document.getElementById("image-models-container");
-      if (imageModelsContainer) {
-          if (this.config.api.image.models && this.config.api.image.models.length > 0) {
-              imageModelsContainer.innerHTML = this.config.api.image.models.map(model => `
-                  <div class="image-model-row" style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;">
-                    <label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;">
-                      <input type="checkbox" class="image-model-checkbox" value="${escapeHtml(model)}" checked>
-                      ${escapeHtml(model)}
-                    </label>
-                    <button type="button" class="image-model-delete-btn" data-model="${escapeHtml(model)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
-                  </div>
-              `).join('');
-          } else {
-              imageModelsContainer.innerHTML = '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">Click \'Fetch Models\' to load available models.</p>';
-          }
-      }
-      
-      // Update main UI dropdown
-      if (window.app && typeof window.app.updateActiveModelsDropdown === 'function') {
-          window.app.updateActiveModelsDropdown();
-      }
+    // Save SillyTavern settings to form
+    const stBaseUrl = document.getElementById("st-base-url");
+    if (stBaseUrl) stBaseUrl.value = this.config.st?.baseUrl || "";
+    const stUsername = document.getElementById("st-username");
+    if (stUsername) stUsername.value = this.config.st?.username || "";
+    const stPassword = document.getElementById("st-password");
+    if (stPassword) stPassword.value = this.config.st?.password || "";
+    
+    const imageModelsContainer = document.getElementById("image-models-container");
+    if (imageModelsContainer) {
+        if (this.config.api.image.models && this.config.api.image.models.length > 0) {
+            imageModelsContainer.innerHTML = this.config.api.image.models.map(model => `
+                <div class="image-model-row" style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;">
+                  <label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;">
+                    <input type="checkbox" class="image-model-checkbox" value="${escapeHtml(model)}" checked>
+                    ${escapeHtml(model)}
+                  </label>
+                  <button type="button" class="image-model-delete-btn" data-model="${escapeHtml(model)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
+                </div>
+            `).join('');
+        } else {
+            imageModelsContainer.innerHTML = '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">Click \'Fetch Models\' to load available models.</p>';
+        }
+    }
+    
+    // Update main UI dropdown
+    if (window.app && typeof window.app.updateActiveModelsDropdown === 'function') {
+        window.app.updateActiveModelsDropdown();
+    }
 
-      // Save toggle states
-      const enableImageGeneration = document.getElementById(
-        "enable-image-generation",
-      );
-      if (enableImageGeneration)
-        enableImageGeneration.checked =
-          this.config.app.enableImageGeneration !== false;
-    }, 100);
+    // Save toggle states
+    const enableImageGeneration = document.getElementById(
+      "enable-image-generation",
+    );
+    if (enableImageGeneration)
+      enableImageGeneration.checked =
+        this.config.app.enableImageGeneration !== false;
   }
 
   deepMerge(target, source) {
@@ -303,6 +314,13 @@ class Config {
 
   clearStoredConfig() {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
+    if (window.cardgenAuth && window.cardgenAuth.getToken()) {
+      (window.authFetch || fetch)("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(e => console.error("Failed to clear config on server", e));
+    }
   }
 
   redactSensitiveData(data) {

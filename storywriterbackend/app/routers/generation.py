@@ -97,10 +97,15 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
     
     # Generate new segment
     llm = LLMService(settings)
-    
+
+    model_name = getattr(settings, 'model', 'unknown')
+
     async def stream_generator():
         content_parts = []
         try:
+            # Emit api_log with request details before generation starts
+            yield f"data: {json.dumps({'type': 'api_log', 'log': {'endpoint': 'Story Generation', 'request': {'model': model_name, 'messages': messages}}})}\n\n"
+
             async for chunk in llm.generate(messages, stream=True):
                 content_parts.append(chunk)
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
@@ -127,6 +132,9 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
             db.add(seg)
             db.commit()
             db.refresh(seg)
+
+            # Emit api_log with response after generation completes
+            yield f"data: {json.dumps({'type': 'api_log', 'log': {'endpoint': 'Story Generation', 'response': full_content}})}\n\n"
             
             done_payload = {
                 'type': 'done',

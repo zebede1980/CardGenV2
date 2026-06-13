@@ -507,8 +507,19 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
     }
 
     const dbCards = await dbResponse.json();
-    // Return permanent DB cards first, then history (temp) cards
-    res.json([...dbCards.map(translateDbCard), ...histItems]);
+    
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    const extensions = await readJsonStore(extFile) || {};
+
+    const translatedCards = dbCards.map(c => {
+      const translated = translateDbCard(c);
+      if (extensions[translated.id]) {
+        translated.character.imagePrompt = extensions[translated.id].imagePrompt || "";
+        translated.character.imageGuidance = extensions[translated.id].imageGuidance || "";
+      }
+      return translated;
+    });
+    res.json([...translatedCards, ...histItems]);
   } catch (e) {
     console.error("[Card Storage] GET /api/storage/cards Error:", e.message);
     res.status(500).json({ error: e.message });
@@ -558,6 +569,13 @@ app.get("/api/storage/cards/:id", requireAuth, async (req, res) => {
 
     const translated = translateDbCard(await response.json());
     console.log(`[Card Storage] GET /:id translated card: name="${translated.characterName}", image_path="${translated.image_path}"`);
+
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    const extensions = await readJsonStore(extFile) || {};
+    if (extensions[translated.id]) {
+      translated.character.imagePrompt = extensions[translated.id].imagePrompt || "";
+      translated.character.imageGuidance = extensions[translated.id].imageGuidance || "";
+    }
 
     // ── Image resolution: three-tier lookup ──────────────────────────────────
     const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
@@ -731,6 +749,16 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     // Save archived image history alongside the portrait
     await saveCardHistoryImages(permImgDir, dbCard.id, record.imageHistory);
 
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    await withFileLock(`user-${req.user.userId}-ext`, async () => {
+      const extensions = await readJsonStore(extFile) || {};
+      extensions[dbCard.id] = {
+        imagePrompt: char.imagePrompt || "",
+        imageGuidance: char.imageGuidance || ""
+      };
+      await writeJsonStore(extFile, extensions);
+    });
+
     res.json({ ...record, id: dbCard.id });
   } catch (e) {
     console.error("[Card Storage] POST /api/storage/cards Error:", e.message);
@@ -771,6 +799,16 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
       const f = path.join(imgDir, `${cardId}${ext}`);
       if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
     }
+    
+    const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
+    await withFileLock(`user-${req.user.userId}-ext`, async () => {
+      const extensions = await readJsonStore(extFile) || {};
+      if (extensions[cardId]) {
+        delete extensions[cardId];
+        await writeJsonStore(extFile, extensions);
+      }
+    });
+
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1840,7 +1878,7 @@ function isAllowedImportUrl(urlStr) {
 
 app.post("/api/import/url", requireAuth, async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, token } = req.body;
     if (!url || typeof url !== "string") {
       return res.status(400).json({ success: false, error: "URL is required" });
     }
@@ -1854,33 +1892,70 @@ app.post("/api/import/url", requireAuth, async (req, res) => {
 
     console.log(`[URL Import] Fetching: ${url}`);
 
+    let character = null;
+    const fetchOptions = {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/html, */*"
+      },
+    };
+
+    // Direct API fetch for JanitorAI & JannyAI
+    const janitorMatch = url.match(/(?:janitorai\.com|jannyai\.com)\/characters\/([a-f0-9\-]+)/i);
+    if (janitorMatch) {
+      try {
+        const apiRes = await fetch(`https://api.janitorai.com/characters/${janitorMatch[1]}`, fetchOptions);
+        if (apiRes.ok) {
+          const data = await apiRes.json();
+          if (data && (data.name || data.description || data.first_mes || data.firstMessage)) {
+            character = normalizeCharacterFields(data, url);
+          }
+        }
+      } catch (e) { console.warn("[URL Import] Janitor API direct fetch failed:", e.message); }
+    }
+
+    // Direct API fetch for Chub.ai
+    const chubMatch = url.match(/(?:chub\.ai|characterhub\.org)\/characters\/([^\/]+)\/([^\/?#]+)/i);
+    if (!character && chubMatch) {
+      try {
+        const chubHeaders = { ...fetchOptions.headers };
+        if (token) chubHeaders["Authorization"] = `Bearer ${token}`;
+
+        const apiRes = await fetch(`https://api.chub.ai/api/characters/${chubMatch[1]}/${chubMatch[2]}?full=true`, { headers: chubHeaders });
+        if (apiRes.ok) {
+          const data = await apiRes.json();
+          const node = data.node || data;
+          if (node && (node.name || node.description || node.first_mes || node.firstMessage)) {
+            character = normalizeCharacterFields(node, url);
+          }
+        }
+      } catch (e) { console.warn("[URL Import] Chub API direct fetch failed:", e.message); }
+    }
+
     // 15-second timeout
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
-    let response;
-    try {
-      response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    if (!character) {
+      let response;
+      try {
+        response = await fetch(url, { ...fetchOptions, signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
 
-    if (!response.ok) {
-      return res.status(502).json({ success: false, error: `Site returned HTTP ${response.status}` });
-    }
+      if (!response.ok) {
+        return res.status(502).json({ success: false, error: `Site returned HTTP ${response.status}` });
+      }
 
-    const html = await response.text();
-    const MAX_HTML = 5 * 1024 * 1024; // 5 MB cap
-    if (html.length > MAX_HTML) {
-      return res.status(413).json({ success: false, error: "Page too large (max 5 MB)" });
-    }
+      const html = await response.text();
+      const MAX_HTML = 5 * 1024 * 1024; // 5 MB cap
+      if (html.length > MAX_HTML) {
+        return res.status(413).json({ success: false, error: "Page too large (max 5 MB)" });
+      }
 
-    const character = extractCharacterFromHtml(html, url);
+      character = extractCharacterFromHtml(html, url);
+    }
 
     if (!character) {
       return res.status(422).json({
@@ -2096,6 +2171,7 @@ function extractFromNextData(data, sourceUrl) {
     "props.pageProps.characterData",
     "props.pageProps.charData",
     "props.pageProps.data",
+    "props.pageProps.node",
     "query",
   ];
 
@@ -2197,7 +2273,7 @@ function extractFromMetaAndText(html, sourceUrl) {
 
   return {
     name: cleanName(name || extractNameFromUrl(sourceUrl)),
-    description: (description || textDescription || "").slice(0, 2000),
+    description: (description || textDescription || "").slice(0, 30000),
     personality: "",
     scenario: "",
     firstMessage: "",
@@ -2213,13 +2289,13 @@ function normalizeCharacterFields(data, sourceUrl) {
   // Map from various naming conventions to our standard fields
   return {
     name: cleanName(data.name || data.character_name || data.charName || ""),
-    description: (data.description || data.desc || data.bio || data.backstory || "").slice(0, 4000),
-    personality: (data.personality || data.persona || data.traits || "").slice(0, 4000),
-    scenario: (data.scenario || data.setting || data.scene || "").slice(0, 2000),
-    firstMessage: data.firstMessage || data.first_mes || data.greeting || data.intro || data.first_message || "",
+    description: (data.description || data.desc || data.bio || data.backstory || "").slice(0, 30000),
+    personality: (data.personality || data.persona || data.traits || "").slice(0, 30000),
+    scenario: (data.scenario || data.setting || data.scene || "").slice(0, 30000),
+    firstMessage: (data.firstMessage || data.first_mes || data.greeting || data.intro || data.first_message || "").slice(0, 30000),
     tags: normalizeTags(data.tags || data.tag || data.categories || []),
-    mesExample: data.mesExample || data.mes_example || data.example_dialogs || data.examples || "",
-    creatorNotes: data.creatorNotes || data.creator_notes || data.creatorcomment || `Imported from ${sourceUrl}`,
+    mesExample: (data.mesExample || data.mes_example || data.example_dialogs || data.examples || "").slice(0, 30000),
+    creatorNotes: (data.creatorNotes || data.creator_notes || data.creatorcomment || `Imported from ${sourceUrl}`).slice(0, 30000),
     alternateGreetings: Array.isArray(data.alternateGreetings)
       ? data.alternateGreetings
       : Array.isArray(data.alternate_greetings) ? data.alternate_greetings : [],

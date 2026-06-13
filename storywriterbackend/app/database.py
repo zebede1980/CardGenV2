@@ -92,6 +92,18 @@ def run_migrations():
                 "UPDATE character_cards SET updated_at = created_at WHERE updated_at IS NULL"
             ))
 
+        # roleplay_chats user persona fields
+        if not _column_exists(conn, "roleplay_chats", "user_persona_name"):
+            conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_name VARCHAR NOT NULL DEFAULT 'User'"))
+        if not _column_exists(conn, "roleplay_chats", "user_persona_age"):
+            conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_age VARCHAR NOT NULL DEFAULT ''"))
+        if not _column_exists(conn, "roleplay_chats", "user_persona_gender"):
+            conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_gender VARCHAR NOT NULL DEFAULT ''"))
+        if not _column_exists(conn, "roleplay_chats", "user_persona_detail"):
+            conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_detail TEXT NOT NULL DEFAULT ''"))
+        if not _column_exists(conn, "roleplay_chats", "user_persona_card_id"):
+            conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_card_id INTEGER"))
+
 def init_db():
     run_migrations()
 

@@ -17,6 +17,7 @@ function setToken(token) {
 function clearToken() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
+  localStorage.removeItem("charGeneratorConfig");
 }
 
 function getStoredUser() {

@@ -164,6 +164,7 @@ api-keys.json
 proxy/data/config.json
 proxy/data/cards.json
 proxy/data/prompts.json
+proxy/data/users.json
 
 # Build artifacts
 build/
@@ -193,3 +194,5 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
+proxy/data/users/1781089145336/prompts.json
+proxy/data/users/1781089145336/history.json

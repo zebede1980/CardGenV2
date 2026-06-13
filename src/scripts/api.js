@@ -6,6 +6,7 @@ class APIHandler {
     this.currentAbortController = null; // Store current abort controller for stopping generation
     this.currentReader = null; // Store current stream reader for cancellation
     this.userStopRequested = false;
+    this.requestLogs = []; // Rolling log of recent API interactions
   }
 
   async makeRequest(endpoint, data, isImageRequest = false, stream = false) {
@@ -110,6 +111,38 @@ class APIHandler {
       dataKeys: Object.keys(data),
     });
 
+    // Safely truncate large base64 images to prevent the log from crashing the browser
+    let logRequestData = data;
+    try {
+        logRequestData = JSON.parse(JSON.stringify(data));
+        if (logRequestData.messages) {
+            logRequestData.messages.forEach(m => {
+                if (Array.isArray(m.content)) {
+                    m.content.forEach(c => {
+                        if (c.type === 'image_url' && c.image_url?.url?.length > 200) {
+                            c.image_url.url = c.image_url.url.substring(0, 50) + "... [BASE64 TRUNCATED]";
+                        }
+                    });
+                }
+            });
+        }
+    } catch(e) {}
+
+    const logEntry = {
+        id: Date.now() + Math.random().toString(36).substr(2, 5),
+        timestamp: new Date().toISOString(),
+        endpoint: endpoint,
+        model: data.model,
+        request: logRequestData,
+        response: null,
+        status: "pending",
+        duration: 0,
+        usage: null
+    };
+    this.requestLogs.unshift(logEntry);
+    if (this.requestLogs.length > 30) this.requestLogs.pop();
+    const startTime = performance.now();
+
     try {
       const authToken = window.cardgenAuth?.getToken() || "";
       const response = await fetch(url, {
@@ -137,6 +170,10 @@ class APIHandler {
         } catch (e) {
           console.error("Failed to parse error response as JSON:", e);
         }
+        
+        logEntry.status = response.status;
+        logEntry.duration = performance.now() - startTime;
+        logEntry.response = errorData;
 
         const errorMessage =
           errorData.error?.message ||
@@ -160,16 +197,31 @@ class APIHandler {
       }
 
       if (stream) {
+        response._logEntry = logEntry;
+        response._startTime = startTime;
         return response;
       } else if (isImageRequest) {
+        response.clone().json().then(res => {
+           logEntry.status = response.status;
+           logEntry.duration = performance.now() - startTime;
+           logEntry.response = res;
+        }).catch(() => {});
         return response;
       } else {
         const result = await response.json();
+        logEntry.status = response.status;
+        logEntry.duration = performance.now() - startTime;
+        logEntry.response = result;
+        if (result.usage) logEntry.usage = result.usage;
         this.config.log("API Response:", result);
         return result;
       }
     } catch (error) {
       clearTimeout(timeoutId);
+
+      logEntry.status = error.name === "AbortError" ? "aborted" : "error";
+      logEntry.duration = performance.now() - startTime;
+      logEntry.response = error.message;
 
       if (error.name === "AbortError") {
         if (this.userStopRequested) {
@@ -193,6 +245,8 @@ class APIHandler {
     const decoder = new TextDecoder();
     let buffer = "";
     let fullContent = "";
+    const logEntry = response._logEntry;
+    const startTime = response._startTime || performance.now();
 
     try {
       while (true) {
@@ -223,6 +277,11 @@ class APIHandler {
                 fullContent += content;
                 onStream(content, fullContent);
               }
+            
+            // Capture usage stats occasionally sent at the end of streams
+            if (parsed.usage && logEntry) {
+              logEntry.usage = parsed.usage;
+            }
             } catch (e) {
               // Log only when debug mode is on, and truncate long data
               if (window.config?.getDebugMode?.()) {
@@ -231,6 +290,12 @@ class APIHandler {
             }
           }
         }
+      }
+
+      if (logEntry) {
+        logEntry.status = 200;
+        logEntry.duration = performance.now() - startTime;
+        logEntry.response = fullContent;
       }
 
       return fullContent;

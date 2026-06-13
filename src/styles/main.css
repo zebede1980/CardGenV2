@@ -6,9 +6,9 @@
 
 :root {
     --bg-page: #f3f7fb;
-    --bg-orb-a: #f9c990;
-    --bg-orb-b: #98d3f8;
-    --bg-orb-c: #ffd9d0;
+    --bg-orb-a: #d4bbf7;
+    --bg-orb-b: #bfd5ff;
+    --bg-orb-c: #f0bbf7;
     --surface: rgba(255, 255, 255, 0.8);
     --surface-strong: #ffffff;
     --surface-muted: #f8fbff;
@@ -17,9 +17,9 @@
     --text-soft: #7d8ea1;
     --border: rgba(16, 36, 58, 0.12);
     --border-strong: rgba(16, 36, 58, 0.2);
-    --accent: #0e7a8a;
-    --accent-strong: #0a5f6d;
-    --accent-soft: #e0f6f9;
+    --accent: #7c3aed;
+    --accent-strong: #5b21b6;
+    --accent-soft: #ede9fe;
     --success: #1f9d66;
     --warning: #cf8a00;
     --error: #c93d4a;
@@ -37,9 +37,9 @@
 
 [data-theme="dark"] {
     --bg-page: #0d1117;
-    --bg-orb-a: #3d2b1f;
-    --bg-orb-b: #1a3a4a;
-    --bg-orb-c: #3d1f2b;
+    --bg-orb-a: #2d1b69;
+    --bg-orb-b: #1a1040;
+    --bg-orb-c: #3b0764;
     --surface: rgba(22, 27, 34, 0.85);
     --surface-strong: #161b22;
     --surface-muted: #111820;
@@ -48,9 +48,9 @@
     --text-soft: #6e7681;
     --border: rgba(201, 209, 217, 0.12);
     --border-strong: rgba(201, 209, 217, 0.2);
-    --accent: #58a6ff;
-    --accent-strong: #79c0ff;
-    --accent-soft: rgba(88, 166, 255, 0.15);
+    --accent: #a78bfa;
+    --accent-strong: #c4b5fd;
+    --accent-soft: rgba(167, 139, 250, 0.15);
     --success: #3fb950;
     --warning: #d29922;
     --error: #f85149;
@@ -69,21 +69,15 @@ body {
 
 body {
     background:
-        radial-gradient(
-            48rem 28rem at 12% -8%,
+        radial-gradient(48rem 28rem at 12% -8%,
             var(--bg-orb-a) 0%,
-            transparent 60%
-        ),
-        radial-gradient(
-            42rem 24rem at 100% 8%,
+            transparent 60%),
+        radial-gradient(42rem 24rem at 100% 8%,
             var(--bg-orb-b) 0%,
-            transparent 58%
-        ),
-        radial-gradient(
-            30rem 24rem at 70% 100%,
+            transparent 58%),
+        radial-gradient(30rem 24rem at 70% 100%,
             var(--bg-orb-c) 0%,
-            transparent 62%
-        ),
+            transparent 62%),
         var(--bg-page);
     color: var(--text-primary);
     font-family: "Sora", "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
@@ -101,13 +95,11 @@ body {
 .header {
     padding: 1.4rem 1.6rem;
     border-radius: var(--radius-lg);
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    background: linear-gradient(
-        120deg,
-        rgba(255, 255, 255, 0.78),
-        rgba(255, 255, 255, 0.52)
-    );
-    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    background: linear-gradient(120deg,
+            rgba(255, 255, 255, 0.82),
+            rgba(237, 233, 254, 0.6));
+    box-shadow: var(--shadow-md), 0 0 0 1px rgba(124, 58, 237, 0.06);
     backdrop-filter: blur(8px);
 }
 
@@ -116,6 +108,10 @@ body {
     letter-spacing: -0.03em;
     font-weight: 700;
     margin-bottom: 0.3rem;
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #6366f1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .subtitle {
@@ -191,7 +187,7 @@ textarea.content-box:focus,
 input[type="file"]:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(14, 122, 138, 0.2);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
 }
 
 textarea.content-box {
@@ -207,7 +203,7 @@ textarea.content-box {
     flex-wrap: wrap;
 }
 
-.form-row > .form-group {
+.form-row>.form-group {
     flex: 1;
     min-width: 230px;
 }
@@ -219,7 +215,7 @@ textarea.content-box {
     align-items: stretch;
 }
 
-.generation-buttons > button {
+.generation-buttons>button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -266,13 +262,13 @@ textarea.content-box {
 
 .btn-primary {
     color: #fff;
-    background: linear-gradient(140deg, #0e7a8a 0%, #0a5f6d 100%);
-    box-shadow: 0 9px 24px rgba(14, 122, 138, 0.34);
+    background: linear-gradient(140deg, #7c3aed 0%, #5b21b6 100%);
+    box-shadow: 0 9px 24px rgba(124, 58, 237, 0.34);
 }
 
 .btn-primary:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 13px 28px rgba(14, 122, 138, 0.42);
+    box-shadow: 0 13px 28px rgba(124, 58, 237, 0.42);
 }
 
 .btn-primary:disabled {
@@ -306,12 +302,10 @@ textarea.content-box {
 }
 
 [data-theme="dark"] .header {
-    background: linear-gradient(
-        120deg,
-        rgba(22, 27, 34, 0.92),
-        rgba(22, 27, 34, 0.75)
-    );
-    border-color: var(--border-strong);
+    background: linear-gradient(120deg,
+            rgba(45, 27, 105, 0.7),
+            rgba(22, 27, 34, 0.85));
+    border-color: rgba(167, 139, 250, 0.2);
 }
 
 [data-theme="dark"] .footer {
@@ -348,8 +342,8 @@ textarea.content-box {
 .btn-outline:hover,
 .btn-small:hover {
     border-color: var(--accent);
-    color: var(--accent-strong);
-    box-shadow: 0 8px 20px rgba(14, 122, 138, 0.12);
+    color: var(--accent);
+    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.14);
 }
 
 .btn-stop {
@@ -379,13 +373,11 @@ textarea.content-box {
     max-height: 360px;
     overflow: auto;
     border: 1px solid var(--border);
-    background: repeating-linear-gradient(
-        180deg,
-        #f6fbff,
-        #f6fbff 28px,
-        #f3f8fc 28px,
-        #f3f8fc 56px
-    );
+    background: repeating-linear-gradient(180deg,
+            #f6fbff,
+            #f6fbff 28px,
+            #f3f8fc 28px,
+            #f3f8fc 56px);
     border-radius: var(--radius-md);
     padding: 0.9rem;
     color: #0f2b46;
@@ -413,7 +405,7 @@ textarea.content-box {
     margin-bottom: 1.15rem !important;
 }
 
-.character-field > div:first-child {
+.character-field>div:first-child {
     margin-bottom: 0.42rem !important;
     display: flex !important;
     justify-content: space-between !important;
@@ -435,7 +427,7 @@ textarea.content-box {
 .image-preview .content-box {
     min-height: 330px;
     padding: 0.75rem;
-    background: linear-gradient(160deg, #f9fdff 0%, #eff6ff 100%);
+    background: linear-gradient(160deg, var(--surface-muted) 0%, var(--accent-soft) 100%);
 }
 
 .content-box {
@@ -471,18 +463,16 @@ textarea.content-box {
     width: 34px;
     height: 34px;
     border-radius: 999px;
-    border: 3px solid rgba(14, 122, 138, 0.18);
+    border: 3px solid rgba(124, 58, 237, 0.18);
     border-top-color: var(--accent);
     animation: spin 900ms linear infinite;
 }
 
 /* Example Messages Section */
 .example-messages-section {
-    background: linear-gradient(
-        160deg,
-        rgba(139, 92, 246, 0.05) 0%,
-        rgba(59, 130, 246, 0.05) 100%
-    );
+    background: linear-gradient(160deg,
+            rgba(139, 92, 246, 0.05) 0%,
+            rgba(59, 130, 246, 0.05) 100%);
     border: 1px solid rgba(139, 92, 246, 0.15);
     border-radius: var(--radius-md);
     padding: 1rem;
@@ -544,7 +534,7 @@ textarea.content-box {
     gap: 0.46rem;
 }
 
-.image-buttons-row > .btn-small {
+.image-buttons-row>.btn-small {
     flex: 1 1 110px;
 }
 
@@ -554,7 +544,7 @@ textarea.content-box {
     flex: 1 1 110px;
 }
 
-.free-image-dropdown-wrapper > .btn-small {
+.free-image-dropdown-wrapper>.btn-small {
     width: 100%;
 }
 
@@ -606,8 +596,14 @@ textarea.content-box {
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
-.st-status-ok { color: #28a745; }
-.st-status-err { color: var(--error, #c93d4a); }
+
+.st-status-ok {
+    color: #28a745;
+}
+
+.st-status-err {
+    color: var(--error, #c93d4a);
+}
 
 /* Tags widget */
 .tags-container {
@@ -622,10 +618,12 @@ textarea.content-box {
     background: var(--surface-color, #fff);
     cursor: text;
 }
+
 .tags-container:focus-within {
     border-color: var(--primary, #7c3aed);
-    box-shadow: 0 0 0 2px rgba(124,58,237,0.15);
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15);
 }
+
 .tag-pill {
     display: inline-flex;
     align-items: center;
@@ -639,8 +637,17 @@ textarea.content-box {
     user-select: none;
     transition: background 0.15s;
 }
-.tag-pill:hover { background: #ddd6fe; }
-.tag-pill-remove { font-size: 0.85em; opacity: 0.6; line-height: 1; }
+
+.tag-pill:hover {
+    background: #ddd6fe;
+}
+
+.tag-pill-remove {
+    font-size: 0.85em;
+    opacity: 0.6;
+    line-height: 1;
+}
+
 .tags-input {
     border: none;
     outline: none;
@@ -660,6 +667,7 @@ textarea.content-box {
     align-items: flex-start;
     padding: 0.5rem 0.62rem;
 }
+
 .st-card-thumb-wrap {
     position: relative;
     width: 56px;
@@ -668,6 +676,7 @@ textarea.content-box {
     border-radius: var(--radius-sm);
     overflow: hidden;
 }
+
 .st-card-thumb {
     position: relative;
     z-index: 1;
@@ -677,6 +686,7 @@ textarea.content-box {
     border-radius: var(--radius-sm);
     background: var(--border);
 }
+
 .st-card-thumb-placeholder {
     position: absolute;
     inset: 0;
@@ -684,10 +694,12 @@ textarea.content-box {
     background: var(--surface-secondary, #e8e8e8);
     border-radius: var(--radius-sm);
 }
+
 .st-card-body {
     flex: 1;
     min-width: 0;
 }
+
 .st-card-snippet {
     font-size: 0.76rem;
     color: var(--text-secondary);
@@ -698,12 +710,14 @@ textarea.content-box {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
 }
+
 .st-card-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 0.25rem;
     margin-bottom: 0.3rem;
 }
+
 .st-card-tag {
     font-size: 0.68rem;
     background: var(--surface-secondary, #eef);
@@ -711,6 +725,7 @@ textarea.content-box {
     border-radius: 3px;
     padding: 0.1rem 0.35rem;
 }
+
 .st-card-footer {
     display: flex;
     align-items: center;
@@ -718,7 +733,10 @@ textarea.content-box {
     gap: 0.5rem;
     margin-top: 0.1rem;
 }
-.st-card-footer .library-item-date { margin-bottom: 0; }
+
+.st-card-footer .library-item-date {
+    margin-bottom: 0;
+}
 
 .actions {
     border-top: 1px solid var(--border);
@@ -729,7 +747,7 @@ textarea.content-box {
     align-items: center;
 }
 
-.actions > button {
+.actions>button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -800,7 +818,7 @@ textarea.content-box {
     align-items: stretch;
 }
 
-#library-section .result-grid > div {
+#library-section .result-grid>div {
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -893,6 +911,7 @@ textarea.content-box {
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -988,15 +1007,15 @@ textarea.content-box {
     transition: var(--transition);
 }
 
-.switch input:checked + .slider {
+.switch input:checked+.slider {
     background: var(--accent);
 }
 
-.switch input:checked + .slider::before {
+.switch input:checked+.slider::before {
     transform: translateX(22px);
 }
 
-.switch input:focus + .slider {
+.switch input:focus+.slider {
     outline: none;
     box-shadow: 0 0 0 3px rgba(14, 122, 138, 0.2);
 }
@@ -1088,7 +1107,7 @@ textarea.content-box {
         gap: 0.35rem !important;
     }
 
-    .form-row > .form-group {
+    .form-row>.form-group {
         min-width: 100%;
     }
 
@@ -1097,8 +1116,8 @@ textarea.content-box {
         flex-direction: column;
     }
 
-    .generation-buttons > button,
-    .actions > button {
+    .generation-buttons>button,
+    .actions>button {
         width: 100%;
     }
 
@@ -1148,6 +1167,7 @@ textarea.content-box {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
     *,
     *::before,
     *::after {
@@ -1189,11 +1209,24 @@ textarea.content-box {
     text-align: center;
 }
 
-#drop-overlay-icon { font-size: 3.5rem; line-height: 1; }
-#drop-overlay-text { font-size: 1.5rem; font-weight: 600; }
-#drop-overlay-sub  { font-size: 0.875rem; opacity: 0.65; }
+#drop-overlay-icon {
+    font-size: 3.5rem;
+    line-height: 1;
+}
 
-#drop-import-modal { z-index: 2100; }
+#drop-overlay-text {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+#drop-overlay-sub {
+    font-size: 0.875rem;
+    opacity: 0.65;
+}
+
+#drop-import-modal {
+    z-index: 2100;
+}
 
 /* ── Name Picker Modal ─────────────────────────────────────────────── */
 .name-picker-grid {
@@ -1443,6 +1476,29 @@ textarea.content-box {
     border-color: var(--accent);
 }
 
+/* Regen button — amber tint to stand out from other actions */
+.chat-regen-btn {
+    color: #b45309;
+    border-color: #d97706;
+}
+
+.chat-regen-btn:hover {
+    background: #d97706 !important;
+    border-color: #b45309 !important;
+    color: #fff !important;
+}
+
+[data-theme="dark"] .chat-regen-btn {
+    color: #fbbf24;
+    border-color: #d97706;
+}
+
+[data-theme="dark"] .chat-regen-btn:hover {
+    background: #d97706 !important;
+    border-color: #b45309 !important;
+    color: #fff !important;
+}
+
 /* Swipe bar */
 .chat-swipe-bar {
     display: flex;
@@ -1585,9 +1641,13 @@ textarea.content-box {
 }
 
 @keyframes chatTypingBounce {
-    0%, 60%, 100% {
+
+    0%,
+    60%,
+    100% {
         transform: translateY(0);
     }
+
     30% {
         transform: translateY(-6px);
     }
@@ -1723,8 +1783,13 @@ textarea.content-box {
     border-color: rgba(255, 255, 255, 0.4);
 }
 
-.gallery-nav-prev { left: 1rem; }
-.gallery-nav-next { right: 1rem; }
+.gallery-nav-prev {
+    left: 1rem;
+}
+
+.gallery-nav-next {
+    right: 1rem;
+}
 
 .gallery-image-container {
     max-width: 90vw;
@@ -2145,8 +2210,15 @@ textarea.content-box {
 }
 
 @keyframes searchPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 [data-theme="dark"] .mode-selector {
@@ -2234,8 +2306,15 @@ textarea.content-box {
 }
 
 @keyframes narration-slide-in {
-    from { opacity: 0; transform: translateY(-4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 #sw-narration-controls .btn-small {
@@ -2267,324 +2346,1140 @@ textarea.content-box {
     accent-color: var(--accent);
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
-   MOBILE CHAT MODAL — Immersive roleplay experience for iPhone / iPad
-   All rules scoped to #chat-tester-modal so desktop + other modals are untouched
-   ══════════════════════════════════════════════════════════════════════════════ */
+/* ==========================================================================
+   RICH EMBEDDED UI ELEMENTS (Roleplay Chat)
+   ========================================================================== */
 
+/* Text Messages (Simulated Phone) */
+.rich-text-message {
+    background: var(--surface-strong);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    margin: 0.75rem 0;
+    max-width: 300px;
+    box-shadow: var(--shadow-sm);
+    font-family: "IBM Plex Sans", sans-serif;
+}
+
+.rich-text-sender {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.rich-text-content {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* Stat / Progress Bars */
+.rich-stat-bar-container {
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+    max-width: 350px;
+}
+
+.rich-stat-bar-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rich-stat-value {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+.rich-stat-bar-track {
+    background: rgba(16, 36, 58, 0.1);
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+[data-theme="dark"] .rich-stat-bar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.rich-stat-bar-fill {
+    background: var(--accent);
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+/* Task / Objective Indicators */
+.rich-task-box {
+    border-left: 3px solid var(--warning);
+    background: var(--surface-strong);
+    padding: 0.75rem 1rem;
+    margin: 0.75rem 0;
+    border-radius: 0 8px 8px 0;
+    box-shadow: var(--shadow-sm);
+}
+
+.rich-task-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--warning);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.rich-task-desc {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+/* Scene Image Loading State */
+.chat-scene-image-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+    background: var(--surface-muted);
+    border: 1px dashed var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    max-width: fit-content;
+}
+
+/* Scene Image Rendering */
+.chat-scene-image-wrapper {
+    position: relative;
+    margin-top: 0.75rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    cursor: zoom-in;
+    max-width: 350px;
+    border: 1px solid var(--border);
+    background: var(--surface-color);
+}
+
+.chat-scene-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.chat-scene-image-wrapper .gallery-trigger-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    backdrop-filter: blur(2px);
+}
+
+.chat-scene-image-wrapper:hover .gallery-trigger-overlay {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   ROLEPLAY CHAT UI
+   ========================================================================== */
+
+.chat-container {
+    display: flex;
+    height: 75vh;
+    min-height: 600px;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Roleplay Chat — CSS Custom Properties
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+    --chat-avatar-size: 64px;
+    --chat-avatar-gap: 10px;
+    --chat-bubble-max-width: 85%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Chat Container & Layout Chain (CSS-based height — no JS needed)
+   ═══════════════════════════════════════════════════════════════════════ */
+#view-roleplaychat {
+    display: flex;
+    overflow: hidden;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100vw;
+    flex: 1;
+    min-height: 0;
+}
+
+.chat-container {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sidebar
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chat-sidebar {
+    width: 260px;
+    min-width: 260px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-muted);
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.chat-sidebar-header {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.chat-session-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.chat-session-item {
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+    transition: var(--transition);
+    border: 1px solid transparent;
+}
+
+.chat-session-item:hover {
+    background: var(--surface-strong);
+}
+
+.chat-session-item.active {
+    background: var(--surface-strong);
+    border-color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Main Chat Area
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-page);
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    /* for scroll-to-bottom FAB */
+}
+
+.chat-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.chat-timeline {
+    position: relative;
+    flex: 1 1 0%;
+    overflow-y: auto;
+    padding: 1rem 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 0;
+}
+
+.chat-placeholder {
+    margin: auto;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Scroll-to-bottom floating button */
+.chat-scroll-bottom-btn {
+    position: absolute;
+    bottom: 90px;
+    right: 20px;
+    z-index: 50;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface-strong);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    animation: chatFabIn 0.25s ease-out;
+}
+
+@keyframes chatFabIn {
+    from {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.chat-scroll-bottom-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Input Area
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chat-input-area {
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.chat-input-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+#chat-message-input {
+    flex: 1;
+    resize: none;
+    max-height: 150px;
+    min-height: 42px;
+    min-width: 120px;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+#chat-send-btn,
+#chat-stop-btn {
+    flex-shrink: 0;
+    min-height: 42px;
+    padding: 0 1.2rem;
+}
+
+/* OOC */
+.chat-ooc-container input {
+    width: 100%;
+    border-style: dashed;
+    border-color: var(--text-secondary);
+    background: var(--surface-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+.chat-ooc-container input:focus {
+    border-color: var(--accent);
+}
+
+/* OOC toggle badge */
+#chat-toggle-ooc-btn {
+    position: relative;
+}
+
+#chat-toggle-ooc-btn.has-ooc::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Message Bubbles
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chat-bubble-wrapper {
+    display: flex;
+    gap: var(--chat-avatar-gap);
+    margin-bottom: 0.75rem;
+    width: 100%;
+    box-sizing: border-box;
+    max-width: var(--chat-bubble-max-width);
+}
+
+.chat-bubble-wrapper.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.chat-bubble-wrapper.assistant {
+    align-self: flex-start;
+}
+
+/* Avatar */
+.chat-avatar-container {
+    width: var(--chat-avatar-size);
+    height: var(--chat-avatar-size);
+    flex-shrink: 0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: var(--surface-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+/* Content column */
+.chat-bubble-content-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.chat-bubble-wrapper.user .chat-bubble-content-col {
+    align-items: flex-end;
+}
+
+.chat-bubble-wrapper.assistant .chat-bubble-content-col {
+    align-items: flex-start;
+}
+
+/* Name row */
+.chat-bubble-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 0.2rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    gap: 0.4rem;
+}
+
+.chat-bubble-name-text {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+/* Timestamp */
+.chat-bubble-time {
+    font-size: 0.68rem;
+    color: var(--text-soft);
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+/* Bubble */
+.chat-bubble {
+    padding: 0.7rem 0.95rem;
+    border-radius: 0.75rem;
+    line-height: 1.55;
+    word-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+.chat-bubble-wrapper.user .chat-bubble {
+    background: var(--surface-color);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-bottom-right-radius: 0.2rem;
+}
+
+.chat-bubble-wrapper.assistant .chat-bubble {
+    background: var(--bg-tertiary, rgba(0, 0, 0, 0.06));
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 0.2rem;
+}
+
+.chat-bubble pre {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Message actions (edit/delete) */
+.chat-message-actions {
+    display: flex;
+    gap: 0.35rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.chat-bubble-wrapper:hover .chat-message-actions,
+.chat-bubble-wrapper.touch-device .chat-message-actions {
+    opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Fullscreen Mode
+   ═══════════════════════════════════════════════════════════════════════════ */
+#view-roleplaychat.chat-fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 9999 !important;
+    background: var(--bg-page) !important;
+    padding: 0.25rem !important;
+    box-sizing: border-box !important;
+}
+
+html.chat-scroll-locked,
+body.chat-scroll-locked {
+    overflow: hidden !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Character Accent Colours (group chat)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chat-bubble-wrapper.assistant .chat-bubble[data-char-accent] {
+    border-left-width: 3px;
+    border-left-style: solid;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Dark Mode
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] .chat-bubble-wrapper.assistant .chat-bubble {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] #chat-message-input {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE — Sidebar becomes a slide-out overlay drawer
+   ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-
-    /* ── 1. Full-viewport modal ─────────────────────────────────────────────── */
-
-    #chat-tester-modal.modal-overlay {
-        padding: 0;
+    :root {
+        --chat-avatar-size: 36px;
+        --chat-avatar-gap: 8px;
+        --chat-bubble-max-width: 92%;
     }
 
-    #chat-tester-modal .api-settings-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh;
-        height: var(--chat-mobile-vh, 100vh); /* fallback for older Safari */
-        max-height: 100dvh !important;
-        border-radius: 0 !important;
-        border: none !important;
-        display: flex;
+    .chat-container {
         flex-direction: column;
-        overflow: hidden;
     }
 
-    /* ── 2. Compact sticky header ───────────────────────────────────────────── */
+    /* Sidebar — overlay drawer */
+    .chat-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        min-width: 280px;
+        max-width: 85vw;
+        height: 100%;
+        height: 100dvh;
+        z-index: 200;
+        transform: translateX(-100%);
+        opacity: 0;
+        box-shadow: var(--shadow-lg);
+        border-right: 1px solid var(--border);
+        border-bottom: none;
+    }
 
-    #chat-tester-modal .modal-header {
+    .chat-sidebar.mobile-drawer-open {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    /* Backdrop */
+    .chat-sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 199;
+        background: rgba(0, 0, 0, 0.4);
+        animation: chatFadeIn 0.2s ease;
+    }
+
+    .chat-sidebar-backdrop.active {
+        display: block;
+    }
+
+    @keyframes chatFadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    /* Header compact on mobile */
+    .chat-header {
         padding: 0.5rem 0.75rem;
-        gap: 0.4rem;
-        min-height: 44px;
-        flex-shrink: 0;
-        padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+        gap: 0.5rem;
     }
 
-    #chat-tester-modal .modal-title {
-        font-size: 0.88rem;
+    .chat-header-info h2 {
+        font-size: 1rem !important;
+    }
+
+    /* Timeline — more padding at bottom for FAB */
+    .chat-timeline {
+        padding: 0.75rem 0.75rem 3rem;
+        gap: 0.75rem;
+    }
+
+    /* Input area */
+    .chat-input-area {
+        padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .chat-input-controls {
+        gap: 0.4rem;
+    }
+
+    /* On very narrow screens (<500px), force textarea to full width */
+    @media (max-width: 500px) {
+        .chat-input-controls {
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+
+        #chat-message-input {
+            flex-basis: 100%;
+            order: 1;
+        }
+
+        #chat-toggle-ooc-btn {
+            order: 2;
+        }
+
+        #chat-speaker-select {
+            order: 3;
+        }
+
+        #chat-send-btn,
+        #chat-stop-btn {
+            order: 4;
+        }
+    }
+
+    /* FAB — position above the input area */
+    .chat-scroll-bottom-btn {
+        bottom: 80px;
+        right: 12px;
+    }
+
+    /* Always show message actions on mobile (no hover) */
+    .chat-bubble-wrapper .chat-message-actions {
+        opacity: 1;
+    }
+
+    /* Character name in bubble actions shorter */
+    .chat-bubble-name {
+        font-size: 0.72rem;
+    }
+
+    /* Ensure the chat view fills available height on mobile without overlapping footer */
+    #view-roleplaychat:not([style*="display: none"]) {
+        height: auto !important;
+    }
+
+    .chat-scene-image-wrapper {
+        max-width: 100%;
+    }
+}
+
+/* ==========================================================================
+   ROLEPLAY CHAT - IMMERSIVE MOBILE FULLSCREEN OPTIMISATIONS (iPhone / iPad)
+   ========================================================================== */
+@media (max-width: 1024px) {
+
+    /* Full-screen wrapper - edge-to-edge with no padding or borders */
+    #view-roleplaychat.chat-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 9999 !important;
+        padding: 0 !important;
+        background: var(--bg-page) !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        min-height: 100vh !important;
+        min-height: 100dvh !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        overscroll-behavior: none !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-container {
+        border: none !important;
+        border-radius: 0 !important;
+        height: 100% !important;
+        min-height: 100% !important;
+        max-height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-main {
+        border-radius: 0 !important;
+        height: 100% !important;
+        min-height: 100% !important;
+        max-height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    /* Immersive, Safe-Area-Aware Header */
+    #view-roleplaychat.chat-fullscreen .chat-header {
+        padding: calc(0.6rem + env(safe-area-inset-top, 0px)) 0.75rem 0.6rem !important;
+        background: var(--surface) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-bottom: 1px solid var(--border) !important;
+        gap: 0.5rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-header-info {
+        min-width: 0;
+        flex: 1;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-active-title {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        min-width: 0;
-        flex-shrink: 1;
+        max-width: 40vw;
     }
 
-    #chat-tester-modal #chat-tester-char-name {
-        display: inline;
+    #view-roleplaychat.chat-fullscreen #chat-active-characters {
+        font-size: 0.75rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+        max-width: 40vw;
     }
 
-    #chat-tester-modal .chat-header-slot-row {
-        gap: 0.25rem !important;
-        margin-left: auto !important;
-        margin-right: 0.25rem !important;
-        flex-shrink: 0;
+    /* Compact header actions for mobile */
+    #view-roleplaychat.chat-fullscreen .chat-header-actions {
+        gap: 0.4rem !important;
     }
 
-    #chat-tester-modal #chat-slot-select {
-        max-width: 90px !important;
-        font-size: 0.7rem;
-    }
-
-    #chat-tester-modal .chat-header-slot-row .btn-small {
-        padding: 0.25rem 0.4rem;
-        font-size: 0.72rem;
-        min-width: 0;
-    }
-
-    #chat-tester-modal .modal-close {
-        width: 30px;
-        height: 30px;
-        font-size: 1.15rem;
-        flex-shrink: 0;
-    }
-
-    /* ── 3. Messages area ───────────────────────────────────────────────────── */
-
-    #chat-tester-modal .modal-body {
-        flex: 1 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-        min-height: 0;
-    }
-
-    #chat-tester-modal .chat-messages {
-        flex: 1;
-        padding: 0.6rem 0.5rem;
-        gap: 0.5rem;
-        min-height: 0;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-    }
-
-    #chat-tester-modal .chat-message {
-        max-width: 98%;
-    }
-
-    #chat-tester-modal .chat-message-inner {
-        gap: 0.4rem;
-        align-items: flex-start;
-    }
-
-    #chat-tester-modal .chat-avatar {
-        width: 28px;
-        height: 28px;
-        font-size: 0.62rem;
-        flex-shrink: 0;
-    }
-
-    #chat-tester-modal .chat-message-name {
-        font-size: 0.7rem;
-        padding: 0 0.15rem;
-    }
-
-    #chat-tester-modal .chat-message-content {
-        padding: 0.5rem 0.7rem;
-        font-size: 0.9rem;
-        line-height: 1.5;
-        border-radius: var(--radius-md);
-    }
-
-    #chat-tester-modal .chat-message-user .chat-message-content {
-        border-bottom-right-radius: 0.2rem;
-    }
-
-    #chat-tester-modal .chat-message-character .chat-message-content {
-        border-bottom-left-radius: 0.2rem;
-    }
-
-    /* Always show actions on touch — no hover on mobile */
-    #chat-tester-modal .chat-message .chat-message-actions {
-        opacity: 0.6;
-        padding: 0.1rem 0.15rem;
-    }
-
-    #chat-tester-modal .chat-action-btn {
-        font-size: 0.65rem;
-        padding: 0.2rem 0.45rem;
-        min-height: 26px;
-        min-width: 40px;
-    }
-
-    /* ── 4. Swipe bar — larger touch targets ────────────────────────────────── */
-
-    #chat-tester-modal .chat-swipe-bar {
-        margin-left: 2rem;
-        gap: 0.5rem;
-        padding: 0.25rem 0.5rem;
-    }
-
-    #chat-tester-modal .chat-swipe-btn {
-        min-width: 36px;
-        min-height: 30px;
-        font-size: 0.8rem;
-        padding: 0.2rem 0.5rem;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* ── 5. Input area — fixed bottom with safe-area ────────────────────────── */
-
-    #chat-tester-modal .chat-input-area {
-        flex-shrink: 0;
-        padding: 0.5rem 0.5rem;
-        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-        border-top: 1px solid var(--border);
-        gap: 0.35rem;
-    }
-
-    #chat-tester-modal .chat-input-row {
-        gap: 0.4rem;
-    }
-
-    /* 16px font prevents iOS Safari auto-zoom on focus */
-    #chat-tester-modal .chat-input {
-        font-size: 16px;
-        padding: 0.5rem 0.65rem;
-        min-height: 44px;
-        border-radius: var(--radius-sm);
-        line-height: 1.35;
-    }
-
-    #chat-tester-modal .chat-send-btn {
-        min-width: 44px;
-        min-height: 44px;
-        padding: 0.5rem;
-        font-size: 1.1rem;
-        border-radius: var(--radius-sm);
-        flex-shrink: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* ── 6. Toolbar — compact layout ────────────────────────────────────────── */
-
-    #chat-tester-modal .chat-toolbar {
-        flex-wrap: wrap;
-        gap: 0.3rem;
-        padding: 0;
-    }
-
-    #chat-tester-modal .chat-toolbar-left {
-        flex-wrap: wrap;
-        gap: 0.3rem;
-        flex: 1;
-        min-width: 0;
-    }
-
-    #chat-tester-modal .chat-persona-input {
-        width: 80px;
-        font-size: 0.75rem;
-        padding: 0.2rem 0.4rem;
-        min-height: 30px;
-    }
-
-    #chat-tester-modal .chat-persona-select {
-        font-size: 0.7rem;
-        max-width: 80px !important;
-        min-height: 30px;
-    }
-
-    #chat-tester-modal .chat-token-count {
-        font-size: 0.68rem;
-    }
-
-    #chat-tester-modal .chat-toolbar-right {
-        gap: 0.25rem;
-        flex-wrap: wrap;
-    }
-
-    #chat-tester-modal .chat-toolbar-right .btn-outline,
-    #chat-tester-modal .chat-toolbar-right .btn-small {
-        font-size: 0.72rem;
-        padding: 0.3rem 0.5rem;
-        min-height: 30px;
-        border-radius: var(--radius-sm);
-    }
-
-    /* ── 7. Params — collapsed by default on mobile ─────────────────────────── */
-
-    #chat-tester-modal.chat-mobile-params-collapsed .chat-toolbar-params {
+    /* Hide the "Playing as:" text label to save horizontal space */
+    #view-roleplaychat.chat-fullscreen .chat-header-actions div>span {
         display: none !important;
     }
 
-    #chat-tester-modal .chat-toolbar-params {
-        gap: 0.5rem 0.75rem;
-        padding: 0.4rem 0;
+    /* Compact rounded persona select dropdown */
+    #view-roleplaychat.chat-fullscreen #chat-user-persona-select {
+        max-width: 105px !important;
+        border-radius: 20px !important;
+        padding: 0.25rem 1.5rem 0.25rem 0.5rem !important;
+        font-size: 0.78rem !important;
+        height: 32px !important;
+        background-position: right 0.4rem center !important;
     }
 
-    #chat-tester-modal .chat-param-label {
-        font-size: 0.72rem;
-        gap: 0.25rem;
-        flex: 0 0 auto;
+    /* Make Settings Button a circular gear icon */
+    #view-roleplaychat.chat-fullscreen #chat-settings-btn {
+        font-size: 0 !important;
+        width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: 1px solid var(--border) !important;
+        background: var(--surface-muted) !important;
     }
 
-    #chat-tester-modal .chat-param-slider {
-        width: 60px;
+    #view-roleplaychat.chat-fullscreen #chat-settings-btn::before {
+        content: '⚙️';
+        font-size: 1.05rem !important;
     }
 
-    #chat-tester-modal .chat-param-number {
-        width: 55px;
-        font-size: 0.72rem;
-        padding: 0.15rem 0.25rem;
+    /* Close/Exit button styled beautifully */
+    #view-roleplaychat.chat-fullscreen #chat-fullscreen-toggle {
+        font-size: 0.95rem !important;
+        width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        border-radius: 50% !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+        margin-left: 0.2rem !important;
     }
 
-    /* Export menu - position above the button properly on mobile */
-    #chat-tester-modal #chat-export-menu {
-        right: 0;
-        left: auto;
-        min-width: 140px;
+    /* Timeline & Message bubbles */
+    #view-roleplaychat.chat-fullscreen .chat-timeline {
+        padding: 1rem 0.75rem calc(1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+        background: var(--bg-page) !important;
+        gap: 0.85rem !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        /* smooth kinetic scrolling for iOS */
+        flex: 1 1 0% !important;
+        min-height: 0 !important;
     }
 
-    /* ── 8. Lorebook highlight — slightly larger on mobile for readability ──── */
-
-    #chat-tester-modal .lorebook-highlight {
-        padding: 0.05rem 0.15rem;
-        border-radius: 3px;
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper {
+        max-width: 90% !important;
+        gap: 8px !important;
     }
 
-    /* ── 9. Typing indicator ────────────────────────────────────────────────── */
-
-    #chat-tester-modal .chat-typing-dots {
-        padding: 0.4rem 0.6rem;
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user {
+        max-width: 86% !important;
     }
 
-    #chat-tester-modal .chat-typing-dots span {
-        width: 7px;
-        height: 7px;
+    #view-roleplaychat.chat-fullscreen .chat-avatar-container {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 50% !important;
+        /* Circular avatars for a modern chat feel */
+        box-shadow: var(--shadow-sm);
     }
 
-    /* ── 10. Code blocks — prevent overflow on narrow screens ────────────── */
-
-    #chat-tester-modal .chat-message-content pre.chat-code-block {
-        font-size: 0.76rem;
-        padding: 0.4rem 0.5rem;
-        max-width: 100%;
-        overflow-x: auto;
+    #view-roleplaychat.chat-fullscreen .chat-bubble {
+        border-radius: 18px !important;
+        padding: 0.7rem 0.95rem !important;
+        font-size: 0.95rem !important;
+        line-height: 1.5 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
     }
 
-    #chat-tester-modal .chat-message-content code.chat-inline-code {
-        font-size: 0.8em;
+    /* User messages styling - accent background, white text */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user .chat-bubble {
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-bottom-right-radius: 4px !important;
     }
 
-    #chat-tester-modal .chat-message-content blockquote.chat-blockquote {
-        padding-left: 0.5rem;
-        font-size: 0.88rem;
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user .chat-bubble * {
+        color: #ffffff !important;
     }
-}
 
-/* Touch-device override — show message actions always (applied via JS) */
-#chat-tester-modal.chat-touch-device .chat-message-actions {
-    opacity: 0.55 !important;
-    transition: opacity 120ms;
-}
+    /* Resolve quotes color mismatch inside user bubbles */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.user .chat-bubble span[style*="color"] {
+        color: #ffe0b2 !important;
+        /* Warm gold/peach for readability on accent bg */
+        font-weight: 600 !important;
+    }
 
-#chat-tester-modal.chat-touch-device .chat-message-actions:active {
-    opacity: 1 !important;
+    /* Assistant messages styling - surface background */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.assistant .chat-bubble {
+        background: var(--surface-strong) !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border) !important;
+        border-bottom-left-radius: 4px !important;
+    }
+
+    /* Group chat indicator bar */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.assistant .chat-bubble[data-char-accent] {
+        border-left-width: 4px !important;
+    }
+
+    /* Message Header: align name and time nicely, keep actions pushed right */
+    #view-roleplaychat.chat-fullscreen .chat-bubble-name {
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        gap: 0.4rem !important;
+        font-size: 0.75rem !important;
+        margin-bottom: 0.15rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble-name-text {
+        font-weight: 700 !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-bubble-time {
+        margin-right: auto !important;
+        /* Push everything else (actions) to the far right */
+        opacity: 0.75 !important;
+    }
+
+    /* Touch-friendly, compact message action buttons */
+    #view-roleplaychat.chat-fullscreen .chat-message-actions {
+        opacity: 0.85 !important;
+        margin-left: auto !important;
+        gap: 0.25rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-message-actions .chat-action-btn {
+        padding: 0.2rem 0.4rem !important;
+        font-size: 0.72rem !important;
+        border-radius: 6px !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-secondary) !important;
+        min-height: unset !important;
+        height: auto !important;
+    }
+
+    /* Input area - sleek floating capsule design */
+    #view-roleplaychat.chat-fullscreen .chat-input-area {
+        padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom, 0px)) !important;
+        background: var(--surface) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    /* OOC Note Row */
+    #view-roleplaychat.chat-fullscreen .chat-ooc-container {
+        margin-bottom: 0.25rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-ooc-input {
+        border-radius: 12px !important;
+        padding: 0.4rem 0.75rem !important;
+        font-size: 0.88rem !important;
+        background: var(--surface-muted) !important;
+        border: 1px dashed var(--border-strong) !important;
+    }
+
+    /* Grid layout for input controls row */
+    #view-roleplaychat.chat-fullscreen .chat-input-controls {
+        display: grid !important;
+        grid-template-columns: auto 1fr auto auto !important;
+        grid-template-rows: auto auto !important;
+        gap: 0.4rem !important;
+        align-items: end !important;
+        width: 100% !important;
+    }
+
+    /* Character router speaker select on its own full-width row */
+    #view-roleplaychat.chat-fullscreen #chat-speaker-select {
+        grid-row: 1 !important;
+        grid-column: 1 / span 4 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        height: 34px !important;
+        font-size: 0.85rem !important;
+        padding: 0.25rem 0.5rem !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-speaker-select[style*="display: none"] {
+        display: none !important;
+    }
+
+    /* Mask icon for OOC toggle button */
+    #view-roleplaychat.chat-fullscreen #chat-toggle-ooc-btn {
+        grid-row: 2 !important;
+        grid-column: 1 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: 1px solid var(--border) !important;
+        background: var(--surface-muted) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-toggle-ooc-btn::before {
+        content: '🎭';
+        font-size: 1.2rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-toggle-ooc-btn.has-ooc::after {
+        top: 4px !important;
+        right: 4px !important;
+        width: 8px !important;
+        height: 8px !important;
+    }
+
+    /* Capsule Textarea */
+    #view-roleplaychat.chat-fullscreen #chat-message-input {
+        grid-row: 2 !important;
+        grid-column: 2 !important;
+        border-radius: 20px !important;
+        padding: 0.6rem 0.95rem !important;
+        font-size: 16px !important;
+        /* Prevent iOS Safari auto-zoom on focus */
+        line-height: 1.3 !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+        min-height: 42px !important;
+        max-height: 120px !important;
+    }
+
+    /* Edit mode textarea inside messages */
+    #view-roleplaychat.chat-fullscreen .chat-bubble textarea {
+        font-size: 16px !important;
+        /* Prevent iOS Safari auto-zoom when editing a message */
+        border-radius: 8px !important;
+        padding: 0.5rem !important;
+        background: var(--surface-muted) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    /* Impersonate button as circular button */
+    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn {
+        grid-row: 2 !important;
+        grid-column: 3 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: 1px solid var(--border) !important;
+        background: var(--surface-muted) !important;
+        margin: 0 !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn::before {
+        content: '👤';
+        font-size: 1.15rem !important;
+    }
+
+    /* Send button as circular capsule */
+    #view-roleplaychat.chat-fullscreen #chat-send-btn {
+        grid-row: 2 !important;
+        grid-column: 4 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: none !important;
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 8px rgba(14, 122, 138, 0.3) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-send-btn::before {
+        content: '➤';
+        font-size: 1.1rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-send-btn:disabled {
+        background: var(--border) !important;
+        box-shadow: none !important;
+        opacity: 0.6 !important;
+    }
+
+    /* Stop button as circular capsule */
+    #view-roleplaychat.chat-fullscreen #chat-stop-btn {
+        grid-row: 2 !important;
+        grid-column: 4 !important;
+        font-size: 0 !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        border: none !important;
+        background: var(--error) !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 8px rgba(201, 61, 74, 0.3) !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #chat-stop-btn::before {
+        content: '⏹';
+        font-size: 1.1rem !important;
+    }
+
+    /* Position Scroll-to-bottom FAB above the input area */
+    #view-roleplaychat.chat-fullscreen .chat-scroll-bottom-btn {
+        bottom: calc(65px + env(safe-area-inset-bottom, 0px)) !important;
+        right: 16px !important;
+        background: var(--surface) !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        box-shadow: var(--shadow-md) !important;
+        width: 36px !important;
+        height: 36px !important;
+    }
 }

@@ -2,10 +2,71 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>SillyTavern Character Generator</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+        <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20260513" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20260612" />
+        <style>
+            /* API Log Popup Styles */
+            .api-log-entry {
+                background: var(--surface-color);
+                border: 1px solid var(--border);
+                border-radius: 0.5rem;
+                margin-bottom: 1rem;
+                overflow: hidden;
+            }
+            .api-log-header {
+                display: flex;
+                justify-content: space-between;
+                padding: 0.5rem 0.75rem;
+                background: var(--surface-strong);
+                border-bottom: 1px solid var(--border);
+                font-size: 0.85rem;
+            }
+            .api-log-ts {
+                color: var(--text-secondary);
+            }
+            .api-log-endpoint {
+                font-weight: 600;
+                color: var(--text-primary);
+            }
+            .api-log-content {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 1px;
+                background: var(--border);
+            }
+            .api-log-col {
+                background: var(--surface-color);
+                padding: 0.75rem;
+                display: flex;
+                flex-direction: column;
+            }
+            .api-log-copy-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.5rem;
+            }
+            .api-log-copy-header h4 {
+                margin: 0;
+                font-size: 0.9rem;
+            }
+            .api-log-col pre {
+                background: var(--surface-muted);
+                border: 1px solid var(--border);
+                border-radius: 0.375rem;
+                padding: 0.75rem;
+                margin: 0;
+                font-family: 'IBM Plex Mono', monospace;
+                font-size: 0.8rem;
+                white-space: pre-wrap;
+                word-break: break-all;
+                overflow: auto;
+                max-height: 400px;
+                flex-grow: 1;
+            }
+        </style>
         <script>
             // Apply saved theme before first paint so the login overlay
             // never flashes with the wrong colour scheme.
@@ -85,9 +146,9 @@
             <header class="header">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
                     <div>
-                        <h1 class="title">🎭 SillyTavern Character Generator</h1>
+                        <h1 class="title">✨ Zebede's Roleplay Tool</h1>
                         <p class="subtitle">
-                            Create SillyTavern characters cards with AI
+                            Create characters, write stories, and roleplay with AI
                         </p>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
@@ -108,6 +169,7 @@
                 <div id="view-tabs" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
                     <button id="tab-cardgen" class="btn-primary" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎭 Character Generator</button>
                     <button id="tab-storywriter" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">✍️ Story Writer</button>
+                    <button id="tab-roleplaychat" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">💬 Roleplay Chat</button>
                 </div>
 
                 <!-- Character Generator View -->
@@ -1317,27 +1379,10 @@
                         <button id="push-to-st-btn" class="btn-outline" style="display: none" title="Push this character card to your SillyTavern instance. If loaded from ST it will update in place; otherwise it creates a new card.">
                             📤 Push to SillyTavern
                         </button>
-                        <button id="test-chat-btn" class="btn-outline" style="display: none" title="Test the character in a live chat conversation using the current card data and lorebook.">
-                            💬 Test Chat
+                        <button id="test-chat-btn" class="btn-outline" style="display: none" title="Start a roleplay chat with this character in the Roleplay Chat tab.">
+                            🎭 Chat with Char
                         </button>
-                        <button id="import-card-btn" class="btn-outline" title="Load an existing SillyTavern character card (.png or .json) into the editor for viewing and manual editing">
-                            Import Card for Editing
-                        </button>
-                        <input
-                            type="file"
-                            id="import-card-input"
-                            accept=".png,.json,application/json,image/png"
-                            style="display: none"
-                        />
-                        <button id="import-remaster-btn" class="btn-outline" title="Import a card and immediately run a full AI rewrite — fixes inconsistencies, tightens language, and reformats it into a clean concise card ready for play">
-                            ✨ Import & Remaster
-                        </button>
-                        <input
-                            type="file"
-                            id="import-remaster-input"
-                            accept=".png,.json,application/json,image/png"
-                            style="display: none"
-                        />
+
                         <button id="remaster-btn" class="btn-outline" style="display: none" title="Run a full AI rewrite on the currently loaded card — fixes inconsistencies, tightens language, and reformats it into a clean concise card ready for play">
                             🔄 Remaster Current Card
                         </button>
@@ -1367,7 +1412,10 @@
                         <div>
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                                 <h3 class="library-title" style="margin: 0;">Saved Cards (Permanent)</h3>
-                                <button id="migrate-cards-btn" class="btn-small" style="font-size: 0.75rem;" title="One-time import of all cards from the old cards.json file into the database">📦 Migrate from old storage</button>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button id="gallery-cards-btn" class="btn-small" style="font-size: 0.75rem;" title="View your saved cards in a visual gallery">🖼️ Gallery</button>
+                                    <button id="migrate-cards-btn" class="btn-small" style="font-size: 0.75rem;" title="One-time import of all cards from the old cards.json file into the database">📦 Migrate from old storage</button>
+                                </div>
                             </div>
                             <div
                                 id="stored-cards-list"
@@ -1576,6 +1624,61 @@
                     </section>
                 </div>
 
+                <!-- Roleplay Chat View -->
+                <div id="view-roleplaychat" class="tab-content" style="display: none;">
+                  <div class="chat-container">
+                    
+                    <!-- Sidebar: Chat Sessions -->
+                    <div class="chat-sidebar">
+                      <div class="chat-sidebar-header">
+                        <h2 style="margin: 0; font-size: 1.1rem;">Chats</h2>
+                        <button id="chat-new-btn" class="btn-primary btn-small">➕ New</button>
+                      </div>
+                      <div id="chat-session-list" class="chat-session-list">
+                        <!-- Chat sessions will be dynamically injected here -->
+                      </div>
+                    </div>
+
+                    <!-- Main Chat Area -->
+                    <div class="chat-main">
+                      <div class="chat-header">
+                        <div class="chat-header-info">
+                          <h2 id="chat-active-title" style="margin: 0; font-size: 1.25rem;">Select a Chat</h2>
+                          <span id="chat-active-characters" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                        </div>
+                        <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+
+                          <button id="chat-settings-btn" class="btn-outline btn-small">⚙️ Settings</button>
+                        </div>
+                      </div>
+
+                      <div id="chat-timeline" class="chat-timeline">
+                        <div class="chat-placeholder">
+                          <p>Create a new chat or select an existing one to begin roleplaying.</p>
+                        </div>
+                      </div>
+                      <button id="chat-scroll-bottom-btn" class="chat-scroll-bottom-btn" title="New messages below" style="display:none;">↓</button>
+
+                      <div class="chat-input-area">
+                        <div id="chat-ooc-container" class="chat-ooc-container" style="display: none;">
+                          <input type="text" id="chat-ooc-input" class="content-box" placeholder="[OOC Note to AI: E.g., 'Make them angrier' or 'Notice the ring I just dropped']" />
+                        </div>
+                        <div class="chat-input-controls">
+                          <select id="chat-speaker-select" class="content-box" style="display: none; max-width: 140px; padding: 0.5rem;"></select>
+                          <button id="chat-toggle-ooc-btn" class="btn-outline" title="Toggle OOC Note">🎭 OOC</button>
+                          <textarea id="chat-message-input" class="content-box" rows="1" placeholder="Type your message... (Shift+Enter for newline)" disabled></textarea>
+                          <button id="roleplay-send-btn" class="btn-primary" disabled>Send</button>
+                          <button id="roleplay-stop-btn" class="btn-stop" style="display: none;">
+                              <div class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem; display: inline-block; vertical-align: middle;"></div>
+                              <span style="vertical-align: middle;">Stop Generating</span>
+                          </button>
+                          <button id="roleplay-impersonate-btn" class="btn-outline" title="Make the AI write from your perspective">🎭 Impersonate</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
             </main>
 
             <footer class="footer">
@@ -1630,12 +1733,17 @@
         <script src="src/scripts/revision-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/chat-tester.js?v=20260512"></script>
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
+        <script src="src/scripts/rich-element-parser.js"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
         <script src="src/scripts/batch-generator.js?v=20260518"></script>
         <script src="src/scripts/image-gallery.js?v=20260518"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=8"></script>
         <script src="src/scripts/inspire-me.js?v=20260601"></script>
+        <script src="src/scripts/gallery-mode.js"></script>
+        <script src="src/scripts/chat-handler.js?v=20260610"></script>
+        <script src="src/scripts/chat-settings.js"></script>
+        <script src="src/scripts/home-handler.js"></script>
         <!-- API Settings Modal -->
 
         <!-- ST push-choice modal (name changed) -->
@@ -2385,5 +2493,165 @@
             </div>
         </div>
 
+        <!-- NEW CHAT MODAL -->
+        <div id="chat-new-modal" class="modal-overlay">
+          <div class="api-settings-modal" style="max-width: 500px; width: 90%;">
+            <div class="modal-header">
+              <h2 class="modal-title">Create New Chat</h2>
+              <button id="chat-new-close-btn" class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+              <label class="label">Chat Title</label>
+              <input type="text" id="chat-new-title" class="content-box" style="width:100%; margin-bottom: 1rem;" placeholder="E.g., Tavern Encounter" />
+              
+              <label class="label">Selected Characters</label>
+              <div id="chat-new-selected-chars" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; min-height: 42px; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);">
+                  <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
+              </div>
+              <button id="chat-new-add-char-btn" class="btn-outline btn-small" style="width: 100%; margin-bottom: 1rem;">🖼️ Add Character from Gallery</button>
+
+              <label class="label">User Persona</label>
+              <div style="margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--surface-muted);">
+                  <div style="display: flex; gap: 1rem; margin-bottom: 0.75rem;">
+                      <label style="cursor:pointer; display:flex; align-items:center; gap:0.25rem;"><input type="radio" name="chat_user_persona_type" value="manual" checked> Manual Entry</label>
+                      <label style="cursor:pointer; display:flex; align-items:center; gap:0.25rem;"><input type="radio" name="chat_user_persona_type" value="card"> Select Card</label>
+                  </div>
+                  
+                  <div id="chat-new-persona-manual">
+                      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                          <input type="text" id="chat-new-persona-name" class="content-box" style="flex:2;" placeholder="Name (e.g. User)" />
+                          <input type="text" id="chat-new-persona-age" class="content-box" style="flex:1;" placeholder="Age" />
+                          <input type="text" id="chat-new-persona-gender" class="content-box" style="flex:1;" placeholder="Gender" />
+                      </div>
+                      <textarea id="chat-new-persona-detail" class="content-box" rows="2" style="width:100%;" placeholder="Basic Detail (appearance, background...)"></textarea>
+                  </div>
+                  
+                  <div id="chat-new-persona-card" style="display: none;">
+                      <div style="display: flex; align-items: center; gap: 0.5rem;">
+                          <span id="chat-new-persona-card-name" style="flex:1; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">No card selected</span>
+                          <button id="chat-new-persona-pick-btn" class="btn-outline btn-small">Pick Card</button>
+                      </div>
+                  </div>
+              </div>
+
+              <label class="label">Custom System Prompt (Optional)</label>
+              <textarea id="chat-new-system-prompt" class="content-box" rows="3" style="width:100%; margin-bottom: 1rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>
+              <button id="chat-create-submit-btn" class="btn-primary" style="width:100%;">Start Chatting</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHAT SETTINGS MODAL -->
+        <div id="chat-settings-modal" class="modal-overlay">
+          <div class="api-settings-modal" style="max-width: 500px; width: 90%;">
+            <div class="modal-header">
+              <h2 class="modal-title">⚙️ Chat Settings</h2>
+              <button id="chat-settings-close-btn" class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+              <label class="label">Chat Title</label>
+              <input type="text" id="chat-settings-title" class="content-box" style="width:100%; margin-bottom: 1rem;" />
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <label class="label" style="margin: 0;">System Prompt (Jailbreaks, Rules)</label>
+                <button type="button" class="btn-small btn-outline" onclick="roleplayChatHandler.resetToGlobalSystemPrompt('chat-settings-system-prompt')" title="Reset this chat's system prompt to the global baseline configured in settings">🔄 Reset to Global</button>
+              </div>
+              <textarea id="chat-settings-system-prompt" class="content-box" rows="5" style="width:100%; margin-bottom: 0.5rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                This prompt is injected at the very beginning of the context window.
+              </p>
+
+              <button id="chat-settings-save-btn" class="btn-primary" style="width:100%;">Save Settings</button>
+            </div>
+          </div>
+        </div>
+
+        <script>
+            // Intercept authFetch calls to extract backend API logs for the API Logs popup
+            document.addEventListener("DOMContentLoaded", () => {
+                if (typeof window.authFetch === 'function') {
+                    const originalAuthFetch = window.authFetch;
+                    window.authFetch = async function(...args) {
+                        const response = await originalAuthFetch.apply(this, args);
+                        const contentType = response.headers.get("content-type") || "";
+                        
+                        // Intercept JSON responses (e.g., Image Gen)
+                        if (contentType.includes("application/json")) {
+                            const cloned = response.clone();
+                            cloned.json().then(data => {
+                                if (data && data.api_log) {
+                                    _pushApiLog(data.api_log, args);
+                                }
+                            }).catch(() => {});
+                            return response;
+                        }
+                        
+                        // Intercept SSE Stream responses (e.g., Chat Gen)
+                        if (contentType.includes("text/event-stream")) {
+                            const cloned = response.clone();
+                            const reader = cloned.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = "";
+                            let partialLog = null; // accumulate multi-part api_log events
+                            (async () => {
+                                try {
+                                    while (true) {
+                                        const { done, value } = await reader.read();
+                                        if (done) break;
+                                        buffer += decoder.decode(value, { stream: true });
+                                        const lines = buffer.split('\n');
+                                        buffer = lines.pop(); // keep remainder
+                                        for (const line of lines) {
+                                            if (line.startsWith('data: ')) {
+                                                try {
+                                                    const data = JSON.parse(line.substring(6));
+                                                    if (data.type === 'api_log') {
+                                                        // Backend may send api_log in two parts (request then response)
+                                                        if (data.log.request && !partialLog) {
+                                                            partialLog = data.log;
+                                                        } else if (data.log.response && partialLog) {
+                                                            // Merge and push
+                                                            _pushApiLog({ ...partialLog, ...data.log }, args);
+                                                            partialLog = null;
+                                                        } else {
+                                                            // Single-part api_log
+                                                            _pushApiLog(data.log, args);
+                                                        }
+                                                    }
+                                                } catch (e) {}
+                                            }
+                                        }
+                                    }
+                                    // Flush any lingering partial log (response-only without a request)
+                                    if (partialLog) {
+                                        _pushApiLog(partialLog, args);
+                                        partialLog = null;
+                                    }
+                                } catch (e) {}
+                            })();
+                        }
+                        return response;
+                    };
+
+                    function _pushApiLog(logData, fetchArgs) {
+                        if (!window.apiHandler) return;
+                        const endpoint = logData.endpoint || (fetchArgs && fetchArgs[0]) || '/api/sw/unknown';
+                        const logEntry = {
+                            id: Date.now() + Math.random().toString(36).substr(2, 5),
+                            timestamp: new Date().toISOString(),
+                            endpoint: endpoint,
+                            model: logData.request?.model || 'unknown',
+                            request: logData.request || null,
+                            response: logData.response !== undefined ? logData.response : null,
+                            status: logData.status || 200,
+                            duration: logData.duration || 0,
+                            usage: logData.usage || null
+                        };
+                        window.apiHandler.requestLogs.unshift(logEntry);
+                        if (window.apiHandler.requestLogs.length > 30) window.apiHandler.requestLogs.pop();
+                    }
+                }
+            });
+        </script>
     </body>
 </html>
