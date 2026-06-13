@@ -45,14 +45,23 @@ class AdventureHandler {
             this.tabBtns.adventure.addEventListener('click', () => this.showView());
         }
         
-        this.addCharBtn.addEventListener('click', () => {
-            if (window.appUI) {
-                window.appUI.showCharacterPickerModal((cardId) => {
+        this.addCharBtn.addEventListener('click', async () => {
+            if (!window.cardGallery || !window.characterStorage) {
+                alert("Gallery module not loaded.");
+                return;
+            }
+            try {
+                const allCards = await window.characterStorage.listCards();
+                const unselectedCards = allCards.filter(c => !this.selectedCharacters.includes(c.id) && c.isPermanent);
+                window.cardGallery.open(unselectedCards, (selectedCardOrId) => {
+                    const cardId = typeof selectedCardOrId === 'object' ? selectedCardOrId.id : selectedCardOrId;
                     if (!this.selectedCharacters.includes(cardId)) {
                         this.selectedCharacters.push(cardId);
                         this.renderSelectedCharacters();
                     }
                 });
+            } catch (e) {
+                console.error("Failed to load cards for gallery", e);
             }
         });
         
@@ -87,13 +96,14 @@ class AdventureHandler {
         }
         
         for (const id of this.selectedCharacters) {
-            const card = await StorageManager.getCharacter(id);
+            const card = await window.characterStorage.getCard(id);
             if (!card) continue;
+            const cardName = card.characterName || (card.character && card.character.name) || card.name || 'Unknown';
             
             const badge = document.createElement('div');
             badge.style.cssText = 'display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;';
             badge.innerHTML = `
-                <span>${card.name}</span>
+                <span>${cardName}</span>
                 <button type="button" class="btn-clear" style="padding:0; font-size:1rem; line-height:1; color:var(--text-soft); border:none; background:transparent; cursor:pointer;" title="Remove">×</button>
             `;
             badge.querySelector('button').addEventListener('click', () => {
