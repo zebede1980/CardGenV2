@@ -204,7 +204,7 @@ class AdventureHandler {
                 if (action.is_summarized) return;
                 
                 if (action.role === 'user') {
-                    this.appendStorySegment(`<b>You chose:</b> ${action.content}`);
+                    this.appendStorySegment(`<b>Next:</b> ${action.content}`);
                 } else if (action.role === 'assistant') {
                     this.appendStorySegment(this.formatStory(action.content));
                     if (action.options) {
@@ -277,7 +277,7 @@ class AdventureHandler {
             btn.appendChild(textSpan);
             
             btn.addEventListener('click', () => {
-                this.appendStorySegment(`<b>You chose:</b> ${optText}`);
+                this.appendStorySegment(`<b>Next:</b> ${optText}`);
                 this.sendAction(optText, "user");
             });
             this.optionsArea.appendChild(btn);

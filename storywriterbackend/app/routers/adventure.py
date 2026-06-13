@@ -31,10 +31,10 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session):
     if session_data.summary:
         system_parts.append(f"Story Summary:\n{session_data.summary}")
         
-    system_parts.append(
         "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n"
-        "First, write the next segment of the story naturally.\n"
-        "Then, you MUST end your response by providing exactly 4 distinct choices for the protagonist's next action.\n"
+        "First, write the next segment of the story naturally. You control all characters and the world itself.\n"
+        "Then, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n"
+        "The choices should dictate what happens next in the scene, rather than just being a single character's dialogue or action. For example, an option could be 'Lightning strikes the tree', or 'A stranger interrupts', or 'The characters find a hidden trapdoor'.\n"
         "Format the choices EXACTLY like this at the very end of your response:\n"
         "[OPTION 1] First choice here\n"
         "[OPTION 2] Second choice here\n"
@@ -55,7 +55,7 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session):
         
         # If user made a choice
         if action.role == "user":
-            messages.append({"role": "user", "content": f"The protagonist chooses: {action.content}"})
+            messages.append({"role": "user", "content": f"The user directs the story to: {action.content}"})
         # If assistant generated story
         elif action.role == "assistant":
             # We must include the options it generated so it knows the context of the user's next choice
@@ -98,7 +98,7 @@ async def summarize_adventure_task(session_id: str, user_id: int):
         text_parts = []
         for a in to_summarize:
             if a.role == "user":
-                text_parts.append(f"Protagonist chose: {a.content}")
+                text_parts.append(f"User direction: {a.content}")
             else:
                 text_parts.append(f"Narrator: {a.content}")
         combined_text = "\n".join(text_parts)
