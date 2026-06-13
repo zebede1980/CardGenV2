@@ -14,8 +14,9 @@ from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])
 
-def build_adventure_prompt(session_data: models.AdventureSession, db: Session):
+def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None):
     messages = []
+    history_messages = []
     
     # 1. System Prompt & Character Cards
     system_parts = [
@@ -59,7 +60,7 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session):
         
         # If user made a choice
         if action.role == "user":
-            messages.append({"role": "user", "content": f"The user directs the story to: {action.content}"})
+            history_messages.append({"role": "user", "content": f"The user directs the story to: {action.content}"})
         # If assistant generated story
         elif action.role == "assistant":
             # We must include the options it generated so it knows the context of the user's next choice
@@ -71,8 +72,19 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session):
                     content += f"\n\n{options_str}"
                 except:
                     pass
-            messages.append({"role": "assistant", "content": content})
+            history_messages.append({"role": "assistant", "content": content})
             
+    # Truncate history to fit within max_input_tokens if provided
+    if max_input_tokens:
+        def estimate_tokens(msg_list):
+            return sum(len(m.get("content", "")) // 4 for m in msg_list)
+            
+        system_tokens = estimate_tokens(messages)
+        # Always keep at least the very last message
+        while history_messages and (estimate_tokens(history_messages) + system_tokens > max_input_tokens) and len(history_messages) > 1:
+            history_messages.pop(0)
+            
+    messages.extend(history_messages)
     return messages
 
 async def summarize_adventure_task(session_id: str, user_id: int):
@@ -214,7 +226,7 @@ async def send_action(
         next_order_index += 1
         db.commit()
     
-    prompt_messages = build_adventure_prompt(session_data, db)
+    prompt_messages = build_adventure_prompt(session_data, db, getattr(req, 'max_input_tokens', None))
     
     assistant_action = models.AdventureAction(
         session_id=session_id,

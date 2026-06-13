@@ -324,13 +324,21 @@ class AdventureHandler {
         const segmentDiv = this.appendStorySegment('...');
         let accumulatedText = "";
         
+        // Get settings from config, defaulting to some sensible values if not set
+        const maxInput = window.config?.get("adventure.maxInputTokens") || 2048;
+        const maxOutput = window.config?.get("adventure.maxOutputTokens") || 512;
+        const repPenalty = window.config?.get("adventure.repetitionPenalty") || 1.0;
+        
         try {
             const res = await authFetch(`/api/sw/adventures/${this.currentSessionId}/action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     content: content,
-                    role: role
+                    role: role,
+                    max_input_tokens: maxInput,
+                    max_output_tokens: maxOutput,
+                    repetition_penalty: repPenalty
                 })
             });
             
@@ -411,7 +419,20 @@ class AdventureHandler {
                     </div>
                 </div>
                 <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column;">
-                    <h3 style="margin-top: 0; margin-bottom: 0.5rem;">Modular System Prompt</h3>
+                    <div class="form-group">
+                        <label>Max Input Tokens (Context Window)</label>
+                        <input type="number" id="adv-global-max-input" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Output Tokens</label>
+                        <input type="number" id="adv-global-max-output" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Repetition Penalty</label>
+                        <input type="number" step="0.05" id="adv-global-rep-penalty" class="content-box" style="width: 100%;">
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new adventure.</p>
                     
                     <div id="adv-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; flex: 1; min-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
@@ -460,6 +481,11 @@ class AdventureHandler {
         if (!window.config) return;
         this.systemPromptSegments = [...(window.config.get("adventure.systemPromptSegments") || [])];
         this.renderSystemPromptSegments();
+        
+        document.getElementById('adv-global-max-input').value = window.config.get("adventure.maxInputTokens") || 2048;
+        document.getElementById('adv-global-max-output').value = window.config.get("adventure.maxOutputTokens") || 512;
+        document.getElementById('adv-global-rep-penalty').value = window.config.get("adventure.repetitionPenalty") || 1.0;
+        
         document.getElementById('adv-global-settings-modal').style.display = 'flex';
     }
 
@@ -577,6 +603,15 @@ class AdventureHandler {
     saveGlobalSettings() {
         if (!window.config) return;
         window.config.set("adventure.systemPromptSegments", this.systemPromptSegments);
+        
+        const maxIn = parseInt(document.getElementById('adv-global-max-input').value) || 2048;
+        const maxOut = parseInt(document.getElementById('adv-global-max-output').value) || 512;
+        const repPen = parseFloat(document.getElementById('adv-global-rep-penalty').value) || 1.0;
+        
+        window.config.set("adventure.maxInputTokens", maxIn);
+        window.config.set("adventure.maxOutputTokens", maxOut);
+        window.config.set("adventure.repetitionPenalty", repPen);
+        
         document.getElementById('adv-global-settings-modal').style.display = 'none';
         
         // Update the textarea if we are currently on the setup view
