@@ -31,6 +31,9 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session):
     if session_data.summary:
         system_parts.append(f"Story Summary:\n{session_data.summary}")
         
+    if getattr(session_data, "system_prompt", None):
+        system_parts.append(session_data.system_prompt)
+        
     system_parts.append(
         "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n"
         "First, write the next segment of the story naturally. You control all characters and the world itself.\n"
@@ -146,7 +149,8 @@ def create_session(session_in: schemas.AdventureSessionCreate, db: Session = Dep
     new_session = models.AdventureSession(
         user_id=str(current_user.id),
         title=session_in.title,
-        starting_scenario=session_in.starting_scenario
+        starting_scenario=session_in.starting_scenario,
+        system_prompt=session_in.system_prompt
     )
     db.add(new_session)
     db.flush()

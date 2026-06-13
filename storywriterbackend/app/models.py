@@ -158,6 +158,7 @@ class AdventureSession(Base):
     title = Column(String, nullable=False, default="New Adventure")
     starting_scenario = Column(Text, default="")
     summary = Column(Text, default="")
+    system_prompt = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

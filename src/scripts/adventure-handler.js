@@ -3,9 +3,11 @@ class AdventureHandler {
         this.currentSessionId = null;
         this.selectedCharacters = [];
         this.isGenerating = false;
+        this.systemPromptSegments = [];
         
         this.initDOM();
         this.bindEvents();
+        this.injectSettingsModal();
     }
 
     initDOM() {
@@ -28,6 +30,7 @@ class AdventureHandler {
         this.selectedCharsContainer = document.getElementById('adv-selected-chars');
         this.addCharBtn = document.getElementById('adv-add-char-btn');
         this.startingScenario = document.getElementById('adv-starting-scenario');
+        this.systemPrompt = document.getElementById('adv-system-prompt');
         this.startBtn = document.getElementById('adv-start-btn');
         this.listContainer = document.getElementById('adv-list');
         
@@ -85,6 +88,12 @@ class AdventureHandler {
         
         this.playView.style.display = 'none';
         this.setupView.style.display = 'block';
+        
+        const segments = window.config?.get("adventure.systemPromptSegments") || [];
+        if (this.systemPrompt) {
+            this.systemPrompt.value = segments.join("\n\n");
+        }
+        
         this.loadSessionList();
     }
 
@@ -154,6 +163,7 @@ class AdventureHandler {
     async startNewAdventure() {
         const title = "Adventure " + new Date().toLocaleString();
         const scenario = this.startingScenario.value.trim();
+        const sysPrompt = this.systemPrompt ? this.systemPrompt.value.trim() : "";
         const cards = this.selectedCharacters;
         
         try {
@@ -163,6 +173,7 @@ class AdventureHandler {
                 body: JSON.stringify({
                     title: title,
                     starting_scenario: scenario,
+                    system_prompt: sysPrompt,
                     card_ids: cards
                 })
             });
@@ -360,6 +371,204 @@ class AdventureHandler {
             this.isGenerating = false;
             this.loadingIndicator.style.display = 'none';
             this.scrollToBottom();
+        }
+    }
+
+    injectSettingsModal() {
+        if (document.getElementById('adv-global-settings-modal')) return;
+        
+        const modal = document.createElement('div');
+        modal.id = 'adv-global-settings-modal';
+        modal.className = 'modal-overlay';
+        modal.style.display = 'none';
+        modal.style.zIndex = '2000';
+        modal.innerHTML = `
+            <div class="api-settings-modal" style="max-width: 600px; width: 90%; max-height: 90vh; height: auto; display: flex; flex-direction: column;">
+                <div class="modal-header">
+                    <h2 class="modal-title">⚙️ Adventure Global Settings</h2>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button id="adv-global-settings-close" class="modal-close">×</button>
+                    </div>
+                </div>
+                <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column;">
+                    <h3 style="margin-top: 0; margin-bottom: 0.5rem;">Modular System Prompt</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new adventure.</p>
+                    
+                    <div id="adv-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; flex: 1; min-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
+                        <!-- Segments injected here -->
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="adv-global-new-segment" class="content-box" style="flex: 1;" placeholder="New prompt segment...">
+                        <button id="adv-global-add-segment" class="btn-primary">Add</button>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+                        <button id="adv-global-save-btn" class="btn-primary">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Add a settings button to the Setup view title
+        const setupTitle = document.querySelector('#adv-setup-view .section-title');
+        if (setupTitle) {
+            const settingsBtn = document.createElement('button');
+            settingsBtn.id = 'adv-open-global-settings';
+            settingsBtn.className = 'btn-outline btn-small';
+            settingsBtn.innerHTML = '⚙️ Settings';
+            settingsBtn.style.marginLeft = '1rem';
+            settingsBtn.style.fontSize = '0.9rem';
+            setupTitle.appendChild(settingsBtn);
+            
+            settingsBtn.addEventListener('click', () => this.openGlobalSettings());
+        }
+
+        document.getElementById('adv-global-settings-close').addEventListener('click', () => {
+            document.getElementById('adv-global-settings-modal').style.display = 'none';
+        });
+        document.getElementById('adv-global-save-btn').addEventListener('click', () => this.saveGlobalSettings());
+        document.getElementById('adv-global-add-segment').addEventListener('click', () => this.addSystemPromptSegment());
+        
+        document.getElementById('adv-global-new-segment').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.addSystemPromptSegment();
+        });
+    }
+
+    openGlobalSettings() {
+        if (!window.config) return;
+        this.systemPromptSegments = [...(window.config.get("adventure.systemPromptSegments") || [])];
+        this.renderSystemPromptSegments();
+        document.getElementById('adv-global-settings-modal').style.display = 'flex';
+    }
+
+    renderSystemPromptSegments() {
+        const container = document.getElementById('adv-global-prompt-segments');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        this.systemPromptSegments.forEach((seg, i) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'flex-start';
+            row.style.padding = '0.5rem';
+            row.style.background = 'var(--surface-color)';
+            row.style.border = '1px solid var(--border)';
+            row.style.borderRadius = '0.4rem';
+            row.style.gap = '0.5rem';
+            row.draggable = true;
+            
+            const dragHandle = document.createElement('div');
+            dragHandle.innerHTML = '☰';
+            dragHandle.style.cursor = 'grab';
+            dragHandle.style.color = 'var(--text-secondary)';
+            dragHandle.style.paddingTop = '0.2rem';
+            dragHandle.style.userSelect = 'none';
+            
+            row.addEventListener('dragstart', (e) => {
+                this.draggedSegmentIndex = i;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', i);
+                setTimeout(() => row.style.opacity = '0.4', 0);
+            });
+            
+            row.addEventListener('dragend', () => {
+                row.style.opacity = '1';
+                this.draggedSegmentIndex = null;
+                Array.from(container.children).forEach(r => r.style.boxShadow = '');
+            });
+            
+            row.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (this.draggedSegmentIndex !== null && this.draggedSegmentIndex !== i) {
+                    if (this.draggedSegmentIndex < i) row.style.boxShadow = '0 2px 0 var(--accent)';
+                    else row.style.boxShadow = '0 -2px 0 var(--accent)';
+                }
+            });
+            
+            row.addEventListener('dragleave', () => row.style.boxShadow = '');
+            
+            row.addEventListener('drop', (e) => {
+                e.preventDefault();
+                row.style.boxShadow = '';
+                if (this.draggedSegmentIndex !== null && this.draggedSegmentIndex !== i) {
+                    const draggedItem = this.systemPromptSegments.splice(this.draggedSegmentIndex, 1)[0];
+                    this.systemPromptSegments.splice(i, 0, draggedItem);
+                    this.renderSystemPromptSegments();
+                }
+            });
+
+            const input = document.createElement('textarea');
+            input.value = seg;
+            input.style.flex = '1';
+            input.style.background = 'transparent';
+            input.style.border = 'none';
+            input.style.color = 'var(--text-primary)';
+            input.style.fontFamily = 'inherit';
+            input.style.fontSize = '0.85rem';
+            input.style.resize = 'none';
+            input.style.overflowY = 'hidden';
+            input.style.minHeight = '3rem';
+            input.style.outline = 'none';
+            input.style.padding = '0';
+            
+            input.addEventListener('change', (e) => {
+                this.systemPromptSegments[i] = e.target.value;
+            });
+
+            const autoSize = () => {
+                input.style.height = 'auto';
+                input.style.height = (input.scrollHeight) + 'px';
+            };
+            input.addEventListener('input', autoSize);
+            
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '🗑️';
+            delBtn.style.background = 'none';
+            delBtn.style.border = 'none';
+            delBtn.style.cursor = 'pointer';
+            delBtn.style.padding = '0.2rem';
+            delBtn.onclick = () => {
+                this.systemPromptSegments.splice(i, 1);
+                this.renderSystemPromptSegments();
+            };
+            
+            row.appendChild(dragHandle);
+            row.appendChild(input);
+            row.appendChild(delBtn);
+            container.appendChild(row);
+
+            setTimeout(autoSize, 0);
+        });
+    }
+
+    addSystemPromptSegment() {
+        const newSegInput = document.getElementById('adv-global-new-segment');
+        const val = newSegInput.value.trim();
+        if (val) {
+            this.systemPromptSegments.push(val);
+            newSegInput.value = '';
+            this.renderSystemPromptSegments();
+        }
+    }
+
+    saveGlobalSettings() {
+        if (!window.config) return;
+        window.config.set("adventure.systemPromptSegments", this.systemPromptSegments);
+        document.getElementById('adv-global-settings-modal').style.display = 'none';
+        
+        // Update the textarea if we are currently on the setup view
+        const segments = window.config.get("adventure.systemPromptSegments") || [];
+        if (this.systemPrompt) {
+            this.systemPrompt.value = segments.join("\n\n");
+        }
+        
+        if (window.app && window.app.showNotification) {
+            window.app.showNotification("Adventure global settings saved", "success");
+        } else {
+            alert("Settings saved!");
         }
     }
 }

@@ -227,12 +227,14 @@ class AdventureActionCreate(BaseModel):
 class AdventureSessionCreate(BaseModel):
     title: str
     starting_scenario: str = ""
+    system_prompt: str = ""
     card_ids: List[int] = []
 
 class AdventureSessionUpdate(BaseModel):
     title: Optional[str] = None
     starting_scenario: Optional[str] = None
     summary: Optional[str] = None
+    system_prompt: Optional[str] = None
 
 class AdventureSessionOut(BaseModel):
     id: str
@@ -240,6 +242,7 @@ class AdventureSessionOut(BaseModel):
     title: str
     starting_scenario: str
     summary: str
+    system_prompt: str
     created_at: datetime
     updated_at: datetime
     class Config:
