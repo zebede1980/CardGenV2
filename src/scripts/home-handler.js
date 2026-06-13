@@ -40,6 +40,8 @@ class HomeHandler {
         if (viewStoryWriter) viewStoryWriter.style.display = 'none';
         const viewChat = document.getElementById('view-roleplaychat');
         if (viewChat) viewChat.style.display = 'none';
+        const viewAdventure = document.getElementById('view-adventure');
+        if (viewAdventure) viewAdventure.style.display = 'none';
 
         // Reset existing top tabs
         const tabCardGen = document.getElementById('tab-cardgen');
@@ -52,6 +54,7 @@ class HomeHandler {
                     <button id="home-btn-cardgen" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">✨ Character Generator</button>
                     <button id="home-btn-story" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📖 Story Mode</button>
                     <button id="home-btn-chat" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">💬 Roleplay Chat</button>
+                    <button id="home-btn-adventure" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🎲 Adventure</button>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
@@ -89,8 +92,8 @@ class HomeHandler {
                         justify-content: center;
                     }
                     @media (max-width: 768px) {
-                        #tab-home, #tab-cardgen, #tab-storywriter, #tab-roleplaychat {
-                            flex: 1 1 40% !important; /* Creates a 2x2 grid */
+                        #tab-home, #tab-cardgen, #tab-storywriter, #tab-roleplaychat, #tab-adventure {
+                            flex: 1 1 30% !important; /* Creates a responsive grid */
                             padding: 0.6rem 0.5rem !important;
                             font-size: 0.85rem !important;
                             margin: 0 !important;
@@ -108,33 +111,42 @@ class HomeHandler {
         const tabCardGen = document.getElementById('tab-cardgen');
         const tabStoryWriter = document.getElementById('tab-storywriter');
         const tabChat = document.getElementById('tab-roleplaychat');
+        const tabAdventure = document.getElementById('tab-adventure');
         
         const viewHome = document.getElementById('view-home');
         const viewCardGen = document.getElementById('view-cardgen');
         const viewStoryWriter = document.getElementById('view-storywriter');
         const viewChat = document.getElementById('view-roleplaychat');
+        const viewAdventure = document.getElementById('view-adventure');
 
         const switchView = (targetView, targetTab) => {
             if (viewHome) viewHome.style.display = targetView === viewHome ? 'block' : 'none';
             if (viewCardGen) viewCardGen.style.display = targetView === viewCardGen ? 'block' : 'none';
             if (viewStoryWriter) viewStoryWriter.style.display = targetView === viewStoryWriter ? 'block' : 'none';
             if (viewChat) viewChat.style.display = targetView === viewChat ? 'block' : 'none';
+            if (viewAdventure) viewAdventure.style.display = targetView === viewAdventure ? 'block' : 'none';
             
             if (tabHome) tabHome.className = targetTab === tabHome ? 'btn-primary' : 'btn-outline';
             if (tabCardGen) tabCardGen.className = targetTab === tabCardGen ? 'btn-primary' : 'btn-outline';
             if (tabStoryWriter) tabStoryWriter.className = targetTab === tabStoryWriter ? 'btn-primary' : 'btn-outline';
             if (tabChat) tabChat.className = targetTab === tabChat ? 'btn-primary' : 'btn-outline';
+            if (tabAdventure) tabAdventure.className = targetTab === tabAdventure ? 'btn-primary' : 'btn-outline';
         };
 
         if (tabHome) tabHome.addEventListener('click', () => { switchView(viewHome, tabHome); this.loadCards(); });
         if (tabCardGen) tabCardGen.addEventListener('click', () => switchView(viewCardGen, tabCardGen));
         if (tabStoryWriter) tabStoryWriter.addEventListener('click', () => switchView(viewStoryWriter, tabStoryWriter));
         if (tabChat) tabChat.addEventListener('click', () => switchView(viewChat, tabChat));
+        if (tabAdventure) tabAdventure.addEventListener('click', () => {
+            switchView(viewAdventure, tabAdventure);
+            if(window.adventureHandler) window.adventureHandler.showView();
+        });
 
         // Home Hero Buttons
         document.getElementById('home-btn-cardgen')?.addEventListener('click', () => { if (tabCardGen) tabCardGen.click(); });
         document.getElementById('home-btn-story')?.addEventListener('click', () => { if (tabStoryWriter) tabStoryWriter.click(); });
         document.getElementById('home-btn-chat')?.addEventListener('click', () => { if (tabChat) tabChat.click(); });
+        document.getElementById('home-btn-adventure')?.addEventListener('click', () => { if (tabAdventure) tabAdventure.click(); });
 
         document.getElementById('home-search')?.addEventListener('input', (e) => this.filterCards(e.target.value));
     }
