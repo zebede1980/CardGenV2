@@ -3403,3 +3403,27 @@ html.chat-scroll-locked, body.chat-scroll-locked {
         height: 36px !important;
     }
 }
+
+/* ── Adventure Mode ──────────────────────────────────────────────────────────── */
+
+#view-adventure .adv-story-segment {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+#view-adventure .adv-option-btn {
+    transition: all 0.2s ease-in-out;
+    background: var(--surface-muted);
+}
+
+#view-adventure .adv-option-btn:hover {
+    background: var(--surface);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 600px) {
+    #adv-options-area {
+        grid-template-columns: 1fr !important;
+    }
+}

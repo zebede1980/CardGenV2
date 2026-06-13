@@ -170,6 +170,7 @@
                     <button id="tab-cardgen" class="btn-primary" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎭 Character Generator</button>
                     <button id="tab-storywriter" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">✍️ Story Writer</button>
                     <button id="tab-roleplaychat" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">💬 Roleplay Chat</button>
+                    <button id="tab-adventure" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎲 Adventure</button>
                 </div>
 
                 <!-- Character Generator View -->
@@ -1679,6 +1680,51 @@
                   </div>
                 </div>
 
+                <!-- Adventure Mode View -->
+                <div id="view-adventure" class="tab-content" style="display: none;">
+                    <section class="input-section" id="adv-setup-view" style="margin-bottom: 2rem;">
+                        <h2 class="section-title">New Adventure</h2>
+                        <div class="content-box">
+                            <label class="label">Select Characters</label>
+                            <div id="adv-selected-chars" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; min-height: 42px; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);">
+                                <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
+                            </div>
+                            <button id="adv-add-char-btn" class="btn-outline" style="margin-bottom: 1rem;">🖼️ Add Character</button>
+                            
+                            <label class="label">Starting Scenario (Optional)</label>
+                            <textarea id="adv-starting-scenario" class="input" rows="3" placeholder="Describe how the adventure begins..."></textarea>
+                            
+                            <button id="adv-start-btn" class="btn-primary" style="width: 100%; margin-top: 1rem;">Begin Adventure</button>
+                        </div>
+                        
+                        <h2 class="section-title" style="margin-top: 2rem;">Load Adventure</h2>
+                        <div id="adv-list-container" class="content-box">
+                            <ul id="adv-list" class="story-list"></ul>
+                        </div>
+                    </section>
+
+                    <section class="result-section" id="adv-play-view" style="display: none; flex-direction: column; padding-bottom: 4rem;">
+                        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                            <button id="adv-back-btn" class="btn-outline">← Exit</button>
+                            <input type="text" id="adv-title" class="input" style="flex: 1; font-weight: bold; font-size: 1.1rem; background: transparent; border: none;">
+                        </div>
+
+                        <!-- Story History -->
+                        <div id="adv-story-area" class="content-box" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--surface-color); min-height: 300px; max-height: 50vh;">
+                            <!-- Segments go here -->
+                        </div>
+
+                        <!-- The 4 Options -->
+                        <div id="adv-options-area" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                            <!-- Buttons go here -->
+                        </div>
+                        
+                        <div id="adv-loading" style="display: none; justify-content: center; align-items: center; padding: 1rem;">
+                            <div class="loading-spinner"></div>
+                            <span style="margin-left: 0.5rem; color: var(--text-secondary);">The narrator is thinking...</span>
+                        </div>
+                    </section>
+                </div>
             </main>
 
             <footer class="footer">
@@ -1739,6 +1785,7 @@
         <script src="src/scripts/image-gallery.js?v=20260518"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=8"></script>
+        <script src="src/scripts/adventure-handler.js?v=1"></script>
         <script src="src/scripts/inspire-me.js?v=20260601"></script>
         <script src="src/scripts/gallery-mode.js"></script>
         <script src="src/scripts/chat-handler.js?v=20260610"></script>
