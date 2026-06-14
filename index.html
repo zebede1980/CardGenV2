@@ -1983,10 +1983,17 @@
                         </p>
                     </div>
 
-                    <div style="text-align: center; margin-top: 2rem">
-                        <button id="clear-config-btn" class="btn-outline">
-                            Clear Saved Configuration
+                    <div style="text-align: center; margin-top: 2rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                        <button id="backup-config-btn" class="btn-primary">
+                            Export Backup
                         </button>
+                        <button id="restore-config-btn" class="btn-outline">
+                            Import Backup
+                        </button>
+                        <button id="clear-config-btn" class="btn-outline" style="border-color: #ef4444; color: #ef4444;">
+                            Clear Config
+                        </button>
+                        <input type="file" id="restore-config-file" accept=".json" style="display: none;" />
                     </div>
 
                     <hr style="border-color: var(--border); margin: 1.5rem 0;" />

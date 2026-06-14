@@ -76,7 +76,7 @@ function withFileLock(filename, fn) {
     throw err;
   });
   // Store only a never-rejecting tail so the chain doesn't stall on error.
-  writeLocks.set(filename, next.catch(() => {}));
+  writeLocks.set(filename, next.catch(() => { }));
   return next;
 }
 
@@ -134,7 +134,7 @@ async function deleteCardHistoryImages(imgDir, cardId) {
     const imgFile = path.join(imgDir, `${cardId}_h${i}.img`);
     if (!fs.existsSync(imgFile)) break;
     for (const ext of [".img", ".mime"]) {
-      fsPromises.unlink(path.join(imgDir, `${cardId}_h${i}${ext}`)).catch(() => {});
+      fsPromises.unlink(path.join(imgDir, `${cardId}_h${i}${ext}`)).catch(() => { });
     }
     i++;
   }
@@ -507,7 +507,7 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
     }
 
     const dbCards = await dbResponse.json();
-    
+
     const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
     const extensions = await readJsonStore(extFile) || {};
 
@@ -673,7 +673,7 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
         for (const old of removed) {
           for (const ext of [".img", ".mime"]) {
             const f = path.join(imgDir, `${old.id}${ext}`);
-            if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+            if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
           }
           deleteCardHistoryImages(imgDir, old.id);
         }
@@ -706,7 +706,7 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
     let url = `${internalUrl}/api/cards/`;
     let method = "POST";
-    
+
     // Use PUT if the record has a numeric DB ID (not a legacy Date.now() string)
     const recordId = record.id;
     if (recordId !== undefined && recordId !== null && Number.isInteger(Number(recordId)) && !isNaN(Number(recordId)) && String(recordId).length < 13) {
@@ -716,7 +716,7 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
 
     const response = await fetch(url, {
       method: method,
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         "X-User-Id": String(req.user.userId),
         "X-User-Name": String(req.user.username),
@@ -724,13 +724,13 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
       },
       body: JSON.stringify(dbPayload)
     });
-    
+
     if (!response.ok) {
       const errText = await response.text();
       console.error(`[Card Storage] POST/PUT Database returned ${response.status}: ${errText}`);
       throw new Error(`Database returned ${response.status}`);
     }
-    
+
     const dbCard = await response.json();
 
     // Save portrait image to proxy filesystem keyed by card DB id
@@ -777,7 +777,7 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
       await writeHistory(req.user.userId, histItems.filter(c => String(c.id) !== String(cardId)));
       for (const ext of [".img", ".mime"]) {
         const f = path.join(imgDir, `${cardId}${ext}`);
-        if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+        if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
       }
       deleteCardHistoryImages(imgDir, cardId);
       return res.json({ success: true });
@@ -797,9 +797,9 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
     deleteCardHistoryImages(imgDir, cardId);
     for (const ext of [".img", ".mime"]) {
       const f = path.join(imgDir, `${cardId}${ext}`);
-      if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+      if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
     }
-    
+
     const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
     await withFileLock(`user-${req.user.userId}-ext`, async () => {
       const extensions = await readJsonStore(extFile) || {};
@@ -848,11 +848,11 @@ app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
       if (listRes.ok) {
         const existing = await listRes.json();
         for (const ec of existing) {
-          await fetch(`${internalUrl}/api/cards/${ec.id}`, { method: "DELETE", headers: internalHeaders }).catch(() => {});
+          await fetch(`${internalUrl}/api/cards/${ec.id}`, { method: "DELETE", headers: internalHeaders }).catch(() => { });
           const ecImgDir = path.join(getUserDataDir(req.user.userId), "card-images");
           for (const ext of [".img", ".mime"]) {
             const f = path.join(ecImgDir, `${ec.id}${ext}`);
-            if (fs.existsSync(f)) await fsPromises.unlink(f).catch(() => {});
+            if (fs.existsSync(f)) await fsPromises.unlink(f).catch(() => { });
           }
         }
         console.log(`[Migration] Purged ${existing.length} existing cards`);
@@ -1009,7 +1009,7 @@ app.get("/api/story-app/status", async (req, res) => {
       method: "GET",
       timeout: 3000,
     });
-    
+
     console.log(`Story Writer connection check: Received status ${response.status} ${response.statusText}`);
     if (response.ok) {
       console.log(`Story Writer connection check: Success! Returning public URL: ${publicUrl || internalUrl}`);
@@ -1034,21 +1034,21 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
   try {
     const fetchOptions = {
       method: req.method,
-      headers: { 
+      headers: {
         "Content-Type": req.headers["content-type"] || "application/json",
         "X-User-Id": String(req.user.userId),
         "X-User-Name": String(req.user.username),
         "X-Internal-Secret": INTERNAL_API_SECRET
       }
     };
-    
+
     // Only pass bodies for methods that allow them
     if (["POST", "PUT", "PATCH"].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
       fetchOptions.body = JSON.stringify(req.body);
     }
 
     const response = await fetch(targetUrl, fetchOptions);
-    
+
     if (response.headers.get("content-type")?.includes("text/event-stream")) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
@@ -1110,7 +1110,7 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
       const googleUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleApiKey}`;
       const languageCode = voice.substring(0, 5) || "en-US"; // e.g., extract 'en-US' from 'en-US-Neural2-F'
-      
+
       const response = await fetch(googleUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1237,9 +1237,9 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     const isOpenRouter = apiUrl.includes("openrouter.ai");
     const additionalHeaders = isOpenRouter
       ? {
-          "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
-          "X-Title": "SillyTavern Character Generator",
-        }
+        "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
+        "X-Title": "SillyTavern Character Generator",
+      }
       : {};
 
     const requestBody = {
@@ -1317,7 +1317,8 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
 });
 
 // Free image generation via Pollinations.ai (no API key required)
-app.post("/api/image/free", requireAuth, async (req, res) => {  try {
+app.post("/api/image/free", requireAuth, async (req, res) => {
+  try {
     const { prompt, service, model, width, height, seed } = req.body;
 
     if (!prompt) {
@@ -1412,9 +1413,9 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     const isOpenRouter = apiUrl.includes("openrouter.ai");
     const additionalHeaders = isOpenRouter
       ? {
-          "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
-          "X-Title": "SillyTavern Character Generator",
-        }
+        "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
+        "X-Title": "SillyTavern Character Generator",
+      }
       : {};
 
     // Try Bearer auth first (most common for image APIs)

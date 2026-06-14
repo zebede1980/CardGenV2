@@ -291,6 +291,9 @@ class CharacterGeneratorApp {
       .forEach((input) => input.addEventListener("change", () => this.saveAPISettings()));
 
     document.getElementById("clear-config-btn").addEventListener("click", () => this.handleClearConfig());
+    document.getElementById("backup-config-btn").addEventListener("click", () => this.handleBackupConfig());
+    document.getElementById("restore-config-btn").addEventListener("click", () => document.getElementById("restore-config-file").click());
+    document.getElementById("restore-config-file").addEventListener("change", (e) => this.handleRestoreConfig(e));
     document.getElementById("test-connection-btn").addEventListener("click", () => this.handleTestConnection());
 
     // Card type: force POV to third-person and disable it for group/scenario
@@ -788,6 +791,76 @@ class CharacterGeneratorApp {
 
   async handleAPIConfig() {
     this.showNotification("Configure API settings in form above", "info");
+  }
+
+  async handleBackupConfig() {
+    this.config.saveToForm();
+    this.config.saveConfig();
+    
+    let swSettings = {};
+    try {
+        const swRes = await (window.authFetch || fetch)("/api/sw/settings/");
+        if (swRes.ok) {
+            swSettings = await swRes.json();
+        }
+    } catch (e) {
+        console.warn("Failed to fetch Storywriter settings for backup:", e);
+    }
+    
+    const backupData = {
+        cardgen: this.config.config,
+        storywriter: swSettings
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", "cardgen_config_backup.json");
+    dlAnchorElem.click();
+    this.showNotification("Configuration backed up successfully!", "success");
+  }
+
+  handleRestoreConfig(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedConfig = JSON.parse(event.target.result);
+        
+        let cardgenConfig = importedConfig;
+        let swConfig = null;
+        
+        // Detect new backup format with separated configs
+        if (importedConfig.cardgen !== undefined) {
+            cardgenConfig = importedConfig.cardgen;
+            swConfig = importedConfig.storywriter;
+        }
+        
+        this.config.config = this.config.deepMerge(this.config.config, cardgenConfig);
+        this.config.saveConfig();
+        
+        if (swConfig && Object.keys(swConfig).length > 0) {
+            try {
+                await (window.authFetch || fetch)("/api/sw/settings/", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(swConfig)
+                });
+            } catch (e) {
+                console.error("Failed to restore Storywriter settings:", e);
+            }
+        }
+        
+        this.showNotification("Configuration restored successfully! Reloading page...", "success");
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (error) {
+        this.showNotification("Failed to parse configuration file.", "error");
+        console.error("Config Import Error:", error);
+      }
+      e.target.value = ""; // Reset input
+    };
+    reader.readAsText(file);
   }
 
   handleClearConfig() {
