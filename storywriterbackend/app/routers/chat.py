@@ -569,9 +569,11 @@ async def send_message(
                     {"role": "user", "content": route_prompt}
                 ]
                 
+                route_log_id = str(uuid.uuid4())
                 queue.put_nowait({
                     "type": "api_log",
                     "log": {
+                        "id": route_log_id,
                         "endpoint": "Chat Speaker Routing",
                         "request": {"model": getattr(settings, 'model', 'unknown'), "messages": route_msgs}
                     }
@@ -586,8 +588,10 @@ async def send_message(
                 queue.put_nowait({
                     "type": "api_log",
                     "log": {
+                        "id": route_log_id,
                         "endpoint": "Chat Speaker Routing",
-                        "response": chosen
+                        "response": chosen,
+                        "usage": llm.last_usage
                     }
                 })
                 
@@ -701,9 +705,11 @@ async def send_message(
                 break
 
     # 4. Setup Background Detached Generation & Queue
+    gen_log_id = str(uuid.uuid4())
     queue.put_nowait({
         "type": "api_log",
         "log": {
+            "id": gen_log_id,
             "endpoint": "Roleplay Chat Generation",
             "request": {"model": getattr(settings, 'model', 'unknown'), "messages": prompt_messages}
         }
@@ -735,8 +741,10 @@ async def send_message(
             await queue.put({
                 "type": "api_log",
                 "log": {
+                    "id": gen_log_id,
                     "endpoint": "Roleplay Chat Generation",
-                    "response": full_content
+                    "response": full_content,
+                    "usage": llm.last_usage
                 }
             })
             

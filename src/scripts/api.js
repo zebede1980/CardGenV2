@@ -9,6 +9,39 @@ class APIHandler {
     this.requestLogs = []; // Rolling log of recent API interactions
   }
 
+  addBackendLog(logData) {
+      if (!logData.id) return;
+      
+      let existingLog = this.requestLogs.find(l => l.id === logData.id);
+      if (!existingLog) {
+          existingLog = {
+              id: logData.id,
+              timestamp: new Date().toISOString(),
+              endpoint: logData.endpoint || "Backend Stream",
+              model: logData.model || "Unknown",
+              request: null,
+              response: null,
+              status: "pending",
+              duration: 0,
+              usage: null,
+              _startTime: performance.now()
+          };
+          this.requestLogs.unshift(existingLog);
+          if (this.requestLogs.length > 30) this.requestLogs.pop();
+      }
+      
+      if (logData.request) existingLog.request = logData.request;
+      if (logData.model) existingLog.model = logData.model;
+      if (logData.response !== undefined) {
+          existingLog.response = logData.response;
+          existingLog.status = 200;
+          if (existingLog._startTime) {
+              existingLog.duration = performance.now() - existingLog._startTime;
+          }
+      }
+      if (logData.usage) existingLog.usage = logData.usage;
+  }
+
   async makeRequest(endpoint, data, isImageRequest = false, stream = false) {
     let lastError;
     let delay = this.config.get("app.retryDelay") || 1000;

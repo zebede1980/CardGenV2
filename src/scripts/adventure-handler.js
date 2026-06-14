@@ -394,7 +394,7 @@ class AdventureHandler {
                         if (!jsonStr) continue;
                         
                         const data = JSON.parse(jsonStr);
-                        if (data.type === 'chunk') {
+                        if (data.type === 'api_log' && window.apiHandler) { window.apiHandler.addBackendLog(data.log); } else if (data.type === 'chunk') {
                             accumulatedText += data.content;
                             // Update UI dynamically but hide the [OPTION X] markers if they start appearing
                             // Actually, they only appear at the very end.

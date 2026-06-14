@@ -1835,6 +1835,10 @@ class RoleplayChatHandler {
                         if (dataStr.trim() === '[DONE]') continue;
                         try {
                             const data = JSON.parse(dataStr);
+                            if (data.type === 'api_log' && window.apiHandler) {
+                                window.apiHandler.addBackendLog(data.log);
+                                continue;
+                            }
 
                             if (data.type === 'metadata') {
                                 if (data.character_name) {

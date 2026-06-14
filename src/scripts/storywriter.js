@@ -1313,7 +1313,7 @@ class StoryWriterApp {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            if (data.type === 'chunk') {
+                            if (data.type === 'api_log' && window.apiHandler) { window.apiHandler.addBackendLog(data.log); } else if (data.type === 'chunk') {
                                 // Display the chunk
                                 streamDiv.textContent += data.content;
 

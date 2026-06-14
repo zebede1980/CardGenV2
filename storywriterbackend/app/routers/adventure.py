@@ -247,6 +247,17 @@ async def send_action(
     db.commit()
     assistant_action_id = assistant_action.id
     
+    log_id = str(uuid.uuid4())
+    
+    queue.put_nowait({
+        "type": "api_log",
+        "log": {
+            "id": log_id,
+            "endpoint": "Adventure Action Generation",
+            "request": {"model": getattr(settings, 'model', 'unknown'), "messages": prompt_messages}
+        }
+    })
+    
     queue.put_nowait({
         "type": "metadata", 
         "user_action_id": user_action.id if user_action else None,
@@ -281,6 +292,16 @@ async def send_action(
                     cleaned_story = re.sub(f"\[OPTION {i}\].*?(?=\[OPTION|$)", "", cleaned_story, flags=re.IGNORECASE | re.DOTALL)
             
             cleaned_story = cleaned_story.strip()
+            
+            await queue.put({
+                "type": "api_log",
+                "log": {
+                    "id": log_id,
+                    "endpoint": "Adventure Action Generation",
+                    "response": full_content,
+                    "usage": llm.last_usage
+                }
+            })
             
             # Persist to DB
             with SessionLocal() as bg_db:
