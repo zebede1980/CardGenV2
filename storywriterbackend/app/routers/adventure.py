@@ -298,7 +298,10 @@ async def send_action(
                 "log": {
                     "id": log_id,
                     "endpoint": "Adventure Action Generation",
-                    "response": full_content,
+                    "response": {
+                        "choices": [{"message": {"content": full_content}}],
+                        "usage": llm.last_usage
+                    },
                     "usage": llm.last_usage
                 }
             })

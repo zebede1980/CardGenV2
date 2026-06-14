@@ -181,9 +181,9 @@ class RoleplayChatHandler {
                         <!-- Segments injected here -->
                     </div>
                     
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" id="chat-global-new-segment" class="content-box" style="flex: 1;" placeholder="New prompt segment...">
-                        <button id="chat-global-add-segment" class="btn-primary">Add</button>
+                    <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+                        <textarea id="chat-global-new-segment" class="content-box" style="flex: 1; resize: vertical;" rows="3" placeholder="New prompt segment (Ctrl+Enter to add)..."></textarea>
+                        <button id="chat-global-add-segment" class="btn-primary" style="height: fit-content; padding: 0.8rem 1.2rem;">Add</button>
                     </div>
                     
                     <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
@@ -440,6 +440,13 @@ class RoleplayChatHandler {
             } else if (e.key === 'Escape') {
                 this.els.msgInput.blur();
                 this.closeMobileSidebar();
+            }
+        });
+        
+        this.els.globalNewSegment.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                this.addSystemPromptSegment();
             }
         });
         

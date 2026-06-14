@@ -8,6 +8,7 @@ import json
 import httpx
 import base64
 import urllib.parse
+import uuid
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
@@ -584,13 +585,15 @@ async def send_message(
                     name_response.append(chunk)
                 
                 chosen = "".join(name_response).strip()
-                
                 queue.put_nowait({
                     "type": "api_log",
                     "log": {
                         "id": route_log_id,
                         "endpoint": "Chat Speaker Routing",
-                        "response": chosen,
+                        "response": {
+                            "choices": [{"message": {"content": chosen}}],
+                            "usage": llm.last_usage
+                        },
                         "usage": llm.last_usage
                     }
                 })
@@ -743,7 +746,10 @@ async def send_message(
                 "log": {
                     "id": gen_log_id,
                     "endpoint": "Roleplay Chat Generation",
-                    "response": full_content,
+                    "response": {
+                        "choices": [{"message": {"content": full_content}}],
+                        "usage": llm.last_usage
+                    },
                     "usage": llm.last_usage
                 }
             })

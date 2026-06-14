@@ -598,9 +598,9 @@ class AdventureHandler {
                         <!-- Segments injected here -->
                     </div>
                     
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" id="adv-global-new-segment" class="content-box" style="flex: 1;" placeholder="New prompt segment...">
-                        <button id="adv-global-add-segment" class="btn-primary">Add</button>
+                    <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+                        <textarea id="adv-global-new-segment" class="content-box" style="flex: 1; resize: vertical;" rows="3" placeholder="New prompt segment (Ctrl+Enter to add)..."></textarea>
+                        <button id="adv-global-add-segment" class="btn-primary" style="height: fit-content; padding: 0.8rem 1.2rem;">Add</button>
                     </div>
                     
                     <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
@@ -632,7 +632,7 @@ class AdventureHandler {
         document.getElementById('adv-global-add-segment').addEventListener('click', () => this.addSystemPromptSegment());
         
         document.getElementById('adv-global-new-segment').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') this.addSystemPromptSegment();
+            if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); this.addSystemPromptSegment(); }
         });
     }
 

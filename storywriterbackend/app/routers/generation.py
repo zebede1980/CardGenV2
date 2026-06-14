@@ -136,7 +136,11 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
             db.refresh(seg)
 
             # Emit api_log with response after generation completes
-            yield f"data: {json.dumps({'type': 'api_log', 'log': {'id': log_id, 'endpoint': 'Story Generation', 'response': full_content, 'usage': llm.last_usage}})}\n\n"
+            response_obj = {
+                "choices": [{"message": {"content": full_content}}],
+                "usage": llm.last_usage
+            }
+            yield f"data: {json.dumps({'type': 'api_log', 'log': {'id': log_id, 'endpoint': 'Story Generation', 'response': response_obj, 'usage': llm.last_usage}})}\n\n"
             
             done_payload = {
                 'type': 'done',
