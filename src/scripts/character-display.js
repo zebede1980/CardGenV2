@@ -79,6 +79,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const resetScenarioBtn = document.getElementById("reset-scenario-btn");
     const resetFirstMessageBtn = document.getElementById("reset-first-message-btn");
     const resetPostHistoryBtn = document.getElementById("reset-post-history-btn");
+    const resetCreatorNotesBtn = document.getElementById("reset-creator-notes-btn");
 
     if (resetNameBtn) resetNameBtn.style.display = "none";
     if (resetDescriptionBtn) resetDescriptionBtn.style.display = "none";
@@ -86,6 +87,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (resetScenarioBtn) resetScenarioBtn.style.display = "none";
     if (resetFirstMessageBtn) resetFirstMessageBtn.style.display = "none";
     if (resetPostHistoryBtn) resetPostHistoryBtn.style.display = "none";
+    if (resetCreatorNotesBtn) resetCreatorNotesBtn.style.display = "none";
 
     const exampleMessagesOutput = document.getElementById("example-messages-output");
     if (exampleMessagesOutput) {
@@ -159,6 +161,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
         originalValue = this.originalCharacter.postHistoryInstructions;
         currentField = "postHistoryInstructions";
         break;
+      case "creatorNotes":
+        textarea = document.getElementById("creator-notes");
+        resetBtn = document.getElementById("reset-creator-notes-btn");
+        originalValue = this.originalCharacter.creatorNotes;
+        currentField = "creatorNotes";
+        break;
     }
 
     this.currentCharacter[currentField] = textarea.value;
@@ -219,6 +227,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
         resetBtn = document.getElementById("reset-post-history-btn");
         originalValue = this.originalCharacter.postHistoryInstructions;
         fieldName = "Post-history instructions";
+        break;
+      case "creatorNotes":
+        textarea = document.getElementById("creator-notes");
+        resetBtn = document.getElementById("reset-creator-notes-btn");
+        originalValue = this.originalCharacter.creatorNotes;
+        fieldName = "Creator's notes";
         break;
     }
 
@@ -506,6 +520,77 @@ Object.assign(CharacterGeneratorApp.prototype, {
       } else {
         outputDiv.textContent = `⚠️ Generation failed: ${error.message}`;
       }
+    }
+  },
+
+  async handleRegenerateCreatorNotes() {
+    if (!this.currentCharacter) return;
+
+    const textArea = document.getElementById("creator-notes");
+    const regenBtn = document.getElementById("regenerate-creator-notes-btn");
+    const promptInput = document.getElementById("creator-notes-prompt");
+
+    if (!textArea || !regenBtn) return;
+
+    const customPrompt = promptInput?.value?.trim() || "";
+
+    try {
+      regenBtn.disabled = true;
+      const originalText = regenBtn.textContent;
+      regenBtn.textContent = "⏳...";
+
+      const newNotes = await window.apiHandler.generateCreatorNotes(this.currentCharacter, customPrompt);
+
+      if (newNotes) {
+        textArea.value = newNotes;
+        this.currentCharacter.creatorNotes = newNotes;
+        this.showNotification("Creator's Notes regenerated!", "success");
+        const resetBtn = document.getElementById("reset-creator-notes-btn");
+        if (resetBtn) resetBtn.style.display = "block";
+      }
+
+      regenBtn.textContent = originalText;
+      regenBtn.disabled = false;
+    } catch (error) {
+      console.error("Creator's Notes generation failed:", error);
+      this.showNotification(`Failed to generate notes: ${error.message}`, "error");
+      regenBtn.disabled = false;
+      regenBtn.textContent = "🔄 Redo";
+    }
+  },
+
+  async handleRegeneratePostHistory() {
+    if (!this.currentCharacter) return;
+
+    const textArea = document.getElementById("character-post-history");
+    const regenBtn = document.getElementById("regenerate-post-history-btn");
+    const promptInput = document.getElementById("post-history-prompt");
+
+    if (!textArea || !regenBtn) return;
+
+    const customPrompt = promptInput?.value?.trim() || "";
+
+    try {
+      regenBtn.disabled = true;
+      const originalText = regenBtn.textContent;
+      regenBtn.textContent = "⏳...";
+
+      const newInstructions = await window.apiHandler.generatePostHistoryInstructions(this.currentCharacter, customPrompt);
+
+      if (newInstructions) {
+        textArea.value = newInstructions;
+        this.currentCharacter.postHistoryInstructions = newInstructions;
+        this.handleCharacterEdit("postHistoryInstructions");
+        this.showNotification("Post-History Instructions regenerated!", "success");
+      }
+
+      regenBtn.textContent = originalText;
+      regenBtn.disabled = false;
+    } catch (error) {
+      console.error("Post-History Instructions generation failed:", error);
+      this.showNotification(`Failed to generate instructions: ${error.message}`, "error");
+      regenBtn.disabled = false;
+      regenBtn.textContent = "🔄 Redo";
     }
   },
 

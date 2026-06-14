@@ -217,6 +217,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
         console.warn("Creator notes generation failed (non-fatal):", notesError);
       }
 
+      this.showStreamMessage("📜 Generating post-history instructions...\n");
+      try {
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        if (postHistory) { this.currentCharacter.postHistoryInstructions = postHistory; }
+      } catch (phError) {
+        console.warn("Post-History Instructions generation failed (non-fatal):", phError);
+      }
+
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 
       this.showStreamMessage("\n✅ Character generation complete!\n");

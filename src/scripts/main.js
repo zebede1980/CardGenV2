@@ -240,6 +240,7 @@ class CharacterGeneratorApp {
     document.getElementById("reset-scenario-btn").addEventListener("click", () => this.handleResetField("scenario"));
     if (document.getElementById("reset-first-message-btn")) document.getElementById("reset-first-message-btn").addEventListener("click", () => this.handleResetField("firstMessage"));
     if (document.getElementById("reset-post-history-btn")) document.getElementById("reset-post-history-btn").addEventListener("click", () => this.handleResetField("postHistoryInstructions"));
+    if (document.getElementById("reset-creator-notes-btn")) document.getElementById("reset-creator-notes-btn").addEventListener("click", () => this.handleResetField("creatorNotes"));
 
     // Character field edit tracking
     const nameInput = document.getElementById("character-generated-name");
@@ -399,10 +400,14 @@ class CharacterGeneratorApp {
     const regenPersBtn = document.getElementById("regenerate-personality-btn");
     const regenScenBtn = document.getElementById("regenerate-scenario-btn");
     const regenFirstMsgBtn = document.getElementById("regenerate-first-message-btn");
+    const regenPostHistoryBtn = document.getElementById("regenerate-post-history-btn");
+    const regenCreatorNotesBtn = document.getElementById("regenerate-creator-notes-btn");
     if (regenDescBtn) regenDescBtn.addEventListener("click", () => this.handleRegenerateField("description"));
     if (regenPersBtn) regenPersBtn.addEventListener("click", () => this.handleRegenerateField("personality"));
     if (regenScenBtn) regenScenBtn.addEventListener("click", () => this.handleRegenerateField("scenario"));
     if (regenFirstMsgBtn) regenFirstMsgBtn.addEventListener("click", () => this.handleRegenerateField("firstMessage"));
+    if (regenPostHistoryBtn) regenPostHistoryBtn.addEventListener("click", () => this.handleRegeneratePostHistory());
+    if (regenCreatorNotesBtn) regenCreatorNotesBtn.addEventListener("click", () => this.handleRegenerateCreatorNotes());
 
     // Lorebook Manager
     const manageLorebookBtn = document.getElementById("manage-lorebook-btn");
@@ -1015,6 +1020,16 @@ class CharacterGeneratorApp {
         }
       } catch (notesError) {
         console.warn("Creator notes generation failed (non-fatal):", notesError);
+      }
+
+      this.showStreamMessage("📜 Generating post-history instructions...\n");
+      try {
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        if (postHistory) {
+          this.currentCharacter.postHistoryInstructions = postHistory;
+        }
+      } catch (phError) {
+        console.warn("Post-History Instructions generation failed (non-fatal):", phError);
       }
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));

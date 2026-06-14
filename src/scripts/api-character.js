@@ -673,6 +673,7 @@ ${lorebookContent}`;
         firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
         mesExample: parsed.mesExample || parsed.mes_example || currentCharacter.mesExample || "",
         creatorNotes: currentCharacter.creatorNotes || "",
+        postHistoryInstructions: currentCharacter.postHistoryInstructions || "",
         tags: Array.isArray(currentCharacter.tags) ? currentCharacter.tags : [],
         cardType: currentCharacter.cardType || "single",
         character_book: currentCharacter.character_book,
@@ -1166,7 +1167,7 @@ Output a JSON array of tags only.`;
     }
   },
 
-  async generateCreatorNotes(character) {
+  async generateCreatorNotes(character, customPrompt = "") {
     if (!character) throw new Error("Character is required to generate creator notes");
     const model = this.config.get("api.text.model");
     const charName = character.name || "the character";
@@ -1183,7 +1184,7 @@ Rules:
 - No hashtags, no lists, no headers — just plain compelling prose.
 - Do NOT start with "Meet" or "Introducing". Be more creative.`;
 
-    const userPrompt = `Character name: ${charName}
+    let userPrompt = `Character name: ${charName}
 
 Description (excerpt):
 ${(character.description || "").slice(0, 600)}
@@ -1198,6 +1199,10 @@ First message (for tone reference):
 ${(character.firstMessage || "").slice(0, 300)}
 
 Write the Creator's Notes blurb now. Plain text only, no formatting.`;
+
+    if (customPrompt && customPrompt.trim()) {
+      userPrompt += `\n\nCRITICAL INSTRUCTION FOR THIS GENERATION: ${customPrompt.trim()}`;
+    }
 
     const data = {
       model,
@@ -1215,6 +1220,54 @@ Write the Creator's Notes blurb now. Plain text only, no formatting.`;
       return this.processNormalResponse(response).trim();
     } catch (error) {
       console.error("=== CREATOR NOTES GENERATION FAILED ===", error);
+      throw error;
+    }
+  },
+
+  async generatePostHistoryInstructions(character, customPrompt = "") {
+    if (!character) throw new Error("Character is required to generate post-history instructions");
+    const model = this.config.get("api.text.model");
+
+    const systemPrompt = `You write operational "Post-History Instructions" for AI roleplaying. This text acts as a persistent system prompt injected immediately before the AI's generation.
+
+Rules:
+- Write 1-2 concise, direct sentences.
+- Focus ONLY on enforcing the core mechanics or style of the scenario.
+- Use the exact string \`{{char}}\` instead of the character's actual name.
+- Use the exact string \`{{user}}\` instead of the player's name.
+- Use imperative mood (e.g. "Write strictly in the third-person...", "Focus on sensory details...").
+- Do NOT provide background lore or personality traits here. This is ONLY for steering the AI's immediate output behavior.`;
+
+    let userPrompt = `Scenario Mechanics & Conflict:
+${(character.scenario || "").slice(0, 800)}
+
+Personality Highlights:
+${(character.personality || "").slice(0, 400)}
+
+Based on the scenario mechanics above, generate a concise Post-History Instruction. Example: "Write strictly in the third person. {{char}} must actively drive the plot forward and respond directly to {{user}}'s actions. Emphasize visceral, sensory details."
+
+Write the instructions now. Plain text only, no formatting.`;
+
+    if (customPrompt && customPrompt.trim()) {
+      userPrompt += `\n\nCRITICAL INSTRUCTION FOR THIS GENERATION: ${customPrompt.trim()}`;
+    }
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 150,
+      stream: false,
+    };
+
+    try {
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      return this.processNormalResponse(response).trim();
+    } catch (error) {
+      console.error("=== POST-HISTORY GENERATION FAILED ===", error);
       throw error;
     }
   },

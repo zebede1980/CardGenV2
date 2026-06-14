@@ -982,18 +982,22 @@
                                         Post-History Instructions (Author's Note)
                                         <span id="post-history-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
                                     </h3>
-                                    <button
-                                        id="reset-post-history-btn"
-                                        class="btn-secondary"
-                                        style="
-                                            display: none;
-                                            padding: 0.3rem 0.8rem;
-                                            font-size: 0.75rem;
-                                        "
-                                        title="Revert back to the version that was last generated or imported"
-                                    >
-                                        🔄 Reset
-                                    </button>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="post-history-prompt" class="input" placeholder="Optional: Guide the instruction generation..." style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-post-history-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the Post-History Instructions with AI.">🔄 Redo</button>
+                                        <button
+                                            id="reset-post-history-btn"
+                                            class="btn-secondary"
+                                            style="
+                                                display: none;
+                                                padding: 0.3rem 0.8rem;
+                                                font-size: 0.75rem;
+                                            "
+                                            title="Revert back to the version that was last generated or imported"
+                                        >
+                                            🔄 Reset
+                                        </button>
+                                    </div>
                                 </div>
                                 <p
                                     style="
@@ -1042,6 +1046,22 @@
                                     <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
                                         Creator's Notes
                                     </h3>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="creator-notes-prompt" class="input" placeholder="Optional: Guide the notes generation..." style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-creator-notes-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the Creator's Notes with AI.">🔄 Redo</button>
+                                        <button
+                                            id="reset-creator-notes-btn"
+                                            class="btn-secondary"
+                                            style="
+                                                display: none;
+                                                padding: 0.3rem 0.8rem;
+                                                font-size: 0.75rem;
+                                            "
+                                            title="Revert the Creator's Notes back to the version that was last generated or imported"
+                                        >
+                                            🔄 Reset
+                                        </button>
+                                    </div>
                                 </div>
                                 <p
                                     style="
