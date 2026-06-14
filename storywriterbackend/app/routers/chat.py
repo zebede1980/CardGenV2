@@ -13,6 +13,7 @@ import uuid
 from app.database import get_db, SessionLocal
 from app import models, schemas
 from app.services.llm_service import LLMService
+from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
 
@@ -52,9 +53,18 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
             persona_str += f"\nDetails: {chat.user_persona_detail}"
         system_parts.append(persona_str)
         
+    # Pre-calculate recent history text for lorebook extraction
+    recent_history_text = " ".join([m.content for m in sorted(chat.messages, key=lambda m: m.created_at)[-5:]])
+
     # 2. Character Cards
     for card in chat.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
+        
+        if card.character_book:
+            relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
+            if relevant_lore:
+                card_text += "\nLorebook:\n" + "\n".join(relevant_lore)
+                
         system_parts.append(f"Character: {card.name}\n{card_text}")
         
     # 3. Dynamic Memory & Summary

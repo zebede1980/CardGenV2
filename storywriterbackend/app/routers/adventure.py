@@ -9,6 +9,7 @@ import uuid
 from app.database import get_db, SessionLocal
 from app import models, schemas
 from app.services.llm_service import LLMService
+from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
 
@@ -25,8 +26,17 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
         "Always adhere strictly to the character definitions provided."
     ]
     
+    # Pre-calculate recent history text for lorebook extraction
+    recent_history_text = " ".join([a.content for a in sorted(session_data.actions, key=lambda x: x.order_index)[-5:]])
+
     for card in session_data.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
+        
+        if card.character_book:
+            relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
+            if relevant_lore:
+                card_text += "\nLorebook:\n" + "\n".join(relevant_lore)
+                
         system_parts.append(f"Character: {card.name}\n{card_text}")
         
     if session_data.summary:

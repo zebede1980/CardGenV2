@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models import Story, StorySegment, CharacterCard, Settings, SteeringInstruction
-from app.services.card_parser import get_lorebook_entries
+from app.services.card_parser import extract_relevant_lorebook_entries
 import json
 
 class ContextManager:
@@ -24,6 +24,14 @@ class ContextManager:
         if story.synopsis:
             system_parts.append(f"Story Synopsis/Memo:\n{story.synopsis}")
 
+        # Build story context from segments
+        segments = self.db.query(StorySegment).filter(
+            StorySegment.story_id == story.id
+        ).order_by(StorySegment.order_index).all()
+        
+        # Pre-calculate recent history text for lorebook extraction
+        recent_history_text = " ".join([s.content for s in segments[-3:]])
+
         # Add character cards and lorebooks
         for sc in story.cards:
             card: CharacterCard = sc.card
@@ -43,12 +51,9 @@ class ContextManager:
             
             # Lorebook entries
             if card.character_book:
-                entries = get_lorebook_entries(card.character_book)
-                if entries:
-                    lore_parts = []
-                    for entry in entries:
-                        lore_parts.append(f"- {entry.get('name', 'Unnamed')}: {entry.get('content', '')}")
-                    card_parts.append("Lorebook:\n" + "\n".join(lore_parts))
+                relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
+                if relevant_lore:
+                    card_parts.append("Lorebook:\n" + "\n".join(relevant_lore))
             
             if card_parts:
                 system_parts.append("Character Card:\n" + "\n".join(card_parts))
@@ -64,11 +69,6 @@ class ContextManager:
 
         if steering:
             system_parts.append(f"Current Steering Instruction (do not include in story text):\n{steering}")
-
-        # Build story context from segments
-        segments = self.db.query(StorySegment).filter(
-            StorySegment.story_id == story.id
-        ).order_by(StorySegment.order_index).all()
 
         story_context = self._build_story_context(segments)
         if story_context:
