@@ -3389,6 +3389,12 @@ html.chat-scroll-locked, body.chat-scroll-locked {
         font-size: 1.1rem !important;
     }
 
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn[style*="display: none"],
+    #view-roleplaychat.chat-fullscreen #roleplay-stop-btn[style*="display: none"],
+    #view-roleplaychat.chat-fullscreen #roleplay-impersonate-btn[style*="display: none"] {
+        display: none !important;
+    }
+
     /* Position Scroll-to-bottom FAB above the input area */
     #view-roleplaychat.chat-fullscreen .chat-scroll-bottom-btn {
         bottom: calc(65px + env(safe-area-inset-bottom, 0px)) !important;
