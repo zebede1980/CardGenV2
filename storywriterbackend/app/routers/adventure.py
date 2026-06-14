@@ -340,3 +340,25 @@ async def send_action(
             pass
             
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
+
+@router.put('/{session_id}/actions/{action_id}', response_model=schemas.AdventureActionOut)
+def update_action(session_id: str, action_id: str, payload: schemas.AdventureActionUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    session = db.query(models.AdventureSession).filter(models.AdventureSession.id == session_id, models.AdventureSession.user_id == current_user.id).first()
+    if not session: raise HTTPException(status_code=404, detail='Session not found')
+    action = db.query(models.AdventureAction).filter(models.AdventureAction.id == action_id, models.AdventureAction.session_id == session_id).first()
+    if not action: raise HTTPException(status_code=404, detail='Action not found')
+    action.content = payload.content
+    db.commit()
+    db.refresh(action)
+    return action
+
+@router.delete('/{session_id}/actions/{action_id}')
+def delete_action(session_id: str, action_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    session = db.query(models.AdventureSession).filter(models.AdventureSession.id == session_id, models.AdventureSession.user_id == current_user.id).first()
+    if not session: raise HTTPException(status_code=404, detail='Session not found')
+    action = db.query(models.AdventureAction).filter(models.AdventureAction.id == action_id, models.AdventureAction.session_id == session_id).first()
+    if not action: raise HTTPException(status_code=404, detail='Action not found')
+    db.delete(action)
+    db.commit()
+    return {'status': 'ok'}
+

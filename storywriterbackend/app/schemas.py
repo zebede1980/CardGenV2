@@ -224,6 +224,9 @@ class AdventureActionCreate(BaseModel):
     role: str
     options: Optional[str] = ""
 
+class AdventureActionUpdate(BaseModel):
+    content: str
+
 class AdventureSessionCreate(BaseModel):
     title: str
     starting_scenario: str = ""

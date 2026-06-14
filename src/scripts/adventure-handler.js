@@ -218,9 +218,9 @@ class AdventureHandler {
                 if (action.is_summarized) return;
                 
                 if (action.role === 'user') {
-                    this.appendStorySegment(`<b>Next:</b> ${action.content}`);
+                    this.appendStorySegment(`<b>Next:</b> ${action.content}`, action.id, 'user');
                 } else if (action.role === 'assistant') {
-                    this.appendStorySegment(this.formatStory(action.content));
+                    this.appendStorySegment(this.formatStory(action.content), action.id, 'assistant');
                     if (action.options) {
                         try {
                             lastAssistantOptions = JSON.parse(action.options);
@@ -275,14 +275,131 @@ class AdventureHandler {
         });
     }
 
-    appendStorySegment(htmlContent) {
+    appendStorySegment(htmlContent, actionId = null, role = 'assistant') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'adv-story-wrapper';
+        wrapper.style.cssText = 'position: relative; margin-bottom: 0.5rem; display: flex; flex-direction: column;';
+        if (actionId) wrapper.dataset.actionId = actionId;
+        if (role) wrapper.dataset.role = role;
+
         const div = document.createElement('div');
         div.className = 'adv-story-segment';
-        div.style.cssText = 'padding: 0.5rem; border-left: 3px solid var(--accent); margin-bottom: 0.5rem; background: var(--surface); border-radius: 0 8px 8px 0; font-size: 1.05rem; line-height: 1.6;';
-        div.innerHTML = htmlContent;
-        this.storyArea.appendChild(div);
+        div.style.cssText = 'padding: 0.5rem; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; font-size: 1.05rem; line-height: 1.6; position: relative; padding-right: 3rem;';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'adv-story-content';
+        contentDiv.innerHTML = htmlContent;
+        div.appendChild(contentDiv);
+
+        if (actionId) {
+            const actionsEl = document.createElement('div');
+            actionsEl.className = 'adv-segment-actions';
+            actionsEl.style.cssText = 'position: absolute; top: 0.25rem; right: 0.25rem; display: flex; gap: 0.25rem; opacity: 0.2; transition: opacity 0.2s;';
+            div.onmouseenter = () => actionsEl.style.opacity = '1';
+            div.onmouseleave = () => actionsEl.style.opacity = '0.2';
+
+            const editBtn = document.createElement('button');
+            editBtn.innerHTML = '&#9998;';
+            editBtn.title = 'Edit';
+            editBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--text); padding: 2px;';
+            editBtn.onclick = () => this.editAction(actionId, wrapper);
+            actionsEl.appendChild(editBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '&#10006;';
+            delBtn.title = 'Delete';
+            delBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--text); padding: 2px;';
+            delBtn.onclick = () => this.deleteAction(actionId, wrapper);
+            actionsEl.appendChild(delBtn);
+
+            if (role === 'assistant') {
+                const regenBtn = document.createElement('button');
+                regenBtn.className = 'adv-regen-btn';
+                regenBtn.innerHTML = '&#8635;';
+                regenBtn.title = 'Regenerate';
+                regenBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--text); padding: 2px; display: none;';
+                regenBtn.onclick = () => this.regenAction(actionId, wrapper);
+                actionsEl.appendChild(regenBtn);
+            }
+
+            div.appendChild(actionsEl);
+        }
+
+        wrapper.appendChild(div);
+        this.storyArea.appendChild(wrapper);
         this.scrollToBottom();
+        this._updateRegenButtons();
         return div;
+    }
+
+    _updateRegenButtons() {
+        const allWrappers = Array.from(this.storyArea.querySelectorAll('.adv-story-wrapper'));
+        let lastAssistantWrapper = null;
+        for (let i = allWrappers.length - 1; i >= 0; i--) {
+            if (allWrappers[i].dataset.role === 'assistant') {
+                lastAssistantWrapper = allWrappers[i];
+                break;
+            }
+        }
+        allWrappers.forEach(w => {
+            const btn = w.querySelector('.adv-regen-btn');
+            if (btn) {
+                btn.style.display = (w === lastAssistantWrapper) ? 'block' : 'none';
+            }
+        });
+    }
+
+    async deleteAction(actionId, wrapper) {
+        if (!confirm("Delete this action?")) return;
+        try {
+            await authFetch(`/api/sw/adventures/${this.currentSessionId}/actions/${actionId}`, { method: 'DELETE' });
+            wrapper.remove();
+            this._updateRegenButtons();
+        } catch (e) {
+            console.error("Failed to delete action", e);
+        }
+    }
+
+    async editAction(actionId, wrapper) {
+        const contentDiv = wrapper.querySelector('.adv-story-content');
+        const role = wrapper.dataset.role;
+        // Extract raw text. If user, remove "<b>Next:</b> " prefix.
+        let rawText = contentDiv.innerText;
+        if (role === 'user' && rawText.startsWith('Next: ')) {
+            rawText = rawText.substring(6).trim();
+        }
+
+        const newText = prompt("Edit text:", rawText);
+        if (newText === null || newText === rawText) return;
+
+        try {
+            const res = await authFetch(`/api/sw/adventures/${this.currentSessionId}/actions/${actionId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newText })
+            });
+            const updated = await res.json();
+            if (role === 'user') {
+                contentDiv.innerHTML = `<b>Next:</b> ${updated.content}`;
+            } else {
+                contentDiv.innerHTML = this.formatStory(updated.content);
+            }
+        } catch (e) {
+            console.error("Failed to edit action", e);
+        }
+    }
+
+    async regenAction(actionId, wrapper) {
+        if (!confirm("Regenerate this response?")) return;
+        try {
+            await authFetch(`/api/sw/adventures/${this.currentSessionId}/actions/${actionId}`, { method: 'DELETE' });
+            wrapper.remove();
+            this._updateRegenButtons();
+            // Now generate a new one
+            this.sendAction("", "system");
+        } catch (e) {
+            console.error("Failed to regen action", e);
+        }
     }
 
     escapeHtml(unsafe) {
@@ -340,7 +457,7 @@ class AdventureHandler {
             btn.appendChild(textSpan);
             
             btn.addEventListener('click', () => {
-                this.appendStorySegment(`<b>Next:</b> ${optText}`);
+                const div = this.appendStorySegment(`<b>Next:</b> ${optText}`, null, 'user');
                 this.sendAction(optText, "user");
             });
             this.optionsArea.appendChild(btn);
@@ -353,7 +470,8 @@ class AdventureHandler {
         this.optionsArea.innerHTML = '';
         this.loadingIndicator.style.display = 'flex';
         
-        const segmentDiv = this.appendStorySegment('...');
+        const wrapper = this.appendStorySegment('...', null, 'assistant');
+        const segmentDiv = wrapper.querySelector('.adv-story-segment') || wrapper;
         let accumulatedText = "";
         
         // Get settings from config, defaulting to some sensible values if not set
@@ -407,6 +525,10 @@ class AdventureHandler {
                         } else if (data.type === 'parsed_options') {
                             optionsParsed = data.options;
                             finalCleanedStory = data.cleaned_story;
+                        } else if (data.type === 'metadata') {
+                            if (data.assistant_action_id) {
+                                wrapper.dataset.actionId = data.assistant_action_id;
+                            }
                         } else if (data.type === 'done') {
                             break;
                         } else if (data.type === 'error') {
@@ -416,9 +538,14 @@ class AdventureHandler {
                 }
             }
             
-            if (finalCleanedStory) {
-                segmentDiv.innerHTML = this.formatStory(finalCleanedStory);
-            }
+            
+            // Now that stream is done, let's re-render the wrapper so it has buttons
+            const actionId = wrapper.dataset.actionId;
+            wrapper.remove();
+            
+            const renderStory = finalCleanedStory ? finalCleanedStory : accumulatedText;
+            const newDiv = this.appendStorySegment(this.formatStory(renderStory), actionId, 'assistant');
+            
             if (optionsParsed) {
                 this.renderOptions(optionsParsed);
             }
