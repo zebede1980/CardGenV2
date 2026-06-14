@@ -1018,8 +1018,6 @@ class CharacterGeneratorApp {
       }
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
 
       this.showStreamMessage("\n✅ Character generation complete!\n");
       this.displayCharacter();
@@ -1039,7 +1037,7 @@ class CharacterGeneratorApp {
       } else if (imageApiBase && imageApiKey && enableImageGeneration) {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
-          await this.generateImage();
+          await this.generateImage(true);
           this.showStreamMessage("✅ Image generation complete!\n");
         } catch (imageError) {
           console.error("Image generation error:", imageError);
@@ -1103,6 +1101,9 @@ class CharacterGeneratorApp {
           }
         }
       }
+
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
 
       this.showNotification("Character generated successfully!", "success");
     } catch (error) {

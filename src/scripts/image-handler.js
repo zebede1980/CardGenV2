@@ -6,7 +6,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return document.getElementById("prompt-guidance")?.value?.trim() || "";
   },
 
-  async generateImage() {
+  async generateImage(skipSave = false) {
     const imageContainer = document.getElementById("image-content");
 
     const customPromptTextarea = document.getElementById("custom-image-prompt");
@@ -48,8 +48,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       customPromptTextarea.value = window.apiHandler.lastGeneratedImagePrompt;
     }
 
-    await this.saveCardToLibrary();
-    await this.refreshLibraryViews();
+    if (!skipSave) {
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+    }
   },
 
   async handleRegenerateImage() {
