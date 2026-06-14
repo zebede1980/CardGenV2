@@ -4,7 +4,7 @@ from typing import List
 from datetime import datetime
 
 from app.database import get_db
-from app.auth import get_current_user
+from app.routers.auth import get_current_user
 from app.models import User, GlobalConfig, SavedPrompt, HistoryItem, Lorebook, AlternateGreeting
 from app.schemas import GlobalConfigCreate, GlobalConfigOut, ProxyDataCreate, ProxyDataOut
 
