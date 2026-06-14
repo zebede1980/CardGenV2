@@ -351,6 +351,8 @@ BEGIN PROMPT:`;
         return s("A classical oil painting portrait of", "oil on canvas, old masters technique, impasto brushwork, rich saturated colors, Rembrandt lighting, museum quality fine art, highly detailed");
       case "concept-art":
         return s("Professional character concept art of", "game concept art, character design sheet, clean rendering, professional illustration, artstation, dynamic lighting, detailed costume design");
+      case "grunge-anime":
+        return s("Modern edgy 2D anime illustration of", "grunge aesthetic, highly desaturated color palette, sharp messy line art, detailed streetwear fashion, chaotic expressive vibe, flat cel shading, Pixiv ranking style, masterpiece");
       case "gothic-anime":
         return s("Semi-realistic anime illustration of", "dark fantasy gothic, high contrast lighting, dramatic shadows, detailed concept art, palette of deep blacks, stark whites, luminous crimson");
       case "gothic":
