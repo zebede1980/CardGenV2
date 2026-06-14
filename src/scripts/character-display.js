@@ -32,6 +32,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     updateFieldCount("scenario", "scenario-token-count");
     updateFieldCount("firstMessage", "first-message-token-count");
     updateFieldCount("mesExample", "example-messages-token-count");
+    updateFieldCount("postHistoryInstructions", "post-history-token-count");
 
     let lorebookTokens = 0;
     this.lorebookEntries.forEach((entry) => {
@@ -58,12 +59,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const personalityTextarea = document.getElementById("character-personality");
     const scenarioTextarea = document.getElementById("character-scenario");
     const firstMessageTextarea = document.getElementById("character-first-message");
+    const postHistoryTextarea = document.getElementById("character-post-history");
 
     if (nameInput) nameInput.value = this.currentCharacter.name || "";
     descriptionTextarea.value = this.currentCharacter.description || "";
     personalityTextarea.value = this.currentCharacter.personality || "";
     scenarioTextarea.value = this.currentCharacter.scenario || "";
     firstMessageTextarea.value = this.currentCharacter.firstMessage || "";
+    if (postHistoryTextarea) postHistoryTextarea.value = this.currentCharacter.postHistoryInstructions || "";
 
     const creatorNotesTextarea = document.getElementById("creator-notes");
     if (creatorNotesTextarea) creatorNotesTextarea.value = this.currentCharacter.creatorNotes || "";
@@ -75,12 +78,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const resetPersonalityBtn = document.getElementById("reset-personality-btn");
     const resetScenarioBtn = document.getElementById("reset-scenario-btn");
     const resetFirstMessageBtn = document.getElementById("reset-first-message-btn");
+    const resetPostHistoryBtn = document.getElementById("reset-post-history-btn");
 
     if (resetNameBtn) resetNameBtn.style.display = "none";
     if (resetDescriptionBtn) resetDescriptionBtn.style.display = "none";
     if (resetPersonalityBtn) resetPersonalityBtn.style.display = "none";
     if (resetScenarioBtn) resetScenarioBtn.style.display = "none";
     if (resetFirstMessageBtn) resetFirstMessageBtn.style.display = "none";
+    if (resetPostHistoryBtn) resetPostHistoryBtn.style.display = "none";
 
     const exampleMessagesOutput = document.getElementById("example-messages-output");
     if (exampleMessagesOutput) {
@@ -148,6 +153,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
         originalValue = this.originalCharacter.firstMessage;
         currentField = "firstMessage";
         break;
+      case "postHistoryInstructions":
+        textarea = document.getElementById("character-post-history");
+        resetBtn = document.getElementById("reset-post-history-btn");
+        originalValue = this.originalCharacter.postHistoryInstructions;
+        currentField = "postHistoryInstructions";
+        break;
     }
 
     this.currentCharacter[currentField] = textarea.value;
@@ -202,6 +213,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
         resetBtn = document.getElementById("reset-first-message-btn");
         originalValue = this.originalCharacter.firstMessage;
         fieldName = "First message";
+        break;
+      case "postHistoryInstructions":
+        textarea = document.getElementById("character-post-history");
+        resetBtn = document.getElementById("reset-post-history-btn");
+        originalValue = this.originalCharacter.postHistoryInstructions;
+        fieldName = "Post-history instructions";
         break;
     }
 
@@ -501,6 +518,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         scenario: specData.data.scenario || "",
         firstMessage: specData.data.first_mes || "",
         mesExample: specData.data.mes_example || "",
+        postHistoryInstructions: specData.data.post_history_instructions || specData.data.postHistoryInstructions || "",
         creatorNotes: specData.data.creator_notes || "",
         character_book: specData.data.character_book || undefined,
         alternateGreetings: specData.data.alternate_greetings || [],
@@ -516,6 +534,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       scenario: specData.scenario || "",
       firstMessage: specData.firstMessage || specData.first_mes || "",
       mesExample: specData.mesExample || specData.mes_example || "",
+      postHistoryInstructions: specData.postHistoryInstructions || specData.post_history_instructions || "",
       creatorNotes: specData.creatorNotes || specData.creator_notes || "",
       character_book: specData.character_book || undefined,
       alternateGreetings:

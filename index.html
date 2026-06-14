@@ -963,6 +963,67 @@
                                 ></textarea>
                             </div>
 
+                            <!-- Post-History Instructions Field -->
+                            <div
+                                class="character-field"
+                                style="margin-bottom: 1.5rem"
+                            >
+                                <div
+                                    style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        margin-bottom: 0.5rem;
+                                        flex-wrap: wrap;
+                                        gap: 0.5rem;
+                                    "
+                                >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                        Post-History Instructions (Author's Note)
+                                        <span id="post-history-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
+                                    </h3>
+                                    <button
+                                        id="reset-post-history-btn"
+                                        class="btn-secondary"
+                                        style="
+                                            display: none;
+                                            padding: 0.3rem 0.8rem;
+                                            font-size: 0.75rem;
+                                        "
+                                        title="Revert back to the version that was last generated or imported"
+                                    >
+                                        🔄 Reset
+                                    </button>
+                                </div>
+                                <p
+                                    style="
+                                        font-size: 0.8rem;
+                                        color: var(--text-secondary);
+                                        margin-bottom: 0.75rem;
+                                    "
+                                >
+                                💡 Directly instructs the AI on how to write the next response. Injected at the bottom of the prompt to prevent it from being forgotten.
+                                </p>
+                                <textarea
+                                    id="character-post-history"
+                                    class="content-box"
+                                    style="
+                                        width: 100%;
+                                        min-height: 80px;
+                                        font-family: inherit;
+                                        font-size: 0.9375rem;
+                                        line-height: 1.6;
+                                        resize: vertical;
+                                        padding: 1rem;
+                                        border: 1px solid var(--border);
+                                        border-radius: 0.5rem;
+                                        background: var(--surface-color);
+                                        color: var(--text-color);
+                                    "
+                                    placeholder="e.g. Write descriptively, focusing on sensory details..."
+                                ></textarea>
+                            </div>
+
                             <!-- Creator's Notes Field -->
                             <div
                                 class="character-field"

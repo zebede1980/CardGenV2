@@ -32,6 +32,9 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     for card in session_data.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
         
+        if card.mes_example:
+            card_text += f"\nExample Messages:\n{card.mes_example}"
+            
         if card.character_book:
             relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
             if relevant_lore:
@@ -104,6 +107,15 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
             history_messages.pop(0)
             
     messages.extend(history_messages)
+    
+    post_history_parts = []
+    for card in session_data.characters:
+        if card.post_history_instructions:
+            post_history_parts.append(f"[{card.name} Note]: {card.post_history_instructions}")
+            
+    if post_history_parts:
+        messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
+        
     return messages
 
 async def summarize_adventure_task(session_id: str, user_id: int):

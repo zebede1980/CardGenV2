@@ -217,6 +217,7 @@ class CharacterGenerator {
         scenario: character.scenario || "",
         first_mes: character.firstMessage || "Hello!",
         mes_example: character.mesExample || "",
+        post_history_instructions: character.postHistoryInstructions || "",
         creator_notes: character.creatorNotes || "",
         creator: character.creator || "",
         alternate_greetings: character.alternateGreetings || [],

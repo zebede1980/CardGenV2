@@ -60,6 +60,9 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     for card in chat.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
         
+        if card.mes_example:
+            card_text += f"\nExample Messages:\n{card.mes_example}"
+            
         if card.character_book:
             relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
             if relevant_lore:
@@ -120,6 +123,14 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
             history_messages.pop(0)
             
     messages.extend(history_messages)
+    
+    post_history_parts = []
+    for card in chat.characters:
+        if card.post_history_instructions:
+            post_history_parts.append(f"[{card.name} Note]: {card.post_history_instructions}")
+            
+    if post_history_parts:
+        messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
     if speaker_name and len(chat.characters) > 1:
         messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message, just write the dialogue and actions."})

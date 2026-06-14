@@ -238,7 +238,8 @@ class CharacterGeneratorApp {
     document.getElementById("reset-description-btn").addEventListener("click", () => this.handleResetField("description"));
     document.getElementById("reset-personality-btn").addEventListener("click", () => this.handleResetField("personality"));
     document.getElementById("reset-scenario-btn").addEventListener("click", () => this.handleResetField("scenario"));
-    document.getElementById("reset-first-message-btn").addEventListener("click", () => this.handleResetField("firstMessage"));
+    if (document.getElementById("reset-first-message-btn")) document.getElementById("reset-first-message-btn").addEventListener("click", () => this.handleResetField("firstMessage"));
+    if (document.getElementById("reset-post-history-btn")) document.getElementById("reset-post-history-btn").addEventListener("click", () => this.handleResetField("postHistoryInstructions"));
 
     // Character field edit tracking
     const nameInput = document.getElementById("character-generated-name");
@@ -247,6 +248,11 @@ class CharacterGeneratorApp {
     document.getElementById("character-personality").addEventListener("input", () => this.handleCharacterEdit("personality"));
     document.getElementById("character-scenario").addEventListener("input", () => this.handleCharacterEdit("scenario"));
     document.getElementById("character-first-message").addEventListener("input", () => this.handleCharacterEdit("firstMessage"));
+
+    const postHistoryEl = document.getElementById("character-post-history");
+    if (postHistoryEl) {
+        postHistoryEl.addEventListener("input", () => this.handleCharacterEdit("postHistoryInstructions"));
+    }
 
     // Image & file uploads
     document.getElementById("upload-image-btn").addEventListener("click", () => document.getElementById("image-upload-input").click());
