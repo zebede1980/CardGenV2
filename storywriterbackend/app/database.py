@@ -108,6 +108,16 @@ def run_migrations():
         if not _column_exists(conn, "adventure_sessions", "system_prompt"):
             conn.execute(text("ALTER TABLE adventure_sessions ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''"))
 
+        # chat_messages new fields
+        if not _column_exists(conn, "chat_messages", "avatar_url"):
+            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN avatar_url VARCHAR"))
+        if not _column_exists(conn, "chat_messages", "character_name"):
+            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN character_name VARCHAR"))
+        if not _column_exists(conn, "chat_messages", "is_summarized"):
+            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN is_summarized BOOLEAN NOT NULL DEFAULT false"))
+        if not _column_exists(conn, "chat_messages", "is_extracted"):
+            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN is_extracted BOOLEAN NOT NULL DEFAULT false"))
+
 def init_db():
     run_migrations()
 

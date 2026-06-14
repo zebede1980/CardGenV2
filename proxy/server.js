@@ -154,7 +154,7 @@ async function writeHistory(userId, items) {
       const newIds = new Set(items.map(i => String(i.id)));
       
       // 2. Delete any items currently in DB that are NOT in the new list
-      await Promise.all(currentItems.map(async (curr) => {
+      for (const curr of currentItems) {
         if (!newIds.has(String(curr.id))) {
           await fetch(`${internalUrl}/api/proxy-data/history/${curr.id}`, {
             method: "DELETE",
@@ -166,11 +166,11 @@ async function writeHistory(userId, items) {
             }
           });
         }
-      }));
+      }
     }
 
     // 3. Upsert the items that are in the new list
-    await Promise.all(items.map(async (item) => {
+    for (const item of items) {
        await fetch(`${internalUrl}/api/proxy-data/history`, {
          method: "POST",
          headers: {
@@ -181,7 +181,7 @@ async function writeHistory(userId, items) {
          },
          body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
        });
-    }));
+    }
   } catch(e) {
     console.error("Failed to write history:", e);
   }
@@ -440,11 +440,11 @@ async function autoMigrateDataIfNeeded(userId, username) {
       }
 
       if (itemsToPush.length > 0) {
-        await Promise.all(itemsToPush.map(async (item) => {
+        for (const item of itemsToPush) {
           await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
             method: "POST", headers, body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
           });
-        }));
+        }
       }
 
       // Rename to avoid migrating again
@@ -968,11 +968,11 @@ app.post("/api/storage/migrate-all", requireAuth, async (req, res) => {
       }
 
       if (itemsToPush.length > 0) {
-        await Promise.all(itemsToPush.map(async (item) => {
+        for (const item of itemsToPush) {
           await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
             method: "POST", headers, body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
           });
-        }));
+        }
       }
 
       // Rename to avoid migrating again
