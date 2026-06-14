@@ -127,6 +127,7 @@ class ChatMessage(Base):
     id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     chat_id = Column(String(36), ForeignKey("roleplay_chats.id", ondelete="CASCADE"), nullable=False)
     role = Column(String, nullable=False)  # user, assistant, system
+    avatar_url = Column(String, nullable=True)
     character_name = Column(String, nullable=True)  # To identify who spoke in group chats
     content = Column(Text, default="")
     ooc_note = Column(Text, default="")  # Hidden instruction sent alongside the message
@@ -177,3 +178,38 @@ class AdventureAction(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     session = relationship("AdventureSession", back_populates="actions")
+
+class GlobalConfig(Base):
+    __tablename__ = "global_configs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    config_data = Column(JSON, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class SavedPrompt(Base):
+    __tablename__ = "saved_prompts"
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    data = Column(JSON, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class HistoryItem(Base):
+    __tablename__ = "history_items"
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    data = Column(JSON, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Lorebook(Base):
+    __tablename__ = "lorebooks"
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    data = Column(JSON, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AlternateGreeting(Base):
+    __tablename__ = "alternate_greetings"
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    data = Column(JSON, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

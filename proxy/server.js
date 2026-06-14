@@ -112,19 +112,79 @@ function getUserDataDir(userId) {
 const HISTORY_MAX = 30;
 
 async function readHistory(userId) {
-  const filePath = path.join(getUserDataDir(userId), "history.json");
-  if (!fs.existsSync(filePath)) return [];
+  await autoMigrateDataIfNeeded(userId, "system");
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const url = `${internalUrl}/api/proxy-data/history`;
   try {
-    const raw = await fsPromises.readFile(filePath, "utf8");
-    return JSON.parse(raw) || [];
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(userId),
+        "X-User-Name": "system",
+        "X-Internal-Secret": INTERNAL_API_SECRET
+      }
+    });
+    if (!response.ok) return [];
+    let items = await response.json();
+    return items.map(item => ({ ...item.data, id: item.id, updatedAt: item.updated_at }));
   } catch (e) {
     return [];
   }
 }
 
 async function writeHistory(userId, items) {
-  const filePath = path.join(getUserDataDir(userId), "history.json");
-  await fsPromises.writeFile(filePath, JSON.stringify(items, null, 2), "utf8");
+  await autoMigrateDataIfNeeded(userId, "system");
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  
+  try {
+    // 1. Fetch current history from DB
+    const currentRes = await fetch(`${internalUrl}/api/proxy-data/history`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(userId),
+        "X-User-Name": "system",
+        "X-Internal-Secret": INTERNAL_API_SECRET
+      }
+    });
+    
+    if (currentRes.ok) {
+      const currentItems = await currentRes.json();
+      const newIds = new Set(items.map(i => String(i.id)));
+      
+      // 2. Delete any items currently in DB that are NOT in the new list
+      await Promise.all(currentItems.map(async (curr) => {
+        if (!newIds.has(String(curr.id))) {
+          await fetch(`${internalUrl}/api/proxy-data/history/${curr.id}`, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "X-User-Id": String(userId),
+              "X-User-Name": "system",
+              "X-Internal-Secret": INTERNAL_API_SECRET
+            }
+          });
+        }
+      }));
+    }
+
+    // 3. Upsert the items that are in the new list
+    await Promise.all(items.map(async (item) => {
+       await fetch(`${internalUrl}/api/proxy-data/history`, {
+         method: "POST",
+         headers: {
+           "Content-Type": "application/json",
+           "X-User-Id": String(userId),
+           "X-User-Name": "system",
+           "X-Internal-Secret": INTERNAL_API_SECRET
+         },
+         body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
+       });
+    }));
+  } catch(e) {
+    console.error("Failed to write history:", e);
+  }
 }
 
 // Delete all archived history-image files for a card (e.g. ${cardId}_h0.img)
@@ -344,69 +404,126 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
 });
 
 // ── Data Endpoints for Settings & Configurations ─────────────────────────────
+// ── Shared helper to proxy proxy-data requests to backend ────────────────────
+async function autoMigrateDataIfNeeded(userId, username) {
+  const dir = getUserDataDir(userId);
+  const filesToMigrate = ["config.json", "prompts.json", "history.json"];
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const headers = {
+    "Content-Type": "application/json",
+    "X-User-Id": String(userId),
+    "X-User-Name": String(username),
+    "X-Internal-Secret": INTERNAL_API_SECRET
+  };
+
+  for (const file of filesToMigrate) {
+    const filePath = path.join(dir, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    try {
+      const content = await fsPromises.readFile(filePath, "utf8");
+      const parsed = JSON.parse(content);
+      let itemsToPush = [];
+      let endpoint = "";
+
+      if (file === "config.json") {
+        endpoint = "config";
+        await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+          method: "POST", headers, body: JSON.stringify({ config_data: parsed })
+        });
+      } else if (file === "prompts.json") {
+        endpoint = "prompts";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      } else if (file === "history.json") {
+        endpoint = "history";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      }
+
+      if (itemsToPush.length > 0) {
+        await Promise.all(itemsToPush.map(async (item) => {
+          await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+            method: "POST", headers, body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
+          });
+        }));
+      }
+
+      // Rename to avoid migrating again
+      await fsPromises.rename(filePath, `${filePath}.migrated`);
+      console.log(`[Migration] Auto-migrated ${file} to PostgreSQL`);
+    } catch (e) {
+      console.error(`[Migration] Failed for ${file}:`, e);
+    }
+  }
+}
+
+async function forwardProxyData(req, res, endpoint) {
+  await autoMigrateDataIfNeeded(req.user.userId, req.user.username);
+  
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const url = `${internalUrl}/api/proxy-data/${endpoint}`;
+  try {
+    const response = await fetch(url, {
+      method: req.method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(req.user.userId),
+        "X-User-Name": String(req.user.username),
+        "X-Internal-Secret": INTERNAL_API_SECRET
+      },
+      body: req.method !== "GET" && req.method !== "DELETE" ? JSON.stringify(req.body) : undefined
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: errText });
+    }
+    let data = await response.json();
+    
+    // For GET lists, unwrap the nested data so it looks exactly like local JSON to the frontend
+    if (req.method === "GET" && Array.isArray(data)) {
+       data = data.map(item => ({ ...item.data, id: item.id, updatedAt: item.updated_at }));
+    } else if (req.method === "GET" && data.data) {
+       data = { ...data.data, id: data.id, updatedAt: data.updated_at };
+    } else if (req.method === "GET" && endpoint === "config") {
+       data = data.config_data || {};
+    } else if ((req.method === "POST" || req.method === "PUT") && endpoint === "config") {
+       data = { success: true };
+    }
+    
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// ── Data Endpoints for Settings & Configurations ─────────────────────────────
 // Config is now stored per user, ensuring each user has their own API settings
 app.get("/api/config", requireAuth, async (req, res) => {
-  try {
-    const configPath = path.join(getUserDataDir(req.user.userId), "config.json");
-    if (fs.existsSync(configPath)) {
-      const data = await fsPromises.readFile(configPath, "utf8");
-      res.json(JSON.parse(data));
-    } else {
-      res.json({});
-    }
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  return forwardProxyData(req, res, "config");
 });
 
 app.post("/api/config", requireAuth, async (req, res) => {
-  try {
-    await fsPromises.writeFile(path.join(getUserDataDir(req.user.userId), "config.json"), JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  req.body = { config_data: req.body };
+  return forwardProxyData(req, res, "config");
 });
 
-// ── Per-user Data Endpoints for Prompts (Local JSON) ─────────────────────────
+// ── Per-user Data Endpoints for Prompts (PostgreSQL proxied) ─────────────────────────
 app.get("/api/storage/prompts", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  res.json(await readJsonStore(storeFile));
+  return forwardProxyData(req, res, "prompts");
 });
 
 app.get("/api/storage/prompts/:id", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  const items = await readJsonStore(storeFile);
-  const item = items.find(i => i.id == req.params.id);
-  if (item) res.json(item);
-  else res.status(404).json({ error: "Not found" });
+  return forwardProxyData(req, res, `prompts/${req.params.id}`);
 });
 
 app.post("/api/storage/prompts", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  const lockKey = `user-${req.user.userId}-prompts.json`;
   const record = req.body;
-  if (!record.id) record.id = Date.now();
-  try {
-    const result = await withFileLock(lockKey, async () => {
-      const items = await readJsonStore(storeFile);
-      const index = items.findIndex(i => i.id == record.id);
-      if (index >= 0) items[index] = record;
-      else items.push(record);
-      await writeJsonStore(storeFile, items);
-      return record;
-    });
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  if (!record.id) record.id = String(Date.now());
+  req.body = { id: record.id, data: record };
+  return forwardProxyData(req, res, "prompts");
 });
 
 app.delete("/api/storage/prompts/:id", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  const lockKey = `user-${req.user.userId}-prompts.json`;
-  try {
-    await withFileLock(lockKey, async () => {
-      let items = await readJsonStore(storeFile);
-      items = items.filter(i => i.id != req.params.id);
-      await writeJsonStore(storeFile, items);
-    });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  return forwardProxyData(req, res, `prompts/${req.params.id}`);
 });
 
 // ── Shared helper: translate a flat DB card row into the shape the UI expects ─
@@ -811,6 +928,63 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
 
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Migrate JSON configuration files to PostgreSQL (Config, Prompts, History, etc.) ─
+app.post("/api/storage/migrate-all", requireAuth, async (req, res) => {
+  const dir = getUserDataDir(req.user.userId);
+  const filesToMigrate = ["config.json", "prompts.json", "history.json"];
+  let results = { migrated: [], errors: [] };
+
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const headers = {
+    "Content-Type": "application/json",
+    "X-User-Id": String(req.user.userId),
+    "X-User-Name": String(req.user.username),
+    "X-Internal-Secret": INTERNAL_API_SECRET
+  };
+
+  for (const file of filesToMigrate) {
+    const filePath = path.join(dir, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    try {
+      const content = await fsPromises.readFile(filePath, "utf8");
+      const parsed = JSON.parse(content);
+      let itemsToPush = [];
+      let endpoint = "";
+
+      if (file === "config.json") {
+        endpoint = "config";
+        await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+          method: "POST", headers, body: JSON.stringify({ config_data: parsed })
+        });
+      } else if (file === "prompts.json") {
+        endpoint = "prompts";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      } else if (file === "history.json") {
+        endpoint = "history";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      }
+
+      if (itemsToPush.length > 0) {
+        await Promise.all(itemsToPush.map(async (item) => {
+          await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+            method: "POST", headers, body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
+          });
+        }));
+      }
+
+      // Rename to avoid migrating again
+      await fsPromises.rename(filePath, `${filePath}.migrated`);
+      results.migrated.push(file);
+    } catch (e) {
+      console.error(`Migration failed for ${file}:`, e);
+      results.errors.push({ file, error: e.message });
+    }
+  }
+
+  res.json(results);
 });
 
 // ── Migrate cards from legacy cards.json to PostgreSQL ───────────────────────

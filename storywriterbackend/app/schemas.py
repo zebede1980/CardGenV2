@@ -260,3 +260,21 @@ class AdventureSendActionRequest(BaseModel):
     max_output_tokens: Optional[int] = None
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
+
+class GlobalConfigCreate(BaseModel):
+    config_data: dict
+
+class GlobalConfigOut(GlobalConfigCreate):
+    id: int
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class ProxyDataCreate(BaseModel):
+    id: str
+    data: dict
+
+class ProxyDataOut(ProxyDataCreate):
+    updated_at: datetime
+    class Config:
+        from_attributes = True
