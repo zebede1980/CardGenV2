@@ -1221,11 +1221,12 @@ class RoleplayChatHandler {
         wrapper.appendChild(avatarEl);
         wrapper.appendChild(contentCol);
 
+        this.els.timeline.appendChild(wrapper);
+
         if (msg.id) {
             this.attachMessageActions(wrapper, msg, bubbleEl, nameEl);
         }
 
-        this.els.timeline.appendChild(wrapper);
         if (alignToTop) {
             this.scrollToMessage(wrapper);
         }
