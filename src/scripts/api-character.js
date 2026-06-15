@@ -367,9 +367,6 @@ ${templateContent}
 **Roleplay Mechanics & Story Steering:**
 (Provide 2-3 bullet points defining how the roleplay should unfold. What is the central conflict? What are the key mechanics, pacing rules, or behavioral constraints {{char}} must enforce to drive the story forward? Ensure the character acts as an active catalyst for the story.)
 
-(CRITICAL INSTRUCTION: You MUST append the following exact text at the very end of the scenario to ensure proper roleplay mechanics:
-[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.])
-
 # First Message
 
 ${firstMessageInstruction}
@@ -468,9 +465,6 @@ Use ## as a separator for each main section as shown in the template.`;
 **Roleplay Mechanics & Story Steering:**
 (Provide 2-3 bullet points defining how the roleplay should unfold and how the group drives the story. What is the central conflict or progression mechanic?)
 
-(CRITICAL INSTRUCTION: Append this exact text at the very end of the scenario:
-[System Note: {{char}} will follow on from {{user}}'s actions and speech. When voicing individual members, {{char}} must clearly identify who is speaking or acting. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray the group's own actions, thoughts, and dialogue.])
-
 # First Message
 
 (Write a group scene opening in the third-person. Introduce the group in action — show at least two members doing something distinct that reveals their personalities. Describe the environment in vivid sensory detail. {{user}}'s presence should be passive at first — they are noticed, but not yet engaged. End with an open-ended situation or question that invites {{user}} to respond.)
@@ -554,9 +548,6 @@ Use ## as a separator for each main section as shown in the template.`;
 **Roleplay Mechanics & Story Steering:**
 (Provide 2-3 bullet points on how the scenario should unfold. What are the key mechanics, events, or pacing rules the AI must enforce to drive the story forward?)
 
-(CRITICAL INSTRUCTION: Append this exact text at the very end of the scenario:
-[System Note: {{char}} will narrate events in this scenario and voice any NPCs encountered. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray the scenario's events, atmosphere, and NPC dialogue and actions.])
-
 # First Message
 
 (Write a scene-setting opening in the third-person. Place {{user}} at the threshold of the scenario — arriving, entering, discovering. Describe the environment in vivid sensory detail. Introduce one NPC or one immediate problem that creates a reason for {{user}} to act. End with an open-ended situation that invites {{user}} to respond.)
@@ -639,7 +630,7 @@ ${lorebookContent}`;
       messages: [
         {
           role: "system",
-          content: "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. **CONCISENESS RULE:** The card is AI stage-direction, not prose fiction. Keep revised output concise — tighten where possible; do not expand sections that are already clear. Use short prose for backstory/scenario; use direct bullet points for traits, behaviours, and mechanics. **CRITICAL STRUCTURE RULE:** The 'description' field MUST ONLY contain physical appearance, backstory, and current state. The 'personality' field MUST contain behavioral traits, 'How They Operate' (speech style, body language, mindset), likes, dislikes, goals, fears, and quirks. The 'scenario' field MUST outline the Premise AND include a 'Roleplay Mechanics & Story Steering' section with bullet points on how the story should unfold. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.] CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string `{{char}}` whenever referring to the character by name. **CRITICAL JSON RULE:** You MUST properly escape all newlines as \\n within the JSON string values. Do NOT output literal newlines inside strings.",
+          content: "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. **CONCISENESS RULE:** The card is AI stage-direction, not prose fiction. Keep revised output concise — tighten where possible; do not expand sections that are already clear. Use short prose for backstory/scenario; use direct bullet points for traits, behaviours, and mechanics. **CRITICAL STRUCTURE RULE:** The 'description' field MUST ONLY contain physical appearance, backstory, and current state. The 'personality' field MUST contain behavioral traits, 'How They Operate' (speech style, body language, mindset), likes, dislikes, goals, fears, and quirks. The 'scenario' field MUST outline the Premise AND include a 'Roleplay Mechanics & Story Steering' section with bullet points on how the story should unfold. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string `{{char}}` whenever referring to the character by name. **CRITICAL JSON RULE:** You MUST properly escape all newlines as \\n within the JSON string values. Do NOT output literal newlines inside strings.",
         },
         {
           role: "user",
@@ -1000,11 +991,6 @@ DO NOT output full markdown blocks for other sections, ONLY the revised content 
       ? `\nCRITICAL INSTRUCTION FOR THIS SECTION: ${customPrompt}`
       : `\nRevise and improve this section to be more detailed, engaging, and consistent with the rest of the character.`;
 
-    let systemNoteInstruction = "";
-    if (field === 'scenario') {
-      systemNoteInstruction = `\n\nIMPORTANT: You MUST append the following exact text at the very end of the rewritten scenario:\n[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]`;
-    }
-
     const lorebookContext = this.formatLorebookKeysContext(lorebookEntries);
     const userPrompt = `Character Profile Context:
 Name: ${charName}
@@ -1012,7 +998,7 @@ Description: ${character.description}
 Personality: ${character.personality}
 Scenario: ${character.scenario}${lorebookContext}
 
-Please REWRITE the ${fieldName} section.${customInstruction}${systemNoteInstruction}
+Please REWRITE the ${fieldName} section.${customInstruction}
 
 Output ONLY the new ${fieldName} content without surrounding explanation.`;
 
