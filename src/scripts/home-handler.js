@@ -5,6 +5,9 @@
 class HomeHandler {
     constructor() {
         this.cards = [];
+        this.filteredCards = [];
+        this.currentPage = 1;
+        this.itemsPerPage = 20;
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
         } else {
@@ -64,6 +67,12 @@ class HomeHandler {
                 
                 <div id="home-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1.5rem;">
                     <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 3rem;">Loading library...</div>
+                </div>
+
+                <div id="home-pagination" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem; display: none;">
+                    <button id="home-prev-btn" class="btn-outline" style="padding: 0.5rem 1rem;">Previous</button>
+                    <span id="home-page-indicator" style="color: var(--text-primary); font-weight: 500;">Page 1</span>
+                    <button id="home-next-btn" class="btn-outline" style="padding: 0.5rem 1rem;">Next</button>
                 </div>
             </div>
         `;
@@ -149,6 +158,21 @@ class HomeHandler {
         document.getElementById('home-btn-adventure')?.addEventListener('click', () => { if (tabAdventure) tabAdventure.click(); });
 
         document.getElementById('home-search')?.addEventListener('input', (e) => this.filterCards(e.target.value));
+
+        document.getElementById('home-prev-btn')?.addEventListener('click', () => {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.updateView();
+            }
+        });
+
+        document.getElementById('home-next-btn')?.addEventListener('click', () => {
+            const totalPages = Math.ceil(this.filteredCards.length / this.itemsPerPage);
+            if (this.currentPage < totalPages) {
+                this.currentPage++;
+                this.updateView();
+            }
+        });
     }
 
     async loadCards() {
@@ -156,7 +180,9 @@ class HomeHandler {
         try {
             const allCards = await window.characterStorage.listCards();
             this.cards = allCards.filter(c => c.isPermanent);
-            this.renderGrid(this.cards);
+            this.filteredCards = [...this.cards];
+            this.currentPage = 1;
+            this.updateView();
         } catch (e) {
             console.error("Home: Failed to load cards", e);
             const grid = document.getElementById('home-grid');
@@ -167,20 +193,56 @@ class HomeHandler {
     filterCards(searchTerm) {
         if (!this.cards) return;
         if (!searchTerm || !searchTerm.trim()) {
-            this.renderGrid(this.cards);
+            this.filteredCards = [...this.cards];
+            this.currentPage = 1;
+            this.updateView();
             return;
         }
         
         const term = searchTerm.toLowerCase().trim();
-        const filtered = this.cards.filter(card => {
+        this.filteredCards = this.cards.filter(card => {
             const charObj = card.character || card;
             const name = (card.characterName || charObj.name || '').toLowerCase();
             const desc = (charObj.description || '').toLowerCase();
             const pers = (charObj.personality || '').toLowerCase();
-            return name.includes(term) || desc.includes(term) || pers.includes(term);
+            let tags = '';
+            if (Array.isArray(card.tags)) {
+                tags = card.tags.join(' ').toLowerCase();
+            } else if (Array.isArray(charObj.tags)) {
+                tags = charObj.tags.join(' ').toLowerCase();
+            }
+            return name.includes(term) || desc.includes(term) || pers.includes(term) || tags.includes(term);
         });
         
-        this.renderGrid(filtered);
+        this.currentPage = 1;
+        this.updateView();
+    }
+
+    updateView() {
+        const totalItems = this.filteredCards.length;
+        const totalPages = Math.ceil(totalItems / this.itemsPerPage) || 1;
+        
+        // Ensure currentPage is within valid bounds
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        if (this.currentPage < 1) this.currentPage = 1;
+
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const pageCards = this.filteredCards.slice(startIndex, endIndex);
+        
+        this.renderGrid(pageCards);
+
+        const paginationDiv = document.getElementById('home-pagination');
+        if (paginationDiv) {
+            if (totalItems > this.itemsPerPage) {
+                paginationDiv.style.display = 'flex';
+                document.getElementById('home-page-indicator').textContent = `Page ${this.currentPage} of ${totalPages}`;
+                document.getElementById('home-prev-btn').disabled = this.currentPage === 1;
+                document.getElementById('home-next-btn').disabled = this.currentPage === totalPages;
+            } else {
+                paginationDiv.style.display = 'none';
+            }
+        }
     }
 
     escapeHtml(str) {
