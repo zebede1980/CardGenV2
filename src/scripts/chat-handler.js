@@ -433,6 +433,16 @@ class RoleplayChatHandler {
             this.els.impBtn.addEventListener('click', () => this.sendImpersonateMessage());
         }
         
+        const autoResizeInput = (el) => {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+            el.style.overflowY = el.scrollHeight > 150 ? 'auto' : 'hidden';
+        };
+
+        this.els.msgInput.addEventListener('input', () => autoResizeInput(this.els.msgInput));
+        // Trigger initial resize
+        setTimeout(() => autoResizeInput(this.els.msgInput), 0);
+
         this.els.msgInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -1784,6 +1794,7 @@ class RoleplayChatHandler {
         // Optimistic UI update
         const userMsgObj = { role: 'user', content, ooc_note: oocNote, created_at: new Date().toISOString() };
         this.els.msgInput.value = '';
+        this.els.msgInput.style.height = 'auto';
         this.els.oocInput.value = '';
         this.updateOocBadge();
         const userBubbleWrapper = this.appendMessage(userMsgObj, true);
