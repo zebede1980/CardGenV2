@@ -118,6 +118,10 @@ def run_migrations():
         if not _column_exists(conn, "chat_messages", "is_extracted"):
             conn.execute(text("ALTER TABLE chat_messages ADD COLUMN is_extracted BOOLEAN NOT NULL DEFAULT false"))
 
+        # story_segments new fields
+        if not _column_exists(conn, "story_segments", "is_summarized"):
+            conn.execute(text("ALTER TABLE story_segments ADD COLUMN is_summarized BOOLEAN NOT NULL DEFAULT false"))
+
 def init_db():
     run_migrations()
 

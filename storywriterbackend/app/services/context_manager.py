@@ -102,29 +102,36 @@ class ContextManager:
     def _build_story_context(self, segments: List[StorySegment]) -> str:
         if not segments:
             return ""
+            
+        # Filter out original segments that have already been folded into a summary segment
+        active_segments = [s for s in segments if not getattr(s, 'is_summarized', False)]
         
-        # If we have many segments, use summaries for old ones and full text for recent
-        if len(segments) > self.summary_threshold:
+        if not active_segments:
+            return ""
+        
+        # If we have many active segments, use summaries for old ones and full text for recent
+        if len(active_segments) > self.summary_threshold:
             context_parts = []
             # Summarize old segments if not already summarized
-            for seg in segments[:-self.summary_threshold]:
+            for seg in active_segments[:-self.summary_threshold]:
                 if seg.is_summary:
                     context_parts.append(f"[Summary] {seg.content}")
                 else:
                     context_parts.append(seg.content)
             # Add recent segments in full
-            for seg in segments[-self.summary_threshold:]:
+            for seg in active_segments[-self.summary_threshold:]:
                 context_parts.append(seg.content)
             return "\n\n".join(context_parts)
         else:
-            return "\n\n".join([seg.content for seg in segments])
+            return "\n\n".join([seg.content for seg in active_segments])
 
     def should_summarize(self, segments: List[StorySegment]) -> bool:
-        non_summary = [s for s in segments if not s.is_summary]
+        # Only count segments that are not summaries and haven't been summarized yet
+        non_summary = [s for s in segments if not s.is_summary and not getattr(s, 'is_summarized', False)]
         return len(non_summary) > self.summary_threshold
 
     def get_segments_to_summarize(self, segments: List[StorySegment]) -> List[StorySegment]:
-        non_summary = [s for s in segments if not s.is_summary]
+        non_summary = [s for s in segments if not s.is_summary and not getattr(s, 'is_summarized', False)]
         # Summarize the oldest half of non-summary segments
         to_summarize_count = len(non_summary) - self.summary_threshold // 2
         return non_summary[:to_summarize_count]

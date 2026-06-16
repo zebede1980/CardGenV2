@@ -67,6 +67,7 @@ class StorySegment(Base):
     content = Column(Text, default="")
     summary = Column(Text, default="")
     is_summary = Column(Boolean, default=False)
+    is_summarized = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     story = relationship("Story", back_populates="segments")
 

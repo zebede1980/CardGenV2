@@ -962,13 +962,15 @@ class StoryWriterApp {
         area.innerHTML = '';
 
         this.story.segments.forEach(seg => {
+            if (seg.is_summary) return; // Do not render summary segments to the user
+
             const div = document.createElement('div');
             div.dataset.segmentId = seg.id;
             div.style.padding = '1rem';
             div.style.marginBottom = '1rem';
             div.style.background = 'var(--bg-tertiary)';
             div.style.borderRadius = '0.5rem';
-            div.style.borderLeft = seg.is_summary ? '3px solid #f9a825' : '3px solid var(--accent)';
+            div.style.borderLeft = '3px solid var(--accent)';
 
             const content = document.createElement('div');
             content.style.lineHeight = '1.7';

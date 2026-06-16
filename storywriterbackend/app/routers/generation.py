@@ -74,9 +74,9 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
             )
             db.add(summary_seg)
             
-            # Remove old segments
+            # Mark old segments as summarized
             for s in to_summarize:
-                db.delete(s)
+                s.is_summarized = True
             db.commit()
             
             # Reorder
@@ -193,7 +193,7 @@ async def summarize_story(story_id: int, db: Session = Depends(get_db), current_
         db.add(summary_seg)
         
         for s in to_summarize:
-            db.delete(s)
+            s.is_summarized = True
         db.commit()
         
         remaining = db.query(StorySegment).filter(
