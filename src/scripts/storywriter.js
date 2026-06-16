@@ -647,28 +647,35 @@ class StoryWriterApp {
         if (!voiceSelect) return;
 
         try {
-            if (provider === 'openai') {
-                const speakers = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
-                voiceSelect.innerHTML = '';
-                speakers.forEach(speaker => {
-                    const opt = document.createElement('option');
-                    opt.value = speaker;
-                    opt.textContent = speaker.charAt(0).toUpperCase() + speaker.slice(1);
-                    voiceSelect.appendChild(opt);
-                });
-                
-                if (this.ttsSettings.tts_voice && speakers.includes(this.ttsSettings.tts_voice)) {
-                    voiceSelect.value = this.ttsSettings.tts_voice;
-                } else if (speakers.length > 0) {
-                    voiceSelect.value = speakers[0];
-                }
-                
-                if (statusSpan) statusSpan.textContent = speakers.length + ' voices available';
-                return;
-            }
-
             let res;
-            if (provider.startsWith('google')) {
+            if (provider === 'openai') {
+                const openaiUrl = document.getElementById('sw-tts-openai-url')?.value || '';
+                const openaiKey = document.getElementById('sw-tts-openai-key')?.value || '';
+                
+                // If it's nano-gpt, query their models endpoint
+                if (openaiUrl.includes('nano-gpt.com')) {
+                    res = await window.authFetch(`/api/tts/nanogpt-voices?key=${openaiKey}`);
+                } else {
+                    // Otherwise just use standard OpenAI models directly
+                    const speakers = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+                    voiceSelect.innerHTML = '';
+                    speakers.forEach(speaker => {
+                        const opt = document.createElement('option');
+                        opt.value = speaker;
+                        opt.textContent = speaker.charAt(0).toUpperCase() + speaker.slice(1);
+                        voiceSelect.appendChild(opt);
+                    });
+                    
+                    if (this.ttsSettings.tts_voice && speakers.includes(this.ttsSettings.tts_voice)) {
+                        voiceSelect.value = this.ttsSettings.tts_voice;
+                    } else if (speakers.length > 0) {
+                        voiceSelect.value = speakers[0];
+                    }
+                    
+                    if (statusSpan) statusSpan.textContent = speakers.length + ' voices available';
+                    return;
+                }
+            } else if (provider.startsWith('google')) {
                 if (!googleKey) {
                     voiceSelect.innerHTML = '<option value="">— Enter API Key —</option>';
                     if (statusSpan) statusSpan.textContent = 'Key required';

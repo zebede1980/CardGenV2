@@ -1408,7 +1408,11 @@ app.get("/api/tts/google-voices", async (req, res) => {
 app.get("/api/tts/nanogpt-voices", async (req, res) => {
   try {
     const apiKey = req.query.key;
-    if (!apiKey) return res.status(401).json({ error: "API Key required" });
+    
+    // If no key is provided, we can't authenticate, so just return the fallback list immediately
+    if (!apiKey) {
+      return res.json({ status: "ready", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"] });
+    }
 
     const response = await fetch(`https://api.nano-gpt.com/v1/models`, {
       headers: { "Authorization": `Bearer ${apiKey}` }
