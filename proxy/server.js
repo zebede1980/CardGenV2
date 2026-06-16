@@ -1278,34 +1278,87 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
     // Branch: Nano-GPT TTS
     if (provider === "nanogpt") {
-      const requestUrl = "https://api.nano-gpt.com/v1/audio/speech";
+      const modelName = nanogptModel || "tts-1";
+      const isStandardModel = modelName.startsWith("tts-") || modelName.startsWith("openai/");
 
-      const headers = { "Content-Type": "application/json" };
-      if (nanogptKey) {
-        headers["Authorization"] = `Bearer ${nanogptKey}`;
+      if (isStandardModel) {
+        // Standard OpenAI-compatible endpoint
+        const requestUrl = "https://api.nano-gpt.com/v1/audio/speech";
+        const headers = { "Content-Type": "application/json" };
+        if (nanogptKey) {
+          headers["Authorization"] = `Bearer ${nanogptKey}`;
+        }
+
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            model: modelName,
+            input: text,
+            voice: nanogptVoice || "alloy",
+            response_format: "mp3",
+            speed: speed || 1.0
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.text();
+          return res.status(response.status).send(`Nano-GPT TTS Error: ${errData}`);
+        }
+
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Cache-Control", "no-cache");
+        response.body.pipe(res);
+        return;
+      } else {
+        // Proprietary Nano-GPT endpoint (for Kokoro, ElevenLabs, etc.)
+        const requestUrl = "https://nano-gpt.com/api/tts";
+        const headers = { "Content-Type": "application/json" };
+        if (nanogptKey) {
+          headers["x-api-key"] = nanogptKey;
+        }
+
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            text: text,
+            model: modelName,
+            voice: nanogptVoice || "af_bella",
+            speed: speed || 1.0
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.text();
+          return res.status(response.status).send(`Nano-GPT Custom TTS Error: ${errData}`);
+        }
+
+        const contentType = response.headers.get('content-type') || "";
+        
+        if (contentType.includes("application/json")) {
+          const data = await response.json();
+          if (data.audioUrl) {
+            // Fetch the actual audio file
+            const audioRes = await fetch(data.audioUrl);
+            if (!audioRes.ok) {
+              return res.status(audioRes.status).send(`Nano-GPT Audio Fetch Error: ${audioRes.statusText}`);
+            }
+            res.setHeader("Content-Type", "audio/mpeg");
+            res.setHeader("Cache-Control", "no-cache");
+            audioRes.body.pipe(res);
+            return;
+          } else {
+            return res.status(500).json({ error: "No audioUrl returned from Nano-GPT", data });
+          }
+        } else {
+          // Binary audio directly returned
+          res.setHeader("Content-Type", "audio/mpeg");
+          res.setHeader("Cache-Control", "no-cache");
+          response.body.pipe(res);
+          return;
+        }
       }
-
-      const response = await fetch(requestUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: nanogptModel || "tts-1",
-          input: text,
-          voice: nanogptVoice || "alloy",
-          response_format: "mp3",
-          speed: speed || 1.0
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.text();
-        return res.status(response.status).send(`Nano-GPT TTS Error: ${errData}`);
-      }
-
-      res.setHeader("Content-Type", "audio/mpeg");
-      res.setHeader("Cache-Control", "no-cache");
-      response.body.pipe(res);
-      return;
     }
 
     // Branch: Google Cloud TTS
