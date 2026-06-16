@@ -136,7 +136,7 @@ async function readHistory(userId) {
 async function writeHistory(userId, items) {
   await autoMigrateDataIfNeeded(userId, "system");
   const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-  
+
   try {
     // 1. Fetch current history from DB
     const currentRes = await fetch(`${internalUrl}/api/proxy-data/history`, {
@@ -148,11 +148,11 @@ async function writeHistory(userId, items) {
         "X-Internal-Secret": INTERNAL_API_SECRET
       }
     });
-    
+
     if (currentRes.ok) {
       const currentItems = await currentRes.json();
       const newIds = new Set(items.map(i => String(i.id)));
-      
+
       // 2. Delete any items currently in DB that are NOT in the new list
       for (const curr of currentItems) {
         if (!newIds.has(String(curr.id))) {
@@ -171,18 +171,18 @@ async function writeHistory(userId, items) {
 
     // 3. Upsert the items that are in the new list
     for (const item of items) {
-       await fetch(`${internalUrl}/api/proxy-data/history`, {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json",
-           "X-User-Id": String(userId),
-           "X-User-Name": "system",
-           "X-Internal-Secret": INTERNAL_API_SECRET
-         },
-         body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
-       });
+      await fetch(`${internalUrl}/api/proxy-data/history`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": String(userId),
+          "X-User-Name": "system",
+          "X-Internal-Secret": INTERNAL_API_SECRET
+        },
+        body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
+      });
     }
-  } catch(e) {
+  } catch (e) {
     console.error("Failed to write history:", e);
   }
 }
@@ -458,7 +458,7 @@ async function autoMigrateDataIfNeeded(userId, username) {
 
 async function forwardProxyData(req, res, endpoint) {
   await autoMigrateDataIfNeeded(req.user.userId, req.user.username);
-  
+
   const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
   const url = `${internalUrl}/api/proxy-data/${endpoint}`;
   try {
@@ -477,18 +477,18 @@ async function forwardProxyData(req, res, endpoint) {
       return res.status(response.status).json({ error: errText });
     }
     let data = await response.json();
-    
+
     // For GET lists, unwrap the nested data so it looks exactly like local JSON to the frontend
     if (req.method === "GET" && Array.isArray(data)) {
-       data = data.map(item => ({ ...item.data, id: item.id, updatedAt: item.updated_at }));
+      data = data.map(item => ({ ...item.data, id: item.id, updatedAt: item.updated_at }));
     } else if (req.method === "GET" && data.data) {
-       data = { ...data.data, id: data.id, updatedAt: data.updated_at };
+      data = { ...data.data, id: data.id, updatedAt: data.updated_at };
     } else if (req.method === "GET" && endpoint === "config") {
-       data = data.config_data || {};
+      data = data.config_data || {};
     } else if ((req.method === "POST" || req.method === "PUT") && endpoint === "config") {
-       data = { success: true };
+      data = { success: true };
     }
-    
+
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1401,6 +1401,44 @@ app.get("/api/tts/google-voices", async (req, res) => {
     res.json({ status: "ready", speakers: voices });
   } catch (error) {
     res.status(503).json({ error: "Failed to fetch voices: " + error.message });
+  }
+});
+
+// Fetch nano-gpt.com Voices/Models
+app.get("/api/tts/nanogpt-voices", async (req, res) => {
+  try {
+    const apiKey = req.query.key;
+    if (!apiKey) return res.status(401).json({ error: "API Key required" });
+
+    const response = await fetch(`https://api.nano-gpt.com/v1/models`, {
+      headers: { "Authorization": `Bearer ${apiKey}` }
+    });
+
+    if (!response.ok) {
+      console.warn(`nano-gpt.com /v1/models fetch failed with status ${response.status}. Falling back to hardcoded list.`);
+      return res.json({ status: "ready", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"] });
+    }
+
+    const data = await response.json();
+    let voices = [];
+    if (data && data.data && Array.isArray(data.data)) {
+      // Heuristic to find TTS models from a general models list
+      voices = data.data
+        .filter(m => m.id.includes('tts') || m.id.includes('eleven') || m.id.includes('kokoro') || m.id.includes('speech'))
+        .map(m => m.id)
+        .sort();
+    }
+
+    // If API parsing yields no voices, use hardcoded list as a fallback
+    if (voices.length === 0) {
+      voices = ["elevenlabs-multilingual-v2", "kokoro-82m"];
+    }
+
+    res.json({ status: "ready", speakers: voices });
+  } catch (error) {
+    console.error("Failed to fetch nano-gpt.com voices:", error.message);
+    // On any error, provide a fallback list so the UI is still usable.
+    res.status(200).json({ status: "fallback", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"], error: error.message });
   }
 });
 
