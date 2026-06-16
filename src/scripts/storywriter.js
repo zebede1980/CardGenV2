@@ -161,8 +161,8 @@ class TTSPlayer {
             return;
         }
 
-        // Keep one sentence buffered ahead.
-        if (this.audioQueue.length >= 2) {
+        // Keep multiple chunks buffered ahead.
+        if (this.audioQueue.length >= 4) {
             return;
         }
 
@@ -219,7 +219,7 @@ class TTSPlayer {
         } finally {
             this.loading = false;
             if (!this.stopped && !this.paused) {
-                if (this.textQueue.length > 0 && this.audioQueue.length < 2) {
+                if (this.textQueue.length > 0 && this.audioQueue.length < 4) {
                     this._maybeLoadNext();
                 } else if (!this.playing && this.audioQueue.length === 0) {
                     this._playNext();
@@ -332,24 +332,27 @@ class SentenceDetector {
     }
 
     /**
-     * Feed a chunk of text. Returns an array of complete sentences found.
+     * Feed a chunk of text. Returns an array of complete paragraphs found.
      * Incomplete trailing text stays in the internal buffer.
      */
     feed(chunk) {
         this.buffer += chunk;
-        const sentences = [];
-        // Match lazily up to punctuation + optional quotes, avoiding splits at common abbreviations.
-        const re = /([\s\S]+?(?<!\b(?:Mr|Mrs|Ms|Dr|Prof|Rev|Capt|Gen|St|Sgt|Sr|Jr|vs|etc))[.!?]+["'\u201D\u2019)\]]*)(?=\s+[A-Z"\u201C\u2018]|\s*\n|$)/g;
-        let match;
-        let lastIndex = 0;
-        while ((match = re.exec(this.buffer)) !== null) {
-            sentences.push(match[0].trim());
-            lastIndex = match.index + match[0].length;
+        const paragraphs = [];
+        
+        // Split by one or more newlines
+        const lines = this.buffer.split(/\n+/);
+        
+        // If there's more than 1 item, everything except the last is a complete paragraph
+        if (lines.length > 1) {
+            for (let i = 0; i < lines.length - 1; i++) {
+                if (lines[i].trim()) {
+                    paragraphs.push(lines[i].trim());
+                }
+            }
+            this.buffer = lines[lines.length - 1];
         }
-        if (lastIndex > 0) {
-            this.buffer = this.buffer.slice(lastIndex);
-        }
-        return sentences;
+        
+        return paragraphs;
     }
 
     /**
