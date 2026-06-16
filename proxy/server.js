@@ -1274,7 +1274,7 @@ app.get("/api/tts/models", async (_req, res) => {
 
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
-    const { text, voice, speed, provider, googleApiKey, openaiUrl, openaiApiKey } = req.body;
+    const { text, voice, speed, provider, googleApiKey, openaiUrl, openaiApiKey, openaiModel } = req.body;
 
     // Branch: OpenAI Compatible TTS
     if (provider === "openai") {
@@ -1293,7 +1293,7 @@ app.post("/api/tts/synthesize", async (req, res) => {
         method: "POST",
         headers,
         body: JSON.stringify({
-          model: "tts-1",
+          model: openaiModel || "tts-1",
           input: text,
           voice: voice || "alloy",
           response_format: "mp3",
