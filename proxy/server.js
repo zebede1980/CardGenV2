@@ -1274,7 +1274,39 @@ app.get("/api/tts/models", async (_req, res) => {
 
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
-    const { text, voice, speed, provider, googleApiKey } = req.body;
+    const { text, voice, speed, provider, googleApiKey, nanoGptApiKey } = req.body;
+
+    // Branch: nano-gpt.com TTS
+    if (provider && provider === "nanogpt") {
+      if (!nanoGptApiKey) {
+        return res.status(401).json({ error: "nano-gpt.com API key is required for this TTS provider" });
+      }
+
+      const nanoGptUrl = `https://api.nano-gpt.com/v1/audio/speech`;
+      const payload = {
+        model: voice, // e.g., "kokoro-82m" or "elevenlabs-multilingual-v2"
+        input: text,
+        speed: speed || 1.0,
+      };
+
+      const response = await fetch(nanoGptUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${nanoGptApiKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errData = await response.text();
+        return res.status(response.status).send(`nano-gpt.com TTS Error: ${errData}`);
+      }
+
+      res.setHeader("Content-Type", response.headers.get("content-type") || "audio/mpeg");
+      res.setHeader("Cache-Control", "no-cache");
+      return response.body.pipe(res);
+    }
 
     // Branch: Google Cloud TTS
     if (provider && provider.startsWith("google")) {
@@ -1365,6 +1397,44 @@ app.get("/api/tts/google-voices", async (req, res) => {
     res.json({ status: "ready", speakers: voices });
   } catch (error) {
     res.status(503).json({ error: "Failed to fetch voices: " + error.message });
+  }
+});
+
+// Fetch nano-gpt.com Voices/Models
+app.get("/api/tts/nanogpt-voices", async (req, res) => {
+  try {
+    const apiKey = req.query.key;
+    if (!apiKey) return res.status(401).json({ error: "API Key required" });
+
+    const response = await fetch(`https://api.nano-gpt.com/v1/models`, {
+        headers: { "Authorization": `Bearer ${apiKey}` }
+    });
+
+    if (!response.ok) {
+      console.warn(`nano-gpt.com /v1/models fetch failed with status ${response.status}. Falling back to hardcoded list.`);
+      return res.json({ status: "ready", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"] });
+    }
+
+    const data = await response.json();
+    let voices = [];
+    if (data && data.data && Array.isArray(data.data)) {
+        // Heuristic to find TTS models from a general models list
+        voices = data.data
+            .filter(m => m.id.includes('tts') || m.id.includes('eleven') || m.id.includes('kokoro') || m.id.includes('speech'))
+            .map(m => m.id)
+            .sort();
+    }
+
+    // If API parsing yields no voices, use hardcoded list as a fallback
+    if (voices.length === 0) {
+        voices = ["elevenlabs-multilingual-v2", "kokoro-82m"];
+    }
+
+    res.json({ status: "ready", speakers: voices });
+  } catch (error) {
+    console.error("Failed to fetch nano-gpt.com voices:", error.message);
+    // On any error, provide a fallback list so the UI is still usable.
+    res.status(200).json({ status: "fallback", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"], error: error.message });
   }
 });
 

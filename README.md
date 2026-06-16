@@ -342,9 +342,10 @@ Configured directly within the **⚙️ Generation Settings** panel in the Story
 
 | Setting | Notes |
 |---|---|
-| Provider | Choose between **Local Coqui TTS**, **Google Cloud (Standard)**, or **Google Cloud (Premium)**. |
+| Provider | Choose between **Local Coqui TTS**, **Google Cloud (Standard)**, **Google Cloud (Premium)**, or **nano-gpt.com**. |
 | Google API Key | Required only if a Google provider is selected. Ensure your key has the *Cloud Text-to-Speech API* enabled and a linked billing account (even for free tier limits). |
-| Voice | Select from available voices. Automatically fetches the list from your active provider. |
+| **nano-gpt.com API Key** | **Required only if the nano-gpt.com provider is selected.** |
+| Voice | Select from available voices. Automatically fetches the list from your active provider. For nano-gpt.com, this selects the underlying TTS model (e.g., `elevenlabs-multilingual-v2`, `kokoro-82m`). |
 
 #### SillyTavern Bridge
 
