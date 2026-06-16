@@ -104,6 +104,8 @@ class TTSPlayer {
         this.speed = 1.0;
         this.provider = 'local';
         this.googleApiKey = '';
+        this.openaiUrl = '';
+        this.openaiApiKey = '';
     }
 
     _setupMediaSession() {
@@ -174,7 +176,7 @@ class TTSPlayer {
             const res = await window.authFetch('/api/tts/synthesize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice: this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey }),
+                body: JSON.stringify({ text, voice: this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, openaiUrl: this.openaiUrl, openaiApiKey: this.openaiApiKey }),
             });
 
             if (!res.ok) {
@@ -451,8 +453,10 @@ class StoryWriterApp {
         const providerSelect = document.getElementById('sw-tts-provider');
         if (providerSelect) {
             providerSelect.addEventListener('change', () => {
-                const isGoogle = providerSelect.value.startsWith('google');
-                document.getElementById('sw-tts-google-key-container').style.display = isGoogle ? 'block' : 'none';
+                const provider = providerSelect.value;
+                document.getElementById('sw-tts-google-key-container').style.display = provider.startsWith('google') ? 'block' : 'none';
+                const openaiContainer = document.getElementById('sw-tts-openai-container');
+                if (openaiContainer) openaiContainer.style.display = provider === 'openai' ? 'block' : 'none';
                 this.loadVoices();
             });
         }
@@ -501,6 +505,8 @@ class StoryWriterApp {
             let savedProvider = window.config.get('api.tts.provider') || localStorage.getItem('sw-tts-provider') || 'local';
             if (savedProvider === 'google') savedProvider = 'google-premium';
             const savedGoogleKey = window.config.get('api.tts.apiKey') || localStorage.getItem('sw-tts-google-key') || '';
+            const savedOpenaiUrl = window.config.get('api.tts.openaiUrl') || localStorage.getItem('sw-tts-openai-url') || '';
+            const savedOpenaiKey = window.config.get('api.tts.openaiKey') || localStorage.getItem('sw-tts-openai-key') || '';
 
             this.ttsSettings = {
                 tts_enabled: s.tts_enabled || false,
@@ -508,7 +514,9 @@ class StoryWriterApp {
                 tts_voice: s.tts_voice || 'p230',
                 tts_speed: s.tts_speed || 1.0,
                 tts_provider: savedProvider,
-                tts_google_key: savedGoogleKey
+                tts_google_key: savedGoogleKey,
+                tts_openai_url: savedOpenaiUrl,
+                tts_openai_key: savedOpenaiKey
             };
             console.debug('[StoryWriter][TTS] Loaded settings', this.ttsSettings);
 
@@ -519,6 +527,8 @@ class StoryWriterApp {
             const speedLabel   = document.getElementById('sw-tts-speed-label');
             const providerSelect = document.getElementById('sw-tts-provider');
             const googleKeyInput = document.getElementById('sw-tts-google-key');
+            const openaiUrlInput = document.getElementById('sw-tts-openai-url');
+            const openaiKeyInput = document.getElementById('sw-tts-openai-key');
 
             if (ttsEnabled) ttsEnabled.checked = this.ttsSettings.tts_enabled;
             if (autoMode)  autoMode.checked  = this.ttsSettings.auto_mode;
@@ -529,9 +539,17 @@ class StoryWriterApp {
             if (providerSelect) {
                 providerSelect.value = this.ttsSettings.tts_provider;
                 document.getElementById('sw-tts-google-key-container').style.display = this.ttsSettings.tts_provider.startsWith('google') ? 'block' : 'none';
+                const openaiContainer = document.getElementById('sw-tts-openai-container');
+                if (openaiContainer) openaiContainer.style.display = this.ttsSettings.tts_provider === 'openai' ? 'block' : 'none';
             }
             if (googleKeyInput) {
                 googleKeyInput.value = this.ttsSettings.tts_google_key;
+            }
+            if (openaiUrlInput) {
+                openaiUrlInput.value = this.ttsSettings.tts_openai_url;
+            }
+            if (openaiKeyInput) {
+                openaiKeyInput.value = this.ttsSettings.tts_openai_key;
             }
         } catch (e) {
             console.error('[StoryWriter] Failed to load settings:', e);
@@ -560,13 +578,19 @@ class StoryWriterApp {
         const ttsSpeed   = parseFloat(document.getElementById('sw-tts-speed')?.value || '1.0');
         const ttsProvider = document.getElementById('sw-tts-provider')?.value || 'local';
         const ttsGoogleKey = document.getElementById('sw-tts-google-key')?.value || '';
+        const ttsOpenaiUrl = document.getElementById('sw-tts-openai-url')?.value || '';
+        const ttsOpenaiKey = document.getElementById('sw-tts-openai-key')?.value || '';
 
         if (window.config) {
             window.config.set('api.tts.provider', ttsProvider);
             window.config.set('api.tts.apiKey', ttsGoogleKey);
+            window.config.set('api.tts.openaiUrl', ttsOpenaiUrl);
+            window.config.set('api.tts.openaiKey', ttsOpenaiKey);
         }
         localStorage.removeItem('sw-tts-provider');
         localStorage.removeItem('sw-tts-google-key');
+        localStorage.removeItem('sw-tts-openai-url');
+        localStorage.removeItem('sw-tts-openai-key');
 
         const payload = {
             max_tokens: maxTokens,
@@ -587,7 +611,9 @@ class StoryWriterApp {
             tts_voice: ttsVoice,
             tts_speed: ttsSpeed,
             tts_provider: ttsProvider,
-            tts_google_key: ttsGoogleKey
+            tts_google_key: ttsGoogleKey,
+            tts_openai_url: ttsOpenaiUrl,
+            tts_openai_key: ttsOpenaiKey
         };
 
         btn.disabled = true;
@@ -621,6 +647,26 @@ class StoryWriterApp {
         if (!voiceSelect) return;
 
         try {
+            if (provider === 'openai') {
+                const speakers = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+                voiceSelect.innerHTML = '';
+                speakers.forEach(speaker => {
+                    const opt = document.createElement('option');
+                    opt.value = speaker;
+                    opt.textContent = speaker.charAt(0).toUpperCase() + speaker.slice(1);
+                    voiceSelect.appendChild(opt);
+                });
+                
+                if (this.ttsSettings.tts_voice && speakers.includes(this.ttsSettings.tts_voice)) {
+                    voiceSelect.value = this.ttsSettings.tts_voice;
+                } else if (speakers.length > 0) {
+                    voiceSelect.value = speakers[0];
+                }
+                
+                if (statusSpan) statusSpan.textContent = speakers.length + ' voices available';
+                return;
+            }
+
             let res;
             if (provider.startsWith('google')) {
                 if (!googleKey) {
@@ -715,6 +761,8 @@ class StoryWriterApp {
         player.setVolume(parseInt(volumeSlider?.value || '80', 10));
         player.provider = document.getElementById('sw-tts-provider')?.value || 'local';
         player.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
+        player.openaiUrl = document.getElementById('sw-tts-openai-url')?.value || '';
+        player.openaiApiKey = document.getElementById('sw-tts-openai-key')?.value || '';
 
         let hasError = false;
         player.onError = (err) => {

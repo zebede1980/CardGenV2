@@ -1274,7 +1274,43 @@ app.get("/api/tts/models", async (_req, res) => {
 
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
-    const { text, voice, speed, provider, googleApiKey } = req.body;
+    const { text, voice, speed, provider, googleApiKey, openaiUrl, openaiApiKey } = req.body;
+
+    // Branch: OpenAI Compatible TTS
+    if (provider === "openai") {
+      if (!openaiUrl) {
+        return res.status(400).json({ error: "OpenAI API URL is required for OpenAI TTS" });
+      }
+
+      const requestUrl = openaiUrl.endsWith('/audio/speech') ? openaiUrl : `${openaiUrl.replace(/\/$/, '')}/audio/speech`;
+
+      const headers = { "Content-Type": "application/json" };
+      if (openaiApiKey) {
+        headers["Authorization"] = `Bearer ${openaiApiKey}`;
+      }
+
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: "tts-1",
+          input: text,
+          voice: voice || "alloy",
+          response_format: "mp3",
+          speed: speed || 1.0
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.text();
+        return res.status(response.status).send(`OpenAI TTS Error: ${errData}`);
+      }
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "no-cache");
+      response.body.pipe(res);
+      return;
+    }
 
     // Branch: Google Cloud TTS
     if (provider && provider.startsWith("google")) {

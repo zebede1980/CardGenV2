@@ -1620,12 +1620,21 @@
                                         <option value="local">Local Coqui TTS</option>
                                         <option value="google-premium">Google Cloud (Premium: Neural2 / WaveNet)</option>
                                         <option value="google-standard">Google Cloud (Standard)</option>
+                                        <option value="openai">OpenAI Compatible (nano-gpt, etc.)</option>
                                     </select>
                                 </div>
 
                                 <div id="sw-tts-google-key-container" style="margin-top: 0.5rem; display: none;">
                                     <label class="label" for="sw-tts-google-key">Google API Key</label>
                                     <input type="password" id="sw-tts-google-key" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="AIzaSy..." />
+                                </div>
+
+                                <div id="sw-tts-openai-container" style="margin-top: 0.5rem; display: none;">
+                                    <label class="label" for="sw-tts-openai-url">OpenAI API URL</label>
+                                    <input type="text" id="sw-tts-openai-url" class="input" style="background: var(--surface-color); max-width: 260px; margin-bottom: 0.5rem;" placeholder="https://api.openai.com/v1/audio/speech" />
+                                    
+                                    <label class="label" for="sw-tts-openai-key">OpenAI API Key (Optional)</label>
+                                    <input type="password" id="sw-tts-openai-key" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="sk-..." />
                                 </div>
 
                                 <div style="margin-top: 0.75rem;">
