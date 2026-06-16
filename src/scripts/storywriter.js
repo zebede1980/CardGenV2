@@ -104,9 +104,9 @@ class TTSPlayer {
         this.speed = 1.0;
         this.provider = 'local';
         this.googleApiKey = '';
-        this.openaiUrl = '';
-        this.openaiApiKey = '';
-        this.openaiModel = '';
+        this.nanogptKey = '';
+        this.nanogptModel = '';
+        this.nanogptVoice = '';
     }
 
     _setupMediaSession() {
@@ -177,7 +177,7 @@ class TTSPlayer {
             const res = await window.authFetch('/api/tts/synthesize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice: this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, openaiUrl: this.openaiUrl, openaiApiKey: this.openaiApiKey, openaiModel: this.openaiModel }),
+                body: JSON.stringify({ text, voice: this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, nanogptKey: this.nanogptKey, nanogptModel: this.nanogptModel, nanogptVoice: this.nanogptVoice }),
             });
 
             if (!res.ok) {
@@ -456,8 +456,13 @@ class StoryWriterApp {
             providerSelect.addEventListener('change', () => {
                 const provider = providerSelect.value;
                 document.getElementById('sw-tts-google-key-container').style.display = provider.startsWith('google') ? 'block' : 'none';
-                const openaiContainer = document.getElementById('sw-tts-openai-container');
-                if (openaiContainer) openaiContainer.style.display = provider === 'openai' ? 'block' : 'none';
+                
+                const nanogptContainer = document.getElementById('sw-tts-nanogpt-container');
+                if (nanogptContainer) nanogptContainer.style.display = provider === 'nanogpt' ? 'block' : 'none';
+                
+                const standardVoiceContainer = document.getElementById('sw-tts-standard-voice-container');
+                if (standardVoiceContainer) standardVoiceContainer.style.display = provider === 'nanogpt' ? 'none' : 'block';
+                
                 this.loadVoices();
             });
         }
@@ -506,9 +511,9 @@ class StoryWriterApp {
             let savedProvider = window.config.get('api.tts.provider') || localStorage.getItem('sw-tts-provider') || 'local';
             if (savedProvider === 'google') savedProvider = 'google-premium';
             const savedGoogleKey = window.config.get('api.tts.apiKey') || localStorage.getItem('sw-tts-google-key') || '';
-            const savedOpenaiUrl = window.config.get('api.tts.openaiUrl') || localStorage.getItem('sw-tts-openai-url') || '';
-            const savedOpenaiKey = window.config.get('api.tts.openaiKey') || localStorage.getItem('sw-tts-openai-key') || '';
-            const savedOpenaiModel = window.config.get('api.tts.openaiModel') || localStorage.getItem('sw-tts-openai-model') || '';
+            const savedNanogptKey = window.config.get('api.tts.nanogptKey') || localStorage.getItem('sw-tts-nanogpt-key') || '';
+            const savedNanogptModel = window.config.get('api.tts.nanogptModel') || localStorage.getItem('sw-tts-nanogpt-model') || '';
+            const savedNanogptVoice = window.config.get('api.tts.nanogptVoice') || localStorage.getItem('sw-tts-nanogpt-voice') || '';
 
             this.ttsSettings = {
                 tts_enabled: s.tts_enabled || false,
@@ -517,9 +522,9 @@ class StoryWriterApp {
                 tts_speed: s.tts_speed || 1.0,
                 tts_provider: savedProvider,
                 tts_google_key: savedGoogleKey,
-                tts_openai_url: savedOpenaiUrl,
-                tts_openai_key: savedOpenaiKey,
-                tts_openai_model: savedOpenaiModel
+                tts_nanogpt_key: savedNanogptKey,
+                tts_nanogpt_model: savedNanogptModel,
+                tts_nanogpt_voice: savedNanogptVoice
             };
             console.debug('[StoryWriter][TTS] Loaded settings', this.ttsSettings);
 
@@ -530,9 +535,9 @@ class StoryWriterApp {
             const speedLabel   = document.getElementById('sw-tts-speed-label');
             const providerSelect = document.getElementById('sw-tts-provider');
             const googleKeyInput = document.getElementById('sw-tts-google-key');
-            const openaiUrlInput = document.getElementById('sw-tts-openai-url');
-            const openaiKeyInput = document.getElementById('sw-tts-openai-key');
-            const openaiModelInput = document.getElementById('sw-tts-openai-model');
+            const nanogptKeyInput = document.getElementById('sw-tts-nanogpt-key');
+            const nanogptModelSelect = document.getElementById('sw-tts-nanogpt-model');
+            const nanogptVoiceInput = document.getElementById('sw-tts-nanogpt-voice');
 
             if (ttsEnabled) ttsEnabled.checked = this.ttsSettings.tts_enabled;
             if (autoMode)  autoMode.checked  = this.ttsSettings.auto_mode;
@@ -543,21 +548,23 @@ class StoryWriterApp {
             if (providerSelect) {
                 providerSelect.value = this.ttsSettings.tts_provider;
                 document.getElementById('sw-tts-google-key-container').style.display = this.ttsSettings.tts_provider.startsWith('google') ? 'block' : 'none';
-                const openaiContainer = document.getElementById('sw-tts-openai-container');
-                if (openaiContainer) openaiContainer.style.display = this.ttsSettings.tts_provider === 'openai' ? 'block' : 'none';
+                
+                const nanogptContainer = document.getElementById('sw-tts-nanogpt-container');
+                if (nanogptContainer) nanogptContainer.style.display = this.ttsSettings.tts_provider === 'nanogpt' ? 'block' : 'none';
+                
+                const standardVoiceContainer = document.getElementById('sw-tts-standard-voice-container');
+                if (standardVoiceContainer) standardVoiceContainer.style.display = this.ttsSettings.tts_provider === 'nanogpt' ? 'none' : 'block';
             }
             if (googleKeyInput) {
                 googleKeyInput.value = this.ttsSettings.tts_google_key;
             }
-            if (openaiUrlInput) {
-                openaiUrlInput.value = this.ttsSettings.tts_openai_url;
+            if (nanogptKeyInput) {
+                nanogptKeyInput.value = this.ttsSettings.tts_nanogpt_key;
             }
-            if (openaiKeyInput) {
-                openaiKeyInput.value = this.ttsSettings.tts_openai_key;
+            if (nanogptVoiceInput) {
+                nanogptVoiceInput.value = this.ttsSettings.tts_nanogpt_voice;
             }
-            if (openaiModelInput) {
-                openaiModelInput.value = this.ttsSettings.tts_openai_model;
-            }
+            // Model select is populated inside loadVoices
         } catch (e) {
             console.error('[StoryWriter] Failed to load settings:', e);
         }
@@ -585,22 +592,22 @@ class StoryWriterApp {
         const ttsSpeed   = parseFloat(document.getElementById('sw-tts-speed')?.value || '1.0');
         const ttsProvider = document.getElementById('sw-tts-provider')?.value || 'local';
         const ttsGoogleKey = document.getElementById('sw-tts-google-key')?.value || '';
-        const ttsOpenaiUrl = document.getElementById('sw-tts-openai-url')?.value || '';
-        const ttsOpenaiKey = document.getElementById('sw-tts-openai-key')?.value || '';
-        const ttsOpenaiModel = document.getElementById('sw-tts-openai-model')?.value || '';
+        const ttsNanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
+        const ttsNanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
+        const ttsNanogptVoice = document.getElementById('sw-tts-nanogpt-voice')?.value || '';
 
         if (window.config) {
             window.config.set('api.tts.provider', ttsProvider);
             window.config.set('api.tts.apiKey', ttsGoogleKey);
-            window.config.set('api.tts.openaiUrl', ttsOpenaiUrl);
-            window.config.set('api.tts.openaiKey', ttsOpenaiKey);
-            window.config.set('api.tts.openaiModel', ttsOpenaiModel);
+            window.config.set('api.tts.nanogptKey', ttsNanogptKey);
+            window.config.set('api.tts.nanogptModel', ttsNanogptModel);
+            window.config.set('api.tts.nanogptVoice', ttsNanogptVoice);
         }
         localStorage.removeItem('sw-tts-provider');
         localStorage.removeItem('sw-tts-google-key');
-        localStorage.removeItem('sw-tts-openai-url');
-        localStorage.removeItem('sw-tts-openai-key');
-        localStorage.removeItem('sw-tts-openai-model');
+        localStorage.removeItem('sw-tts-nanogpt-key');
+        localStorage.removeItem('sw-tts-nanogpt-model');
+        localStorage.removeItem('sw-tts-nanogpt-voice');
 
         const payload = {
             max_tokens: maxTokens,
@@ -622,9 +629,9 @@ class StoryWriterApp {
             tts_speed: ttsSpeed,
             tts_provider: ttsProvider,
             tts_google_key: ttsGoogleKey,
-            tts_openai_url: ttsOpenaiUrl,
-            tts_openai_key: ttsOpenaiKey,
-            tts_openai_model: ttsOpenaiModel
+            tts_nanogpt_key: ttsNanogptKey,
+            tts_nanogpt_model: ttsNanogptModel,
+            tts_nanogpt_voice: ttsNanogptVoice
         };
 
         btn.disabled = true;
@@ -659,33 +666,29 @@ class StoryWriterApp {
 
         try {
             let res;
-            if (provider === 'openai') {
-                const openaiUrl = document.getElementById('sw-tts-openai-url')?.value || '';
-                const openaiKey = document.getElementById('sw-tts-openai-key')?.value || '';
+            if (provider === 'nanogpt') {
+                const nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
+                res = await window.authFetch(`/api/tts/nanogpt-voices?key=${nanogptKey}`);
+                const data = await res.json();
                 
-                // If it's nano-gpt, query their models endpoint
-                if (openaiUrl.includes('nano-gpt.com')) {
-                    res = await window.authFetch(`/api/tts/nanogpt-voices?key=${openaiKey}`);
-                } else {
-                    // Otherwise just use standard OpenAI models directly
-                    const speakers = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
-                    voiceSelect.innerHTML = '';
+                const modelSelect = document.getElementById('sw-tts-nanogpt-model');
+                if (modelSelect) {
+                    modelSelect.innerHTML = '';
+                    const speakers = data.speakers || [];
                     speakers.forEach(speaker => {
                         const opt = document.createElement('option');
                         opt.value = speaker;
-                        opt.textContent = speaker.charAt(0).toUpperCase() + speaker.slice(1);
-                        voiceSelect.appendChild(opt);
+                        opt.textContent = speaker;
+                        modelSelect.appendChild(opt);
                     });
                     
-                    if (this.ttsSettings.tts_voice && speakers.includes(this.ttsSettings.tts_voice)) {
-                        voiceSelect.value = this.ttsSettings.tts_voice;
+                    if (this.ttsSettings.tts_nanogpt_model && speakers.includes(this.ttsSettings.tts_nanogpt_model)) {
+                        modelSelect.value = this.ttsSettings.tts_nanogpt_model;
                     } else if (speakers.length > 0) {
-                        voiceSelect.value = speakers[0];
+                        modelSelect.value = speakers[0];
                     }
-                    
-                    if (statusSpan) statusSpan.textContent = speakers.length + ' voices available';
-                    return;
                 }
+                return;
             } else if (provider.startsWith('google')) {
                 if (!googleKey) {
                     voiceSelect.innerHTML = '<option value="">— Enter API Key —</option>';
@@ -779,9 +782,9 @@ class StoryWriterApp {
         player.setVolume(parseInt(volumeSlider?.value || '80', 10));
         player.provider = document.getElementById('sw-tts-provider')?.value || 'local';
         player.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
-        player.openaiUrl = document.getElementById('sw-tts-openai-url')?.value || '';
-        player.openaiApiKey = document.getElementById('sw-tts-openai-key')?.value || '';
-        player.openaiModel = document.getElementById('sw-tts-openai-model')?.value || '';
+        player.nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
+        player.nanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
+        player.nanogptVoice = document.getElementById('sw-tts-nanogpt-voice')?.value || '';
 
         let hasError = false;
         player.onError = (err) => {
@@ -1184,9 +1187,9 @@ class StoryWriterApp {
         this.ttsPlayer.setVolume(volume);
         this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'local';
         this.ttsPlayer.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
-        this.ttsPlayer.openaiUrl = document.getElementById('sw-tts-openai-url')?.value || '';
-        this.ttsPlayer.openaiApiKey = document.getElementById('sw-tts-openai-key')?.value || '';
-        this.ttsPlayer.openaiModel = document.getElementById('sw-tts-openai-model')?.value || '';
+        this.ttsPlayer.nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
+        this.ttsPlayer.nanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
+        this.ttsPlayer.nanogptVoice = document.getElementById('sw-tts-nanogpt-voice')?.value || '';
         this._showNarrationControls();
         const pauseBtn = document.getElementById('sw-tts-pause-btn');
         if (pauseBtn) pauseBtn.textContent = '\u23f8 Pause';

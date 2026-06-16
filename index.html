@@ -1620,7 +1620,7 @@
                                         <option value="local">Local Coqui TTS</option>
                                         <option value="google-premium">Google Cloud (Premium: Neural2 / WaveNet)</option>
                                         <option value="google-standard">Google Cloud (Standard)</option>
-                                        <option value="openai">OpenAI Compatible (nano-gpt, etc.)</option>
+                                        <option value="nanogpt">Nano-GPT</option>
                                     </select>
                                 </div>
 
@@ -1629,18 +1629,20 @@
                                     <input type="password" id="sw-tts-google-key" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="AIzaSy..." />
                                 </div>
 
-                                <div id="sw-tts-openai-container" style="margin-top: 0.5rem; display: none;">
-                                    <label class="label" for="sw-tts-openai-url">OpenAI API URL</label>
-                                    <input type="text" id="sw-tts-openai-url" class="input" style="background: var(--surface-color); max-width: 260px; margin-bottom: 0.5rem;" placeholder="https://api.openai.com/v1/audio/speech" />
-                                    
-                                    <label class="label" for="sw-tts-openai-key">OpenAI API Key (Optional)</label>
-                                    <input type="password" id="sw-tts-openai-key" class="input" style="background: var(--surface-color); max-width: 260px; margin-bottom: 0.5rem;" placeholder="sk-..." />
+                                <div id="sw-tts-nanogpt-container" style="margin-top: 0.5rem; display: none;">
+                                    <label class="label" for="sw-tts-nanogpt-key">Nano-GPT API Key</label>
+                                    <input type="password" id="sw-tts-nanogpt-key" class="input" style="background: var(--surface-color); max-width: 260px; margin-bottom: 0.5rem;" placeholder="sk-..." />
 
-                                    <label class="label" for="sw-tts-openai-model">OpenAI Model (Optional)</label>
-                                    <input type="text" id="sw-tts-openai-model" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="tts-1" />
+                                    <label class="label" for="sw-tts-nanogpt-model">Model</label>
+                                    <select id="sw-tts-nanogpt-model" class="input" style="background: var(--surface-color); max-width: 260px; margin-bottom: 0.5rem;">
+                                        <option value="">— Loading models… —</option>
+                                    </select>
+
+                                    <label class="label" for="sw-tts-nanogpt-voice">Voice Name / ID</label>
+                                    <input type="text" id="sw-tts-nanogpt-voice" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="e.g. Rachel, alloy, etc." />
                                 </div>
 
-                                <div style="margin-top: 0.75rem;">
+                                <div id="sw-tts-standard-voice-container" style="margin-top: 0.75rem;">
                                     <label class="label" for="sw-tts-voice">Voice</label>
                                     <select id="sw-tts-voice" class="input" style="background: var(--surface-color); max-width: 260px;">
                                         <option value="">— Loading voices… —</option>

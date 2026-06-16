@@ -1274,28 +1274,24 @@ app.get("/api/tts/models", async (_req, res) => {
 
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
-    const { text, voice, speed, provider, googleApiKey, openaiUrl, openaiApiKey, openaiModel } = req.body;
+    const { text, voice, speed, provider, googleApiKey, nanogptKey, nanogptModel, nanogptVoice } = req.body;
 
-    // Branch: OpenAI Compatible TTS
-    if (provider === "openai") {
-      if (!openaiUrl) {
-        return res.status(400).json({ error: "OpenAI API URL is required for OpenAI TTS" });
-      }
-
-      const requestUrl = openaiUrl.endsWith('/audio/speech') ? openaiUrl : `${openaiUrl.replace(/\/$/, '')}/audio/speech`;
+    // Branch: Nano-GPT TTS
+    if (provider === "nanogpt") {
+      const requestUrl = "https://api.nano-gpt.com/v1/audio/speech";
 
       const headers = { "Content-Type": "application/json" };
-      if (openaiApiKey) {
-        headers["Authorization"] = `Bearer ${openaiApiKey}`;
+      if (nanogptKey) {
+        headers["Authorization"] = `Bearer ${nanogptKey}`;
       }
 
       const response = await fetch(requestUrl, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          model: openaiModel || "tts-1",
+          model: nanogptModel || "elevenlabs-multilingual-v2",
           input: text,
-          voice: voice || "alloy",
+          voice: nanogptVoice || "alloy",
           response_format: "mp3",
           speed: speed || 1.0
         }),
@@ -1303,7 +1299,7 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
       if (!response.ok) {
         const errData = await response.text();
-        return res.status(response.status).send(`OpenAI TTS Error: ${errData}`);
+        return res.status(response.status).send(`Nano-GPT TTS Error: ${errData}`);
       }
 
       res.setHeader("Content-Type", "audio/mpeg");
