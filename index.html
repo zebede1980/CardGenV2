@@ -1639,7 +1639,26 @@
                                     </select>
 
                                     <label class="label" for="sw-tts-nanogpt-voice">Voice Name / ID</label>
-                                    <input type="text" id="sw-tts-nanogpt-voice" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="e.g. Rachel, alloy, etc." />
+                                    <input type="text" id="sw-tts-nanogpt-voice" list="nanogpt-voice-suggestions" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="e.g. Rachel, alloy, etc." />
+                                    <datalist id="nanogpt-voice-suggestions">
+                                        <option value="alloy">alloy (OpenAI)</option>
+                                        <option value="echo">echo (OpenAI)</option>
+                                        <option value="fable">fable (OpenAI)</option>
+                                        <option value="onyx">onyx (OpenAI)</option>
+                                        <option value="nova">nova (OpenAI)</option>
+                                        <option value="shimmer">shimmer (OpenAI)</option>
+                                        <option value="Rachel">Rachel (ElevenLabs)</option>
+                                        <option value="Adam">Adam (ElevenLabs)</option>
+                                        <option value="Bella">Bella (ElevenLabs)</option>
+                                        <option value="Antoni">Antoni (ElevenLabs)</option>
+                                        <option value="af_heart">af_heart (Kokoro Female)</option>
+                                        <option value="am_adam">am_adam (Kokoro Male)</option>
+                                        <option value="af_bella">af_bella (Kokoro Female)</option>
+                                        <option value="am_michael">am_michael (Kokoro Male)</option>
+                                    </datalist>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); max-width: 260px; margin-top: 0.25rem;">
+                                        Double-click box for examples. Type any specific voice name/ID supported by the chosen model. If left blank, defaults to 'alloy'.
+                                    </div>
                                 </div>
 
                                 <div id="sw-tts-standard-voice-container" style="margin-top: 0.75rem;">
