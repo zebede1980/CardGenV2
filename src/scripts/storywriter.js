@@ -107,6 +107,7 @@ class TTSPlayer {
         this.nanogptKey = '';
         this.nanogptModel = '';
         this.nanogptVoice = '';
+        this.errorCount = 0;
     }
 
     _setupMediaSession() {
@@ -183,8 +184,17 @@ class TTSPlayer {
             if (!res.ok) {
                 const errText = await res.text().catch(() => '');
                 console.warn('[TTSPlayer] Synthesis HTTP', res.status, errText, '— skipping sentence');
+                this.errorCount++;
                 if (this.onError) this.onError(`HTTP ${res.status}: ${errText || 'Failed'}`);
+                
+                if (this.errorCount >= 3) {
+                    console.error('[TTSPlayer] Halting after 3 consecutive failures to prevent runaway billing.');
+                    if (this.onError) this.onError(`Halting playback: 3 consecutive errors encountered.`);
+                    this.stop();
+                    return;
+                }
             } else {
+                this.errorCount = 0;
                 const blob = await res.blob();
                 if (blob.size > 0) {
                     const url = URL.createObjectURL(blob);
@@ -197,7 +207,15 @@ class TTSPlayer {
             }
         } catch (e) {
             console.error('[TTSPlayer] Audio load error:', e);
+            this.errorCount++;
             if (this.onError) this.onError(`Network error: ${e.message}`);
+            
+            if (this.errorCount >= 3) {
+                console.error('[TTSPlayer] Halting after 3 consecutive network failures.');
+                if (this.onError) this.onError(`Halting playback: 3 consecutive network errors.`);
+                this.stop();
+                return;
+            }
         } finally {
             this.loading = false;
             if (!this.stopped && !this.paused) {

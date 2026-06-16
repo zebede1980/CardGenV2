@@ -1337,7 +1337,34 @@ app.post("/api/tts/synthesize", async (req, res) => {
         const contentType = response.headers.get('content-type') || "";
         
         if (contentType.includes("application/json")) {
-          const data = await response.json();
+          let data = await response.json();
+          
+          // If the job is pending, we must poll for completion
+          if (data.status === "pending" && data.runId) {
+            let maxAttempts = 60;
+            while (data.status !== "completed" && maxAttempts > 0) {
+              if (data.status === "error") {
+                return res.status(500).send(`Nano-GPT Custom TTS Generation Failed: ${data.error || 'Unknown error'}`);
+              }
+              
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              const qs = new URLSearchParams({ runId: data.runId, model: modelName });
+              const pollRes = await fetch(`https://nano-gpt.com/api/tts/status?${qs.toString()}`, {
+                headers: { 'x-api-key': nanogptKey }
+              });
+              
+              if (!pollRes.ok) {
+                const errText = await pollRes.text();
+                return res.status(pollRes.status).send(`Nano-GPT Polling Failed: ${errText}`);
+              }
+              data = await pollRes.json();
+              maxAttempts--;
+            }
+            if (data.status !== "completed") {
+              return res.status(500).send("Nano-GPT Custom TTS Polling Timeout.");
+            }
+          }
+
           if (data.audioUrl) {
             // Fetch the actual audio file
             const audioRes = await fetch(data.audioUrl);
