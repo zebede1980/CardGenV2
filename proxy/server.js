@@ -1289,7 +1289,7 @@ app.post("/api/tts/synthesize", async (req, res) => {
         method: "POST",
         headers,
         body: JSON.stringify({
-          model: nanogptModel || "elevenlabs-multilingual-v2",
+          model: nanogptModel || "tts-1",
           input: text,
           voice: nanogptVoice || "alloy",
           response_format: "mp3",
@@ -1400,47 +1400,6 @@ app.get("/api/tts/google-voices", async (req, res) => {
   }
 });
 
-// Fetch nano-gpt.com Voices/Models
-app.get("/api/tts/nanogpt-voices", async (req, res) => {
-  try {
-    const apiKey = req.query.key;
-    
-    // If no key is provided, we can't authenticate, so just return the fallback list immediately
-    if (!apiKey) {
-      return res.json({ status: "ready", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"] });
-    }
-
-    const response = await fetch(`https://api.nano-gpt.com/v1/models`, {
-      headers: { "Authorization": `Bearer ${apiKey}` }
-    });
-
-    if (!response.ok) {
-      console.warn(`nano-gpt.com /v1/models fetch failed with status ${response.status}. Falling back to hardcoded list.`);
-      return res.json({ status: "ready", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"] });
-    }
-
-    const data = await response.json();
-    let voices = [];
-    if (data && data.data && Array.isArray(data.data)) {
-      // Heuristic to find TTS models from a general models list
-      voices = data.data
-        .filter(m => m.id.includes('tts') || m.id.includes('eleven') || m.id.includes('kokoro') || m.id.includes('speech'))
-        .map(m => m.id)
-        .sort();
-    }
-
-    // If API parsing yields no voices, use hardcoded list as a fallback
-    if (voices.length === 0) {
-      voices = ["elevenlabs-multilingual-v2", "kokoro-82m"];
-    }
-
-    res.json({ status: "ready", speakers: voices });
-  } catch (error) {
-    console.error("Failed to fetch nano-gpt.com voices:", error.message);
-    // On any error, provide a fallback list so the UI is still usable.
-    res.status(200).json({ status: "fallback", speakers: ["elevenlabs-multilingual-v2", "kokoro-82m"], error: error.message });
-  }
-});
 
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {

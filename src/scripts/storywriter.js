@@ -561,10 +561,12 @@ class StoryWriterApp {
             if (nanogptKeyInput) {
                 nanogptKeyInput.value = this.ttsSettings.tts_nanogpt_key;
             }
+            if (nanogptModelSelect) {
+                nanogptModelSelect.value = this.ttsSettings.tts_nanogpt_model;
+            }
             if (nanogptVoiceInput) {
                 nanogptVoiceInput.value = this.ttsSettings.tts_nanogpt_voice;
             }
-            // Model select is populated inside loadVoices
         } catch (e) {
             console.error('[StoryWriter] Failed to load settings:', e);
         }
@@ -667,27 +669,8 @@ class StoryWriterApp {
         try {
             let res;
             if (provider === 'nanogpt') {
-                const nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
-                res = await window.authFetch(`/api/tts/nanogpt-voices?key=${nanogptKey}`);
-                const data = await res.json();
-                
-                const modelSelect = document.getElementById('sw-tts-nanogpt-model');
-                if (modelSelect) {
-                    modelSelect.innerHTML = '';
-                    const speakers = data.speakers || [];
-                    speakers.forEach(speaker => {
-                        const opt = document.createElement('option');
-                        opt.value = speaker;
-                        opt.textContent = speaker;
-                        modelSelect.appendChild(opt);
-                    });
-                    
-                    if (this.ttsSettings.tts_nanogpt_model && speakers.includes(this.ttsSettings.tts_nanogpt_model)) {
-                        modelSelect.value = this.ttsSettings.tts_nanogpt_model;
-                    } else if (speakers.length > 0) {
-                        modelSelect.value = speakers[0];
-                    }
-                }
+                // Nano-GPT models and voices are now handled purely by datalist inputs in the UI,
+                // so we don't dynamically fetch them anymore to avoid errors with endpoints that don't exist.
                 return;
             } else if (provider.startsWith('google')) {
                 if (!googleKey) {
