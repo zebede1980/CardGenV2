@@ -196,3 +196,4 @@ coverage/
 *.sw?
 proxy/data/users/1781089145336/prompts.json
 proxy/data/users/1781089145336/history.json
+models.json
