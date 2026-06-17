@@ -114,15 +114,13 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
-  # Kokoro-82M TTS Service
+  # Kokoro-82M TTS Service (CPU version to avoid CUDA dependency errors)
   kokoro-tts:
-    image: hwdsl2/kokoro-server
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
     container_name: kokoro-tts
     restart: unless-stopped
     ports:
       - "8880:8880"
-    volumes:
-      - ./kokoro-data:/var/lib/kokoro
     networks:
       - app-network
 
