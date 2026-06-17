@@ -88,29 +88,15 @@ services:
     networks:
       - app-network
 
-  # Coqui TTS Bridge Service — local text-to-speech narration for Story Writer
-  tts:
-    build:
-      context: ./tts-service
-      dockerfile: Dockerfile
-    container_name: cardgen-tts
+  # Kokoro-82M TTS Service (CPU version to avoid CUDA dependency errors)
+  kokoro-tts:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: kokoro-tts
     restart: unless-stopped
-    environment:
-      - TTS_MODEL_NAME=${TTS_MODEL_NAME:-tts_models/en/vctk/vits}
-      - TTS_DEVICE=${TTS_DEVICE:-cpu}
-      - TTS_PRELOAD=${TTS_PRELOAD:-true}
-    volumes:
-      - ./tts-models:/root/.local/share/tts
+    ports:
+      - "8880:8880"
     networks:
       - app-network
-    # GPU support — uncomment if you have NVIDIA Container Toolkit installed
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
 networks:
   app-network:
