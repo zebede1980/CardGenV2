@@ -2757,6 +2757,7 @@ textarea.content-box {
 .chat-bubble {
     padding: 0.7rem 0.95rem;
     border-radius: 0.75rem;
+    font-size: calc(0.9375rem * var(--chat-text-zoom, 1));
     line-height: 1.55;
     word-wrap: break-word;
     word-break: break-word;
