@@ -1237,21 +1237,6 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: "StoryWriter backend unreachable: " + error.message }); }
 });
 
-// ── TTS Bridge Proxy ─────────────────────────────────────────────────────────
-// Forwards TTS requests from the browser to the Coqui TTS Docker service.
-
-const TTS_URL = (process.env.TTS_URL || "http://tts:8500").replace(/\/$/, "");
-
-app.get("/api/tts/health", async (_req, res) => {
-  try {
-    const response = await fetch(`${TTS_URL}/health`);
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    res.status(503).json({ status: "unreachable", error: error.message });
-  }
-});
-
 app.get("/api/tts/voices", async (req, res) => {
   try {
     const provider = req.query.provider;
@@ -1269,21 +1254,9 @@ app.get("/api/tts/voices", async (req, res) => {
       return res.json({ status: "ready", speakers: kokoroVoices });
     }
 
-    const response = await fetch(`${TTS_URL}/voices`);
-    const data = await response.json();
-    res.json(data);
+    res.json({ status: "ready", speakers: [] });
   } catch (error) {
     res.status(503).json({ status: "error", error: error.message, speakers: [] });
-  }
-});
-
-app.get("/api/tts/models", async (_req, res) => {
-  try {
-    const response = await fetch(`${TTS_URL}/models`);
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    res.status(503).json({ models: [], error: error.message });
   }
 });
 
@@ -1471,28 +1444,7 @@ app.post("/api/tts/synthesize", async (req, res) => {
       return res.send(audioBuffer);
     }
 
-    // Branch: Local Coqui TTS
-    const response = await fetch(`${TTS_URL}/synthesize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice, speed }), // Exclude provider/key from Coqui
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(response.status).send(errText);
-    }
-
-    res.setHeader("Content-Type", "audio/wav");
-    res.setHeader("Cache-Control", "no-cache");
-
-    // Copy any duration header
-    const duration = response.headers.get("x-tts-duration-seconds");
-    if (duration) {
-      res.setHeader("X-TTS-Duration-Seconds", duration);
-    }
-
-    response.body.pipe(res);
+    return res.status(400).json({ error: "Invalid or unsupported TTS provider selected." });
   } catch (error) {
     res.status(503).json({ error: "TTS service unreachable: " + error.message });
   }

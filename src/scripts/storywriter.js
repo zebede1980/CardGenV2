@@ -682,7 +682,7 @@ class StoryWriterApp {
     async loadVoices() {
         const voiceSelect = document.getElementById('sw-tts-voice');
         const statusSpan  = document.getElementById('sw-tts-status');
-        const provider = document.getElementById('sw-tts-provider')?.value || 'local';
+        const provider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
         const googleKey = document.getElementById('sw-tts-google-key')?.value || '';
 
         if (!voiceSelect) return;
