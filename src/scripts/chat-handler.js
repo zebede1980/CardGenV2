@@ -360,6 +360,10 @@ class RoleplayChatHandler {
             newPersonaDetail: document.getElementById('chat-new-persona-detail'),
             newPersonaCardName: document.getElementById('chat-new-persona-card-name'),
             newPersonaPickBtn: document.getElementById('chat-new-persona-pick-btn'),
+            
+            zoomOutBtn: document.getElementById('chat-zoom-out-btn'),
+            zoomResetBtn: document.getElementById('chat-zoom-reset-btn'),
+            zoomInBtn: document.getElementById('chat-zoom-in-btn'),
         };
     }
 
@@ -473,6 +477,30 @@ class RoleplayChatHandler {
         
         document.addEventListener('visibilitychange', () => this.syncOnWake());
         window.addEventListener('focus', () => this.syncOnWake());
+
+        if (this.els.zoomOutBtn) {
+            this.els.zoomOutBtn.addEventListener('click', () => this.setZoom(this.chatZoom - 0.1));
+        }
+        if (this.els.zoomInBtn) {
+            this.els.zoomInBtn.addEventListener('click', () => this.setZoom(this.chatZoom + 0.1));
+        }
+        if (this.els.zoomResetBtn) {
+            this.els.zoomResetBtn.addEventListener('click', () => this.setZoom(1));
+        }
+        
+        this.chatZoom = window.config ? (window.config.get("chat.textZoom") || 1) : 1;
+        this.setZoom(this.chatZoom);
+    }
+
+    setZoom(level) {
+        this.chatZoom = Math.max(0.5, Math.min(3, level));
+        const view = document.getElementById('view-roleplaychat');
+        if (view) {
+            view.style.setProperty('--chat-text-zoom', this.chatZoom);
+        }
+        if (window.config) {
+            window.config.set("chat.textZoom", this.chatZoom);
+        }
     }
 
     updateOocBadge() {
