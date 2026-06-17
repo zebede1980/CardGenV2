@@ -6,7 +6,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return document.getElementById("prompt-guidance")?.value?.trim() || "";
   },
 
-  async generateImage() {
+  async generateImage(skipSave = false) {
     const imageContainer = document.getElementById("image-content");
 
     const customPromptTextarea = document.getElementById("custom-image-prompt");
@@ -48,8 +48,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       customPromptTextarea.value = window.apiHandler.lastGeneratedImagePrompt;
     }
 
-    await this.saveCardToLibrary();
-    await this.refreshLibraryViews();
+    if (!skipSave) {
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+    }
   },
 
   async handleRegenerateImage() {
@@ -397,7 +399,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (mainStyleSelect) {
       optionsHtml = mainStyleSelect.innerHTML;
     } else {
-      const styles = ["", "realistic", "anime", "hand-drawn-anime", "painted-anime", "waifu", "sexy", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "gothic-anime", "gothic", "art-nouveau", "noir", "ink-sketch", "storybook", "manhwa", "chibi", "vintage"];
+      const styles = ["", "realistic", "anime", "hand-drawn-anime", "painted-anime", "grunge-anime", "waifu", "sexy", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "gothic-anime", "gothic", "art-nouveau", "noir", "ink-sketch", "storybook", "manhwa", "chibi", "vintage"];
       optionsHtml = styles.map(s => `<option value="${s}">${s === "" ? 'Default / None' : s}</option>`).join('');
     }
 

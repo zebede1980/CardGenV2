@@ -76,7 +76,7 @@ function withFileLock(filename, fn) {
     throw err;
   });
   // Store only a never-rejecting tail so the chain doesn't stall on error.
-  writeLocks.set(filename, next.catch(() => {}));
+  writeLocks.set(filename, next.catch(() => { }));
   return next;
 }
 
@@ -112,19 +112,79 @@ function getUserDataDir(userId) {
 const HISTORY_MAX = 30;
 
 async function readHistory(userId) {
-  const filePath = path.join(getUserDataDir(userId), "history.json");
-  if (!fs.existsSync(filePath)) return [];
+  await autoMigrateDataIfNeeded(userId, "system");
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const url = `${internalUrl}/api/proxy-data/history`;
   try {
-    const raw = await fsPromises.readFile(filePath, "utf8");
-    return JSON.parse(raw) || [];
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(userId),
+        "X-User-Name": "system",
+        "X-Internal-Secret": INTERNAL_API_SECRET
+      }
+    });
+    if (!response.ok) return [];
+    let items = await response.json();
+    return items.map(item => ({ ...item.data, id: item.id, updatedAt: item.updated_at }));
   } catch (e) {
     return [];
   }
 }
 
 async function writeHistory(userId, items) {
-  const filePath = path.join(getUserDataDir(userId), "history.json");
-  await fsPromises.writeFile(filePath, JSON.stringify(items, null, 2), "utf8");
+  await autoMigrateDataIfNeeded(userId, "system");
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+
+  try {
+    // 1. Fetch current history from DB
+    const currentRes = await fetch(`${internalUrl}/api/proxy-data/history`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(userId),
+        "X-User-Name": "system",
+        "X-Internal-Secret": INTERNAL_API_SECRET
+      }
+    });
+
+    if (currentRes.ok) {
+      const currentItems = await currentRes.json();
+      const newIds = new Set(items.map(i => String(i.id)));
+
+      // 2. Delete any items currently in DB that are NOT in the new list
+      for (const curr of currentItems) {
+        if (!newIds.has(String(curr.id))) {
+          await fetch(`${internalUrl}/api/proxy-data/history/${curr.id}`, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "X-User-Id": String(userId),
+              "X-User-Name": "system",
+              "X-Internal-Secret": INTERNAL_API_SECRET
+            }
+          });
+        }
+      }
+    }
+
+    // 3. Upsert the items that are in the new list
+    for (const item of items) {
+      await fetch(`${internalUrl}/api/proxy-data/history`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": String(userId),
+          "X-User-Name": "system",
+          "X-Internal-Secret": INTERNAL_API_SECRET
+        },
+        body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
+      });
+    }
+  } catch (e) {
+    console.error("Failed to write history:", e);
+  }
 }
 
 // Delete all archived history-image files for a card (e.g. ${cardId}_h0.img)
@@ -134,7 +194,7 @@ async function deleteCardHistoryImages(imgDir, cardId) {
     const imgFile = path.join(imgDir, `${cardId}_h${i}.img`);
     if (!fs.existsSync(imgFile)) break;
     for (const ext of [".img", ".mime"]) {
-      fsPromises.unlink(path.join(imgDir, `${cardId}_h${i}${ext}`)).catch(() => {});
+      fsPromises.unlink(path.join(imgDir, `${cardId}_h${i}${ext}`)).catch(() => { });
     }
     i++;
   }
@@ -344,69 +404,126 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
 });
 
 // ── Data Endpoints for Settings & Configurations ─────────────────────────────
+// ── Shared helper to proxy proxy-data requests to backend ────────────────────
+async function autoMigrateDataIfNeeded(userId, username) {
+  const dir = getUserDataDir(userId);
+  const filesToMigrate = ["config.json", "prompts.json", "history.json"];
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const headers = {
+    "Content-Type": "application/json",
+    "X-User-Id": String(userId),
+    "X-User-Name": String(username),
+    "X-Internal-Secret": INTERNAL_API_SECRET
+  };
+
+  for (const file of filesToMigrate) {
+    const filePath = path.join(dir, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    try {
+      const content = await fsPromises.readFile(filePath, "utf8");
+      const parsed = JSON.parse(content);
+      let itemsToPush = [];
+      let endpoint = "";
+
+      if (file === "config.json") {
+        endpoint = "config";
+        await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+          method: "POST", headers, body: JSON.stringify({ config_data: parsed })
+        });
+      } else if (file === "prompts.json") {
+        endpoint = "prompts";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      } else if (file === "history.json") {
+        endpoint = "history";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      }
+
+      if (itemsToPush.length > 0) {
+        for (const item of itemsToPush) {
+          await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+            method: "POST", headers, body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
+          });
+        }
+      }
+
+      // Rename to avoid migrating again
+      await fsPromises.rename(filePath, `${filePath}.migrated`);
+      console.log(`[Migration] Auto-migrated ${file} to PostgreSQL`);
+    } catch (e) {
+      console.error(`[Migration] Failed for ${file}:`, e);
+    }
+  }
+}
+
+async function forwardProxyData(req, res, endpoint) {
+  await autoMigrateDataIfNeeded(req.user.userId, req.user.username);
+
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const url = `${internalUrl}/api/proxy-data/${endpoint}`;
+  try {
+    const response = await fetch(url, {
+      method: req.method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(req.user.userId),
+        "X-User-Name": String(req.user.username),
+        "X-Internal-Secret": INTERNAL_API_SECRET
+      },
+      body: req.method !== "GET" && req.method !== "DELETE" ? JSON.stringify(req.body) : undefined
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: errText });
+    }
+    let data = await response.json();
+
+    // For GET lists, unwrap the nested data so it looks exactly like local JSON to the frontend
+    if (req.method === "GET" && Array.isArray(data)) {
+      data = data.map(item => ({ ...item.data, id: item.id, updatedAt: item.updated_at }));
+    } else if (req.method === "GET" && data.data) {
+      data = { ...data.data, id: data.id, updatedAt: data.updated_at };
+    } else if (req.method === "GET" && endpoint === "config") {
+      data = data.config_data || {};
+    } else if ((req.method === "POST" || req.method === "PUT") && endpoint === "config") {
+      data = { success: true };
+    }
+
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// ── Data Endpoints for Settings & Configurations ─────────────────────────────
 // Config is now stored per user, ensuring each user has their own API settings
 app.get("/api/config", requireAuth, async (req, res) => {
-  try {
-    const configPath = path.join(getUserDataDir(req.user.userId), "config.json");
-    if (fs.existsSync(configPath)) {
-      const data = await fsPromises.readFile(configPath, "utf8");
-      res.json(JSON.parse(data));
-    } else {
-      res.json({});
-    }
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  return forwardProxyData(req, res, "config");
 });
 
 app.post("/api/config", requireAuth, async (req, res) => {
-  try {
-    await fsPromises.writeFile(path.join(getUserDataDir(req.user.userId), "config.json"), JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  req.body = { config_data: req.body };
+  return forwardProxyData(req, res, "config");
 });
 
-// ── Per-user Data Endpoints for Prompts (Local JSON) ─────────────────────────
+// ── Per-user Data Endpoints for Prompts (PostgreSQL proxied) ─────────────────────────
 app.get("/api/storage/prompts", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  res.json(await readJsonStore(storeFile));
+  return forwardProxyData(req, res, "prompts");
 });
 
 app.get("/api/storage/prompts/:id", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  const items = await readJsonStore(storeFile);
-  const item = items.find(i => i.id == req.params.id);
-  if (item) res.json(item);
-  else res.status(404).json({ error: "Not found" });
+  return forwardProxyData(req, res, `prompts/${req.params.id}`);
 });
 
 app.post("/api/storage/prompts", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  const lockKey = `user-${req.user.userId}-prompts.json`;
   const record = req.body;
-  if (!record.id) record.id = Date.now();
-  try {
-    const result = await withFileLock(lockKey, async () => {
-      const items = await readJsonStore(storeFile);
-      const index = items.findIndex(i => i.id == record.id);
-      if (index >= 0) items[index] = record;
-      else items.push(record);
-      await writeJsonStore(storeFile, items);
-      return record;
-    });
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  if (!record.id) record.id = String(Date.now());
+  req.body = { id: record.id, data: record };
+  return forwardProxyData(req, res, "prompts");
 });
 
 app.delete("/api/storage/prompts/:id", requireAuth, async (req, res) => {
-  const storeFile = path.join(getUserDataDir(req.user.userId), "prompts.json");
-  const lockKey = `user-${req.user.userId}-prompts.json`;
-  try {
-    await withFileLock(lockKey, async () => {
-      let items = await readJsonStore(storeFile);
-      items = items.filter(i => i.id != req.params.id);
-      await writeJsonStore(storeFile, items);
-    });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  return forwardProxyData(req, res, `prompts/${req.params.id}`);
 });
 
 // ── Shared helper: translate a flat DB card row into the shape the UI expects ─
@@ -507,7 +624,7 @@ app.get("/api/storage/cards", requireAuth, async (req, res) => {
     }
 
     const dbCards = await dbResponse.json();
-    
+
     const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
     const extensions = await readJsonStore(extFile) || {};
 
@@ -673,7 +790,7 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
         for (const old of removed) {
           for (const ext of [".img", ".mime"]) {
             const f = path.join(imgDir, `${old.id}${ext}`);
-            if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+            if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
           }
           deleteCardHistoryImages(imgDir, old.id);
         }
@@ -706,7 +823,7 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
     let url = `${internalUrl}/api/cards/`;
     let method = "POST";
-    
+
     // Use PUT if the record has a numeric DB ID (not a legacy Date.now() string)
     const recordId = record.id;
     if (recordId !== undefined && recordId !== null && Number.isInteger(Number(recordId)) && !isNaN(Number(recordId)) && String(recordId).length < 13) {
@@ -716,7 +833,7 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
 
     const response = await fetch(url, {
       method: method,
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         "X-User-Id": String(req.user.userId),
         "X-User-Name": String(req.user.username),
@@ -724,13 +841,13 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
       },
       body: JSON.stringify(dbPayload)
     });
-    
+
     if (!response.ok) {
       const errText = await response.text();
       console.error(`[Card Storage] POST/PUT Database returned ${response.status}: ${errText}`);
       throw new Error(`Database returned ${response.status}`);
     }
-    
+
     const dbCard = await response.json();
 
     // Save portrait image to proxy filesystem keyed by card DB id
@@ -777,7 +894,7 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
       await writeHistory(req.user.userId, histItems.filter(c => String(c.id) !== String(cardId)));
       for (const ext of [".img", ".mime"]) {
         const f = path.join(imgDir, `${cardId}${ext}`);
-        if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+        if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
       }
       deleteCardHistoryImages(imgDir, cardId);
       return res.json({ success: true });
@@ -797,9 +914,9 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
     deleteCardHistoryImages(imgDir, cardId);
     for (const ext of [".img", ".mime"]) {
       const f = path.join(imgDir, `${cardId}${ext}`);
-      if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => {});
+      if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
     }
-    
+
     const extFile = path.join(getUserDataDir(req.user.userId), "card_extensions.json");
     await withFileLock(`user-${req.user.userId}-ext`, async () => {
       const extensions = await readJsonStore(extFile) || {};
@@ -811,6 +928,63 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
 
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Migrate JSON configuration files to PostgreSQL (Config, Prompts, History, etc.) ─
+app.post("/api/storage/migrate-all", requireAuth, async (req, res) => {
+  const dir = getUserDataDir(req.user.userId);
+  const filesToMigrate = ["config.json", "prompts.json", "history.json"];
+  let results = { migrated: [], errors: [] };
+
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const headers = {
+    "Content-Type": "application/json",
+    "X-User-Id": String(req.user.userId),
+    "X-User-Name": String(req.user.username),
+    "X-Internal-Secret": INTERNAL_API_SECRET
+  };
+
+  for (const file of filesToMigrate) {
+    const filePath = path.join(dir, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    try {
+      const content = await fsPromises.readFile(filePath, "utf8");
+      const parsed = JSON.parse(content);
+      let itemsToPush = [];
+      let endpoint = "";
+
+      if (file === "config.json") {
+        endpoint = "config";
+        await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+          method: "POST", headers, body: JSON.stringify({ config_data: parsed })
+        });
+      } else if (file === "prompts.json") {
+        endpoint = "prompts";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      } else if (file === "history.json") {
+        endpoint = "history";
+        itemsToPush = Array.isArray(parsed) ? parsed : [];
+      }
+
+      if (itemsToPush.length > 0) {
+        for (const item of itemsToPush) {
+          await fetch(`${internalUrl}/api/proxy-data/${endpoint}`, {
+            method: "POST", headers, body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
+          });
+        }
+      }
+
+      // Rename to avoid migrating again
+      await fsPromises.rename(filePath, `${filePath}.migrated`);
+      results.migrated.push(file);
+    } catch (e) {
+      console.error(`Migration failed for ${file}:`, e);
+      results.errors.push({ file, error: e.message });
+    }
+  }
+
+  res.json(results);
 });
 
 // ── Migrate cards from legacy cards.json to PostgreSQL ───────────────────────
@@ -848,11 +1022,11 @@ app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
       if (listRes.ok) {
         const existing = await listRes.json();
         for (const ec of existing) {
-          await fetch(`${internalUrl}/api/cards/${ec.id}`, { method: "DELETE", headers: internalHeaders }).catch(() => {});
+          await fetch(`${internalUrl}/api/cards/${ec.id}`, { method: "DELETE", headers: internalHeaders }).catch(() => { });
           const ecImgDir = path.join(getUserDataDir(req.user.userId), "card-images");
           for (const ext of [".img", ".mime"]) {
             const f = path.join(ecImgDir, `${ec.id}${ext}`);
-            if (fs.existsSync(f)) await fsPromises.unlink(f).catch(() => {});
+            if (fs.existsSync(f)) await fsPromises.unlink(f).catch(() => { });
           }
         }
         console.log(`[Migration] Purged ${existing.length} existing cards`);
@@ -1009,7 +1183,7 @@ app.get("/api/story-app/status", async (req, res) => {
       method: "GET",
       timeout: 3000,
     });
-    
+
     console.log(`Story Writer connection check: Received status ${response.status} ${response.statusText}`);
     if (response.ok) {
       console.log(`Story Writer connection check: Success! Returning public URL: ${publicUrl || internalUrl}`);
@@ -1034,21 +1208,21 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
   try {
     const fetchOptions = {
       method: req.method,
-      headers: { 
+      headers: {
         "Content-Type": req.headers["content-type"] || "application/json",
         "X-User-Id": String(req.user.userId),
         "X-User-Name": String(req.user.username),
         "X-Internal-Secret": INTERNAL_API_SECRET
       }
     };
-    
+
     // Only pass bodies for methods that allow them
     if (["POST", "PUT", "PATCH"].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
       fetchOptions.body = JSON.stringify(req.body);
     }
 
     const response = await fetch(targetUrl, fetchOptions);
-    
+
     if (response.headers.get("content-type")?.includes("text/event-stream")) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
@@ -1063,44 +1237,180 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: "StoryWriter backend unreachable: " + error.message }); }
 });
 
-// ── TTS Bridge Proxy ─────────────────────────────────────────────────────────
-// Forwards TTS requests from the browser to the Coqui TTS Docker service.
-
-const TTS_URL = (process.env.TTS_URL || "http://tts:8500").replace(/\/$/, "");
-
-app.get("/api/tts/health", async (_req, res) => {
+app.get("/api/tts/voices", async (req, res) => {
   try {
-    const response = await fetch(`${TTS_URL}/health`);
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    res.status(503).json({ status: "unreachable", error: error.message });
-  }
-});
+    const provider = req.query.provider;
+    
+    if (provider === "kokoro") {
+      const kokoroVoices = [
+        "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
+        "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
+        "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
+        "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
+        "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi", "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
+        "ef_dora", "em_alex", "em_santa", "ff_siwis", "hf_alpha", "hf_beta", "hm_omega", "hm_psi",
+        "if_sara", "im_nicola", "pf_dora", "pm_alex", "pm_santa"
+      ];
+      return res.json({ status: "ready", speakers: kokoroVoices });
+    }
 
-app.get("/api/tts/voices", async (_req, res) => {
-  try {
-    const response = await fetch(`${TTS_URL}/voices`);
-    const data = await response.json();
-    res.json(data);
+    res.json({ status: "ready", speakers: [] });
   } catch (error) {
     res.status(503).json({ status: "error", error: error.message, speakers: [] });
   }
 });
 
-app.get("/api/tts/models", async (_req, res) => {
-  try {
-    const response = await fetch(`${TTS_URL}/models`);
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    res.status(503).json({ models: [], error: error.message });
-  }
-});
-
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
-    const { text, voice, speed, provider, googleApiKey } = req.body;
+    const { text, voice, speed, provider, googleApiKey, nanogptKey, nanogptModel, nanogptVoice } = req.body;
+
+    // Branch: Kokoro TTS
+    if (provider === "kokoro") {
+      const kokoroUrl = (process.env.KOKORO_TTS_URL || "http://kokoro-tts:8880").replace(/\/$/, "");
+      const requestUrl = `${kokoroUrl}/v1/audio/speech`;
+      
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "kokoro",
+          input: text,
+          voice: voice || "af_heart",
+          response_format: "wav",
+          speed: speed || 1.0
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.text();
+        return res.status(response.status).send(`Kokoro TTS Error: ${errData}`);
+      }
+
+      res.setHeader("Content-Type", "audio/wav");
+      res.setHeader("Cache-Control", "no-cache");
+      
+      // Attempt to copy the duration header if available, but kokoro server might not provide it.
+      // Usually standard OpenAI APIs don't provide x-tts-duration-seconds.
+      const duration = response.headers.get("x-tts-duration-seconds");
+      if (duration) {
+        res.setHeader("X-TTS-Duration-Seconds", duration);
+      }
+      
+      response.body.pipe(res);
+      return;
+    }
+
+    // Branch: Nano-GPT TTS
+    if (provider === "nanogpt") {
+      const modelName = nanogptModel || "tts-1";
+      const isStandardModel = modelName.startsWith("tts-") || modelName.startsWith("openai/");
+
+      if (isStandardModel) {
+        // Standard OpenAI-compatible endpoint
+        const requestUrl = "https://api.nano-gpt.com/v1/audio/speech";
+        const headers = { "Content-Type": "application/json" };
+        if (nanogptKey) {
+          headers["Authorization"] = `Bearer ${nanogptKey}`;
+        }
+
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            model: modelName,
+            input: text,
+            voice: nanogptVoice || "alloy",
+            response_format: "mp3",
+            speed: speed || 1.0
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.text();
+          return res.status(response.status).send(`Nano-GPT TTS Error: ${errData}`);
+        }
+
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Cache-Control", "no-cache");
+        response.body.pipe(res);
+        return;
+      } else {
+        // Proprietary Nano-GPT endpoint (for Kokoro, ElevenLabs, etc.)
+        const requestUrl = "https://nano-gpt.com/api/tts";
+        const headers = { "Content-Type": "application/json" };
+        if (nanogptKey) {
+          headers["x-api-key"] = nanogptKey;
+        }
+
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            text: text,
+            model: modelName,
+            voice: nanogptVoice || "af_bella",
+            speed: speed || 1.0
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.text();
+          return res.status(response.status).send(`Nano-GPT Custom TTS Error: ${errData}`);
+        }
+
+        const contentType = response.headers.get('content-type') || "";
+        
+        if (contentType.includes("application/json")) {
+          let data = await response.json();
+          
+          // If the job is pending, we must poll for completion
+          if (data.status === "pending" && data.runId) {
+            let maxAttempts = 60;
+            while (data.status !== "completed" && maxAttempts > 0) {
+              if (data.status === "error") {
+                return res.status(500).send(`Nano-GPT Custom TTS Generation Failed: ${data.error || 'Unknown error'}`);
+              }
+              
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              const qs = new URLSearchParams({ runId: data.runId, model: modelName });
+              const pollRes = await fetch(`https://nano-gpt.com/api/tts/status?${qs.toString()}`, {
+                headers: { 'x-api-key': nanogptKey }
+              });
+              
+              if (!pollRes.ok) {
+                const errText = await pollRes.text();
+                return res.status(pollRes.status).send(`Nano-GPT Polling Failed: ${errText}`);
+              }
+              data = await pollRes.json();
+              maxAttempts--;
+            }
+            if (data.status !== "completed") {
+              return res.status(500).send("Nano-GPT Custom TTS Polling Timeout.");
+            }
+          }
+
+          if (data.audioUrl) {
+            // Fetch the actual audio file
+            const audioRes = await fetch(data.audioUrl);
+            if (!audioRes.ok) {
+              return res.status(audioRes.status).send(`Nano-GPT Audio Fetch Error: ${audioRes.statusText}`);
+            }
+            res.setHeader("Content-Type", "audio/mpeg");
+            res.setHeader("Cache-Control", "no-cache");
+            audioRes.body.pipe(res);
+            return;
+          } else {
+            return res.status(500).json({ error: "No audioUrl returned from Nano-GPT", data });
+          }
+        } else {
+          // Binary audio directly returned
+          res.setHeader("Content-Type", "audio/mpeg");
+          res.setHeader("Cache-Control", "no-cache");
+          response.body.pipe(res);
+          return;
+        }
+      }
+    }
 
     // Branch: Google Cloud TTS
     if (provider && provider.startsWith("google")) {
@@ -1110,7 +1420,7 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
       const googleUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleApiKey}`;
       const languageCode = voice.substring(0, 5) || "en-US"; // e.g., extract 'en-US' from 'en-US-Neural2-F'
-      
+
       const response = await fetch(googleUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1134,28 +1444,7 @@ app.post("/api/tts/synthesize", async (req, res) => {
       return res.send(audioBuffer);
     }
 
-    // Branch: Local Coqui TTS
-    const response = await fetch(`${TTS_URL}/synthesize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice, speed }), // Exclude provider/key from Coqui
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(response.status).send(errText);
-    }
-
-    res.setHeader("Content-Type", "audio/wav");
-    res.setHeader("Cache-Control", "no-cache");
-
-    // Copy any duration header
-    const duration = response.headers.get("x-tts-duration-seconds");
-    if (duration) {
-      res.setHeader("X-TTS-Duration-Seconds", duration);
-    }
-
-    response.body.pipe(res);
+    return res.status(400).json({ error: "Invalid or unsupported TTS provider selected." });
   } catch (error) {
     res.status(503).json({ error: "TTS service unreachable: " + error.message });
   }
@@ -1193,6 +1482,7 @@ app.get("/api/tts/google-voices", async (req, res) => {
     res.status(503).json({ error: "Failed to fetch voices: " + error.message });
   }
 });
+
 
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
@@ -1237,9 +1527,9 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     const isOpenRouter = apiUrl.includes("openrouter.ai");
     const additionalHeaders = isOpenRouter
       ? {
-          "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
-          "X-Title": "SillyTavern Character Generator",
-        }
+        "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
+        "X-Title": "SillyTavern Character Generator",
+      }
       : {};
 
     const requestBody = {
@@ -1317,7 +1607,8 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
 });
 
 // Free image generation via Pollinations.ai (no API key required)
-app.post("/api/image/free", requireAuth, async (req, res) => {  try {
+app.post("/api/image/free", requireAuth, async (req, res) => {
+  try {
     const { prompt, service, model, width, height, seed } = req.body;
 
     if (!prompt) {
@@ -1412,9 +1703,9 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     const isOpenRouter = apiUrl.includes("openrouter.ai");
     const additionalHeaders = isOpenRouter
       ? {
-          "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
-          "X-Title": "SillyTavern Character Generator",
-        }
+        "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
+        "X-Title": "SillyTavern Character Generator",
+      }
       : {};
 
     // Try Bearer auth first (most common for image APIs)

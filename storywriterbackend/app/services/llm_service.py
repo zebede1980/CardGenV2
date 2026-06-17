@@ -11,6 +11,7 @@ class LLMService:
         self.max_tokens = settings.max_tokens
         self.temperature = settings.temperature
         self.finish_reason: Optional[str] = None
+        self.last_usage: Optional[dict] = None
         self.client = httpx.AsyncClient(timeout=120.0)
 
     async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None) -> AsyncGenerator[str, None]:
@@ -29,7 +30,9 @@ class LLMService:
         if repetition_penalty is not None:
             payload["repetition_penalty"] = repetition_penalty
         if stream:
+            payload["stream_options"] = {"include_usage": True}
             self.finish_reason = None
+            self.last_usage = None
             async with self.client.stream("POST", url, headers=headers, json=payload) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
@@ -39,20 +42,26 @@ class LLMService:
                             break
                         try:
                             chunk = json.loads(data)
-                            choice = chunk["choices"][0]
-                            fr = choice.get("finish_reason")
-                            if fr:
-                                self.finish_reason = fr
-                            delta = choice.get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                yield content
+                            if "usage" in chunk and chunk["usage"]:
+                                self.last_usage = chunk["usage"]
+                            
+                            if "choices" in chunk and len(chunk["choices"]) > 0:
+                                choice = chunk["choices"][0]
+                                fr = choice.get("finish_reason")
+                                if fr:
+                                    self.finish_reason = fr
+                                delta = choice.get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    yield content
                         except Exception:
                             continue
         else:
             response = await self.client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
+            if "usage" in data:
+                self.last_usage = data["usage"]
             content = data["choices"][0]["message"]["content"]
             yield content
 

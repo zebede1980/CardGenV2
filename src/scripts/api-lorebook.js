@@ -55,6 +55,44 @@ Output ONLY the message content.`;
     }
   },
 
+  _parseJsonRobust(output) {
+    if (!output || typeof output !== "string") return null;
+    
+    // Strip reasoning blocks common in GLM 5.1, DeepSeek, etc.
+    let cleaned = output.replace(/<think>[\s\S]*?<\/think>/gi, "")
+                        .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "")
+                        .trim();
+    
+    if (!cleaned) return null;
+
+    try { return JSON.parse(cleaned); } catch (e) {}
+
+    const mdMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (mdMatch) {
+      try { return JSON.parse(mdMatch[1].trim()); } catch (e) {}
+    }
+
+    const firstBracket = cleaned.indexOf('[');
+    const lastBracket = cleaned.lastIndexOf(']');
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    
+    if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < lastBracket && 
+        (firstBrace === -1 || firstBracket < firstBrace || (firstBrace < firstBracket && lastBrace > lastBracket))) {
+      try { return JSON.parse(cleaned.substring(firstBracket, lastBracket + 1)); } catch (e) {}
+    } 
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+      try { return JSON.parse(cleaned.substring(firstBrace, lastBrace + 1)); } catch (e) {}
+    }
+
+    cleaned = cleaned.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    if (!cleaned) return null;
+    try { return JSON.parse(cleaned); } catch (e) {}
+
+    return null;
+  },
+
   async suggestLorebookTopics(character) {
     if (!character) throw new Error("Character is required to suggest lorebook topics");
 
@@ -94,16 +132,11 @@ Output a JSON array of strings with your suggestions.`;
       const response = await this.makeRequest("/chat/completions", data, false, false);
       const output = this.processNormalResponse(response);
 
-      let parsed;
-      try {
-        parsed = JSON.parse(output);
-      } catch (e) {
-        const jsonMatch = output.match(/\[\s*".*?"\s*\]/s);
-        if (jsonMatch) {
-          parsed = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error("No valid JSON array found in AI response for topics.");
-        }
+      let parsed = this._parseJsonRobust(output);
+      
+      if (!parsed) {
+        console.error("Failed to parse suggestLorebookTopics output:", output);
+        throw new Error("No valid JSON array found in AI response for topics.");
       }
 
       if (Array.isArray(parsed)) return parsed;
@@ -112,6 +145,7 @@ Output a JSON array of strings with your suggestions.`;
         if (key) return parsed[key];
       }
 
+      console.error("Parsed output was not an array:", parsed);
       throw new Error("AI response for topics was not a valid JSON array.");
     } catch (error) {
       console.error("=== LOREBOOK TOPIC SUGGESTION FAILED ===", error);
@@ -350,18 +384,11 @@ Return a JSON array of lorebook candidates. Return [] if none found.`;
       const response = await this.makeRequest("/chat/completions", data, false, false);
       const output = this.processNormalResponse(response);
 
-      let parsed;
-      try {
-        parsed = JSON.parse(output);
-      } catch (e) {
-        // Try to extract array from a wrapper object or markdown fence
-        const arrayMatch = output.match(/\[[\s\S]*\]/);
-        if (arrayMatch) {
-          parsed = JSON.parse(arrayMatch[0]);
-        } else {
-          const cleaned = output.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-          parsed = JSON.parse(cleaned);
-        }
+      let parsed = this._parseJsonRobust(output);
+      
+      if (!parsed) {
+        console.error("Failed to parse scanCardForLorebookCandidates output:", output);
+        return [];
       }
 
       if (Array.isArray(parsed)) return parsed;

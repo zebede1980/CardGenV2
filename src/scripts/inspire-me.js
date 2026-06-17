@@ -217,9 +217,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
         console.warn("Creator notes generation failed (non-fatal):", notesError);
       }
 
+      this.showStreamMessage("📜 Generating post-history instructions...\n");
+      try {
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        if (postHistory) { this.currentCharacter.postHistoryInstructions = postHistory; }
+      } catch (phError) {
+        console.warn("Post-History Instructions generation failed (non-fatal):", phError);
+      }
+
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
 
       this.showStreamMessage("\n✅ Character generation complete!\n");
       this.displayCharacter();
@@ -240,7 +246,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       } else if (imageApiBase && imageApiKey && enableImageGeneration) {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
-          await this.generateImage();
+          await this.generateImage(true);
           this.showStreamMessage("✅ Image generation complete!\n");
         } catch (imageError) {
           console.error("Image generation error:", imageError);
@@ -302,6 +308,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
           }
         }
       }
+
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
 
       this.showNotification("Character generated successfully!", "success");
     } catch (error) {

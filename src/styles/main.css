@@ -3012,7 +3012,13 @@ body.chat-scroll-locked {
         }
 
         #chat-send-btn,
-        #chat-stop-btn {
+        #roleplay-send-btn,
+        #chat-stop-btn,
+        #roleplay-stop-btn {
+            order: 4;
+        }
+
+        #roleplay-impersonate-btn {
             order: 4;
         }
     }
@@ -3393,7 +3399,7 @@ body.chat-scroll-locked {
     }
 
     /* Impersonate button as circular button */
-    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn {
+    #view-roleplaychat.chat-fullscreen #roleplay-impersonate-btn {
         grid-row: 2 !important;
         grid-column: 3 !important;
         font-size: 0 !important;
@@ -3410,13 +3416,13 @@ body.chat-scroll-locked {
         margin: 0 !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-impersonate-btn::before {
+    #view-roleplaychat.chat-fullscreen #roleplay-impersonate-btn::before {
         content: '👤';
         font-size: 1.15rem !important;
     }
 
     /* Send button as circular capsule */
-    #view-roleplaychat.chat-fullscreen #chat-send-btn {
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn {
         grid-row: 2 !important;
         grid-column: 4 !important;
         font-size: 0 !important;
@@ -3434,19 +3440,19 @@ body.chat-scroll-locked {
         box-shadow: 0 2px 8px rgba(14, 122, 138, 0.3) !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-send-btn::before {
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn::before {
         content: '➤';
         font-size: 1.1rem !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-send-btn:disabled {
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn:disabled {
         background: var(--border) !important;
         box-shadow: none !important;
         opacity: 0.6 !important;
     }
 
     /* Stop button as circular capsule */
-    #view-roleplaychat.chat-fullscreen #chat-stop-btn {
+    #view-roleplaychat.chat-fullscreen #roleplay-stop-btn {
         grid-row: 2 !important;
         grid-column: 4 !important;
         font-size: 0 !important;
@@ -3464,9 +3470,15 @@ body.chat-scroll-locked {
         box-shadow: 0 2px 8px rgba(201, 61, 74, 0.3) !important;
     }
 
-    #view-roleplaychat.chat-fullscreen #chat-stop-btn::before {
+    #view-roleplaychat.chat-fullscreen #roleplay-stop-btn::before {
         content: '⏹';
         font-size: 1.1rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen #roleplay-send-btn[style*="display: none"],
+    #view-roleplaychat.chat-fullscreen #roleplay-stop-btn[style*="display: none"],
+    #view-roleplaychat.chat-fullscreen #roleplay-impersonate-btn[style*="display: none"] {
+        display: none !important;
     }
 
     /* Position Scroll-to-bottom FAB above the input area */
@@ -3481,5 +3493,29 @@ body.chat-scroll-locked {
         box-shadow: var(--shadow-md) !important;
         width: 36px !important;
         height: 36px !important;
+    }
+}
+
+/* ── Adventure Mode ──────────────────────────────────────────────────────────── */
+
+#view-adventure .adv-story-segment {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+#view-adventure .adv-option-btn {
+    transition: all 0.2s ease-in-out;
+    background: var(--surface-muted);
+}
+
+#view-adventure .adv-option-btn:hover {
+    background: var(--surface);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 600px) {
+    #adv-options-area {
+        grid-template-columns: 1fr !important;
     }
 }

@@ -8,10 +8,12 @@ import json
 import httpx
 import base64
 import urllib.parse
+import uuid
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
 from app.services.llm_service import LLMService
+from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
 
@@ -51,9 +53,21 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
             persona_str += f"\nDetails: {chat.user_persona_detail}"
         system_parts.append(persona_str)
         
+    # Pre-calculate recent history text for lorebook extraction
+    recent_history_text = " ".join([m.content for m in sorted(chat.messages, key=lambda m: m.created_at)[-5:]])
+
     # 2. Character Cards
     for card in chat.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
+        
+        if card.mes_example:
+            card_text += f"\nExample Messages:\n{card.mes_example}"
+            
+        if card.character_book:
+            relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
+            if relevant_lore:
+                card_text += "\nLorebook:\n" + "\n".join(relevant_lore)
+                
         system_parts.append(f"Character: {card.name}\n{card_text}")
         
     # 3. Dynamic Memory & Summary
@@ -109,6 +123,14 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
             history_messages.pop(0)
             
     messages.extend(history_messages)
+    
+    post_history_parts = []
+    for card in chat.characters:
+        if card.post_history_instructions:
+            post_history_parts.append(f"[{card.name} Note]: {card.post_history_instructions}")
+            
+    if post_history_parts:
+        messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
     if speaker_name and len(chat.characters) > 1:
         messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message, just write the dialogue and actions."})
@@ -569,9 +591,11 @@ async def send_message(
                     {"role": "user", "content": route_prompt}
                 ]
                 
+                route_log_id = str(uuid.uuid4())
                 queue.put_nowait({
                     "type": "api_log",
                     "log": {
+                        "id": route_log_id,
                         "endpoint": "Chat Speaker Routing",
                         "request": {"model": getattr(settings, 'model', 'unknown'), "messages": route_msgs}
                     }
@@ -582,12 +606,16 @@ async def send_message(
                     name_response.append(chunk)
                 
                 chosen = "".join(name_response).strip()
-                
                 queue.put_nowait({
                     "type": "api_log",
                     "log": {
+                        "id": route_log_id,
                         "endpoint": "Chat Speaker Routing",
-                        "response": chosen
+                        "response": {
+                            "choices": [{"message": {"content": chosen}}],
+                            "usage": llm.last_usage
+                        },
+                        "usage": llm.last_usage
                     }
                 })
                 
@@ -701,9 +729,11 @@ async def send_message(
                 break
 
     # 4. Setup Background Detached Generation & Queue
+    gen_log_id = str(uuid.uuid4())
     queue.put_nowait({
         "type": "api_log",
         "log": {
+            "id": gen_log_id,
             "endpoint": "Roleplay Chat Generation",
             "request": {"model": getattr(settings, 'model', 'unknown'), "messages": prompt_messages}
         }
@@ -735,8 +765,13 @@ async def send_message(
             await queue.put({
                 "type": "api_log",
                 "log": {
+                    "id": gen_log_id,
                     "endpoint": "Roleplay Chat Generation",
-                    "response": full_content
+                    "response": {
+                        "choices": [{"message": {"content": full_content}}],
+                        "usage": llm.last_usage
+                    },
+                    "usage": llm.last_usage
                 }
             })
             

@@ -206,3 +206,78 @@ class SendMessageRequest(BaseModel):
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
     impersonate: Optional[bool] = False
+
+class AdventureActionOut(BaseModel):
+    id: str
+    session_id: str
+    order_index: int
+    content: str
+    role: str
+    options: str
+    is_summarized: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class AdventureActionCreate(BaseModel):
+    content: str
+    role: str
+    options: Optional[str] = ""
+
+class AdventureActionUpdate(BaseModel):
+    content: str
+
+class AdventureSessionCreate(BaseModel):
+    title: str
+    starting_scenario: str = ""
+    system_prompt: str = ""
+    card_ids: List[int] = []
+
+class AdventureSessionUpdate(BaseModel):
+    title: Optional[str] = None
+    starting_scenario: Optional[str] = None
+    summary: Optional[str] = None
+    system_prompt: Optional[str] = None
+
+class AdventureSessionOut(BaseModel):
+    id: str
+    user_id: int
+    title: str
+    starting_scenario: str
+    summary: str
+    system_prompt: str
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class AdventureSessionDetailOut(AdventureSessionOut):
+    actions: List[AdventureActionOut] = []
+    characters: List[CharacterCardOut] = []
+
+class AdventureSendActionRequest(BaseModel):
+    content: str
+    role: str
+    options: Optional[str] = ""
+    max_input_tokens: Optional[int] = None
+    max_output_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+
+class GlobalConfigCreate(BaseModel):
+    config_data: dict
+
+class GlobalConfigOut(GlobalConfigCreate):
+    id: int
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class ProxyDataCreate(BaseModel):
+    id: str
+    data: dict
+
+class ProxyDataOut(ProxyDataCreate):
+    updated_at: datetime
+    class Config:
+        from_attributes = True

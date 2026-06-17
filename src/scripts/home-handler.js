@@ -5,6 +5,9 @@
 class HomeHandler {
     constructor() {
         this.cards = [];
+        this.filteredCards = [];
+        this.currentPage = 1;
+        this.itemsPerPage = 20;
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
         } else {
@@ -40,6 +43,8 @@ class HomeHandler {
         if (viewStoryWriter) viewStoryWriter.style.display = 'none';
         const viewChat = document.getElementById('view-roleplaychat');
         if (viewChat) viewChat.style.display = 'none';
+        const viewAdventure = document.getElementById('view-adventure');
+        if (viewAdventure) viewAdventure.style.display = 'none';
 
         // Reset existing top tabs
         const tabCardGen = document.getElementById('tab-cardgen');
@@ -52,6 +57,7 @@ class HomeHandler {
                     <button id="home-btn-cardgen" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">✨ Character Generator</button>
                     <button id="home-btn-story" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📖 Story Mode</button>
                     <button id="home-btn-chat" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">💬 Roleplay Chat</button>
+                    <button id="home-btn-adventure" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🎲 Adventure</button>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
@@ -61,6 +67,12 @@ class HomeHandler {
                 
                 <div id="home-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1.5rem;">
                     <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 3rem;">Loading library...</div>
+                </div>
+
+                <div id="home-pagination" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem; display: none;">
+                    <button id="home-prev-btn" class="btn-outline" style="padding: 0.5rem 1rem;">Previous</button>
+                    <span id="home-page-indicator" style="color: var(--text-primary); font-weight: 500;">Page 1</span>
+                    <button id="home-next-btn" class="btn-outline" style="padding: 0.5rem 1rem;">Next</button>
                 </div>
             </div>
         `;
@@ -89,8 +101,8 @@ class HomeHandler {
                         justify-content: center;
                     }
                     @media (max-width: 768px) {
-                        #tab-home, #tab-cardgen, #tab-storywriter, #tab-roleplaychat {
-                            flex: 1 1 40% !important; /* Creates a 2x2 grid */
+                        #tab-home, #tab-cardgen, #tab-storywriter, #tab-roleplaychat, #tab-adventure {
+                            flex: 1 1 30% !important; /* Creates a responsive grid */
                             padding: 0.6rem 0.5rem !important;
                             font-size: 0.85rem !important;
                             margin: 0 !important;
@@ -108,35 +120,59 @@ class HomeHandler {
         const tabCardGen = document.getElementById('tab-cardgen');
         const tabStoryWriter = document.getElementById('tab-storywriter');
         const tabChat = document.getElementById('tab-roleplaychat');
+        const tabAdventure = document.getElementById('tab-adventure');
         
         const viewHome = document.getElementById('view-home');
         const viewCardGen = document.getElementById('view-cardgen');
         const viewStoryWriter = document.getElementById('view-storywriter');
         const viewChat = document.getElementById('view-roleplaychat');
+        const viewAdventure = document.getElementById('view-adventure');
 
         const switchView = (targetView, targetTab) => {
             if (viewHome) viewHome.style.display = targetView === viewHome ? 'block' : 'none';
             if (viewCardGen) viewCardGen.style.display = targetView === viewCardGen ? 'block' : 'none';
             if (viewStoryWriter) viewStoryWriter.style.display = targetView === viewStoryWriter ? 'block' : 'none';
             if (viewChat) viewChat.style.display = targetView === viewChat ? 'block' : 'none';
+            if (viewAdventure) viewAdventure.style.display = targetView === viewAdventure ? 'block' : 'none';
             
             if (tabHome) tabHome.className = targetTab === tabHome ? 'btn-primary' : 'btn-outline';
             if (tabCardGen) tabCardGen.className = targetTab === tabCardGen ? 'btn-primary' : 'btn-outline';
             if (tabStoryWriter) tabStoryWriter.className = targetTab === tabStoryWriter ? 'btn-primary' : 'btn-outline';
             if (tabChat) tabChat.className = targetTab === tabChat ? 'btn-primary' : 'btn-outline';
+            if (tabAdventure) tabAdventure.className = targetTab === tabAdventure ? 'btn-primary' : 'btn-outline';
         };
 
         if (tabHome) tabHome.addEventListener('click', () => { switchView(viewHome, tabHome); this.loadCards(); });
         if (tabCardGen) tabCardGen.addEventListener('click', () => switchView(viewCardGen, tabCardGen));
         if (tabStoryWriter) tabStoryWriter.addEventListener('click', () => switchView(viewStoryWriter, tabStoryWriter));
         if (tabChat) tabChat.addEventListener('click', () => switchView(viewChat, tabChat));
+        if (tabAdventure) tabAdventure.addEventListener('click', () => {
+            switchView(viewAdventure, tabAdventure);
+            if(window.adventureHandler) window.adventureHandler.showView();
+        });
 
         // Home Hero Buttons
         document.getElementById('home-btn-cardgen')?.addEventListener('click', () => { if (tabCardGen) tabCardGen.click(); });
         document.getElementById('home-btn-story')?.addEventListener('click', () => { if (tabStoryWriter) tabStoryWriter.click(); });
         document.getElementById('home-btn-chat')?.addEventListener('click', () => { if (tabChat) tabChat.click(); });
+        document.getElementById('home-btn-adventure')?.addEventListener('click', () => { if (tabAdventure) tabAdventure.click(); });
 
         document.getElementById('home-search')?.addEventListener('input', (e) => this.filterCards(e.target.value));
+
+        document.getElementById('home-prev-btn')?.addEventListener('click', () => {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.updateView();
+            }
+        });
+
+        document.getElementById('home-next-btn')?.addEventListener('click', () => {
+            const totalPages = Math.ceil(this.filteredCards.length / this.itemsPerPage);
+            if (this.currentPage < totalPages) {
+                this.currentPage++;
+                this.updateView();
+            }
+        });
     }
 
     async loadCards() {
@@ -144,7 +180,9 @@ class HomeHandler {
         try {
             const allCards = await window.characterStorage.listCards();
             this.cards = allCards.filter(c => c.isPermanent);
-            this.renderGrid(this.cards);
+            this.filteredCards = [...this.cards];
+            this.currentPage = 1;
+            this.updateView();
         } catch (e) {
             console.error("Home: Failed to load cards", e);
             const grid = document.getElementById('home-grid');
@@ -155,20 +193,56 @@ class HomeHandler {
     filterCards(searchTerm) {
         if (!this.cards) return;
         if (!searchTerm || !searchTerm.trim()) {
-            this.renderGrid(this.cards);
+            this.filteredCards = [...this.cards];
+            this.currentPage = 1;
+            this.updateView();
             return;
         }
         
         const term = searchTerm.toLowerCase().trim();
-        const filtered = this.cards.filter(card => {
+        this.filteredCards = this.cards.filter(card => {
             const charObj = card.character || card;
             const name = (card.characterName || charObj.name || '').toLowerCase();
             const desc = (charObj.description || '').toLowerCase();
             const pers = (charObj.personality || '').toLowerCase();
-            return name.includes(term) || desc.includes(term) || pers.includes(term);
+            let tags = '';
+            if (Array.isArray(card.tags)) {
+                tags = card.tags.join(' ').toLowerCase();
+            } else if (Array.isArray(charObj.tags)) {
+                tags = charObj.tags.join(' ').toLowerCase();
+            }
+            return name.includes(term) || desc.includes(term) || pers.includes(term) || tags.includes(term);
         });
         
-        this.renderGrid(filtered);
+        this.currentPage = 1;
+        this.updateView();
+    }
+
+    updateView() {
+        const totalItems = this.filteredCards.length;
+        const totalPages = Math.ceil(totalItems / this.itemsPerPage) || 1;
+        
+        // Ensure currentPage is within valid bounds
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        if (this.currentPage < 1) this.currentPage = 1;
+
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const pageCards = this.filteredCards.slice(startIndex, endIndex);
+        
+        this.renderGrid(pageCards);
+
+        const paginationDiv = document.getElementById('home-pagination');
+        if (paginationDiv) {
+            if (totalItems > this.itemsPerPage) {
+                paginationDiv.style.display = 'flex';
+                document.getElementById('home-page-indicator').textContent = `Page ${this.currentPage} of ${totalPages}`;
+                document.getElementById('home-prev-btn').disabled = this.currentPage === 1;
+                document.getElementById('home-next-btn').disabled = this.currentPage === totalPages;
+            } else {
+                paginationDiv.style.display = 'none';
+            }
+        }
     }
 
     escapeHtml(str) {

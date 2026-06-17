@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from app.database import init_db
-from app.routers import cards, stories, generation, settings, auth, chat
+from app.routers import cards, stories, generation, settings, auth, chat, adventure, proxy_data
 
 app = FastAPI(title="AI Story Writer", version="1.0.0")
 
@@ -29,6 +29,8 @@ app.include_router(generation.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(adventure.router, prefix="/api")
+app.include_router(proxy_data.router, prefix="/api/proxy-data")
 
 @app.on_event("startup")
 def on_startup():

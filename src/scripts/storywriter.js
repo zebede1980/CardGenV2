@@ -104,6 +104,10 @@ class TTSPlayer {
         this.speed = 1.0;
         this.provider = 'local';
         this.googleApiKey = '';
+        this.nanogptKey = '';
+        this.nanogptModel = '';
+        this.nanogptVoice = '';
+        this.errorCount = 0;
     }
 
     _setupMediaSession() {
@@ -157,8 +161,8 @@ class TTSPlayer {
             return;
         }
 
-        // Keep one sentence buffered ahead.
-        if (this.audioQueue.length >= 2) {
+        // Keep multiple chunks buffered ahead.
+        if (this.audioQueue.length >= 4) {
             return;
         }
 
@@ -174,14 +178,23 @@ class TTSPlayer {
             const res = await window.authFetch('/api/tts/synthesize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice: this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey }),
+                body: JSON.stringify({ text, voice: this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, nanogptKey: this.nanogptKey, nanogptModel: this.nanogptModel, nanogptVoice: this.nanogptVoice }),
             });
 
             if (!res.ok) {
                 const errText = await res.text().catch(() => '');
                 console.warn('[TTSPlayer] Synthesis HTTP', res.status, errText, '— skipping sentence');
+                this.errorCount++;
                 if (this.onError) this.onError(`HTTP ${res.status}: ${errText || 'Failed'}`);
+                
+                if (this.errorCount >= 3) {
+                    console.error('[TTSPlayer] Halting after 3 consecutive failures to prevent runaway billing.');
+                    if (this.onError) this.onError(`Halting playback: 3 consecutive errors encountered.`);
+                    this.stop();
+                    return;
+                }
             } else {
+                this.errorCount = 0;
                 const blob = await res.blob();
                 if (blob.size > 0) {
                     const url = URL.createObjectURL(blob);
@@ -194,11 +207,19 @@ class TTSPlayer {
             }
         } catch (e) {
             console.error('[TTSPlayer] Audio load error:', e);
+            this.errorCount++;
             if (this.onError) this.onError(`Network error: ${e.message}`);
+            
+            if (this.errorCount >= 3) {
+                console.error('[TTSPlayer] Halting after 3 consecutive network failures.');
+                if (this.onError) this.onError(`Halting playback: 3 consecutive network errors.`);
+                this.stop();
+                return;
+            }
         } finally {
             this.loading = false;
             if (!this.stopped && !this.paused) {
-                if (this.textQueue.length > 0 && this.audioQueue.length < 2) {
+                if (this.textQueue.length > 0 && this.audioQueue.length < 4) {
                     this._maybeLoadNext();
                 } else if (!this.playing && this.audioQueue.length === 0) {
                     this._playNext();
@@ -311,24 +332,27 @@ class SentenceDetector {
     }
 
     /**
-     * Feed a chunk of text. Returns an array of complete sentences found.
+     * Feed a chunk of text. Returns an array of complete paragraphs found.
      * Incomplete trailing text stays in the internal buffer.
      */
     feed(chunk) {
         this.buffer += chunk;
-        const sentences = [];
-        // Match lazily up to punctuation + optional quotes, avoiding splits at common abbreviations.
-        const re = /([\s\S]+?(?<!\b(?:Mr|Mrs|Ms|Dr|Prof|Rev|Capt|Gen|St|Sgt|Sr|Jr|vs|etc))[.!?]+["'\u201D\u2019)\]]*)(?=\s+[A-Z"\u201C\u2018]|\s*\n|$)/g;
-        let match;
-        let lastIndex = 0;
-        while ((match = re.exec(this.buffer)) !== null) {
-            sentences.push(match[0].trim());
-            lastIndex = match.index + match[0].length;
+        const paragraphs = [];
+        
+        // Split by one or more newlines
+        const lines = this.buffer.split(/\n+/);
+        
+        // If there's more than 1 item, everything except the last is a complete paragraph
+        if (lines.length > 1) {
+            for (let i = 0; i < lines.length - 1; i++) {
+                if (lines[i].trim()) {
+                    paragraphs.push(lines[i].trim());
+                }
+            }
+            this.buffer = lines[lines.length - 1];
         }
-        if (lastIndex > 0) {
-            this.buffer = this.buffer.slice(lastIndex);
-        }
-        return sentences;
+        
+        return paragraphs;
     }
 
     /**
@@ -451,8 +475,15 @@ class StoryWriterApp {
         const providerSelect = document.getElementById('sw-tts-provider');
         if (providerSelect) {
             providerSelect.addEventListener('change', () => {
-                const isGoogle = providerSelect.value.startsWith('google');
-                document.getElementById('sw-tts-google-key-container').style.display = isGoogle ? 'block' : 'none';
+                const provider = providerSelect.value;
+                document.getElementById('sw-tts-google-key-container').style.display = provider.startsWith('google') ? 'block' : 'none';
+                
+                const nanogptContainer = document.getElementById('sw-tts-nanogpt-container');
+                if (nanogptContainer) nanogptContainer.style.display = provider === 'nanogpt' ? 'block' : 'none';
+                
+                const standardVoiceContainer = document.getElementById('sw-tts-standard-voice-container');
+                if (standardVoiceContainer) standardVoiceContainer.style.display = provider === 'nanogpt' ? 'none' : 'block';
+                
                 this.loadVoices();
             });
         }
@@ -501,6 +532,9 @@ class StoryWriterApp {
             let savedProvider = window.config.get('api.tts.provider') || localStorage.getItem('sw-tts-provider') || 'local';
             if (savedProvider === 'google') savedProvider = 'google-premium';
             const savedGoogleKey = window.config.get('api.tts.apiKey') || localStorage.getItem('sw-tts-google-key') || '';
+            const savedNanogptKey = window.config.get('api.tts.nanogptKey') || localStorage.getItem('sw-tts-nanogpt-key') || '';
+            const savedNanogptModel = window.config.get('api.tts.nanogptModel') || localStorage.getItem('sw-tts-nanogpt-model') || '';
+            const savedNanogptVoice = window.config.get('api.tts.nanogptVoice') || localStorage.getItem('sw-tts-nanogpt-voice') || '';
 
             this.ttsSettings = {
                 tts_enabled: s.tts_enabled || false,
@@ -508,7 +542,10 @@ class StoryWriterApp {
                 tts_voice: s.tts_voice || 'p230',
                 tts_speed: s.tts_speed || 1.0,
                 tts_provider: savedProvider,
-                tts_google_key: savedGoogleKey
+                tts_google_key: savedGoogleKey,
+                tts_nanogpt_key: savedNanogptKey,
+                tts_nanogpt_model: savedNanogptModel,
+                tts_nanogpt_voice: savedNanogptVoice
             };
             console.debug('[StoryWriter][TTS] Loaded settings', this.ttsSettings);
 
@@ -519,6 +556,9 @@ class StoryWriterApp {
             const speedLabel   = document.getElementById('sw-tts-speed-label');
             const providerSelect = document.getElementById('sw-tts-provider');
             const googleKeyInput = document.getElementById('sw-tts-google-key');
+            const nanogptKeyInput = document.getElementById('sw-tts-nanogpt-key');
+            const nanogptModelSelect = document.getElementById('sw-tts-nanogpt-model');
+            const nanogptVoiceInput = document.getElementById('sw-tts-nanogpt-voice');
 
             if (ttsEnabled) ttsEnabled.checked = this.ttsSettings.tts_enabled;
             if (autoMode)  autoMode.checked  = this.ttsSettings.auto_mode;
@@ -529,9 +569,24 @@ class StoryWriterApp {
             if (providerSelect) {
                 providerSelect.value = this.ttsSettings.tts_provider;
                 document.getElementById('sw-tts-google-key-container').style.display = this.ttsSettings.tts_provider.startsWith('google') ? 'block' : 'none';
+                
+                const nanogptContainer = document.getElementById('sw-tts-nanogpt-container');
+                if (nanogptContainer) nanogptContainer.style.display = this.ttsSettings.tts_provider === 'nanogpt' ? 'block' : 'none';
+                
+                const standardVoiceContainer = document.getElementById('sw-tts-standard-voice-container');
+                if (standardVoiceContainer) standardVoiceContainer.style.display = this.ttsSettings.tts_provider === 'nanogpt' ? 'none' : 'block';
             }
             if (googleKeyInput) {
                 googleKeyInput.value = this.ttsSettings.tts_google_key;
+            }
+            if (nanogptKeyInput) {
+                nanogptKeyInput.value = this.ttsSettings.tts_nanogpt_key;
+            }
+            if (nanogptModelSelect) {
+                nanogptModelSelect.value = this.ttsSettings.tts_nanogpt_model;
+            }
+            if (nanogptVoiceInput) {
+                nanogptVoiceInput.value = this.ttsSettings.tts_nanogpt_voice;
             }
         } catch (e) {
             console.error('[StoryWriter] Failed to load settings:', e);
@@ -560,13 +615,22 @@ class StoryWriterApp {
         const ttsSpeed   = parseFloat(document.getElementById('sw-tts-speed')?.value || '1.0');
         const ttsProvider = document.getElementById('sw-tts-provider')?.value || 'local';
         const ttsGoogleKey = document.getElementById('sw-tts-google-key')?.value || '';
+        const ttsNanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
+        const ttsNanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
+        const ttsNanogptVoice = document.getElementById('sw-tts-nanogpt-voice')?.value || '';
 
         if (window.config) {
             window.config.set('api.tts.provider', ttsProvider);
             window.config.set('api.tts.apiKey', ttsGoogleKey);
+            window.config.set('api.tts.nanogptKey', ttsNanogptKey);
+            window.config.set('api.tts.nanogptModel', ttsNanogptModel);
+            window.config.set('api.tts.nanogptVoice', ttsNanogptVoice);
         }
         localStorage.removeItem('sw-tts-provider');
         localStorage.removeItem('sw-tts-google-key');
+        localStorage.removeItem('sw-tts-nanogpt-key');
+        localStorage.removeItem('sw-tts-nanogpt-model');
+        localStorage.removeItem('sw-tts-nanogpt-voice');
 
         const payload = {
             max_tokens: maxTokens,
@@ -587,7 +651,10 @@ class StoryWriterApp {
             tts_voice: ttsVoice,
             tts_speed: ttsSpeed,
             tts_provider: ttsProvider,
-            tts_google_key: ttsGoogleKey
+            tts_google_key: ttsGoogleKey,
+            tts_nanogpt_key: ttsNanogptKey,
+            tts_nanogpt_model: ttsNanogptModel,
+            tts_nanogpt_voice: ttsNanogptVoice
         };
 
         btn.disabled = true;
@@ -615,14 +682,18 @@ class StoryWriterApp {
     async loadVoices() {
         const voiceSelect = document.getElementById('sw-tts-voice');
         const statusSpan  = document.getElementById('sw-tts-status');
-        const provider = document.getElementById('sw-tts-provider')?.value || 'local';
+        const provider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
         const googleKey = document.getElementById('sw-tts-google-key')?.value || '';
 
         if (!voiceSelect) return;
 
         try {
             let res;
-            if (provider.startsWith('google')) {
+            if (provider === 'nanogpt') {
+                // Nano-GPT models and voices are now handled purely by datalist inputs in the UI,
+                // so we don't dynamically fetch them anymore to avoid errors with endpoints that don't exist.
+                return;
+            } else if (provider.startsWith('google')) {
                 if (!googleKey) {
                     voiceSelect.innerHTML = '<option value="">— Enter API Key —</option>';
                     if (statusSpan) statusSpan.textContent = 'Key required';
@@ -631,7 +702,7 @@ class StoryWriterApp {
                 const tier = provider === 'google-standard' ? 'standard' : 'premium';
                 res = await window.authFetch(`/api/tts/google-voices?key=${googleKey}&tier=${tier}`);
             } else {
-                res = await window.authFetch('/api/tts/voices');
+                res = await window.authFetch('/api/tts/voices?provider=' + encodeURIComponent(provider));
             }
             const data = await res.json();
             console.debug('[StoryWriter][TTS] Voice endpoint response', data);
@@ -715,6 +786,9 @@ class StoryWriterApp {
         player.setVolume(parseInt(volumeSlider?.value || '80', 10));
         player.provider = document.getElementById('sw-tts-provider')?.value || 'local';
         player.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
+        player.nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
+        player.nanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
+        player.nanogptVoice = document.getElementById('sw-tts-nanogpt-voice')?.value || '';
 
         let hasError = false;
         player.onError = (err) => {
@@ -891,13 +965,15 @@ class StoryWriterApp {
         area.innerHTML = '';
 
         this.story.segments.forEach(seg => {
+            if (seg.is_summary) return; // Do not render summary segments to the user
+
             const div = document.createElement('div');
             div.dataset.segmentId = seg.id;
             div.style.padding = '1rem';
             div.style.marginBottom = '1rem';
             div.style.background = 'var(--bg-tertiary)';
             div.style.borderRadius = '0.5rem';
-            div.style.borderLeft = seg.is_summary ? '3px solid #f9a825' : '3px solid var(--accent)';
+            div.style.borderLeft = '3px solid var(--accent)';
 
             const content = document.createElement('div');
             content.style.lineHeight = '1.7';
@@ -1117,6 +1193,9 @@ class StoryWriterApp {
         this.ttsPlayer.setVolume(volume);
         this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'local';
         this.ttsPlayer.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
+        this.ttsPlayer.nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
+        this.ttsPlayer.nanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
+        this.ttsPlayer.nanogptVoice = document.getElementById('sw-tts-nanogpt-voice')?.value || '';
         this._showNarrationControls();
         const pauseBtn = document.getElementById('sw-tts-pause-btn');
         if (pauseBtn) pauseBtn.textContent = '\u23f8 Pause';
@@ -1313,7 +1392,7 @@ class StoryWriterApp {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            if (data.type === 'chunk') {
+                            if (data.type === 'api_log' && window.apiHandler) { window.apiHandler.addBackendLog(data.log); } else if (data.type === 'chunk') {
                                 // Display the chunk
                                 streamDiv.textContent += data.content;
 

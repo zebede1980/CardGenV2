@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models import Story, StorySegment, CharacterCard, Settings, SteeringInstruction
-from app.services.card_parser import get_lorebook_entries
+from app.services.card_parser import extract_relevant_lorebook_entries
 import json
 
 class ContextManager:
@@ -24,6 +24,14 @@ class ContextManager:
         if story.synopsis:
             system_parts.append(f"Story Synopsis/Memo:\n{story.synopsis}")
 
+        # Build story context from segments
+        segments = self.db.query(StorySegment).filter(
+            StorySegment.story_id == story.id
+        ).order_by(StorySegment.order_index).all()
+        
+        # Pre-calculate recent history text for lorebook extraction
+        recent_history_text = " ".join([s.content for s in segments[-3:]])
+
         # Add character cards and lorebooks
         for sc in story.cards:
             card: CharacterCard = sc.card
@@ -43,12 +51,9 @@ class ContextManager:
             
             # Lorebook entries
             if card.character_book:
-                entries = get_lorebook_entries(card.character_book)
-                if entries:
-                    lore_parts = []
-                    for entry in entries:
-                        lore_parts.append(f"- {entry.get('name', 'Unnamed')}: {entry.get('content', '')}")
-                    card_parts.append("Lorebook:\n" + "\n".join(lore_parts))
+                relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
+                if relevant_lore:
+                    card_parts.append("Lorebook:\n" + "\n".join(relevant_lore))
             
             if card_parts:
                 system_parts.append("Character Card:\n" + "\n".join(card_parts))
@@ -64,11 +69,6 @@ class ContextManager:
 
         if steering:
             system_parts.append(f"Current Steering Instruction (do not include in story text):\n{steering}")
-
-        # Build story context from segments
-        segments = self.db.query(StorySegment).filter(
-            StorySegment.story_id == story.id
-        ).order_by(StorySegment.order_index).all()
 
         story_context = self._build_story_context(segments)
         if story_context:
@@ -102,29 +102,36 @@ class ContextManager:
     def _build_story_context(self, segments: List[StorySegment]) -> str:
         if not segments:
             return ""
+            
+        # Filter out original segments that have already been folded into a summary segment
+        active_segments = [s for s in segments if not getattr(s, 'is_summarized', False)]
         
-        # If we have many segments, use summaries for old ones and full text for recent
-        if len(segments) > self.summary_threshold:
+        if not active_segments:
+            return ""
+        
+        # If we have many active segments, use summaries for old ones and full text for recent
+        if len(active_segments) > self.summary_threshold:
             context_parts = []
             # Summarize old segments if not already summarized
-            for seg in segments[:-self.summary_threshold]:
+            for seg in active_segments[:-self.summary_threshold]:
                 if seg.is_summary:
                     context_parts.append(f"[Summary] {seg.content}")
                 else:
                     context_parts.append(seg.content)
             # Add recent segments in full
-            for seg in segments[-self.summary_threshold:]:
+            for seg in active_segments[-self.summary_threshold:]:
                 context_parts.append(seg.content)
             return "\n\n".join(context_parts)
         else:
-            return "\n\n".join([seg.content for seg in segments])
+            return "\n\n".join([seg.content for seg in active_segments])
 
     def should_summarize(self, segments: List[StorySegment]) -> bool:
-        non_summary = [s for s in segments if not s.is_summary]
+        # Only count segments that are not summaries and haven't been summarized yet
+        non_summary = [s for s in segments if not s.is_summary and not getattr(s, 'is_summarized', False)]
         return len(non_summary) > self.summary_threshold
 
     def get_segments_to_summarize(self, segments: List[StorySegment]) -> List[StorySegment]:
-        non_summary = [s for s in segments if not s.is_summary]
+        non_summary = [s for s in segments if not s.is_summary and not getattr(s, 'is_summarized', False)]
         # Summarize the oldest half of non-summary segments
         to_summarize_count = len(non_summary) - self.summary_threshold // 2
         return non_summary[:to_summarize_count]

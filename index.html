@@ -170,6 +170,7 @@
                     <button id="tab-cardgen" class="btn-primary" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎭 Character Generator</button>
                     <button id="tab-storywriter" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">✍️ Story Writer</button>
                     <button id="tab-roleplaychat" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">💬 Roleplay Chat</button>
+                    <button id="tab-adventure" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎲 Adventure</button>
                 </div>
 
                 <!-- Character Generator View -->
@@ -962,6 +963,71 @@
                                 ></textarea>
                             </div>
 
+                            <!-- Post-History Instructions Field -->
+                            <div
+                                class="character-field"
+                                style="margin-bottom: 1.5rem"
+                            >
+                                <div
+                                    style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        margin-bottom: 0.5rem;
+                                        flex-wrap: wrap;
+                                        gap: 0.5rem;
+                                    "
+                                >
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                        Post-History Instructions (Author's Note)
+                                        <span id="post-history-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
+                                    </h3>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="post-history-prompt" class="input" placeholder="Optional: Guide the instruction generation..." style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-post-history-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the Post-History Instructions with AI.">🔄 Redo</button>
+                                        <button
+                                            id="reset-post-history-btn"
+                                            class="btn-secondary"
+                                            style="
+                                                display: none;
+                                                padding: 0.3rem 0.8rem;
+                                                font-size: 0.75rem;
+                                            "
+                                            title="Revert back to the version that was last generated or imported"
+                                        >
+                                            🔄 Reset
+                                        </button>
+                                    </div>
+                                </div>
+                                <p
+                                    style="
+                                        font-size: 0.8rem;
+                                        color: var(--text-secondary);
+                                        margin-bottom: 0.75rem;
+                                    "
+                                >
+                                💡 Directly instructs the AI on how to write the next response. Injected at the bottom of the prompt to prevent it from being forgotten.
+                                </p>
+                                <textarea
+                                    id="character-post-history"
+                                    class="content-box"
+                                    style="
+                                        width: 100%;
+                                        min-height: 80px;
+                                        font-family: inherit;
+                                        font-size: 0.9375rem;
+                                        line-height: 1.6;
+                                        resize: vertical;
+                                        padding: 1rem;
+                                        border: 1px solid var(--border);
+                                        border-radius: 0.5rem;
+                                        background: var(--surface-color);
+                                        color: var(--text-color);
+                                    "
+                                    placeholder="e.g. Write descriptively, focusing on sensory details..."
+                                ></textarea>
+                            </div>
+
                             <!-- Creator's Notes Field -->
                             <div
                                 class="character-field"
@@ -980,6 +1046,22 @@
                                     <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
                                         Creator's Notes
                                     </h3>
+                                    <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
+                                        <input type="text" id="creator-notes-prompt" class="input" placeholder="Optional: Guide the notes generation..." style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
+                                        <button id="regenerate-creator-notes-btn" class="btn-small" style="padding: 0.3rem 0.8rem; font-size: 0.75rem;" title="Regenerate the Creator's Notes with AI.">🔄 Redo</button>
+                                        <button
+                                            id="reset-creator-notes-btn"
+                                            class="btn-secondary"
+                                            style="
+                                                display: none;
+                                                padding: 0.3rem 0.8rem;
+                                                font-size: 0.75rem;
+                                            "
+                                            title="Revert the Creator's Notes back to the version that was last generated or imported"
+                                        >
+                                            🔄 Reset
+                                        </button>
+                                    </div>
                                 </div>
                                 <p
                                     style="
@@ -1100,6 +1182,7 @@
                                         <option value="prismatic-anime">Prismatic Anime</option>
                                         <option value="hand-drawn-anime">Hand Drawn Anime</option>
                                         <option value="painted-anime">Painted Anime Artwork</option>
+                                        <option value="grunge-anime">Grunge Anime</option>
                                         <option value="genshin">Genshin Impact Style</option>
                                         <option value="ghibli">Studio Ghibli</option>
                                         <option value="waifu">Waifu</option>
@@ -1534,9 +1617,10 @@
                                 <div style="margin-top: 0.75rem;">
                                     <label class="label" for="sw-tts-provider">Provider</label>
                                     <select id="sw-tts-provider" class="input" style="background: var(--surface-color); max-width: 260px;">
-                                        <option value="local">Local Coqui TTS</option>
+                                        <option value="kokoro" selected>Local Kokoro-82M</option>
                                         <option value="google-premium">Google Cloud (Premium: Neural2 / WaveNet)</option>
                                         <option value="google-standard">Google Cloud (Standard)</option>
+                                        <option value="nanogpt">Nano-GPT</option>
                                     </select>
                                 </div>
 
@@ -1545,7 +1629,37 @@
                                     <input type="password" id="sw-tts-google-key" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="AIzaSy..." />
                                 </div>
 
-                                <div style="margin-top: 0.75rem;">
+                                <div id="sw-tts-nanogpt-container" style="margin-top: 0.5rem; display: none;">
+                                    <label class="label" for="sw-tts-nanogpt-key">Nano-GPT API Key</label>
+                                    <input type="password" id="sw-tts-nanogpt-key" class="input" style="background: var(--surface-color); max-width: 260px; margin-bottom: 0.5rem;" placeholder="sk-..." />
+
+                                    <label class="label" for="sw-tts-nanogpt-model">Model</label>
+                                    <input type="text" id="sw-tts-nanogpt-model" class="input" style="background: var(--surface-color); max-width: 260px; margin-bottom: 0.5rem;" placeholder="e.g. tts-1" />
+
+                                    <label class="label" for="sw-tts-nanogpt-voice">Voice Name / ID</label>
+                                    <input type="text" id="sw-tts-nanogpt-voice" list="nanogpt-voice-suggestions" class="input" style="background: var(--surface-color); max-width: 260px;" placeholder="e.g. Rachel, alloy, etc." />
+                                    <datalist id="nanogpt-voice-suggestions">
+                                        <option value="alloy">alloy (OpenAI)</option>
+                                        <option value="echo">echo (OpenAI)</option>
+                                        <option value="fable">fable (OpenAI)</option>
+                                        <option value="onyx">onyx (OpenAI)</option>
+                                        <option value="nova">nova (OpenAI)</option>
+                                        <option value="shimmer">shimmer (OpenAI)</option>
+                                        <option value="Rachel">Rachel (ElevenLabs)</option>
+                                        <option value="Adam">Adam (ElevenLabs)</option>
+                                        <option value="Bella">Bella (ElevenLabs)</option>
+                                        <option value="Antoni">Antoni (ElevenLabs)</option>
+                                        <option value="af_heart">af_heart (Kokoro Female)</option>
+                                        <option value="am_adam">am_adam (Kokoro Male)</option>
+                                        <option value="af_bella">af_bella (Kokoro Female)</option>
+                                        <option value="am_michael">am_michael (Kokoro Male)</option>
+                                    </datalist>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); max-width: 260px; margin-top: 0.25rem;">
+                                        Double-click box for examples. Type any specific voice name/ID supported by the chosen model. If left blank, defaults to 'alloy'.
+                                    </div>
+                                </div>
+
+                                <div id="sw-tts-standard-voice-container" style="margin-top: 0.75rem;">
                                     <label class="label" for="sw-tts-voice">Voice</label>
                                     <select id="sw-tts-voice" class="input" style="background: var(--surface-color); max-width: 260px;">
                                         <option value="">— Loading voices… —</option>
@@ -1679,6 +1793,58 @@
                   </div>
                 </div>
 
+                <!-- Adventure Mode View -->
+                <div id="view-adventure" class="tab-content" style="display: none;">
+                    <section class="input-section" id="adv-setup-view" style="margin-bottom: 2rem;">
+                        <h2 class="section-title">New Adventure</h2>
+                        <div class="content-box">
+                            <label class="label">Select Characters</label>
+                            <div id="adv-selected-chars" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; min-height: 42px; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);">
+                                <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
+                            </div>
+                            <button id="adv-add-char-btn" class="btn-outline" style="margin-bottom: 1rem;">🖼️ Add Character</button>
+                            
+                            <label class="label">Starting Scenario (Optional)</label>
+                            <textarea id="adv-starting-scenario" class="input" rows="3" placeholder="Describe how the adventure begins..."></textarea>
+                            
+                            <label class="label" style="margin-top: 1rem;">System Prompt</label>
+                            <textarea id="adv-system-prompt" class="input" rows="5" placeholder="System prompt instructions..."></textarea>
+                            
+                            <button id="adv-start-btn" class="btn-primary" style="width: 100%; margin-top: 1rem;">Begin Adventure</button>
+                        </div>
+                        
+                        <h2 class="section-title" style="margin-top: 2rem;">Load Adventure</h2>
+                        <div id="adv-list-container" class="content-box">
+                            <ul id="adv-list" class="story-list"></ul>
+                        </div>
+                    </section>
+
+                    <section class="result-section" id="adv-play-view" style="display: none; flex-direction: column; padding-bottom: 4rem;">
+                        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                            <button id="adv-back-btn" class="btn-outline">← Exit</button>
+                            <input type="text" id="adv-title" class="input" style="flex: 1; font-weight: bold; font-size: 1.1rem; background: transparent; border: none;">
+                        </div>
+
+                        <!-- Active Characters Display -->
+                        <div id="adv-active-characters" style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border);">
+                        </div>
+
+                        <!-- Story History -->
+                        <div id="adv-story-area" class="content-box" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--surface-color); min-height: 300px; max-height: 50vh;">
+                            <!-- Segments go here -->
+                        </div>
+
+                        <!-- The 4 Options -->
+                        <div id="adv-options-area" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                            <!-- Buttons go here -->
+                        </div>
+                        
+                        <div id="adv-loading" style="display: none; justify-content: center; align-items: center; padding: 1rem;">
+                            <div class="loading-spinner"></div>
+                            <span style="margin-left: 0.5rem; color: var(--text-secondary);">The narrator is thinking...</span>
+                        </div>
+                    </section>
+                </div>
             </main>
 
             <footer class="footer">
@@ -1739,6 +1905,7 @@
         <script src="src/scripts/image-gallery.js?v=20260518"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=8"></script>
+        <script src="src/scripts/adventure-handler.js?v=1"></script>
         <script src="src/scripts/inspire-me.js?v=20260601"></script>
         <script src="src/scripts/gallery-mode.js"></script>
         <script src="src/scripts/chat-handler.js?v=20260610"></script>
@@ -1929,10 +2096,17 @@
                         </p>
                     </div>
 
-                    <div style="text-align: center; margin-top: 2rem">
-                        <button id="clear-config-btn" class="btn-outline">
-                            Clear Saved Configuration
+                    <div style="text-align: center; margin-top: 2rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                        <button id="backup-config-btn" class="btn-primary">
+                            Export Backup
                         </button>
+                        <button id="restore-config-btn" class="btn-outline">
+                            Import Backup
+                        </button>
+                        <button id="clear-config-btn" class="btn-outline" style="border-color: #ef4444; color: #ef4444;">
+                            Clear Config
+                        </button>
+                        <input type="file" id="restore-config-file" accept=".json" style="display: none;" />
                     </div>
 
                     <hr style="border-color: var(--border); margin: 1.5rem 0;" />
@@ -2518,10 +2692,10 @@
                   </div>
                   
                   <div id="chat-new-persona-manual">
-                      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                          <input type="text" id="chat-new-persona-name" class="content-box" style="flex:2;" placeholder="Name (e.g. User)" />
-                          <input type="text" id="chat-new-persona-age" class="content-box" style="flex:1;" placeholder="Age" />
-                          <input type="text" id="chat-new-persona-gender" class="content-box" style="flex:1;" placeholder="Gender" />
+                      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                          <input type="text" id="chat-new-persona-name" class="content-box" style="flex: 2 1 120px; min-width: 0;" placeholder="Name (e.g. User)" />
+                          <input type="text" id="chat-new-persona-age" class="content-box" style="flex: 1 1 60px; min-width: 0;" placeholder="Age" />
+                          <input type="text" id="chat-new-persona-gender" class="content-box" style="flex: 1 1 80px; min-width: 0;" placeholder="Gender" />
                       </div>
                       <textarea id="chat-new-persona-detail" class="content-box" rows="2" style="width:100%;" placeholder="Basic Detail (appearance, background...)"></textarea>
                   </div>

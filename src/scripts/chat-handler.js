@@ -181,9 +181,9 @@ class RoleplayChatHandler {
                         <!-- Segments injected here -->
                     </div>
                     
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" id="chat-global-new-segment" class="content-box" style="flex: 1;" placeholder="New prompt segment...">
-                        <button id="chat-global-add-segment" class="btn-primary">Add</button>
+                    <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+                        <textarea id="chat-global-new-segment" class="content-box" style="flex: 1; resize: vertical;" rows="3" placeholder="New prompt segment (Ctrl+Enter to add)..."></textarea>
+                        <button id="chat-global-add-segment" class="btn-primary" style="height: fit-content; padding: 0.8rem 1.2rem;">Add</button>
                     </div>
                     
                     <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
@@ -433,6 +433,16 @@ class RoleplayChatHandler {
             this.els.impBtn.addEventListener('click', () => this.sendImpersonateMessage());
         }
         
+        const autoResizeInput = (el) => {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+            el.style.overflowY = el.scrollHeight > 150 ? 'auto' : 'hidden';
+        };
+
+        this.els.msgInput.addEventListener('input', () => autoResizeInput(this.els.msgInput));
+        // Trigger initial resize
+        setTimeout(() => autoResizeInput(this.els.msgInput), 0);
+
         this.els.msgInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -440,6 +450,13 @@ class RoleplayChatHandler {
             } else if (e.key === 'Escape') {
                 this.els.msgInput.blur();
                 this.closeMobileSidebar();
+            }
+        });
+        
+        this.els.globalNewSegment.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                this.addSystemPromptSegment();
             }
         });
         
@@ -1214,11 +1231,12 @@ class RoleplayChatHandler {
         wrapper.appendChild(avatarEl);
         wrapper.appendChild(contentCol);
 
+        this.els.timeline.appendChild(wrapper);
+
         if (msg.id) {
             this.attachMessageActions(wrapper, msg, bubbleEl, nameEl);
         }
 
-        this.els.timeline.appendChild(wrapper);
         if (alignToTop) {
             this.scrollToMessage(wrapper);
         }
@@ -1776,6 +1794,7 @@ class RoleplayChatHandler {
         // Optimistic UI update
         const userMsgObj = { role: 'user', content, ooc_note: oocNote, created_at: new Date().toISOString() };
         this.els.msgInput.value = '';
+        this.els.msgInput.style.height = 'auto';
         this.els.oocInput.value = '';
         this.updateOocBadge();
         const userBubbleWrapper = this.appendMessage(userMsgObj, true);
@@ -1835,6 +1854,10 @@ class RoleplayChatHandler {
                         if (dataStr.trim() === '[DONE]') continue;
                         try {
                             const data = JSON.parse(dataStr);
+                            if (data.type === 'api_log' && window.apiHandler) {
+                                window.apiHandler.addBackendLog(data.log);
+                                continue;
+                            }
 
                             if (data.type === 'metadata') {
                                 if (data.character_name) {

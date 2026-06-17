@@ -82,3 +82,51 @@ def get_lorebook_entries(character_book_json: str) -> list:
         return entries
     except Exception:
         return []
+
+def extract_relevant_lorebook_entries(character_book_json: str, history_text: str) -> list:
+    """
+    Parse lorebook JSON and return a formatted list of relevant entries.
+    An entry is relevant if it is enabled and one of its keys is found in the history_text.
+    """
+    if not character_book_json or not history_text:
+        return []
+        
+    try:
+        book = json.loads(character_book_json)
+        entries = book.get('entries', [])
+    except Exception:
+        return []
+        
+    history_lower = history_text.lower()
+    relevant_parts = []
+    
+    for entry in entries:
+        if not entry.get("enabled", True):
+            continue
+            
+        keys = entry.get("keys", [])
+        if isinstance(keys, str):
+            keys = [k.strip() for k in keys.split(",") if k.strip()]
+        elif not isinstance(keys, list):
+            keys = []
+            
+        # Global entries (no keys) should be in the card, as requested by user.
+        # So we skip if no valid keys are provided.
+        valid_keys = [k for k in keys if k and k.strip()]
+        if not valid_keys:
+            continue
+            
+        match_found = False
+        for key in valid_keys:
+            if key.lower() in history_lower:
+                match_found = True
+                break
+                
+        if match_found:
+            name = entry.get("name", "Unnamed")
+            content = entry.get("content", "")
+            if content:
+                relevant_parts.append(f"- {name}: {content}")
+                
+    return relevant_parts
+

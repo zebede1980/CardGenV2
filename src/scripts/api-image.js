@@ -157,8 +157,8 @@ Object.assign(APIHandler.prototype, {
           content: `Rewrite the following image generation prompt so it is under ${target} characters total. Preserve the most visually important details: subject, physical appearance, outfit, expression, and setting. Cut filler words, repetition, and anything non-visual. Output ONLY the rewritten prompt — no explanation, no preamble, no labels.\n\nOriginal prompt:\n${text}\n\nRewritten prompt (under ${target} characters):`,
         },
       ],
-      // 220 tokens ≈ 880 chars — gives a hard ceiling that prevents the model exceeding the limit
-      max_tokens: 220,
+      // Give enough tokens so the AI can gracefully finish the sentence without a hard cutoff
+      max_tokens: 500,
       temperature: 0.2,
       stream: false,
     });
@@ -211,9 +211,13 @@ Object.assign(APIHandler.prototype, {
       console.error("❌ AI shortening failed, falling back to sentence-boundary truncation:", error);
       const trimmed = prompt.substring(0, MAX_LENGTH);
       const lastPeriod = trimmed.lastIndexOf(".");
-      return lastPeriod > MAX_LENGTH * 0.6
-        ? trimmed.substring(0, lastPeriod + 1).trim()
-        : trimmed.trim();
+      const lastComma = trimmed.lastIndexOf(",");
+      const cutPoint = lastPeriod > MAX_LENGTH * 0.6
+        ? lastPeriod + 1
+        : lastComma > MAX_LENGTH * 0.6
+          ? lastComma
+          : MAX_LENGTH;
+      return trimmed.substring(0, cutPoint).trim();
     }
   },
 
@@ -351,6 +355,8 @@ BEGIN PROMPT:`;
         return s("A classical oil painting portrait of", "oil on canvas, old masters technique, impasto brushwork, rich saturated colors, Rembrandt lighting, museum quality fine art, highly detailed");
       case "concept-art":
         return s("Professional character concept art of", "game concept art, character design sheet, clean rendering, professional illustration, artstation, dynamic lighting, detailed costume design");
+      case "grunge-anime":
+        return s("Modern edgy 2D anime illustration of", "grunge aesthetic, highly desaturated color palette, sharp messy line art, detailed streetwear fashion, chaotic expressive vibe, flat cel shading, Pixiv ranking style, masterpiece");
       case "gothic-anime":
         return s("Semi-realistic anime illustration of", "dark fantasy gothic, high contrast lighting, dramatic shadows, detailed concept art, palette of deep blacks, stark whites, luminous crimson");
       case "gothic":

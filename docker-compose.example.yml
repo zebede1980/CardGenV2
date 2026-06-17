@@ -1,10 +1,5 @@
-# Example docker-compose.yml for SillyTavern Character Generator
-# To use this file, rename or copy it to 'docker-compose.yml'
-# and adjust the ports or volume paths as needed.
-
 services:
   # Frontend container (Nginx + static files)
-  # This serves the HTML, CSS, and JS files to your browser.
   frontend:
     build:
       context: .
@@ -12,11 +7,8 @@ services:
     container_name: character-generator-frontend
     restart: unless-stopped
     ports:
-      # Maps the host port to the container's Nginx port (80)
-      # Change '2427' if you want to access the app on a different host port.
       - "${FRONTEND_PORT:-2427}:80"
     volumes:
-      # Optional: Maps Nginx access/error logs to your host machine
       - ./logs:/var/log/nginx
     networks:
       - app-network
@@ -30,7 +22,6 @@ services:
       start_period: 30s
 
   # Backend container (Node.js proxy server)
-  # This handles API requests, bypassing CORS, and saving your configuration/library.
   proxy:
     build:
       context: .
@@ -38,31 +29,92 @@ services:
     container_name: character-generator-proxy
     restart: unless-stopped
     ports:
-      # Maps the proxy's internal port to your host machine
       - "${PROXY_PORT:-2426}:${PROXY_PORT:-2426}"
     environment:
       - NODE_ENV=production
       - PORT=${PROXY_PORT:-2426}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-2427}}
-      # REQUIRED: Set a strong random secret for signing JWT tokens.
-      # Generate one with: openssl rand -hex 32
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
-      # Set to 'true' to allow new users to register accounts
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
+      # Optional: URL of the Story Writer backend API
+      - STORY_APP_URL=${STORY_APP_URL:-http://storywriterbackend:8000}
+      # Brave Search API for character web search (1,000 free queries/month)
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+      - BRAVE_SEARCH_ENABLED=${BRAVE_SEARCH_ENABLED:-true}
+      # Public URL shown to the browser for the Story Writer tab
+      - STORY_APP_PUBLIC_URL=${STORY_APP_PUBLIC_URL:-}
+      # Shared secret for internal proxy→backend calls (must match storywriterbackend)
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
     volumes:
-      # IMPORTANT: This volume persists your local library (cards/prompts)
-      # and API settings (keys, models) across container restarts.
       - ./proxy/data:/app/data
     networks:
       - app-network
+      - nginx-proxy-nw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:2426/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+      
+  # StoryWriter Backend (Integrated)
+  storywriterbackend:
+    build:
+      context: ./storywriterbackend
+      dockerfile: Dockerfile
+    container_name: storywriterbackend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://user:password@storywriterbackend-db:5432/joeanory
+      # Must match the proxy's INTERNAL_API_SECRET
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - storywriterbackend-db
+    networks:
+      - app-network
+
+  # StoryWriter PostgreSQL Database (Integrated)
+  storywriterbackend-db:
+    image: postgres:15-alpine
+    container_name: storywriterbackend-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=joeanory
+    volumes:
+      - ./storywriterbackend-db-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # Coqui TTS Bridge Service — local text-to-speech narration for Story Writer
+  tts:
+    build:
+      context: ./tts-service
+      dockerfile: Dockerfile
+    container_name: cardgen-tts
+    restart: unless-stopped
+    environment:
+      - TTS_MODEL_NAME=${TTS_MODEL_NAME:-tts_models/en/vctk/vits}
+      - TTS_DEVICE=${TTS_DEVICE:-cpu}
+      - TTS_PRELOAD=${TTS_PRELOAD:-true}
+    volumes:
+      - ./tts-models:/root/.local/share/tts
+    networks:
+      - app-network
+    # GPU support — uncomment if you have NVIDIA Container Toolkit installed
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
 networks:
   app-network:
     driver: bridge
     name: character-generator-network
+  nginx-proxy-nw:
+    external: true

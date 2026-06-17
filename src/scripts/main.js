@@ -238,7 +238,9 @@ class CharacterGeneratorApp {
     document.getElementById("reset-description-btn").addEventListener("click", () => this.handleResetField("description"));
     document.getElementById("reset-personality-btn").addEventListener("click", () => this.handleResetField("personality"));
     document.getElementById("reset-scenario-btn").addEventListener("click", () => this.handleResetField("scenario"));
-    document.getElementById("reset-first-message-btn").addEventListener("click", () => this.handleResetField("firstMessage"));
+    if (document.getElementById("reset-first-message-btn")) document.getElementById("reset-first-message-btn").addEventListener("click", () => this.handleResetField("firstMessage"));
+    if (document.getElementById("reset-post-history-btn")) document.getElementById("reset-post-history-btn").addEventListener("click", () => this.handleResetField("postHistoryInstructions"));
+    if (document.getElementById("reset-creator-notes-btn")) document.getElementById("reset-creator-notes-btn").addEventListener("click", () => this.handleResetField("creatorNotes"));
 
     // Character field edit tracking
     const nameInput = document.getElementById("character-generated-name");
@@ -247,6 +249,11 @@ class CharacterGeneratorApp {
     document.getElementById("character-personality").addEventListener("input", () => this.handleCharacterEdit("personality"));
     document.getElementById("character-scenario").addEventListener("input", () => this.handleCharacterEdit("scenario"));
     document.getElementById("character-first-message").addEventListener("input", () => this.handleCharacterEdit("firstMessage"));
+
+    const postHistoryEl = document.getElementById("character-post-history");
+    if (postHistoryEl) {
+        postHistoryEl.addEventListener("input", () => this.handleCharacterEdit("postHistoryInstructions"));
+    }
 
     // Image & file uploads
     document.getElementById("upload-image-btn").addEventListener("click", () => document.getElementById("image-upload-input").click());
@@ -291,6 +298,9 @@ class CharacterGeneratorApp {
       .forEach((input) => input.addEventListener("change", () => this.saveAPISettings()));
 
     document.getElementById("clear-config-btn").addEventListener("click", () => this.handleClearConfig());
+    document.getElementById("backup-config-btn").addEventListener("click", () => this.handleBackupConfig());
+    document.getElementById("restore-config-btn").addEventListener("click", () => document.getElementById("restore-config-file").click());
+    document.getElementById("restore-config-file").addEventListener("change", (e) => this.handleRestoreConfig(e));
     document.getElementById("test-connection-btn").addEventListener("click", () => this.handleTestConnection());
 
     // Card type: force POV to third-person and disable it for group/scenario
@@ -390,10 +400,14 @@ class CharacterGeneratorApp {
     const regenPersBtn = document.getElementById("regenerate-personality-btn");
     const regenScenBtn = document.getElementById("regenerate-scenario-btn");
     const regenFirstMsgBtn = document.getElementById("regenerate-first-message-btn");
+    const regenPostHistoryBtn = document.getElementById("regenerate-post-history-btn");
+    const regenCreatorNotesBtn = document.getElementById("regenerate-creator-notes-btn");
     if (regenDescBtn) regenDescBtn.addEventListener("click", () => this.handleRegenerateField("description"));
     if (regenPersBtn) regenPersBtn.addEventListener("click", () => this.handleRegenerateField("personality"));
     if (regenScenBtn) regenScenBtn.addEventListener("click", () => this.handleRegenerateField("scenario"));
     if (regenFirstMsgBtn) regenFirstMsgBtn.addEventListener("click", () => this.handleRegenerateField("firstMessage"));
+    if (regenPostHistoryBtn) regenPostHistoryBtn.addEventListener("click", () => this.handleRegeneratePostHistory());
+    if (regenCreatorNotesBtn) regenCreatorNotesBtn.addEventListener("click", () => this.handleRegenerateCreatorNotes());
 
     // Lorebook Manager
     const manageLorebookBtn = document.getElementById("manage-lorebook-btn");
@@ -796,6 +810,76 @@ class CharacterGeneratorApp {
     this.showNotification("Configure API settings in form above", "info");
   }
 
+  async handleBackupConfig() {
+    this.config.saveToForm();
+    this.config.saveConfig();
+    
+    let swSettings = {};
+    try {
+        const swRes = await (window.authFetch || fetch)("/api/sw/settings/");
+        if (swRes.ok) {
+            swSettings = await swRes.json();
+        }
+    } catch (e) {
+        console.warn("Failed to fetch Storywriter settings for backup:", e);
+    }
+    
+    const backupData = {
+        cardgen: this.config.config,
+        storywriter: swSettings
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", "cardgen_config_backup.json");
+    dlAnchorElem.click();
+    this.showNotification("Configuration backed up successfully!", "success");
+  }
+
+  handleRestoreConfig(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedConfig = JSON.parse(event.target.result);
+        
+        let cardgenConfig = importedConfig;
+        let swConfig = null;
+        
+        // Detect new backup format with separated configs
+        if (importedConfig.cardgen !== undefined) {
+            cardgenConfig = importedConfig.cardgen;
+            swConfig = importedConfig.storywriter;
+        }
+        
+        this.config.config = this.config.deepMerge(this.config.config, cardgenConfig);
+        this.config.saveConfig();
+        
+        if (swConfig && Object.keys(swConfig).length > 0) {
+            try {
+                await (window.authFetch || fetch)("/api/sw/settings/", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(swConfig)
+                });
+            } catch (e) {
+                console.error("Failed to restore Storywriter settings:", e);
+            }
+        }
+        
+        this.showNotification("Configuration restored successfully! Reloading page...", "success");
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (error) {
+        this.showNotification("Failed to parse configuration file.", "error");
+        console.error("Config Import Error:", error);
+      }
+      e.target.value = ""; // Reset input
+    };
+    reader.readAsText(file);
+  }
+
   handleClearConfig() {
     if (confirm("Are you sure you want to clear all saved API settings?")) {
       this.config.clearStoredConfig();
@@ -944,9 +1028,17 @@ class CharacterGeneratorApp {
         console.warn("Creator notes generation failed (non-fatal):", notesError);
       }
 
+      this.showStreamMessage("📜 Generating post-history instructions...\n");
+      try {
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        if (postHistory) {
+          this.currentCharacter.postHistoryInstructions = postHistory;
+        }
+      } catch (phError) {
+        console.warn("Post-History Instructions generation failed (non-fatal):", phError);
+      }
+
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
 
       this.showStreamMessage("\n✅ Character generation complete!\n");
       this.displayCharacter();
@@ -966,7 +1058,7 @@ class CharacterGeneratorApp {
       } else if (imageApiBase && imageApiKey && enableImageGeneration) {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
-          await this.generateImage();
+          await this.generateImage(true);
           this.showStreamMessage("✅ Image generation complete!\n");
         } catch (imageError) {
           console.error("Image generation error:", imageError);
@@ -1030,6 +1122,9 @@ class CharacterGeneratorApp {
           }
         }
       }
+
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
 
       this.showNotification("Character generated successfully!", "success");
     } catch (error) {

@@ -367,9 +367,6 @@ ${templateContent}
 **Roleplay Mechanics & Story Steering:**
 (Provide 2-3 bullet points defining how the roleplay should unfold. What is the central conflict? What are the key mechanics, pacing rules, or behavioral constraints {{char}} must enforce to drive the story forward? Ensure the character acts as an active catalyst for the story.)
 
-(CRITICAL INSTRUCTION: You MUST append the following exact text at the very end of the scenario to ensure proper roleplay mechanics:
-[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.])
-
 # First Message
 
 ${firstMessageInstruction}
@@ -468,9 +465,6 @@ Use ## as a separator for each main section as shown in the template.`;
 **Roleplay Mechanics & Story Steering:**
 (Provide 2-3 bullet points defining how the roleplay should unfold and how the group drives the story. What is the central conflict or progression mechanic?)
 
-(CRITICAL INSTRUCTION: Append this exact text at the very end of the scenario:
-[System Note: {{char}} will follow on from {{user}}'s actions and speech. When voicing individual members, {{char}} must clearly identify who is speaking or acting. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray the group's own actions, thoughts, and dialogue.])
-
 # First Message
 
 (Write a group scene opening in the third-person. Introduce the group in action — show at least two members doing something distinct that reveals their personalities. Describe the environment in vivid sensory detail. {{user}}'s presence should be passive at first — they are noticed, but not yet engaged. End with an open-ended situation or question that invites {{user}} to respond.)
@@ -554,9 +548,6 @@ Use ## as a separator for each main section as shown in the template.`;
 **Roleplay Mechanics & Story Steering:**
 (Provide 2-3 bullet points on how the scenario should unfold. What are the key mechanics, events, or pacing rules the AI must enforce to drive the story forward?)
 
-(CRITICAL INSTRUCTION: Append this exact text at the very end of the scenario:
-[System Note: {{char}} will narrate events in this scenario and voice any NPCs encountered. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray the scenario's events, atmosphere, and NPC dialogue and actions.])
-
 # First Message
 
 (Write a scene-setting opening in the third-person. Place {{user}} at the threshold of the scenario — arriving, entering, discovering. Describe the environment in vivid sensory detail. Introduce one NPC or one immediate problem that creates a reason for {{user}} to act. End with an open-ended situation that invites {{user}} to respond.)
@@ -639,7 +630,7 @@ ${lorebookContent}`;
       messages: [
         {
           role: "system",
-          content: "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. **CONCISENESS RULE:** The card is AI stage-direction, not prose fiction. Keep revised output concise — tighten where possible; do not expand sections that are already clear. Use short prose for backstory/scenario; use direct bullet points for traits, behaviours, and mechanics. **CRITICAL STRUCTURE RULE:** The 'description' field MUST ONLY contain physical appearance, backstory, and current state. The 'personality' field MUST contain behavioral traits, 'How They Operate' (speech style, body language, mindset), likes, dislikes, goals, fears, and quirks. The 'scenario' field MUST outline the Premise AND include a 'Roleplay Mechanics & Story Steering' section with bullet points on how the story should unfold. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL: Always ensure the 'scenario' field ends with the instruction: [System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.] CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string `{{char}}` whenever referring to the character by name. **CRITICAL JSON RULE:** You MUST properly escape all newlines as \\n within the JSON string values. Do NOT output literal newlines inside strings.",
+          content: "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. **CONCISENESS RULE:** The card is AI stage-direction, not prose fiction. Keep revised output concise — tighten where possible; do not expand sections that are already clear. Use short prose for backstory/scenario; use direct bullet points for traits, behaviours, and mechanics. **CRITICAL STRUCTURE RULE:** The 'description' field MUST ONLY contain physical appearance, backstory, and current state. The 'personality' field MUST contain behavioral traits, 'How They Operate' (speech style, body language, mindset), likes, dislikes, goals, fears, and quirks. The 'scenario' field MUST outline the Premise AND include a 'Roleplay Mechanics & Story Steering' section with bullet points on how the story should unfold. **NO DIALOGUE RULE:** DO NOT include example dialogues, conversational quotes, or <START> tags in the description, personality, or scenario fields. Example dialogues are handled separately. CRITICAL RULE: The character's actual name should ONLY be in the 'name' field. In the description, personality, scenario, and firstMessage fields, you MUST use the exact string `{{char}}` whenever referring to the character by name. **CRITICAL JSON RULE:** You MUST properly escape all newlines as \\n within the JSON string values. Do NOT output literal newlines inside strings.",
         },
         {
           role: "user",
@@ -673,6 +664,7 @@ ${lorebookContent}`;
         firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
         mesExample: parsed.mesExample || parsed.mes_example || currentCharacter.mesExample || "",
         creatorNotes: currentCharacter.creatorNotes || "",
+        postHistoryInstructions: currentCharacter.postHistoryInstructions || "",
         tags: Array.isArray(currentCharacter.tags) ? currentCharacter.tags : [],
         cardType: currentCharacter.cardType || "single",
         character_book: currentCharacter.character_book,
@@ -999,11 +991,6 @@ DO NOT output full markdown blocks for other sections, ONLY the revised content 
       ? `\nCRITICAL INSTRUCTION FOR THIS SECTION: ${customPrompt}`
       : `\nRevise and improve this section to be more detailed, engaging, and consistent with the rest of the character.`;
 
-    let systemNoteInstruction = "";
-    if (field === 'scenario') {
-      systemNoteInstruction = `\n\nIMPORTANT: You MUST append the following exact text at the very end of the rewritten scenario:\n[System Note: {{char}} will follow on from {{user}}'s actions and speech. {{char}} is strictly forbidden from speaking, thinking, or performing actions for {{user}}. {{char}} must only portray their own actions, thoughts, and dialogue.]`;
-    }
-
     const lorebookContext = this.formatLorebookKeysContext(lorebookEntries);
     const userPrompt = `Character Profile Context:
 Name: ${charName}
@@ -1011,7 +998,7 @@ Description: ${character.description}
 Personality: ${character.personality}
 Scenario: ${character.scenario}${lorebookContext}
 
-Please REWRITE the ${fieldName} section.${customInstruction}${systemNoteInstruction}
+Please REWRITE the ${fieldName} section.${customInstruction}
 
 Output ONLY the new ${fieldName} content without surrounding explanation.`;
 
@@ -1166,7 +1153,7 @@ Output a JSON array of tags only.`;
     }
   },
 
-  async generateCreatorNotes(character) {
+  async generateCreatorNotes(character, customPrompt = "") {
     if (!character) throw new Error("Character is required to generate creator notes");
     const model = this.config.get("api.text.model");
     const charName = character.name || "the character";
@@ -1183,7 +1170,7 @@ Rules:
 - No hashtags, no lists, no headers — just plain compelling prose.
 - Do NOT start with "Meet" or "Introducing". Be more creative.`;
 
-    const userPrompt = `Character name: ${charName}
+    let userPrompt = `Character name: ${charName}
 
 Description (excerpt):
 ${(character.description || "").slice(0, 600)}
@@ -1198,6 +1185,10 @@ First message (for tone reference):
 ${(character.firstMessage || "").slice(0, 300)}
 
 Write the Creator's Notes blurb now. Plain text only, no formatting.`;
+
+    if (customPrompt && customPrompt.trim()) {
+      userPrompt += `\n\nCRITICAL INSTRUCTION FOR THIS GENERATION: ${customPrompt.trim()}`;
+    }
 
     const data = {
       model,
@@ -1215,6 +1206,54 @@ Write the Creator's Notes blurb now. Plain text only, no formatting.`;
       return this.processNormalResponse(response).trim();
     } catch (error) {
       console.error("=== CREATOR NOTES GENERATION FAILED ===", error);
+      throw error;
+    }
+  },
+
+  async generatePostHistoryInstructions(character, customPrompt = "") {
+    if (!character) throw new Error("Character is required to generate post-history instructions");
+    const model = this.config.get("api.text.model");
+
+    const systemPrompt = `You write operational "Post-History Instructions" for AI roleplaying. This text acts as a persistent system prompt injected immediately before the AI's generation.
+
+Rules:
+- Write 1-2 concise, direct sentences.
+- Focus ONLY on enforcing the core mechanics or style of the scenario.
+- Use the exact string \`{{char}}\` instead of the character's actual name.
+- Use the exact string \`{{user}}\` instead of the player's name.
+- Use imperative mood (e.g. "Write strictly in the third-person...", "Focus on sensory details...").
+- Do NOT provide background lore or personality traits here. This is ONLY for steering the AI's immediate output behavior.`;
+
+    let userPrompt = `Scenario Mechanics & Conflict:
+${(character.scenario || "").slice(0, 800)}
+
+Personality Highlights:
+${(character.personality || "").slice(0, 400)}
+
+Based on the scenario mechanics above, generate a concise Post-History Instruction. Example: "Write strictly in the third person. {{char}} must actively drive the plot forward and respond directly to {{user}}'s actions. Emphasize visceral, sensory details."
+
+Write the instructions now. Plain text only, no formatting.`;
+
+    if (customPrompt && customPrompt.trim()) {
+      userPrompt += `\n\nCRITICAL INSTRUCTION FOR THIS GENERATION: ${customPrompt.trim()}`;
+    }
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 150,
+      stream: false,
+    };
+
+    try {
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      return this.processNormalResponse(response).trim();
+    } catch (error) {
+      console.error("=== POST-HISTORY GENERATION FAILED ===", error);
       throw error;
     }
   },
