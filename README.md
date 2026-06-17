@@ -1,7 +1,8 @@
 # SillyTavern Character Generator (v2)
 
-![SillyTavern Character Generator Interface](clean.png)
-![SillyTavern Character Generator Interface - Generated Card](generated.png)
+<img width="1374" height="1104" alt="image" src="https://github.com/user-attachments/assets/5dacb1af-893e-418c-bb5a-27cc21142ae9" />
+
+
 
 Web app for generating, editing, importing, revising, and exporting SillyTavern character cards (Spec V2 `.png` / `.json`).
 
