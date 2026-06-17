@@ -702,7 +702,7 @@ class StoryWriterApp {
                 const tier = provider === 'google-standard' ? 'standard' : 'premium';
                 res = await window.authFetch(`/api/tts/google-voices?key=${googleKey}&tier=${tier}`);
             } else {
-                res = await window.authFetch('/api/tts/voices');
+                res = await window.authFetch('/api/tts/voices?provider=' + encodeURIComponent(provider));
             }
             const data = await res.json();
             console.debug('[StoryWriter][TTS] Voice endpoint response', data);

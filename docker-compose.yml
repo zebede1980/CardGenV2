@@ -45,6 +45,8 @@ services:
       - STORY_APP_PUBLIC_URL=${STORY_APP_PUBLIC_URL:-}
       # Shared secret for internal proxy→backend calls (must match storywriterbackend)
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
+      # Kokoro TTS backend URL
+      - KOKORO_TTS_URL=${KOKORO_TTS_URL:-http://kokoro-tts:8880}
     volumes:
       - ./proxy/data:/app/data
     networks:
@@ -111,6 +113,18 @@ services:
     #         - driver: nvidia
     #           count: 1
     #           capabilities: [gpu]
+
+  # Kokoro-82M TTS Service
+  kokoro-tts:
+    image: hwdsl2/kokoro-server
+    container_name: kokoro-tts
+    restart: unless-stopped
+    ports:
+      - "8880:8880"
+    volumes:
+      - ./kokoro-data:/var/lib/kokoro
+    networks:
+      - app-network
 
 networks:
   app-network:

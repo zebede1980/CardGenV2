@@ -1252,8 +1252,23 @@ app.get("/api/tts/health", async (_req, res) => {
   }
 });
 
-app.get("/api/tts/voices", async (_req, res) => {
+app.get("/api/tts/voices", async (req, res) => {
   try {
+    const provider = req.query.provider;
+    
+    if (provider === "kokoro") {
+      const kokoroVoices = [
+        "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
+        "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
+        "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
+        "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
+        "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi", "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
+        "ef_dora", "em_alex", "em_santa", "ff_siwis", "hf_alpha", "hf_beta", "hm_omega", "hm_psi",
+        "if_sara", "im_nicola", "pf_dora", "pm_alex", "pm_santa"
+      ];
+      return res.json({ status: "ready", speakers: kokoroVoices });
+    }
+
     const response = await fetch(`${TTS_URL}/voices`);
     const data = await response.json();
     res.json(data);
@@ -1275,6 +1290,42 @@ app.get("/api/tts/models", async (_req, res) => {
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
     const { text, voice, speed, provider, googleApiKey, nanogptKey, nanogptModel, nanogptVoice } = req.body;
+
+    // Branch: Kokoro TTS
+    if (provider === "kokoro") {
+      const kokoroUrl = (process.env.KOKORO_TTS_URL || "http://kokoro-tts:8880").replace(/\/$/, "");
+      const requestUrl = `${kokoroUrl}/v1/audio/speech`;
+      
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "kokoro",
+          input: text,
+          voice: voice || "af_heart",
+          response_format: "wav",
+          speed: speed || 1.0
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.text();
+        return res.status(response.status).send(`Kokoro TTS Error: ${errData}`);
+      }
+
+      res.setHeader("Content-Type", "audio/wav");
+      res.setHeader("Cache-Control", "no-cache");
+      
+      // Attempt to copy the duration header if available, but kokoro server might not provide it.
+      // Usually standard OpenAI APIs don't provide x-tts-duration-seconds.
+      const duration = response.headers.get("x-tts-duration-seconds");
+      if (duration) {
+        res.setHeader("X-TTS-Duration-Seconds", duration);
+      }
+      
+      response.body.pipe(res);
+      return;
+    }
 
     // Branch: Nano-GPT TTS
     if (provider === "nanogpt") {
