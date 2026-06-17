@@ -121,7 +121,7 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - **Text-to-Speech (TTS) Narration**: Read story segments aloud seamlessly.
 - **Auto Mode**: Perfectly pipelined background generation automatically requests and narrates the next chunk of the story for a hands-free listening experience.
 - **Multiple TTS Providers**:
-  - **Local Coqui TTS**: Runs entirely locally via an optional Docker container (free, private).
+  - **Local Kokoro-82M TTS**: Runs entirely locally via an optional Docker container (free, private, high quality).
   - **Google Cloud TTS**: Supports both Standard and Premium (Neural2 / WaveNet) voices via Google API key.
 - **Mobile/iOS Native Support**: Integrates with the HTML5 Media Session API, allowing uninterrupted background audio playback and lock-screen controls (Pause, Skip, Stop) on mobile devices.
 
@@ -342,7 +342,7 @@ Configured directly within the **⚙️ Generation Settings** panel in the Story
 
 | Setting | Notes |
 |---|---|
-| Provider | Choose between **Local Coqui TTS**, **Google Cloud (Standard)**, **Google Cloud (Premium)**, or **nano-gpt.com**. |
+| Provider | Choose between **Local Kokoro-82M**, **Google Cloud (Standard)**, **Google Cloud (Premium)**, or **nano-gpt.com**. |
 | Google API Key | Required only if a Google provider is selected. Ensure your key has the *Cloud Text-to-Speech API* enabled and a linked billing account (even for free tier limits). |
 | **nano-gpt.com API Key** | **Required only if the nano-gpt.com provider is selected.** |
 | Voice | Select from available voices. Automatically fetches the list from your active provider. For nano-gpt.com, this selects the underlying TTS model (e.g., `elevenlabs-multilingual-v2`, `kokoro-82m`). |
@@ -474,12 +474,11 @@ The **Reduce Bloat** and **Scan for Lorebook Content** tools help you bring impo
 
 ## Docker Notes
 
-### Local TTS Service (Coqui)
+### Local TTS Service (Kokoro)
 
-If you want to use the **Local Coqui TTS** provider in the Story Writer, you need to run the optional `tts` Docker service alongside your proxy and frontend.
-- Ensure your `docker-compose.yml` includes the `tts` service block (exposing port `8500`).
-- The required TTS models are automatically downloaded on first run and stored in the `./tts-models` host volume.
-- GPU acceleration (via NVIDIA Container Toolkit) is highly recommended for real-time local narration, though modern CPUs can also keep up with reading pace.
+If you want to use the **Local Kokoro-82M** provider in the Story Writer, you need to run the optional `kokoro-tts` Docker service alongside your proxy and frontend.
+- Ensure your `docker-compose.yml` includes the `kokoro-tts` service block (exposing port `8880`).
+- The recommended `ghcr.io/remsky/kokoro-fastapi-cpu` image runs efficiently on modern CPUs without requiring complex NVIDIA GPU drivers or CUDA installations.
 - Note: The Google Cloud TTS option routes through the proxy and does **not** require this container to be running.
 
 ### Networking with SillyTavern
