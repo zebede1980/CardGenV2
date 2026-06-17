@@ -1364,7 +1364,7 @@ textarea.content-box {
 .chat-message-content {
     padding: 0.6rem 0.85rem;
     border-radius: var(--radius-lg);
-    font-size: 0.9375rem;
+    font-size: calc(0.9375rem * var(--chat-text-zoom, 1));
     line-height: 1.5;
     word-break: break-word;
 }
@@ -1520,7 +1520,7 @@ textarea.content-box {
     align-items: flex-end;
 }
 
-.chat-input {
+.chat-input, #chat-message-input {
     flex: 1;
     resize: none;
     padding: 0.55rem 0.75rem;
@@ -1529,7 +1529,7 @@ textarea.content-box {
     background: var(--bg-page);
     color: var(--text-primary);
     font-family: inherit;
-    font-size: 0.9375rem;
+    font-size: calc(0.9375rem * var(--chat-text-zoom, 1));
     line-height: 1.4;
     transition: border-color 120ms, box-shadow 120ms;
 }
