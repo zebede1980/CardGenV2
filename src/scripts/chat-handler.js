@@ -1502,7 +1502,8 @@ class RoleplayChatHandler {
         const textarea = document.createElement('textarea');
         textarea.className = 'content-box';
         textarea.style.width = '100%';
-        textarea.style.minHeight = '100px';
+        textarea.style.minHeight = '250px';
+        textarea.style.resize = 'vertical';
         textarea.style.fontFamily = 'inherit';
         textarea.style.marginBottom = '0.5rem';
         textarea.value = currentContent;
@@ -1525,6 +1526,11 @@ class RoleplayChatHandler {
         bubbleEl.innerHTML = '';
         bubbleEl.appendChild(textarea);
         bubbleEl.appendChild(controls);
+
+        // Auto-resize to fit content
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.max(250, textarea.scrollHeight) + 'px';
+
         textarea.focus();
 
         cancelBtn.onclick = () => {
