@@ -219,13 +219,17 @@ Output only the lorebook entry content.`;
     const systemPrompt = `You are an expert in writing highly functional lorebook entries for supporting cast members in AI roleplaying.
 Your task is to take a brief, vague description of a background character and flesh them out into a concise lorebook entry (2-3 paragraphs max).
 
+Main Character Profile Context:
+Name: ${charName}
+Description: ${character.description}
+Scenario: ${character.scenario}
+
 RULES:
 - Focus on physical appearance, a few personal details or quirks, and their motivations or attitude.
 - Keep it brief, just enough so the AI can feature them as needed. Do NOT write a full character card.
 - Write from a neutral, omniscient narrator's perspective.
 - Do NOT use the main character's actual name. You MUST use the exact macro string \`{{char}}\` instead of the main character's name in the generated text.
-- ${nameInstruction}
-${excludeNamesInstruction}
+- CRITICAL JSON REQUIREMENT: You MUST escape any internal double quotes within the text fields (e.g., use \\" instead of "). Failure to do so will break the JSON parser. Do NOT add extra fields like "motivation" or "notes".
 
 Return ONLY a strict JSON object with the following structure:
 {
@@ -235,13 +239,11 @@ Return ONLY a strict JSON object with the following structure:
 }
 Do not include any markdown, explanation, or extra text.`;
 
-    const userPrompt = `Main Character Profile Context:
-Name: ${charName}
-Description: ${character.description}
-Scenario: ${character.scenario}
-
-Supporting Cast Member Description:
+    const userPrompt = `Supporting Cast Member Description to generate:
 "${roleDescription}"
+
+${nameInstruction}
+${excludeNamesInstruction}
 
 Generate the supporting cast member JSON now.`;
 
