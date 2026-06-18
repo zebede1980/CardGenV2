@@ -202,7 +202,7 @@ Output only the lorebook entry content.`;
     }
   },
 
-  async generateSupportingCastMember(character, roleDescription, optionalName = "") {
+  async generateSupportingCastMember(character, roleDescription, optionalName = "", alreadyGeneratedNames = []) {
     if (!character || !roleDescription) throw new Error("Character and role description are required");
 
     const model = this.config.get("api.text.model");
@@ -211,6 +211,10 @@ Output only the lorebook entry content.`;
     const nameInstruction = optionalName 
       ? `The character's name is "${optionalName}".` 
       : `You must invent a fitting name for this character based on their role and setting.`;
+
+    const excludeNamesInstruction = (alreadyGeneratedNames && alreadyGeneratedNames.length > 0)
+      ? `- Do NOT use any of these names (they are already taken): ${alreadyGeneratedNames.join(", ")}`
+      : "";
 
     const systemPrompt = `You are an expert in writing highly functional lorebook entries for supporting cast members in AI roleplaying.
 Your task is to take a brief, vague description of a background character and flesh them out into a concise lorebook entry (2-3 paragraphs max).
@@ -221,6 +225,7 @@ RULES:
 - Write from a neutral, omniscient narrator's perspective.
 - Do NOT use the main character's actual name. You MUST use the exact macro string \`{{char}}\` instead of the main character's name in the generated text.
 - ${nameInstruction}
+${excludeNamesInstruction}
 
 Return ONLY a strict JSON object with the following structure:
 {
