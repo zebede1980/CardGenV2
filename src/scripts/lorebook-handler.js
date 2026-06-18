@@ -87,7 +87,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     
     try {
       for (const castMember of castToGenerate) {
-        btnLoading.textContent = \`Generating \${generatedCount + 1} of \${castToGenerate.length}...\`;
+        btnLoading.textContent = `Generating ${generatedCount + 1} of ${castToGenerate.length}...`;
         
         const result = await this.apiHandler.generateSupportingCastMember(
           this.currentCharacter,
@@ -114,7 +114,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
       
       this.updateLorebookEntryCount();
-      this.showNotification(\`Successfully generated \${generatedCount} supporting cast members.\`, "success");
+      this.showNotification(`Successfully generated ${generatedCount} supporting cast members.`, "success");
       this.closeSupportingCastModal();
       
       // Attempt to inject them into the main card
@@ -143,7 +143,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       let generatedCount = 0;
       for (const desc of suggestions) {
-        this.showStreamMessage(\`Generating cast member: \${desc}...\\n\`);
+        this.showStreamMessage(`Generating cast member: ${desc}...\\n`);
         const result = await this.apiHandler.generateSupportingCastMember(this.currentCharacter, desc, "");
         
         const triggerKeys = [result.name];
