@@ -175,7 +175,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       this.updateLorebookEntryCount();
       if (generatedCount > 0) {
-        await this._executeInjectLorebookKeys();
+        await this._executeInjectLorebookKeys(true);
       }
     } catch (error) {
       console.error("Auto-generate cast error:", error);
@@ -481,7 +481,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
-  async _executeInjectLorebookKeys() {
+  async _executeInjectLorebookKeys(silent = false) {
     const allKeys = [...new Set(this.lorebookEntries.flatMap((e) => e.keys.filter(Boolean)))];
     if (allKeys.length === 0) return;
 
@@ -505,6 +505,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
         instruction,
         pov,
       );
+
+      if (silent) {
+        this.currentCharacter = revised;
+        this.originalCharacter = JSON.parse(JSON.stringify(revised));
+        return true;
+      }
 
       const approved = await this.promptCardDiffApproval(before, revised);
 

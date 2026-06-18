@@ -283,7 +283,11 @@ Generate the supporting cast member JSON now.`;
     const model = this.config.get("api.text.model");
     const charName = character.name || "{{char}}";
 
-    const systemPrompt = `You are an expert AI roleplay assistant. Based on the provided character profile and scenario, identify 2-4 implied or highly relevant background characters that would make excellent supporting cast members.
+    const systemPrompt = `You are an expert AI roleplay assistant. Your task is to identify and list supporting cast members for the provided character profile and scenario.
+First, carefully read the Character Context (Description and Scenario).
+If any specific background characters, suspects, crew members, or other supporting roles are explicitly mentioned or strongly implied, extract ALL of them.
+If fewer than 3 background characters are explicitly mentioned, invent additional appropriate supporting cast members so that you return at least 3. Do not exceed 8 characters in total.
+
 Return a strict JSON object containing an array of objects under the key "cast". Each object should have a "description" property containing a brief vague description of the character (e.g., "The cynical bartender at the neon diner", "A naive rookie town guard").
 
 Return ONLY a JSON object:
@@ -299,7 +303,7 @@ Name: ${charName}
 Description: ${character.description}
 Scenario: ${character.scenario}
 
-Identify 2-4 supporting cast members and return the JSON now.`;
+Extract or invent the supporting cast members and return the JSON now.`;
 
     const data = {
       model,
