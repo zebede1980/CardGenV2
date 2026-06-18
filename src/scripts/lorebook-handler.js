@@ -84,6 +84,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     btnLoading.style.display = "inline";
     
     let generatedCount = 0;
+    let alreadyGeneratedNames = [];
     
     try {
       for (const castMember of castToGenerate) {
@@ -92,8 +93,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const result = await this.apiHandler.generateSupportingCastMember(
           this.currentCharacter,
           castMember.description,
-          castMember.name
+          castMember.name,
+          alreadyGeneratedNames
         );
+        
+        if (result.name) {
+          alreadyGeneratedNames.push(result.name);
+        }
         
         // Use name and role as trigger keys, as requested by user
         const triggerKeys = [result.name];
@@ -142,9 +148,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       let generatedCount = 0;
+      let alreadyGeneratedNames = [];
       for (const desc of suggestions) {
         this.showStreamMessage(`Generating cast member: ${desc}...\\n`);
-        const result = await this.apiHandler.generateSupportingCastMember(this.currentCharacter, desc, "");
+        const result = await this.apiHandler.generateSupportingCastMember(this.currentCharacter, desc, "", alreadyGeneratedNames);
+        
+        if (result.name) {
+          alreadyGeneratedNames.push(result.name);
+        }
         
         const triggerKeys = [result.name];
         if (result.role) {
