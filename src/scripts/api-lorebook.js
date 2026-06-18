@@ -202,6 +202,130 @@ Output only the lorebook entry content.`;
     }
   },
 
+  async generateSupportingCastMember(character, roleDescription, optionalName = "") {
+    if (!character || !roleDescription) throw new Error("Character and role description are required");
+
+    const model = this.config.get("api.text.model");
+    const charName = character.name || "{{char}}";
+    
+    const nameInstruction = optionalName 
+      ? `The character's name is "${optionalName}".` 
+      : `You must invent a fitting name for this character based on their role and setting.`;
+
+    const systemPrompt = `You are an expert in writing highly functional lorebook entries for supporting cast members in AI roleplaying.
+Your task is to take a brief, vague description of a background character and flesh them out into a concise lorebook entry (2-3 paragraphs max).
+
+RULES:
+- Focus on physical appearance, a few personal details or quirks, and their motivations or attitude.
+- Keep it brief, just enough so the AI can feature them as needed. Do NOT write a full character card.
+- Write from a neutral, omniscient narrator's perspective.
+- Do NOT use the main character's actual name. You MUST use the exact macro string \`{{char}}\` instead of the main character's name in the generated text.
+- ${nameInstruction}
+
+Return ONLY a strict JSON object with the following structure:
+{
+  "name": "The character's name",
+  "role": "A short 1-3 word summary of their role (e.g. Waitress, Guard Captain)",
+  "content": "The 2-3 paragraphs of lorebook content"
+}
+Do not include any markdown, explanation, or extra text.`;
+
+    const userPrompt = `Main Character Profile Context:
+Name: ${charName}
+Description: ${character.description}
+Scenario: ${character.scenario}
+
+Supporting Cast Member Description:
+"${roleDescription}"
+
+Generate the supporting cast member JSON now.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+      stream: false,
+      response_format: { type: "json_object" },
+    };
+
+    try {
+      console.log(`=== STARTING SUPPORTING CAST GENERATION: ${roleDescription} ===`);
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      const output = this.processNormalResponse(response);
+      
+      let parsed = this._parseJsonRobust(output);
+      
+      if (!parsed || !parsed.name || !parsed.content) {
+        console.error("Failed to parse generateSupportingCastMember output:", output);
+        throw new Error("Invalid JSON returned for supporting cast member.");
+      }
+
+      console.log(`Supporting cast "${parsed.name}" generated successfully.`);
+      return parsed;
+    } catch (error) {
+      console.error(`=== SUPPORTING CAST GENERATION FAILED: ${roleDescription} ===`, error);
+      throw error;
+    }
+  },
+
+  async suggestSupportingCast(character) {
+    if (!character) throw new Error("Character is required");
+
+    const model = this.config.get("api.text.model");
+    const charName = character.name || "{{char}}";
+
+    const systemPrompt = `You are an expert AI roleplay assistant. Based on the provided character profile and scenario, identify 2-4 implied or highly relevant background characters that would make excellent supporting cast members.
+Return a strict JSON object containing an array of objects under the key "cast". Each object should have a "description" property containing a brief vague description of the character (e.g., "The cynical bartender at the neon diner", "A naive rookie town guard").
+
+Return ONLY a JSON object:
+{
+  "cast": [
+    { "description": "..." },
+    { "description": "..." }
+  ]
+}`;
+
+    const userPrompt = `Character Context:
+Name: ${charName}
+Description: ${character.description}
+Scenario: ${character.scenario}
+
+Identify 2-4 supporting cast members and return the JSON now.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+      stream: false,
+      response_format: { type: "json_object" },
+    };
+
+    try {
+      console.log("=== STARTING SUPPORTING CAST SUGGESTION ===");
+      const response = await this.makeRequest("/chat/completions", data, false, false);
+      const output = this.processNormalResponse(response);
+      const parsed = this._parseJsonRobust(output);
+      
+      if (!parsed || !Array.isArray(parsed.cast)) {
+        throw new Error("Invalid JSON structure returned for cast suggestions.");
+      }
+
+      console.log(`Suggested ${parsed.cast.length} supporting cast members.`);
+      return parsed.cast.map(c => c.description).filter(d => d);
+    } catch (error) {
+      console.error("=== SUPPORTING CAST SUGGESTION FAILED ===", error);
+      throw error;
+    }
+  },
+
   /**
    * Enrichment pass — takes a scanned candidate (topic, keys, seed content) and
    * produces a full, standalone lorebook entry grounded in the character context.
