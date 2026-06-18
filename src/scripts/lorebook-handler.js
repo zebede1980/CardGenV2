@@ -497,12 +497,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const keyList = allKeys.join(", ");
     const instruction =
-      `Update ONLY the Scenario and First Message fields so that each of the following lorebook trigger keywords is mentioned at least once naturally within those texts. Keywords: ${keyList}\n\n` +
-      `STRICT RULES:\n` +
-      `- Weave each keyword into the existing text organically — do NOT list them or dump them in bulk.\n` +
-      `- Do NOT copy, summarise, or paraphrase lorebook entry content into the scenario or first message.\n` +
-      `- Keep changes minimal — only add what is necessary to ensure the keywords appear.\n` +
-      `- All other card fields (description, personality) must remain completely unchanged.`;
+      `The following supporting characters have been moved to the lorebook. Their trigger keywords are: ${keyList}\n\n` +
+      `Update the Description, Scenario, and First Message fields with these STRICT RULES:\n` +
+      `- Remove any in-depth details, backstory, or physical descriptions of these characters from the card body (e.g. Description field). Replace them with a brief, passing mention to save tokens, since their full details are now in the lorebook.\n` +
+      `- Ensure each trigger keyword is mentioned at least once naturally in the Scenario so the lorebooks can trigger during play.\n` +
+      `- Weave the keywords in organically — do NOT list them or dump them in bulk.\n` +
+      `- Do NOT copy or paraphrase the lorebook content back into the card.`;
 
     const pov = document.getElementById("pov-select")?.value || "third";
     const before = this._captureCardSnapshot();
