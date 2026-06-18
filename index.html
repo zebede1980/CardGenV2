@@ -479,6 +479,16 @@
                             </div>
                         </div>
 
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="auto-generate-cast" style="width: 1.2rem; height: 1.2rem;" />
+                                <span style="font-weight: 500;">Auto-generate Supporting Cast</span>
+                            </label>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                Automatically creates lorebook entries for implied background characters and references them in the main card.
+                            </p>
+                        </div>
+
                         <div class="generation-buttons" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                             <button
                                 id="generate-btn"
@@ -1117,6 +1127,9 @@
                                     <div style="display: flex; gap: 0.75rem; align-items: center;">
                                         <button id="manage-lorebook-btn" class="btn-outline" title="Open the Lorebook Manager to add, edit, or delete world-building entries (locations, NPCs, factions, items). The lorebook is embedded in the exported card and injects relevant context into the AI during roleplay when a keyword is mentioned.">
                                             📚 Manage Lorebook
+                                        </button>
+                                        <button id="supporting-cast-btn" class="btn-outline" title="Quickly generate and add supporting cast members as lorebook entries.">
+                                            👥 Supporting Cast
                                         </button>
                                         <span id="lorebook-entry-count" style="font-size: 0.875rem; color: var(--text-secondary);">0 entries</span>
                                     </div>
@@ -2137,6 +2150,29 @@
                         <button id="test-st-btn" class="btn-small" type="button">Test Connection</button>
                         <span id="st-connection-status" class="st-status"></span>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Supporting Cast Modal -->
+        <div id="supporting-cast-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 600px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">👥 Supporting Cast</h2>
+                    <button id="supporting-cast-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Add background characters by entering a brief description and an optional name. The AI will generate a short lorebook entry for each and automatically weave references to them into the main card's scenario so they can appear in roleplay.
+                    </p>
+                    <div id="supporting-cast-list" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; max-height: 400px; overflow-y: auto; padding-right: 0.5rem;">
+                        <!-- Rows will be added here -->
+                    </div>
+                    <button id="add-cast-member-btn" class="btn-outline" style="width: 100%; margin-bottom: 1rem;">+ Add Another Person</button>
+                    <button id="generate-cast-btn" class="btn-primary" style="width: 100%;">
+                        <span class="btn-text">✨ Generate Cast</span>
+                        <span class="btn-loading" style="display: none;">Generating...</span>
+                    </button>
                 </div>
             </div>
         </div>

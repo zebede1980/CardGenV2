@@ -445,6 +445,20 @@ class CharacterGeneratorApp {
       keysInput.focus();
     });
 
+    // Supporting Cast
+    const supportingCastBtn = document.getElementById("supporting-cast-btn");
+    const supportingCastModal = document.getElementById("supporting-cast-modal");
+    const supportingCastCloseBtn = document.getElementById("supporting-cast-close-btn");
+    const addCastMemberBtn = document.getElementById("add-cast-member-btn");
+    const generateCastBtn = document.getElementById("generate-cast-btn");
+
+    if (supportingCastBtn) supportingCastBtn.addEventListener("click", () => this.openSupportingCastModal());
+    if (supportingCastCloseBtn) supportingCastCloseBtn.addEventListener("click", () => this.closeSupportingCastModal());
+    if (supportingCastModal) supportingCastModal.addEventListener("click", (e) => { if (e.target === supportingCastModal) this.closeSupportingCastModal(); });
+    if (addCastMemberBtn) addCastMemberBtn.addEventListener("click", () => this.addSupportingCastRow());
+    if (generateCastBtn) generateCastBtn.addEventListener("click", () => this.handleGenerateSupportingCast());
+
+
     // Fetch Image Models & Active Model Selection
     const fetchImageModelsBtn = document.getElementById("fetch-image-models-btn");
     if (fetchImageModelsBtn) fetchImageModelsBtn.addEventListener("click", () => this.handleFetchImageModels());
@@ -1033,6 +1047,19 @@ class CharacterGeneratorApp {
       }
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
+
+      // Auto-generate supporting cast if requested
+      const autoGenerateCast = document.getElementById("auto-generate-cast")?.checked;
+      if (autoGenerateCast) {
+        this.showStreamMessage("\n\n👥 Auto-generating supporting cast...\n");
+        try {
+          await this.handleAutoGenerateSupportingCast();
+          this.showStreamMessage("✅ Supporting cast generated and injected!\n");
+        } catch (castError) {
+          console.error("Auto-generate cast failed:", castError);
+          this.showStreamMessage(`⚠️ Supporting cast generation failed: ${castError.message}\n`);
+        }
+      }
 
       this.showStreamMessage("\n✅ Character generation complete!\n");
       this.displayCharacter();

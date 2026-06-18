@@ -1,6 +1,177 @@
 // Lorebook Manager Methods — extends CharacterGeneratorApp prototype
 Object.assign(CharacterGeneratorApp.prototype, {
 
+  openSupportingCastModal() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate or import a character first.", "warning");
+      return;
+    }
+    const modal = document.getElementById("supporting-cast-modal");
+    if (modal) {
+      modal.classList.add("show");
+      document.body.style.overflow = "hidden";
+      this.renderInitialSupportingCastRows();
+    }
+  },
+
+  closeSupportingCastModal() {
+    const modal = document.getElementById("supporting-cast-modal");
+    if (modal) {
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+    }
+  },
+
+  renderInitialSupportingCastRows() {
+    const list = document.getElementById("supporting-cast-list");
+    if (!list) return;
+    list.innerHTML = "";
+    // Start with one empty row by default
+    this.addSupportingCastRow();
+  },
+
+  addSupportingCastRow(description = "", name = "") {
+    const list = document.getElementById("supporting-cast-list");
+    if (!list) return;
+    
+    const row = document.createElement("div");
+    row.className = "supporting-cast-row";
+    row.style.cssText = "display: flex; gap: 0.5rem; align-items: flex-start;";
+    
+    row.innerHTML = `
+      <div style="flex: 2;">
+        <input type="text" class="input cast-desc-input" placeholder="e.g. Female Waitress" value="${this.escapeHtml(description)}" style="width: 100%;" />
+      </div>
+      <div style="flex: 1;">
+        <input type="text" class="input cast-name-input" placeholder="Name (Optional)" value="${this.escapeHtml(name)}" style="width: 100%;" />
+      </div>
+      <button type="button" class="btn-outline remove-cast-row-btn" style="padding: 0.5rem; color: var(--error-color); border-color: var(--error-color);">✕</button>
+    `;
+    
+    row.querySelector(".remove-cast-row-btn").addEventListener("click", () => {
+      row.remove();
+    });
+    
+    list.appendChild(row);
+  },
+
+  async handleGenerateSupportingCast() {
+    const list = document.getElementById("supporting-cast-list");
+    if (!list) return;
+    
+    const rows = Array.from(list.querySelectorAll(".supporting-cast-row"));
+    const castToGenerate = [];
+    
+    rows.forEach(row => {
+      const desc = row.querySelector(".cast-desc-input").value.trim();
+      const name = row.querySelector(".cast-name-input").value.trim();
+      if (desc) {
+        castToGenerate.push({ description: desc, name: name });
+      }
+    });
+    
+    if (castToGenerate.length === 0) {
+      this.showNotification("Please enter at least one description.", "warning");
+      return;
+    }
+    
+    const generateBtn = document.getElementById("generate-cast-btn");
+    const btnText = generateBtn.querySelector(".btn-text");
+    const btnLoading = generateBtn.querySelector(".btn-loading");
+    
+    generateBtn.disabled = true;
+    btnText.style.display = "none";
+    btnLoading.style.display = "inline";
+    
+    let generatedCount = 0;
+    
+    try {
+      for (const castMember of castToGenerate) {
+        btnLoading.textContent = \`Generating \${generatedCount + 1} of \${castToGenerate.length}...\`;
+        
+        const result = await this.apiHandler.generateSupportingCastMember(
+          this.currentCharacter,
+          castMember.description,
+          castMember.name
+        );
+        
+        // Use name and role as trigger keys, as requested by user
+        const triggerKeys = [result.name];
+        if (result.role) {
+            triggerKeys.push(result.role);
+        }
+        
+        // Create the lorebook entry
+        const entry = {
+          id: Date.now() + Math.random(),
+          keys: triggerKeys,
+          content: result.content,
+          topic: result.name + " (" + result.role + ")"
+        };
+        
+        this.lorebookEntries.push(entry);
+        generatedCount++;
+      }
+      
+      this.updateLorebookEntryCount();
+      this.showNotification(\`Successfully generated \${generatedCount} supporting cast members.\`, "success");
+      this.closeSupportingCastModal();
+      
+      // Attempt to inject them into the main card
+      this.showNotification("Injecting new cast members into the scenario...", "info");
+      await this._executeInjectLorebookKeys();
+      
+    } catch (error) {
+      console.error("Error generating supporting cast:", error);
+      this.showNotification("Failed to generate all supporting cast members. " + error.message, "error");
+    } finally {
+      generateBtn.disabled = false;
+      btnText.style.display = "inline";
+      btnLoading.style.display = "none";
+    }
+  },
+
+  async handleAutoGenerateSupportingCast() {
+    if (!this.currentCharacter) return;
+
+    try {
+      const suggestions = await this.apiHandler.suggestSupportingCast(this.currentCharacter);
+      if (!suggestions || suggestions.length === 0) {
+        console.log("No supporting cast suggestions found.");
+        return;
+      }
+
+      let generatedCount = 0;
+      for (const desc of suggestions) {
+        this.showStreamMessage(\`Generating cast member: \${desc}...\\n\`);
+        const result = await this.apiHandler.generateSupportingCastMember(this.currentCharacter, desc, "");
+        
+        const triggerKeys = [result.name];
+        if (result.role) {
+            triggerKeys.push(result.role);
+        }
+        
+        const entry = {
+          id: Date.now() + Math.random(),
+          keys: triggerKeys,
+          content: result.content,
+          topic: result.name + " (" + result.role + ")"
+        };
+        
+        this.lorebookEntries.push(entry);
+        generatedCount++;
+      }
+
+      this.updateLorebookEntryCount();
+      if (generatedCount > 0) {
+        await this._executeInjectLorebookKeys();
+      }
+    } catch (error) {
+      console.error("Auto-generate cast error:", error);
+      throw error;
+    }
+  },
+
   openLorebookManager() {
     if (!this.currentCharacter) {
       this.showNotification(
