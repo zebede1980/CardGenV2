@@ -40,10 +40,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     
     row.innerHTML = `
       <div style="flex: 2;">
-        <input type="text" class="input cast-desc-input" placeholder="e.g. Female Waitress" value="${this.escapeHtml(description)}" style="width: 100%;" />
+        <input type="text" class="input cast-desc-input" placeholder="e.g. Female Waitress" value="${escapeHtml(description)}" style="width: 100%;" />
       </div>
       <div style="flex: 1;">
-        <input type="text" class="input cast-name-input" placeholder="Name (Optional)" value="${this.escapeHtml(name)}" style="width: 100%;" />
+        <input type="text" class="input cast-name-input" placeholder="Name (Optional)" value="${escapeHtml(name)}" style="width: 100%;" />
       </div>
       <button type="button" class="btn-outline remove-cast-row-btn" style="padding: 0.5rem; color: var(--error-color); border-color: var(--error-color);">✕</button>
     `;
