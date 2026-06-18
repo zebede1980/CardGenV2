@@ -142,7 +142,21 @@ class TTSPlayer {
      */
     enqueue(text) {
         if (!text || !text.trim()) return;
-        const trimmed = text.trim();
+        
+        // Clean up markdown and special characters that TTS struggles with
+        let cleaned = text;
+        // Remove markdown headings
+        cleaned = cleaned.replace(/^[#]+\s*/g, '');
+        // Remove markdown list bullets
+        cleaned = cleaned.replace(/^\s*[-*+]\s+/g, '');
+        // Remove formatting characters (bold, italics, strikethrough, code)
+        cleaned = cleaned.replace(/[*_~`]/g, '');
+        // Replace standalone dashes with a comma to preserve a natural pause
+        cleaned = cleaned.replace(/\s+[-—]+\s+/g, ', ');
+
+        const trimmed = cleaned.trim();
+        if (!trimmed) return;
+
         console.debug('[TTSPlayer] Enqueue sentence', trimmed);
         this.textQueue.push(trimmed);
         this._queueLowFired = false;
