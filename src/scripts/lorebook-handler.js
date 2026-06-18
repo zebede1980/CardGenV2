@@ -90,33 +90,38 @@ Object.assign(CharacterGeneratorApp.prototype, {
       for (const castMember of castToGenerate) {
         btnLoading.textContent = `Generating ${generatedCount + 1} of ${castToGenerate.length}...`;
         
-        const result = await this.apiHandler.generateSupportingCastMember(
-          this.currentCharacter,
-          castMember.description,
-          castMember.name,
-          alreadyGeneratedNames
-        );
-        
-        if (result.name) {
-          alreadyGeneratedNames.push(result.name);
+        try {
+          const result = await this.apiHandler.generateSupportingCastMember(
+            this.currentCharacter,
+            castMember.description,
+            castMember.name,
+            alreadyGeneratedNames
+          );
+          
+          if (result.name) {
+            alreadyGeneratedNames.push(result.name);
+          }
+          
+          // Use name and role as trigger keys, as requested by user
+          const triggerKeys = [result.name];
+          if (result.role) {
+              triggerKeys.push(result.role);
+          }
+          
+          // Create the lorebook entry
+          const entry = {
+            id: Date.now() + Math.random(),
+            keys: triggerKeys,
+            content: result.content,
+            topic: result.name + " (" + result.role + ")"
+          };
+          
+          this.lorebookEntries.push(entry);
+          generatedCount++;
+        } catch (err) {
+          console.error(`Failed to generate cast member: ${castMember.description}`, err);
+          this.showNotification(`Skipped one cast member due to error.`, "warning");
         }
-        
-        // Use name and role as trigger keys, as requested by user
-        const triggerKeys = [result.name];
-        if (result.role) {
-            triggerKeys.push(result.role);
-        }
-        
-        // Create the lorebook entry
-        const entry = {
-          id: Date.now() + Math.random(),
-          keys: triggerKeys,
-          content: result.content,
-          topic: result.name + " (" + result.role + ")"
-        };
-        
-        this.lorebookEntries.push(entry);
-        generatedCount++;
       }
       
       this.updateLorebookEntryCount();
@@ -151,26 +156,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
       let alreadyGeneratedNames = [];
       for (const desc of suggestions) {
         this.showStreamMessage(`Generating cast member: ${desc}...\\n`);
-        const result = await this.apiHandler.generateSupportingCastMember(this.currentCharacter, desc, "", alreadyGeneratedNames);
-        
-        if (result.name) {
-          alreadyGeneratedNames.push(result.name);
+        try {
+          const result = await this.apiHandler.generateSupportingCastMember(this.currentCharacter, desc, "", alreadyGeneratedNames);
+          
+          if (result.name) {
+            alreadyGeneratedNames.push(result.name);
+          }
+          
+          const triggerKeys = [result.name];
+          if (result.role) {
+              triggerKeys.push(result.role);
+          }
+          
+          const entry = {
+            id: Date.now() + Math.random(),
+            keys: triggerKeys,
+            content: result.content,
+            topic: result.name + " (" + result.role + ")"
+          };
+          
+          this.lorebookEntries.push(entry);
+          generatedCount++;
+        } catch (err) {
+          console.error(`Failed to generate auto cast member: ${desc}`, err);
+          this.showStreamMessage(`⚠️ Skipped cast member due to error: ${desc}\\n`);
         }
-        
-        const triggerKeys = [result.name];
-        if (result.role) {
-            triggerKeys.push(result.role);
-        }
-        
-        const entry = {
-          id: Date.now() + Math.random(),
-          keys: triggerKeys,
-          content: result.content,
-          topic: result.name + " (" + result.role + ")"
-        };
-        
-        this.lorebookEntries.push(entry);
-        generatedCount++;
       }
 
       this.updateLorebookEntryCount();
