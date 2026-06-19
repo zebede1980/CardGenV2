@@ -50,15 +50,20 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
         
     prompt_base = [
         "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n",
-        "First, write the next segment of the story naturally in structured paragraphs, using markdown for bolding and italics. You control all characters and the world itself.\n"
+        "First, write a substantial, well-developed next section of the story. ",
+        "Format your output as flowing prose: use standard paragraph breaks (one blank line between paragraphs). ",
+        "Do not use bullet points, numbered lists, headers, bold text, or any other special formatting for the story text. ",
+        "Keep paragraphs dense and readable — avoid single-sentence paragraphs or excessive line breaks. ",
+        "Do not include meta-commentary, do not acknowledge the user or instructions. ",
+        "You control all characters and the world itself.\n"
     ]
     
     if session_data.characters:
         char_names = ", ".join([c.name for c in session_data.characters])
-        prompt_base.append(f"You MUST include and actively involve ALL {len(session_data.characters)} characters ({char_names}) in the story and scene. Do not leave anyone out.\n")
+        prompt_base.append(f"\nYou MUST include and actively involve ALL {len(session_data.characters)} characters ({char_names}) in the story and scene. Do not leave anyone out.\n")
         
     prompt_base.extend([
-        "Then, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n",
+        "\nThen, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n",
         "The choices should dictate what happens next in the scene, rather than just being a single character's dialogue or action. For example, an option could be 'Lightning strikes the tree', or 'A stranger interrupts', or 'The characters find a hidden trapdoor'.\n",
         "Format the choices EXACTLY like this at the very end of your response:\n",
         "[OPTION 1] First choice here\n",
