@@ -1378,16 +1378,29 @@ class StoryWriterApp {
                 let errMsg = `Generation failed (${res.status})`;
                 try { const j = JSON.parse(errText); errMsg = j.detail || j.error || errMsg; } catch (_) {}
                 streamDiv.remove();
-                if (errMsg.toLowerCase().includes('api key')) {
+                
+                if (res.status >= 500 || res.status === 408) {
+                    console.warn(`[StoryWriter] Received ${res.status}, but server might have succeeded in background. Refreshing workspace...`);
+                    // Don't alert, just refresh the workspace to pull the background-generated content
+                    await this.refreshWorkspace();
+                } else if (errMsg.toLowerCase().includes('api key')) {
                     alert('\u26a0\ufe0f ' + errMsg + '\n\nPlease configure your API credentials via \u2699\ufe0f API Settings in the footer.');
                 } else {
                     alert('Generation failed: ' + errMsg);
                 }
+                
                 // Clean up TTS on error
                 if (this.ttsPlayer) {
                     this.ttsPlayer.stop();
                     this._hideNarrationControls();
                 }
+                
+                // Must manually clean up fetching state since we return early
+                this.isFetchingLLM = false;
+                this.abortController = null;
+                btn.textContent = 'Generate Next';
+                btn.disabled = false;
+                if (stopBtn) stopBtn.style.display = 'none';
                 return;
             }
 
@@ -1440,14 +1453,18 @@ class StoryWriterApp {
             }
             await this.refreshWorkspace();
         } catch (e) {
-            console.error(e);
+            console.error('[StoryWriter] Generation stream error:', e);
             const isAbort = e.message?.includes("stopped by user") || e.name === "AbortError" || e.message?.includes("abort");
-            if (!isAbort) {
-                alert("Generation failed: " + e.message);
+            
+            if (streamDiv && streamDiv.parentNode) {
                 streamDiv.remove();
-            } else {
-                this.refreshWorkspace();
             }
+            
+            // Whether it was an abort or a network drop (like phone lock/503),
+            // the server might have saved the segment in the background.
+            // Always refresh the workspace silently to sync state.
+            await this.refreshWorkspace();
+
             if (this.ttsPlayer) {
                 this.ttsPlayer.stop();
                 this._hideNarrationControls();
