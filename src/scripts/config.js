@@ -5,7 +5,11 @@ class Config {
   constructor() {
     this.config = this.getDefaultConfig();
     this.debugMode = false; // Toggle for verbose logging
-    this.loadPromise = this.loadConfig().catch(console.error);
+    this.isLoaded = false;
+    this.loadPromise = this.loadConfig().catch((e) => {
+      console.error(e);
+      this.isLoaded = true;
+    });
   }
 
   getDefaultConfig() {
@@ -97,6 +101,8 @@ class Config {
       // Skip if no auth token yet — authFetch would get a 401 and
       // could disrupt the login flow. Config is reloaded after login.
       if (!(window.cardgenAuth && window.cardgenAuth.getToken())) {
+        this.debugMode = this.config.app.debugMode || false;
+        this.isLoaded = true;
         return;
       }
       const res = await (window.authFetch || fetch)("/api/config");
@@ -115,6 +121,7 @@ class Config {
     this.debugMode = this.config.app.debugMode || false;
 
     this.logRedacted("Final config:", this.config);
+    this.isLoaded = true;
   }
 
   loadFromForm() {
@@ -188,6 +195,11 @@ class Config {
   }
 
   saveConfig() {
+    if (!this.isLoaded) {
+      console.warn("Attempted to save config before it was fully loaded. Ignoring save to prevent data loss.");
+      return;
+    }
+
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.config));
 
     // Also save to server for persistence across devices/sessions
