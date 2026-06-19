@@ -102,59 +102,83 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
 
     async def stream_generator():
         import uuid
+        import asyncio
         log_id = str(uuid.uuid4())
         content_parts = []
+        
+        queue = asyncio.Queue()
+
+        async def read_llm():
+            try:
+                async for chunk in llm.generate(messages, stream=True):
+                    content_parts.append(chunk)
+                    queue.put_nowait(chunk)
+                queue.put_nowait(None)  # EOF
+                
+                full_content = "".join(content_parts)
+                if llm.finish_reason == "length":
+                    trimmed = _trim_to_sentence(full_content)
+                    if trimmed != full_content:
+                        full_content = trimmed
+                        queue.put_nowait({"type": "trim", "content": trimmed})
+                        
+                from app.database import SessionLocal
+                with SessionLocal() as bg_db:
+                    max_order = bg_db.query(StorySegment).filter(
+                        StorySegment.story_id == story.id
+                    ).count()
+                    seg = StorySegment(
+                        story_id=story.id,
+                        order_index=max_order,
+                        content=full_content
+                    )
+                    bg_db.add(seg)
+                    bg_db.commit()
+                    bg_db.refresh(seg)
+                    
+                    done_payload = {
+                        'type': 'done',
+                        'segment': {
+                            'id': seg.id,
+                            'story_id': seg.story_id,
+                            'order_index': seg.order_index,
+                            'content': seg.content,
+                            'summary': seg.summary,
+                            'is_summary': seg.is_summary,
+                            'created_at': seg.created_at.isoformat()
+                        }
+                    }
+                    queue.put_nowait(done_payload)
+
+            except Exception as e:
+                queue.put_nowait(e)
+
+        read_task = asyncio.create_task(read_llm())
+
         try:
             # Emit api_log with request details before generation starts
             yield f"data: {json.dumps({'type': 'api_log', 'log': {'id': log_id, 'endpoint': 'Story Generation', 'request': {'model': model_name, 'messages': messages}}})}\n\n"
 
-            async for chunk in llm.generate(messages, stream=True):
-                content_parts.append(chunk)
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    continue  # Wait for the next event or exception
+                if isinstance(chunk, Exception):
+                    raise chunk
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "done":
+                        full_content = chunk["segment"]["content"]
+                        response_obj = {
+                            "choices": [{"message": {"content": full_content}}],
+                            "usage": llm.last_usage
+                        }
+                        yield f"data: {json.dumps({'type': 'api_log', 'log': {'id': log_id, 'endpoint': 'Story Generation', 'response': response_obj, 'usage': llm.last_usage}})}\n\n"
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                        break
+                    elif chunk.get("type") == "trim":
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    continue
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-
-            full_content = "".join(content_parts)
-
-            # If the model hit the token limit, trim to the last complete sentence
-            if llm.finish_reason == "length":
-                trimmed = _trim_to_sentence(full_content)
-                if trimmed != full_content:
-                    # Tell the client to replace the displayed text with the trimmed version
-                    yield f"data: {json.dumps({'type': 'trim', 'content': trimmed})}\n\n"
-                    full_content = trimmed
-
-            # Save segment
-            max_order = db.query(StorySegment).filter(
-                StorySegment.story_id == story.id
-            ).count()
-            seg = StorySegment(
-                story_id=story.id,
-                order_index=max_order,
-                content=full_content
-            )
-            db.add(seg)
-            db.commit()
-            db.refresh(seg)
-
-            # Emit api_log with response after generation completes
-            response_obj = {
-                "choices": [{"message": {"content": full_content}}],
-                "usage": llm.last_usage
-            }
-            yield f"data: {json.dumps({'type': 'api_log', 'log': {'id': log_id, 'endpoint': 'Story Generation', 'response': response_obj, 'usage': llm.last_usage}})}\n\n"
-            
-            done_payload = {
-                'type': 'done',
-                'segment': {
-                    'id': seg.id,
-                    'story_id': seg.story_id,
-                    'order_index': seg.order_index,
-                    'content': seg.content,
-                    'summary': seg.summary,
-                    'is_summary': seg.is_summary,
-                    'created_at': seg.created_at.isoformat()
-                }
-            }
-            yield f"data: {json.dumps(done_payload)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         finally:
