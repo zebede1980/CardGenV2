@@ -70,12 +70,8 @@ class ContextManager:
         if steering:
             system_parts.append(f"Current Steering Instruction (do not include in story text):\n{steering}")
 
-        story_context = self._build_story_context(segments)
-        if story_context:
-            system_parts.append(f"Story So Far:\n{story_context}")
-
         # Final system instruction
-        system_parts.append(
+        final_system_instruction = (
             "You are a creative story writer. Continue the story from where it left off. "
             "Write a substantial, well-developed next section of the story. "
             "Format your output as flowing prose: use standard paragraph breaks (one blank line between paragraphs). "
@@ -86,6 +82,18 @@ class ContextManager:
             "Always finish your output at a natural sentence or paragraph boundary — never mid-sentence. "
             "Only output the next part of the narrative."
         )
+
+        # Estimate tokens used so far to budget for story context
+        system_text = "\n\n".join(system_parts) + "\n\n" + final_system_instruction
+        system_tokens = len(system_text) // 4
+        reserved_tokens = 500  # For the final user prompt
+        available_context_tokens = max(1000, self.context_window - system_tokens - reserved_tokens)
+
+        story_context = self._build_story_context(segments, available_context_tokens)
+        if story_context:
+            system_parts.append(f"Story So Far:\n{story_context}")
+
+        system_parts.append(final_system_instruction)
 
         messages.append({"role": "system", "content": "\n\n".join(system_parts)})
         
@@ -99,7 +107,7 @@ class ContextManager:
 
         return messages
 
-    def _build_story_context(self, segments: List[StorySegment]) -> str:
+    def _build_story_context(self, segments: List[StorySegment], max_tokens: int) -> str:
         if not segments:
             return ""
             
@@ -109,21 +117,37 @@ class ContextManager:
         if not active_segments:
             return ""
         
-        # If we have many active segments, use summaries for old ones and full text for recent
+        # Prepare parts with summary annotations if needed
+        context_parts = []
         if len(active_segments) > self.summary_threshold:
-            context_parts = []
-            # Summarize old segments if not already summarized
             for seg in active_segments[:-self.summary_threshold]:
                 if seg.is_summary:
                     context_parts.append(f"[Summary] {seg.content}")
                 else:
                     context_parts.append(seg.content)
-            # Add recent segments in full
             for seg in active_segments[-self.summary_threshold:]:
-                context_parts.append(seg.content)
-            return "\n\n".join(context_parts)
+                if seg.is_summary:
+                    context_parts.append(f"[Summary] {seg.content}")
+                else:
+                    context_parts.append(seg.content)
         else:
-            return "\n\n".join([seg.content for seg in active_segments])
+            for seg in active_segments:
+                if seg.is_summary:
+                    context_parts.append(f"[Summary] {seg.content}")
+                else:
+                    context_parts.append(seg.content)
+                    
+        # Truncate oldest segments to fit within max_tokens
+        final_parts = []
+        current_tokens = 0
+        for part in reversed(context_parts):
+            part_tokens = len(part) // 4
+            if current_tokens + part_tokens > max_tokens and final_parts:
+                break
+            final_parts.insert(0, part)
+            current_tokens += part_tokens
+
+        return "\n\n".join(final_parts)
 
     def should_summarize(self, segments: List[StorySegment]) -> bool:
         # Only count segments that are not summaries and haven't been summarized yet
