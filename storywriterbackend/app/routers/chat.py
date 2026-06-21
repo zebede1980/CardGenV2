@@ -333,19 +333,6 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
                     content=msg_content
                 )
                 db.add(first_msg)
-                
-                # Expose alternate greetings via a UI-only system message if they didn't explicitly pick one
-                # Or just always expose them
-                if alt_greetings and len(alt_greetings) > 0:
-                    alt_text = "\n\n---\n\n".join([f"**Option {i+1}**:\n{g}" for i, g in enumerate(alt_greetings)])
-                    system_note = models.ChatMessage(
-                        chat_id=new_chat.id,
-                        role="system",
-                        content=f"💡 **Alternate Greetings Available**\nYou can edit the starting message above to replace it with one of these options if you prefer:\n\n{alt_text}",
-                        is_summarized=True,
-                        is_extracted=True
-                    )
-                    db.add(system_note)
 
     db.commit()
     db.refresh(new_chat)
