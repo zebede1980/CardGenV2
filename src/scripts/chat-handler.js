@@ -816,6 +816,49 @@ class RoleplayChatHandler {
             
             this.els.newSelectedChars.appendChild(tag);
         });
+
+        // Update First Message Selection UI
+        const fmSection = document.getElementById('chat-new-first-message-section');
+        const fmSelect = document.getElementById('chat-new-first-message-select');
+        if (fmSection && fmSelect) {
+            if (this.newChatSelectedCards.length === 1) {
+                const card = this.newChatSelectedCards[0];
+                fmSelect.innerHTML = '';
+                
+                const optMain = document.createElement('option');
+                optMain.value = "-1";
+                optMain.textContent = "Main Greeting";
+                fmSelect.appendChild(optMain);
+                
+                let altGreetings = card.alternate_greetings;
+                if (typeof altGreetings === 'string' && altGreetings.trim().length > 0) {
+                    try {
+                        altGreetings = JSON.parse(altGreetings);
+                    } catch (e) {
+                        altGreetings = [];
+                    }
+                }
+                if (Array.isArray(altGreetings) && altGreetings.length > 0) {
+                    altGreetings.forEach((g, idx) => {
+                        const opt = document.createElement('option');
+                        opt.value = idx.toString();
+                        opt.textContent = `Alternate Greeting ${idx + 1}`;
+                        fmSelect.appendChild(opt);
+                    });
+                }
+                
+                // Only show if there are actual alternate greetings to choose from, or always show?
+                // The user requested a way to select which first message/alternate one to use.
+                // It makes sense to show it if there are alternates. If there are no alternates, we can hide it or show just Main.
+                if (Array.isArray(altGreetings) && altGreetings.length > 0) {
+                    fmSection.style.display = 'block';
+                } else {
+                    fmSection.style.display = 'none';
+                }
+            } else {
+                fmSection.style.display = 'none';
+            }
+        }
     }
 
     escapeHtml(str) {
@@ -859,6 +902,18 @@ class RoleplayChatHandler {
             userPersonaCardId = this.userPersonaSelectedCard.id;
         }
         
+        let firstMessageIndex = -1;
+        const fmSection = document.getElementById('chat-new-first-message-section');
+        if (fmSection && fmSection.style.display !== 'none') {
+            const fmSelect = document.getElementById('chat-new-first-message-select');
+            if (fmSelect) {
+                const parsedVal = parseInt(fmSelect.value, 10);
+                if (!isNaN(parsedVal)) {
+                    firstMessageIndex = parsedVal;
+                }
+            }
+        }
+        
         try {
             this.els.createSubmitBtn.disabled = true;
             this.els.createSubmitBtn.textContent = 'Creating...';
@@ -871,7 +926,8 @@ class RoleplayChatHandler {
                 user_persona_age: userPersonaAge,
                 user_persona_gender: userPersonaGender,
                 user_persona_detail: userPersonaDetail,
-                user_persona_card_id: userPersonaCardId
+                user_persona_card_id: userPersonaCardId,
+                first_message_index: firstMessageIndex
             };
             
             const res = await window.authFetch('/api/sw/chats/', {
@@ -1599,13 +1655,86 @@ class RoleplayChatHandler {
     }
 
     async deleteMessage(id, wrapper) {
-        if (!confirm('Are you sure you want to delete this message?')) return;
+        let truncate = false;
+
+        // Check if there are subsequent messages
+        let isLast = true;
+        let next = wrapper.nextElementSibling;
+        while(next) {
+            if (next.classList.contains('chat-bubble-wrapper')) {
+                isLast = false;
+                break;
+            }
+            next = next.nextElementSibling;
+        }
+
+        if (!isLast) {
+            // Ask user whether to truncate or delete just this one
+            const choice = await new Promise(resolve => {
+                const overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+                overlay.style.display = 'flex';
+                overlay.style.zIndex = '9999';
+                
+                const modal = document.createElement('div');
+                modal.className = 'api-settings-modal';
+                modal.style.maxWidth = '400px';
+                modal.style.width = '90%';
+                
+                modal.innerHTML = `
+                    <div class="modal-header">
+                        <h2 class="modal-title">Delete Message</h2>
+                        <button class="modal-close">×</button>
+                    </div>
+                    <div class="modal-body" style="padding-bottom: 1.5rem;">
+                        <p style="margin-bottom: 1.5rem; font-size: 0.95rem; color: var(--text-primary);">
+                            Do you want to delete only this message, or this message AND all following messages in this chat?
+                        </p>
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <button id="del-btn-single" class="btn-outline" style="padding: 0.75rem;">Delete Just This Message</button>
+                            <button id="del-btn-all" class="btn-primary" style="padding: 0.75rem; background: var(--error); border-color: var(--error);">Delete This & All Following</button>
+                            <button id="del-btn-cancel" class="btn-outline" style="padding: 0.75rem;">Cancel</button>
+                        </div>
+                    </div>
+                `;
+                
+                overlay.appendChild(modal);
+                document.body.appendChild(overlay);
+                
+                const close = () => {
+                    document.body.removeChild(overlay);
+                };
+                
+                modal.querySelector('.modal-close').onclick = () => { close(); resolve('cancel'); };
+                modal.querySelector('#del-btn-cancel').onclick = () => { close(); resolve('cancel'); };
+                modal.querySelector('#del-btn-single').onclick = () => { close(); resolve('single'); };
+                modal.querySelector('#del-btn-all').onclick = () => { close(); resolve('all'); };
+            });
+            
+            if (choice === 'cancel') return;
+            truncate = (choice === 'all');
+        } else {
+            if (!confirm('Are you sure you want to delete this message?')) return;
+        }
+
         try {
-            const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${id}`, {
+            const url = `/api/sw/chats/${this.activeChatId}/messages/${id}` + (truncate ? '?truncate=true' : '');
+            const res = await window.authFetch(url, {
                 method: 'DELETE'
             });
             if (res.ok) {
-                wrapper.remove();
+                if (truncate) {
+                    let curr = wrapper;
+                    while(curr) {
+                        let nxt = curr.nextElementSibling;
+                        if (curr.classList.contains('chat-bubble-wrapper')) {
+                            curr.remove();
+                        }
+                        curr = nxt;
+                    }
+                } else {
+                    wrapper.remove();
+                }
             } else {
                 alert('Failed to delete message');
             }
