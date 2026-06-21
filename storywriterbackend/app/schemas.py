@@ -166,6 +166,7 @@ class RoleplayChatCreate(BaseModel):
     user_persona_gender: str = ""
     user_persona_detail: str = ""
     user_persona_card_id: Optional[int] = None
+    first_message_index: Optional[int] = -1
 
 class RoleplayChatUpdate(BaseModel):
     title: Optional[str] = None

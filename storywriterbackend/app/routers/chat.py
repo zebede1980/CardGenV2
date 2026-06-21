@@ -311,26 +311,41 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
     # If it's a single-character chat, auto-start with their first message
     if len(chat_in.card_ids) == 1:
         card = db.query(models.CharacterCard).filter(models.CharacterCard.id == chat_in.card_ids[0]).first()
-        if card and card.first_mes:
-            first_msg = models.ChatMessage(
-                chat_id=new_chat.id,
-                role="assistant",
-                character_name=card.name,
-                content=card.first_mes
-            )
-            db.add(first_msg)
+        if card:
+            # Parse alternate greetings if it's a JSON string
+            alt_greetings = []
+            if card.alternate_greetings:
+                try:
+                    alt_greetings = json.loads(card.alternate_greetings)
+                except Exception:
+                    alt_greetings = []
             
-            # Expose alternate greetings via a UI-only system message
-            if card.alternate_greetings and isinstance(card.alternate_greetings, list) and len(card.alternate_greetings) > 0:
-                alt_text = "\n\n---\n\n".join([f"**Option {i+1}**:\n{g}" for i, g in enumerate(card.alternate_greetings)])
-                system_note = models.ChatMessage(
+            msg_content = card.first_mes
+            if chat_in.first_message_index is not None and chat_in.first_message_index >= 0:
+                if alt_greetings and len(alt_greetings) > chat_in.first_message_index:
+                    msg_content = alt_greetings[chat_in.first_message_index]
+            
+            if msg_content:
+                first_msg = models.ChatMessage(
                     chat_id=new_chat.id,
-                    role="system",
-                    content=f"💡 **Alternate Greetings Available**\nYou can edit the starting message above to replace it with one of these options if you prefer:\n\n{alt_text}",
-                    is_summarized=True,
-                    is_extracted=True
+                    role="assistant",
+                    character_name=card.name,
+                    content=msg_content
                 )
-                db.add(system_note)
+                db.add(first_msg)
+                
+                # Expose alternate greetings via a UI-only system message if they didn't explicitly pick one
+                # Or just always expose them
+                if alt_greetings and len(alt_greetings) > 0:
+                    alt_text = "\n\n---\n\n".join([f"**Option {i+1}**:\n{g}" for i, g in enumerate(alt_greetings)])
+                    system_note = models.ChatMessage(
+                        chat_id=new_chat.id,
+                        role="system",
+                        content=f"💡 **Alternate Greetings Available**\nYou can edit the starting message above to replace it with one of these options if you prefer:\n\n{alt_text}",
+                        is_summarized=True,
+                        is_extracted=True
+                    )
+                    db.add(system_note)
 
     db.commit()
     db.refresh(new_chat)
@@ -382,7 +397,7 @@ def update_chat_message(chat_id: str, message_id: str, msg_in: schemas.ChatMessa
     return msg
 
 @router.delete("/{chat_id}/messages/{message_id}")
-def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def delete_chat_message(chat_id: str, message_id: str, truncate: bool = False, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -390,7 +405,16 @@ def delete_chat_message(chat_id: str, message_id: str, db: Session = Depends(get
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
     
-    db.delete(msg)
+    if truncate:
+        msgs_to_delete = db.query(models.ChatMessage).filter(
+            models.ChatMessage.chat_id == chat_id,
+            models.ChatMessage.created_at >= msg.created_at
+        ).all()
+        for m in msgs_to_delete:
+            db.delete(m)
+    else:
+        db.delete(msg)
+        
     db.commit()
     return {"success": True}
 
