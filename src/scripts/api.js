@@ -10,7 +10,9 @@ class APIHandler {
   }
 
   addBackendLog(logData) {
-      if (!logData.id) return;
+      if (!logData.id) {
+          logData.id = Date.now() + Math.random().toString(36).substr(2, 5);
+      }
       
       let existingLog = this.requestLogs.find(l => l.id === logData.id);
       if (!existingLog) {
@@ -18,7 +20,7 @@ class APIHandler {
               id: logData.id,
               timestamp: new Date().toISOString(),
               endpoint: logData.endpoint || "Backend Stream",
-              model: logData.model || "Unknown",
+              model: logData.model || (logData.request && logData.request.model ? logData.request.model : "Unknown"),
               request: null,
               response: null,
               status: "pending",
@@ -32,11 +34,15 @@ class APIHandler {
       
       if (logData.request) existingLog.request = logData.request;
       if (logData.model) existingLog.model = logData.model;
+      else if (logData.request && logData.request.model) existingLog.model = logData.request.model;
+      
       if (logData.response !== undefined) {
           existingLog.response = logData.response;
           existingLog.status = 200;
-          if (existingLog._startTime) {
+          if (existingLog._startTime && !logData.duration) {
               existingLog.duration = performance.now() - existingLog._startTime;
+          } else if (logData.duration) {
+              existingLog.duration = logData.duration;
           }
       }
       if (logData.usage) existingLog.usage = logData.usage;

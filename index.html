@@ -2793,6 +2793,7 @@
                 if (typeof window.authFetch === 'function') {
                     const originalAuthFetch = window.authFetch;
                     window.authFetch = async function(...args) {
+                        const startTime = performance.now();
                         const response = await originalAuthFetch.apply(this, args);
                         const contentType = response.headers.get("content-type") || "";
                         
@@ -2800,8 +2801,11 @@
                         if (contentType.includes("application/json")) {
                             const cloned = response.clone();
                             cloned.json().then(data => {
-                                if (data && data.api_log) {
-                                    _pushApiLog(data.api_log, args);
+                                if (data && data.api_log && window.apiHandler) {
+                                    let logData = data.api_log;
+                                    logData.duration = performance.now() - startTime;
+                                    logData.endpoint = logData.endpoint || args[0];
+                                    window.apiHandler.addBackendLog(logData);
                                 }
                             }).catch(() => {});
                             return response;
@@ -2813,7 +2817,6 @@
                             const reader = cloned.body.getReader();
                             const decoder = new TextDecoder();
                             let buffer = "";
-                            let partialLog = null; // accumulate multi-part api_log events
                             (async () => {
                                 try {
                                     while (true) {
@@ -2826,51 +2829,18 @@
                                             if (line.startsWith('data: ')) {
                                                 try {
                                                     const data = JSON.parse(line.substring(6));
-                                                    if (data.type === 'api_log') {
-                                                        // Backend may send api_log in two parts (request then response)
-                                                        if (data.log.request && !partialLog) {
-                                                            partialLog = data.log;
-                                                        } else if (data.log.response && partialLog) {
-                                                            // Merge and push
-                                                            _pushApiLog({ ...partialLog, ...data.log }, args);
-                                                            partialLog = null;
-                                                        } else {
-                                                            // Single-part api_log
-                                                            _pushApiLog(data.log, args);
-                                                        }
+                                                    if (data.type === 'api_log' && window.apiHandler) {
+                                                        window.apiHandler.addBackendLog(data.log);
                                                     }
                                                 } catch (e) {}
                                             }
                                         }
-                                    }
-                                    // Flush any lingering partial log (response-only without a request)
-                                    if (partialLog) {
-                                        _pushApiLog(partialLog, args);
-                                        partialLog = null;
                                     }
                                 } catch (e) {}
                             })();
                         }
                         return response;
                     };
-
-                    function _pushApiLog(logData, fetchArgs) {
-                        if (!window.apiHandler) return;
-                        const endpoint = logData.endpoint || (fetchArgs && fetchArgs[0]) || '/api/sw/unknown';
-                        const logEntry = {
-                            id: Date.now() + Math.random().toString(36).substr(2, 5),
-                            timestamp: new Date().toISOString(),
-                            endpoint: endpoint,
-                            model: logData.request?.model || 'unknown',
-                            request: logData.request || null,
-                            response: logData.response !== undefined ? logData.response : null,
-                            status: logData.status || 200,
-                            duration: logData.duration || 0,
-                            usage: logData.usage || null
-                        };
-                        window.apiHandler.requestLogs.unshift(logEntry);
-                        if (window.apiHandler.requestLogs.length > 30) window.apiHandler.requestLogs.pop();
-                    }
                 }
             });
         </script>
