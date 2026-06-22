@@ -839,6 +839,11 @@ class RoleplayChatHandler {
                     }
                 }
                 if (Array.isArray(altGreetings) && altGreetings.length > 0) {
+                    const optRandom = document.createElement('option');
+                    optRandom.value = "random";
+                    optRandom.textContent = "🎲 Random";
+                    fmSelect.appendChild(optRandom);
+
                     altGreetings.forEach((g, idx) => {
                         const opt = document.createElement('option');
                         opt.value = idx.toString();
@@ -907,9 +912,23 @@ class RoleplayChatHandler {
         if (fmSection && fmSection.style.display !== 'none') {
             const fmSelect = document.getElementById('chat-new-first-message-select');
             if (fmSelect) {
-                const parsedVal = parseInt(fmSelect.value, 10);
-                if (!isNaN(parsedVal)) {
-                    firstMessageIndex = parsedVal;
+                if (fmSelect.value === 'random') {
+                    let altGreetings = [];
+                    if (this.newChatSelectedCards.length === 1) {
+                        let cardAlt = this.newChatSelectedCards[0].alternate_greetings;
+                        if (typeof cardAlt === 'string' && cardAlt.trim().length > 0) {
+                            try { altGreetings = JSON.parse(cardAlt); } catch (e) {}
+                        } else if (Array.isArray(cardAlt)) {
+                            altGreetings = cardAlt;
+                        }
+                    }
+                    const numOptions = 1 + altGreetings.length;
+                    firstMessageIndex = Math.floor(Math.random() * numOptions) - 1;
+                } else {
+                    const parsedVal = parseInt(fmSelect.value, 10);
+                    if (!isNaN(parsedVal)) {
+                        firstMessageIndex = parsedVal;
+                    }
                 }
             }
         }
