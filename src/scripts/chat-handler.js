@@ -1788,6 +1788,11 @@ class RoleplayChatHandler {
         const richTags = [];
         const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
         
+        // Safety Fallback: If the AI forgot the opening <think> tag but included the closing one, inject it.
+        if (parsed.includes('</think>') && !parsed.includes('<think>')) {
+            parsed = '<think>\n' + parsed;
+        }
+        
         const extractTag = (match) => {
             richTags.push(match);
             return `%%RICH_TAG_${richTags.length - 1}%%`;
