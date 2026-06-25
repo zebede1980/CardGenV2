@@ -1407,6 +1407,7 @@ class StoryWriterApp {
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let sseBuffer = '';
+            let processedTTSLength = 0;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -1425,10 +1426,29 @@ class StoryWriterApp {
 
                                 // Feed to sentence detector for TTS
                                 if (sentenceDetector && this.ttsPlayer && !this.ttsPlayer.stopped) {
-                                    const sentences = sentenceDetector.feed(data.content);
-                                    sentences.forEach(s => this.ttsPlayer.enqueue(s));
-                                    if (sentences.length > 0) {
-                                        this._updateNarrationProgress('Speaking...');
+                                    let fullText = streamDiv.textContent;
+                                    // Remove completed think blocks
+                                    fullText = fullText.replace(/<think>[\s\S]*?<\/think>/g, '');
+                                    // Remove unclosed think blocks
+                                    fullText = fullText.replace(/<think>[\s\S]*$/g, '');
+                                    
+                                    // Prevent processing partial tags at the boundary
+                                    const suffixes = ['<', '<t', '<th', '<thi', '<thin', '<think', '</', '</t', '</th', '</thi', '</thin', '</think'];
+                                    for (const suffix of suffixes) {
+                                        if (fullText.endsWith(suffix)) {
+                                            fullText = fullText.slice(0, fullText.length - suffix.length);
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (fullText.length > processedTTSLength) {
+                                        const newText = fullText.slice(processedTTSLength);
+                                        processedTTSLength = fullText.length;
+                                        const sentences = sentenceDetector.feed(newText);
+                                        sentences.forEach(s => this.ttsPlayer.enqueue(s));
+                                        if (sentences.length > 0) {
+                                            this._updateNarrationProgress('Speaking...');
+                                        }
                                     }
                                 }
                             } else if (data.type === 'trim') {

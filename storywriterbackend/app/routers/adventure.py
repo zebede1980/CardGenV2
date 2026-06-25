@@ -126,6 +126,9 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
         
+    if "CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt:
+        messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the story prose/actions after closing the </think> tag."})
+        
     return messages
 
 async def summarize_adventure_task(session_id: str, user_id: int):
