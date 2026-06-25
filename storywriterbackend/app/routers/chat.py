@@ -30,7 +30,9 @@ def get_default_system_prompt() -> str:
         "- When a character sends a text message or phone chat, use: <text-message sender=\"Name\">message content</text-message>",
         "- When showing health, stamina, or numerical progress, use: <stat-bar name=\"Health\" value=\"80\" max=\"100\" />",
         "- When showing a text status, state, or location, use: <stat-bar name=\"Extraction\" value=\"In Progress\" />",
-        "- When a new objective or quest is received, use: <task title=\"Objective Name\">Description of the task</task>"
+        "- When a new objective or quest is received, use: <task title=\"Objective Name\">Description of the task</task>",
+        # 5-Phase Logic CoT
+        "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning within <think> and </think> tags. Inside these tags, you must strictly follow this 5-Phase Logic:\n1. Build Ground Truth: Establish the physical setting, time, and current reality.\n2. Map NPC Knowledge: Determine exactly what your character(s) know and don't know right now.\n3. Identify Intent: Decide the goal or motivation for this specific turn.\n4. Draft the Action/Dialogue: Plan what the character will do or say.\n5. Self-Correct: Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character.\n\nOnly after closing the </think> tag should you write the actual prose for the user."
     ]
     return "\n\n".join(modules)
 
@@ -152,8 +154,8 @@ async def summarize_chat_task(chat_id: str, user_id: int):
             models.ChatMessage.is_summarized == False
         ).order_by(models.ChatMessage.created_at.asc()).all()
         
-        trigger_limit = settings.summary_threshold * 3  # default 30
-        keep_recent = settings.summary_threshold * 2    # default 20
+        trigger_limit = settings.summary_threshold * 10  # default 100
+        keep_recent = settings.summary_threshold * 5    # default 50
         
         if len(unsummarized) <= trigger_limit:
             return
@@ -167,9 +169,10 @@ async def summarize_chat_task(chat_id: str, user_id: int):
         combined_text = "\n".join(text_parts)
         
         prompt = (
-            "Summarize the following chat history concisely. "
-            "Focus on key events, decisions, and character developments. "
-            "Keep the final summary well-organized and strictly under 500 words."
+            "Write a detailed and comprehensive summary of the following chat history. "
+            "It is crucial to retain important context, key dialogue moments, decisions, and character developments and personality. "
+            "Do NOT summarize too aggressively—preserving the rich context of the story is more important than brevity. "
+            "Keep the final summary well-organized, using paragraphs or bullet points to track the narrative flow."
         )
         if chat.summary:
             prompt += f"\n\nIncorporate the new history into the existing summary seamlessly.\n\nExisting Summary:\n{chat.summary}\n\nNew History to add:\n{combined_text}"
