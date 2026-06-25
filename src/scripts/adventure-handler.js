@@ -521,7 +521,7 @@ class AdventureHandler {
         const repPenalty = window.config?.get("adventure.repetitionPenalty") || 1.0;
         
         try {
-            const res = await authFetch(`/api/sw/adventures/${this.currentSessionId}/action`, {
+            const res = await window.authFetch(`/api/sw/adventures/${this.currentSessionId}/action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -532,6 +532,14 @@ class AdventureHandler {
                     repetition_penalty: repPenalty
                 })
             });
+            
+            if (!res.ok) {
+                if (res.status >= 500 || res.status === 408) {
+                    console.warn(`[Adventure] Received ${res.status}, server might succeed in background. Syncing...`);
+                    throw new Error(`API Request Failed: ${res.status}`);
+                }
+                throw new Error('API Request Failed');
+            }
             
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
@@ -592,9 +600,11 @@ class AdventureHandler {
             }
             
         } catch (e) {
-            console.error(e);
-            segmentDiv.innerHTML = '<span style="color:var(--error);">Error generating story.</span>';
-            this.optionsArea.innerHTML = '<button class="btn-primary" onclick="adventureHandler.sendAction(\'\', \'system\')">Retry</button>';
+            console.error('[Adventure] Generation error:', e);
+            // Resiliency: Instead of showing an error when connection drops, silently reload the session
+            // since the backend likely finished the task in the background.
+            wrapper.remove();
+            await this.resumeSession(this.currentSessionId);
         } finally {
             this.isGenerating = false;
             this.loadingIndicator.style.display = 'none';
