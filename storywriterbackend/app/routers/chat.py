@@ -142,7 +142,10 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
     if speaker_name and len(chat.characters) > 1:
-        messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message, just write the dialogue and actions."})
+        messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message. You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
+    elif "CHAIN OF THOUGHT" in "".join(system_parts):
+        # Even for 1-on-1 chats, append a final reminder to ensure the LLM doesn't skip the CoT.
+        messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
         
     return messages
 
