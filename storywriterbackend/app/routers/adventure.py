@@ -48,6 +48,11 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if getattr(session_data, "system_prompt", None):
         system_parts.append(session_data.system_prompt)
         
+    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning within <think> and </think> tags. Inside these tags, you must strictly follow this 5-Phase Logic:\n1. Build Ground Truth: Establish the physical setting, time, and current reality.\n2. Map NPC Knowledge: Determine exactly what your character(s) know and don't know right now.\n3. Identify Intent: Decide the goal or motivation for this specific turn.\n4. Draft the Action/Dialogue: Plan what the character will do or say.\n5. Self-Correct: Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character.\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+    sys_prompt = getattr(session_data, "system_prompt", "") or ""
+    if "CHAIN OF THOUGHT" not in sys_prompt:
+        system_parts.append(cot_prompt)
+        
     prompt_base = [
         "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n",
         "First, write a substantial, well-developed next section of the story. ",
@@ -139,8 +144,8 @@ async def summarize_adventure_task(session_id: str, user_id: int):
             models.AdventureAction.is_summarized == False
         ).order_by(models.AdventureAction.order_index.asc()).all()
         
-        trigger_limit = settings.summary_threshold * 3
-        keep_recent = settings.summary_threshold * 2
+        trigger_limit = settings.summary_threshold * 10
+        keep_recent = settings.summary_threshold * 5
         
         if len(unsummarized) <= trigger_limit:
             return
@@ -156,9 +161,10 @@ async def summarize_adventure_task(session_id: str, user_id: int):
         combined_text = "\n".join(text_parts)
         
         prompt = (
-            "Summarize the following adventure story concisely. "
-            "Focus on key events, decisions made, and character developments. "
-            "Keep the final summary well-organized and strictly under 500 words."
+            "Write a detailed and comprehensive summary of the following adventure story. "
+            "It is crucial to retain important context, key events, decisions made, and character developments and personality. "
+            "Do NOT summarize too aggressively—preserving the rich context of the story is more important than brevity. "
+            "Keep the final summary well-organized, using paragraphs or bullet points to track the narrative flow."
         )
         if session_data.summary:
             prompt += f"\n\nIncorporate the new events into the existing summary seamlessly.\n\nExisting Summary:\n{session_data.summary}\n\nNew Events:\n{combined_text}"
