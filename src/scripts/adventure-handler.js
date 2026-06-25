@@ -429,6 +429,7 @@ class AdventureHandler {
         parsed = parsed.replace(/<task[\s\S]*?<\/task>/gi, extractTag);
         parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
         parsed = parsed.replace(/<scene-image[\s\S]*?<\/scene-image>/gi, extractTag);
+        parsed = parsed.replace(/<think>[\s\S]*?<\/think>/gi, extractTag);
 
         // 2. Safely escape the remaining text
         parsed = this.escapeHtml(parsed);
