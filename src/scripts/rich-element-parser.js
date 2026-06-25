@@ -70,6 +70,12 @@ class RichElementParser {
             return `<div class="rich-task-box" style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 0.75rem; margin: 0.75rem 0; border-radius: 0.25rem;"><div class="rich-task-title" style="font-weight: 600; color: #f59e0b; font-size: 0.9rem; margin-bottom: 0.25rem;">📌 ${this.escapeHtml(title)}</div><div class="rich-task-desc" style="font-size: 0.85rem; color: var(--text-secondary);">${this.escapeHtml(desc.trim())}</div></div>`;
         });
 
+        // 4. AI Reasoning (CoT) Tags: <think>...</think>
+        const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+        parsedText = parsedText.replace(thinkRegex, (match, content) => {
+            return `<details class="rich-ai-reasoning" style="margin: 0.75rem 0; background: var(--bg-tertiary, #1e1e2e); border: 1px solid var(--border, #3a3a4a); border-radius: 0.5rem; overflow: hidden;"><summary style="cursor: pointer; padding: 0.5rem 0.75rem; font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); background: var(--surface-color, #2a2a35); border-bottom: 1px solid var(--border, #3a3a4a); user-select: none;">AI Reasoning Process</summary><div style="padding: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); white-space: pre-wrap;">${this.escapeHtml(content.trim())}</div></details>`;
+        });
+
         return parsedText;
     }
 
