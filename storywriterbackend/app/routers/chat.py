@@ -44,6 +44,13 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if chat.system_prompt:
         system_parts.append(chat.system_prompt)
         
+    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning within <think> and </think> tags. Inside these tags, you must strictly follow this 5-Phase Logic:\n1. Build Ground Truth: Establish the physical setting, time, and current reality.\n2. Map NPC Knowledge: Determine exactly what your character(s) know and don't know right now.\n3. Identify Intent: Decide the goal or motivation for this specific turn.\n4. Draft the Action/Dialogue: Plan what the character will do or say.\n5. Self-Correct: Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character.\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+    
+    if chat.system_prompt and "CHAIN OF THOUGHT" not in chat.system_prompt:
+        system_parts.append(cot_prompt)
+    elif not chat.system_prompt:
+        system_parts.append(cot_prompt)
+        
     # User Persona
     if chat.user_persona_name:
         persona_str = f"User Persona:\nName: {chat.user_persona_name}"
