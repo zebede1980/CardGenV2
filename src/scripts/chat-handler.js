@@ -9,7 +9,7 @@ class RoleplayChatHandler {
         this.chats = [];
         this.availablePersonas = [];
         this._personasLoaded = false;
-        
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
         } else {
@@ -137,7 +137,7 @@ class RoleplayChatHandler {
 
     injectSettingsModal() {
         if (document.getElementById('chat-global-settings-modal')) return;
-        
+
         const modal = document.createElement('div');
         modal.id = 'chat-global-settings-modal';
         modal.className = 'modal-overlay';
@@ -193,7 +193,7 @@ class RoleplayChatHandler {
             </div>
         `;
         document.body.appendChild(modal);
-        
+
         const newBtn = document.getElementById('chat-new-btn');
         if (newBtn && newBtn.parentNode) {
             const settingsBtn = document.createElement('button');
@@ -275,11 +275,11 @@ class RoleplayChatHandler {
         const tabCardGen = document.getElementById('tab-cardgen');
         const tabStoryWriter = document.getElementById('tab-storywriter');
         const tabChat = document.getElementById('tab-roleplaychat');
-        
+
         const viewCardGen = document.getElementById('view-cardgen');
         const viewStoryWriter = document.getElementById('view-storywriter');
         const viewChat = document.getElementById('view-roleplaychat');
-        
+
         if (tabChat && viewChat) {
             // Activate chat tab
             tabChat.addEventListener('click', () => {
@@ -287,18 +287,18 @@ class RoleplayChatHandler {
                 if (viewStoryWriter) viewStoryWriter.style.display = 'none';
                 if (tabCardGen) tabCardGen.className = 'btn-outline';
                 if (tabStoryWriter) tabStoryWriter.className = 'btn-outline';
-                
+
                 const resultSection = document.querySelector('.result-section');
                 if (resultSection) resultSection.style.display = 'none';
-                
+
                 viewChat.style.display = 'flex';
                 tabChat.className = 'btn-primary';
-                
+
                 this.loadSessionList();
                 this.loadPersonas();
                 setTimeout(() => this.adjustChatLayout(), 10);
             });
-            
+
             // Hide chat view and reset layout when other tabs are clicked
             const leaveChat = () => {
                 viewChat.style.display = 'none';
@@ -314,7 +314,7 @@ class RoleplayChatHandler {
         this.els = {
             sessionList: document.getElementById('chat-session-list'),
             newBtn: document.getElementById('chat-new-btn'),
-            
+
             globalSettingsBtn: document.getElementById('chat-open-global-settings'),
             globalSettingsModal: document.getElementById('chat-global-settings-modal'),
             globalSettingsMaxBtn: document.getElementById('chat-global-settings-maximize'),
@@ -332,19 +332,19 @@ class RoleplayChatHandler {
 
             activeTitle: document.getElementById('chat-active-title'),
             activeChars: document.getElementById('chat-active-characters'),
-            
+
             timeline: document.getElementById('chat-timeline'),
-            
+
             msgInput: document.getElementById('chat-message-input'),
             sendBtn: document.getElementById('roleplay-send-btn'),
             stopBtn: document.getElementById('roleplay-stop-btn'),
             impBtn: document.getElementById('roleplay-impersonate-btn'),
-            
+
             oocToggleBtn: document.getElementById('chat-toggle-ooc-btn'),
             oocContainer: document.getElementById('chat-ooc-container'),
             oocInput: document.getElementById('chat-ooc-input'),
             speakerSelect: document.getElementById('chat-speaker-select'),
-            
+
             newModal: document.getElementById('chat-new-modal'),
             newCloseBtn: document.getElementById('chat-new-close-btn'),
             newTitle: document.getElementById('chat-new-title'),
@@ -360,7 +360,7 @@ class RoleplayChatHandler {
             newPersonaDetail: document.getElementById('chat-new-persona-detail'),
             newPersonaCardName: document.getElementById('chat-new-persona-card-name'),
             newPersonaPickBtn: document.getElementById('chat-new-persona-pick-btn'),
-            
+
             zoomOutBtn: document.getElementById('chat-zoom-out-btn'),
             zoomResetBtn: document.getElementById('chat-zoom-reset-btn'),
             zoomInBtn: document.getElementById('chat-zoom-in-btn'),
@@ -368,12 +368,12 @@ class RoleplayChatHandler {
     }
 
     bindEvents() {
-        if(!this.els.sessionList) return; 
+        if (!this.els.sessionList) return;
 
         this.els.newBtn.addEventListener('click', () => this.openNewChatModal());
         this.els.newCloseBtn.addEventListener('click', () => this.closeNewChatModal());
         this.els.createSubmitBtn.addEventListener('click', () => this.createNewChat());
-        
+
         if (this.els.globalSettingsBtn) {
             this.els.globalSettingsBtn.addEventListener('click', () => this.openGlobalSettings());
         }
@@ -389,11 +389,11 @@ class RoleplayChatHandler {
         if (this.els.globalSaveBtn) {
             this.els.globalSaveBtn.addEventListener('click', () => this.saveGlobalSettings());
         }
-        
+
         if (this.els.newAddCharBtn) {
             this.els.newAddCharBtn.addEventListener('click', () => this.openGalleryForNewChat());
         }
-        
+
         const personaRadios = document.querySelectorAll('input[name="chat_user_persona_type"]');
         personaRadios.forEach(r => r.addEventListener('change', (e) => {
             if (e.target.value === 'manual') {
@@ -404,7 +404,7 @@ class RoleplayChatHandler {
                 this.els.newPersonaCard.style.display = 'block';
             }
         }));
-        
+
         if (this.els.newPersonaPickBtn) {
             this.els.newPersonaPickBtn.addEventListener('click', () => {
                 if (!window.cardGallery) return alert("Gallery module not loaded.");
@@ -418,25 +418,25 @@ class RoleplayChatHandler {
                 });
             });
         }
-        
+
         this.els.oocToggleBtn.addEventListener('click', () => {
             const isHidden = this.els.oocContainer.style.display === 'none';
             this.els.oocContainer.style.display = isHidden ? 'block' : 'none';
             if (isHidden) this.els.oocInput.focus();
         });
-        
+
         this.els.oocInput.addEventListener('input', () => this.updateOocBadge());
-        
+
         this.els.sendBtn.addEventListener('click', () => this.sendMessage());
-        
+
         if (this.els.stopBtn) {
             this.els.stopBtn.addEventListener('click', () => this.stopGeneration());
         }
-        
+
         if (this.els.impBtn) {
             this.els.impBtn.addEventListener('click', () => this.sendImpersonateMessage());
         }
-        
+
         const autoResizeInput = (el) => {
             el.style.height = 'auto';
             el.style.height = Math.min(el.scrollHeight, 150) + 'px';
@@ -456,25 +456,25 @@ class RoleplayChatHandler {
                 this.closeMobileSidebar();
             }
         });
-        
+
         this.els.globalNewSegment.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 this.addSystemPromptSegment();
             }
         });
-        
+
         this.els.oocInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.sendMessage();
             }
         });
-        
 
-        
+
+
         window.addEventListener('resize', () => this.adjustChatLayout());
-        
+
         document.addEventListener('visibilitychange', () => this.syncOnWake());
         window.addEventListener('focus', () => this.syncOnWake());
 
@@ -487,7 +487,7 @@ class RoleplayChatHandler {
         if (this.els.zoomResetBtn) {
             this.els.zoomResetBtn.addEventListener('click', () => this.setZoom(1));
         }
-        
+
         this.chatZoom = window.config ? (window.config.get("chat.textZoom") || 1) : 1;
         this.setZoom(this.chatZoom);
     }
@@ -534,9 +534,9 @@ class RoleplayChatHandler {
 
     async syncOnWake() {
         if (document.visibilityState !== 'visible') return;
-        
+
         this.loadSessionList(); // Refresh the sidebar in case external changes occurred
-        
+
         if (!this.activeChatId) return;
 
         if (!this.isGenerating) {
@@ -548,10 +548,10 @@ class RoleplayChatHandler {
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
             if (!res.ok) return;
             const chat = await res.json();
-            
+
             const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
             const dbCount = chat.messages ? chat.messages.length : 0;
-            
+
             // If the DB has caught up to the DOM's optimistic bubble count, the background task finished while asleep
             if (dbCount >= domCount) {
                 if (this.abortController) this.abortController.abort(); // Safely kill the hung/stale socket
@@ -569,17 +569,17 @@ class RoleplayChatHandler {
         this.els.globalTemp.value = window.config.get("chat.temperature") ?? 0.8;
         this.els.globalRepPen.value = window.config.get("chat.repetitionPenalty") ?? 1.0;
         this.els.globalFilterCJK.checked = window.config.get("chat.filterCJK") ?? false;
-        
+
         this.systemPromptSegments = [...(window.config.get("chat.systemPromptSegments") || [])];
         this.renderSystemPromptSegments();
-        
+
         this.els.globalSettingsModal.style.display = 'flex';
     }
 
     toggleGlobalSettingsMaximize() {
         const content = this.els.globalSettingsContent;
         const btn = this.els.globalSettingsMaxBtn;
-        
+
         if (!content.classList.contains('maximized')) {
             content.classList.add('maximized');
             content.style.maxWidth = '95vw';
@@ -613,7 +613,7 @@ class RoleplayChatHandler {
             row.style.alignItems = 'flex-start';
             row.style.gap = '0.5rem';
             row.draggable = true;
-            
+
             const dragHandle = document.createElement('div');
             dragHandle.innerHTML = '☰';
             dragHandle.style.cursor = 'grab';
@@ -621,20 +621,20 @@ class RoleplayChatHandler {
             dragHandle.style.paddingTop = '0.2rem';
             dragHandle.style.userSelect = 'none';
             dragHandle.title = 'Drag to reorder';
-            
+
             row.addEventListener('dragstart', (e) => {
                 this.draggedSegmentIndex = i;
                 e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', i);
                 setTimeout(() => row.style.opacity = '0.4', 0);
             });
-            
+
             row.addEventListener('dragend', () => {
                 row.style.opacity = '1';
                 this.draggedSegmentIndex = null;
                 Array.from(this.els.globalPromptSegments.children).forEach(r => r.style.boxShadow = '');
             });
-            
+
             row.addEventListener('dragover', (e) => {
                 e.preventDefault(); // Necessary to allow dropping
                 if (this.draggedSegmentIndex !== null && this.draggedSegmentIndex !== i) {
@@ -645,11 +645,11 @@ class RoleplayChatHandler {
                     }
                 }
             });
-            
+
             row.addEventListener('dragleave', () => {
                 row.style.boxShadow = '';
             });
-            
+
             row.addEventListener('drop', (e) => {
                 e.preventDefault();
                 row.style.boxShadow = '';
@@ -682,7 +682,7 @@ class RoleplayChatHandler {
                 input.style.height = (input.scrollHeight) + 'px';
             };
             input.addEventListener('input', autoSize);
-            
+
             const delBtn = document.createElement('button');
             delBtn.innerHTML = '🗑️';
             delBtn.style.background = 'none';
@@ -693,7 +693,7 @@ class RoleplayChatHandler {
                 this.systemPromptSegments.splice(i, 1);
                 this.renderSystemPromptSegments();
             };
-            
+
             row.appendChild(dragHandle);
             row.appendChild(input);
             row.appendChild(delBtn);
@@ -720,9 +720,9 @@ class RoleplayChatHandler {
         window.config.set("chat.repetitionPenalty", parseFloat(this.els.globalRepPen.value) || 1.0);
         window.config.set("chat.filterCJK", this.els.globalFilterCJK.checked);
         window.config.set("chat.systemPromptSegments", this.systemPromptSegments);
-        
+
         this.els.globalSettingsModal.style.display = 'none';
-        
+
         if (window.app && window.app.showNotification) {
             window.app.showNotification("Global chat settings saved", "success");
         } else {
@@ -734,7 +734,7 @@ class RoleplayChatHandler {
         this.newChatSelectedCards = [];
         this.renderNewChatSelectedChars();
         this.els.newTitle.value = '';
-        
+
         this.userPersonaSelectedCard = null;
         this.els.newPersonaName.value = '';
         this.els.newPersonaAge.value = '';
@@ -746,12 +746,12 @@ class RoleplayChatHandler {
         if (radioManual) radioManual.checked = true;
         if (this.els.newPersonaManual) this.els.newPersonaManual.style.display = 'block';
         if (this.els.newPersonaCard) this.els.newPersonaCard.style.display = 'none';
-        
+
         const segments = window.config?.get("chat.systemPromptSegments") || [];
         this.els.newSysPrompt.value = segments.join("\n\n");
-        
+
         this.els.newModal.classList.add('show');
-        
+
         try {
             const res = await window.authFetch('/api/sw/cards/');
             if (res.ok) {
@@ -777,10 +777,10 @@ class RoleplayChatHandler {
             alert("Gallery module not loaded.");
             return;
         }
-        
+
         const alreadySelected = new Set((this.newChatSelectedCards || []).map(c => c.id));
         const unselectedCards = (this.availableCards || []).filter(c => !alreadySelected.has(c.id));
-        
+
         window.cardGallery.open(unselectedCards, (selectedCardOrId) => {
             const cardId = typeof selectedCardOrId === 'object' ? selectedCardOrId.id : selectedCardOrId;
             const card = this.availableCards.find(c => c.id === cardId);
@@ -793,13 +793,13 @@ class RoleplayChatHandler {
 
     renderNewChatSelectedChars() {
         if (!this.els.newSelectedChars) return;
-        
+
         this.els.newSelectedChars.innerHTML = '';
         if (!this.newChatSelectedCards || this.newChatSelectedCards.length === 0) {
             this.els.newSelectedChars.innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>';
             return;
         }
-        
+
         this.newChatSelectedCards.forEach((card, index) => {
             const tag = document.createElement('span');
             tag.className = 'tag';
@@ -808,12 +808,12 @@ class RoleplayChatHandler {
             tag.style.gap = '5px';
             tag.style.fontSize = '0.85rem';
             tag.innerHTML = `${this.escapeHtml(card.name || 'Unnamed')} <button style="background:none; border:none; cursor:pointer; color:var(--error);" title="Remove">×</button>`;
-            
+
             tag.querySelector('button').addEventListener('click', () => {
                 this.newChatSelectedCards.splice(index, 1);
                 this.renderNewChatSelectedChars();
             });
-            
+
             this.els.newSelectedChars.appendChild(tag);
         });
 
@@ -824,12 +824,12 @@ class RoleplayChatHandler {
             if (this.newChatSelectedCards.length === 1) {
                 const card = this.newChatSelectedCards[0];
                 fmSelect.innerHTML = '';
-                
+
                 const optMain = document.createElement('option');
                 optMain.value = "-1";
                 optMain.textContent = "Main Greeting";
                 fmSelect.appendChild(optMain);
-                
+
                 let altGreetings = card.alternate_greetings;
                 if (typeof altGreetings === 'string' && altGreetings.trim().length > 0) {
                     try {
@@ -851,7 +851,7 @@ class RoleplayChatHandler {
                         fmSelect.appendChild(opt);
                     });
                 }
-                
+
                 // Only show if there are actual alternate greetings to choose from, or always show?
                 // The user requested a way to select which first message/alternate one to use.
                 // It makes sense to show it if there are alternates. If there are no alternates, we can hide it or show just Main.
@@ -884,17 +884,17 @@ class RoleplayChatHandler {
         const title = this.els.newTitle.value.trim() || 'New Chat';
         const sysPrompt = this.els.newSysPrompt.value.trim();
         const cardIds = (this.newChatSelectedCards || []).map(c => c.id);
-        
+
         let userPersonaName = "User";
         let userPersonaAge = "";
         let userPersonaGender = "";
         let userPersonaDetail = "";
-        
+
         let userPersonaCardId = null;
-        
+
         const typeEl = document.querySelector('input[name="chat_user_persona_type"]:checked');
         const pType = typeEl ? typeEl.value : 'manual';
-        
+
         if (pType === 'manual') {
             userPersonaName = this.els.newPersonaName.value.trim() || "User";
             userPersonaAge = this.els.newPersonaAge.value.trim();
@@ -906,7 +906,7 @@ class RoleplayChatHandler {
                 .filter(x => x).join('\n\n');
             userPersonaCardId = this.userPersonaSelectedCard.id;
         }
-        
+
         let firstMessageIndex = -1;
         const fmSection = document.getElementById('chat-new-first-message-section');
         if (fmSection && fmSection.style.display !== 'none') {
@@ -917,7 +917,7 @@ class RoleplayChatHandler {
                     if (this.newChatSelectedCards.length === 1) {
                         let cardAlt = this.newChatSelectedCards[0].alternate_greetings;
                         if (typeof cardAlt === 'string' && cardAlt.trim().length > 0) {
-                            try { altGreetings = JSON.parse(cardAlt); } catch (e) {}
+                            try { altGreetings = JSON.parse(cardAlt); } catch (e) { }
                         } else if (Array.isArray(cardAlt)) {
                             altGreetings = cardAlt;
                         }
@@ -932,14 +932,14 @@ class RoleplayChatHandler {
                 }
             }
         }
-        
+
         try {
             this.els.createSubmitBtn.disabled = true;
             this.els.createSubmitBtn.textContent = 'Creating...';
-            
-            const payload = { 
-                title, 
-                system_prompt: sysPrompt, 
+
+            const payload = {
+                title,
+                system_prompt: sysPrompt,
                 card_ids: cardIds,
                 user_persona_name: userPersonaName,
                 user_persona_age: userPersonaAge,
@@ -948,13 +948,13 @@ class RoleplayChatHandler {
                 user_persona_card_id: userPersonaCardId,
                 first_message_index: firstMessageIndex
             };
-            
+
             const res = await window.authFetch('/api/sw/chats/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
+
             if (res.ok) {
                 const newChat = await res.json();
                 this.closeNewChatModal();
@@ -986,28 +986,28 @@ class RoleplayChatHandler {
             this.els.sessionList.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center; font-style: italic;">No chats yet</div>';
             return;
         }
-        
+
         this.chats.forEach(chat => {
             const el = document.createElement('div');
             el.className = `chat-session-item ${chat.id === this.activeChatId ? 'active' : ''}`;
             el.dataset.id = chat.id;
-            
+
             const row = document.createElement('div');
             row.style.display = 'flex';
             row.style.justifyContent = 'space-between';
             row.style.alignItems = 'flex-start';
-            
+
             const textCol = document.createElement('div');
-            
+
             const titleEl = document.createElement('div');
             titleEl.style.fontWeight = '600';
             titleEl.textContent = chat.title;
-            
+
             const dateEl = document.createElement('div');
             dateEl.style.fontSize = '0.75rem';
             dateEl.style.color = 'var(--text-secondary)';
             dateEl.textContent = new Date(chat.updated_at).toLocaleString();
-            
+
             const delBtn = document.createElement('button');
             delBtn.innerHTML = '🗑️';
             delBtn.title = "Delete Chat";
@@ -1016,19 +1016,19 @@ class RoleplayChatHandler {
             delBtn.onmouseout = () => { delBtn.style.opacity = '0.7'; delBtn.style.filter = 'grayscale(1)'; };
             delBtn.onclick = async (e) => {
                 e.stopPropagation();
-                if(confirm(`Are you sure you want to delete "${chat.title}"?`)) {
+                if (confirm(`Are you sure you want to delete "${chat.title}"?`)) {
                     await window.authFetch(`/api/sw/chats/${chat.id}`, { method: 'DELETE' });
-                    if(this.activeChatId === chat.id) this.activeChatId = null;
+                    if (this.activeChatId === chat.id) this.activeChatId = null;
                     this.loadSessionList();
                 }
             };
-            
+
             textCol.appendChild(titleEl);
             textCol.appendChild(dateEl);
             row.appendChild(textCol);
             row.appendChild(delBtn);
             el.appendChild(row);
-            
+
             el.addEventListener('click', () => this.selectChat(chat.id));
             this.els.sessionList.appendChild(el);
         });
@@ -1042,16 +1042,16 @@ class RoleplayChatHandler {
         try {
             const allCards = await window.characterStorage.listCards();
             this.availablePersonas = allCards.filter(c => c.isPermanent);
-            
+
             this.availablePersonas.sort((a, b) => {
                 const nameA = (a.characterName || (a.character && a.character.name) || a.name || 'Unnamed').toLowerCase();
                 const nameB = (b.characterName || (b.character && b.character.name) || b.name || 'Unnamed').toLowerCase();
                 return nameA.localeCompare(nameB);
             });
-            
+
             if (this.els.userPersonaSelect) {
                 const currentVal = localStorage.getItem('chatgen_active_user_persona') || '';
-                
+
                 this.els.userPersonaSelect.innerHTML = '<option value="">User (Default)</option>';
                 this.availablePersonas.forEach(card => {
                     const opt = document.createElement('option');
@@ -1060,12 +1060,12 @@ class RoleplayChatHandler {
                     opt.textContent = charName;
                     this.els.userPersonaSelect.appendChild(opt);
                 });
-                
+
                 let activeId = currentVal;
                 if (this.activeChatId) {
                     activeId = localStorage.getItem(`chatgen_persona_${this.activeChatId}`) || currentVal;
                 }
-                
+
                 if (this.availablePersonas.some(c => String(c.id) === String(activeId))) {
                     this.els.userPersonaSelect.value = activeId;
                 } else {
@@ -1087,13 +1087,13 @@ class RoleplayChatHandler {
         const fsBtn = document.getElementById('chat-fullscreen-toggle');
         const sidebar = document.getElementById('chat-sidebar-container');
         const backdrop = document.getElementById('chat-sidebar-backdrop');
-        
+
         if (!chatView) return;
 
         if (!chatView.classList.contains('chat-fullscreen')) {
             chatView.classList.add('chat-fullscreen');
             if (fsBtn) { fsBtn.innerHTML = '✖'; fsBtn.title = 'Exit Fullscreen'; }
-            
+
             // Close mobile sidebar if open
             this.closeMobileSidebar();
             // Hide sidebar and backdrop
@@ -1103,48 +1103,48 @@ class RoleplayChatHandler {
         } else {
             chatView.classList.remove('chat-fullscreen');
             if (fsBtn) { fsBtn.innerHTML = '⛶'; fsBtn.title = 'Fullscreen'; }
-            
+
             // Restore sidebar
             if (sidebar) sidebar.style.display = this.preFsSidebarDisplay !== undefined ? this.preFsSidebarDisplay : '';
             if (backdrop) backdrop.style.display = '';
-            
+
             this.adjustChatLayout();
         }
-        
+
     }
 
     async selectChat(chatId) {
         this.activeChatId = chatId;
-        
+
         // Auto-close mobile sidebar drawer when a chat is selected
         if (window.innerWidth <= 768) {
             this.closeMobileSidebar();
         }
-        
+
         document.querySelectorAll('.chat-session-item').forEach(el => {
-            if(el.dataset.id === chatId) {
+            if (el.dataset.id === chatId) {
                 el.classList.add('active');
             } else {
                 el.classList.remove('active');
             }
         });
-        
+
         // Prevent race condition: wait for personas to load before rendering messages
         let waitCount = 0;
         while (!this._personasLoaded && waitCount < 20) {
             await new Promise(r => setTimeout(r, 100));
             waitCount++;
         }
-        
+
         try {
             const res = await window.authFetch(`/api/sw/chats/${chatId}`);
             if (!res.ok) return;
             const chat = await res.json();
-            
+
             this.els.activeTitle.textContent = chat.title;
             this.els.activeChars.textContent = chat.characters.map(c => c.name).join(', ') || 'No characters linked';
             this.activeChatCharacters = chat.characters || [];
-            
+
             if (this.els.speakerSelect) {
                 if (chat.characters.length > 1) {
                     this.els.speakerSelect.innerHTML = '<option value="">🤖 Auto (Router)</option>';
@@ -1171,17 +1171,17 @@ class RoleplayChatHandler {
             }
 
             this.els.timeline.innerHTML = '';
-            
+
             // Ensure messages are sorted chronologically (oldest first)
             const sortedMessages = (chat.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
             sortedMessages.forEach(msg => this.appendMessage(msg, false));
-            
-            if(chat.messages.length === 0) {
+
+            if (chat.messages.length === 0) {
                 this.els.timeline.innerHTML = '<div class="chat-placeholder"><p>No messages yet. Send a greeting!</p></div>';
             } else {
                 setTimeout(() => this.scrollToBottom(false), 50);
             }
-            
+
             this.els.msgInput.disabled = false;
             this.els.sendBtn.disabled = false;
         } catch (e) {
@@ -1206,7 +1206,7 @@ class RoleplayChatHandler {
         if (!this.activeChatId || !this.chats) return null;
         const chat = this.chats.find(c => c.id === this.activeChatId);
         if (!chat) return null;
-        
+
         return {
             name: chat.user_persona_name || 'User',
             id: chat.user_persona_card_id || null
@@ -1456,9 +1456,9 @@ class RoleplayChatHandler {
             };
 
             if (window.config) {
-                payload.max_input_tokens  = window.config.get('chat.maxInputTokens');
+                payload.max_input_tokens = window.config.get('chat.maxInputTokens');
                 payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
-                payload.temperature       = window.config.get('chat.temperature');
+                payload.temperature = window.config.get('chat.temperature');
                 payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
             }
 
@@ -1577,7 +1577,7 @@ class RoleplayChatHandler {
                 const errText = await res.text();
                 throw new Error(errText);
             }
-            
+
             loadingDiv.remove();
             // Refresh the message context directly from the DB to sync the newly appended XML tag
             const msgRes = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
@@ -1601,7 +1601,7 @@ class RoleplayChatHandler {
 
         const currentContent = msg.content || '';
         const originalHTML = bubbleEl.innerHTML;
-        
+
         const textarea = document.createElement('textarea');
         textarea.className = 'content-box';
         textarea.style.width = '100%';
@@ -1618,7 +1618,7 @@ class RoleplayChatHandler {
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn-primary btn-small';
         saveBtn.textContent = 'Save';
-        
+
         const cancelBtn = document.createElement('button');
         cancelBtn.className = 'btn-outline btn-small';
         cancelBtn.textContent = 'Cancel';
@@ -1679,7 +1679,7 @@ class RoleplayChatHandler {
         // Check if there are subsequent messages
         let isLast = true;
         let next = wrapper.nextElementSibling;
-        while(next) {
+        while (next) {
             if (next.classList.contains('chat-bubble-wrapper')) {
                 isLast = false;
                 break;
@@ -1694,12 +1694,12 @@ class RoleplayChatHandler {
                 overlay.className = 'modal-overlay';
                 overlay.style.display = 'flex';
                 overlay.style.zIndex = '9999';
-                
+
                 const modal = document.createElement('div');
                 modal.className = 'api-settings-modal';
                 modal.style.maxWidth = '400px';
                 modal.style.width = '90%';
-                
+
                 modal.innerHTML = `
                     <div class="modal-header">
                         <h2 class="modal-title">Delete Message</h2>
@@ -1716,20 +1716,20 @@ class RoleplayChatHandler {
                         </div>
                     </div>
                 `;
-                
+
                 overlay.appendChild(modal);
                 document.body.appendChild(overlay);
-                
+
                 const close = () => {
                     document.body.removeChild(overlay);
                 };
-                
+
                 modal.querySelector('.modal-close').onclick = () => { close(); resolve('cancel'); };
                 modal.querySelector('#del-btn-cancel').onclick = () => { close(); resolve('cancel'); };
                 modal.querySelector('#del-btn-single').onclick = () => { close(); resolve('single'); };
                 modal.querySelector('#del-btn-all').onclick = () => { close(); resolve('all'); };
             });
-            
+
             if (choice === 'cancel') return;
             truncate = (choice === 'all');
         } else {
@@ -1744,7 +1744,7 @@ class RoleplayChatHandler {
             if (res.ok) {
                 if (truncate) {
                     let curr = wrapper;
-                    while(curr) {
+                    while (curr) {
                         let nxt = curr.nextElementSibling;
                         if (curr.classList.contains('chat-bubble-wrapper')) {
                             curr.remove();
@@ -1765,17 +1765,17 @@ class RoleplayChatHandler {
     formatMessage(text, characterName = null) {
         if (!text) return "";
         let parsed = text;
-        
+
         let charName = characterName;
         // Fallback for user messages in a 1-on-1 chat
         if (!charName && this.activeChatCharacters && this.activeChatCharacters.length === 1) {
             charName = this.activeChatCharacters[0].name;
         }
         charName = charName || "Character";
-        
+
         const userPersona = this.getUserPersonaData();
         const userName = userPersona ? (userPersona.characterName || (userPersona.character && userPersona.character.name) || userPersona.name || "User") : "User";
-        
+
         parsed = parsed.replace(/\{\{char\}\}/gi, charName);
         parsed = parsed.replace(/\{\{user\}\}/gi, userName);
 
@@ -1787,17 +1787,17 @@ class RoleplayChatHandler {
         // 1. Temporarily extract Rich XML tags to protect their inner attributes from being formatted
         const richTags = [];
         const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
-        
+
         // Safety Fallback: If the AI forgot the opening <think> tag but included the closing one, inject it.
         if (parsed.includes('</think>') && !parsed.includes('<think>')) {
             parsed = '<think>\n' + parsed;
         }
-        
+
         const extractTag = (match) => {
             richTags.push(match);
             return `%%RICH_TAG_${richTags.length - 1}%%`;
         };
-        
+
         parsed = parsed.replace(/<text-message[\s\S]*?<\/text-message>/gi, extractTag);
         parsed = parsed.replace(/<task[\s\S]*?<\/task>/gi, extractTag);
         parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
@@ -1830,7 +1830,7 @@ class RoleplayChatHandler {
         if (window.RichElementParser) {
             parsed = window.RichElementParser.parse(parsed);
         }
-        
+
         parsed = parsed.replace(/\n/g, '<br>');
         return parsed;
     }
@@ -1891,9 +1891,9 @@ class RoleplayChatHandler {
             };
 
             if (window.config) {
-                payload.max_input_tokens  = window.config.get('chat.maxInputTokens');
+                payload.max_input_tokens = window.config.get('chat.maxInputTokens');
                 payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
-                payload.temperature       = window.config.get('chat.temperature');
+                payload.temperature = window.config.get('chat.temperature');
                 payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
             }
 
@@ -1906,7 +1906,7 @@ class RoleplayChatHandler {
 
             if (!res.ok) throw new Error('Impersonate API request failed');
 
-            const reader  = res.body.getReader();
+            const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
 

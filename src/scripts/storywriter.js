@@ -502,6 +502,51 @@ class StoryWriterApp {
             });
         }
         document.getElementById('sw-tts-google-key')?.addEventListener('change', () => this.loadVoices());
+
+        // ── Phone-lock / tab-switch resilience ────────────────────────────────
+        document.addEventListener('visibilitychange', () => this.syncOnWake());
+        window.addEventListener('focus', () => this.syncOnWake());
+    }
+
+    /**
+     * Fires whenever the document becomes visible again (phone unlock, tab switch, app resume).
+     *
+     * Two behaviours depending on state:
+     *   1. Actively generating  — poll the server to see if it finished while the client was
+     *      asleep.  If so, abort the stale stream (triggering the catch path which calls
+     *      refreshWorkspace) so the UI snaps back to the saved result seamlessly.
+     *   2. Idle with story open — silently refresh the workspace so that changes made on
+     *      another device (e.g. desktop) appear automatically.
+     */
+    async syncOnWake() {
+        if (document.visibilityState !== 'visible') return;
+        if (!this.currentStoryId) return;
+
+        if (this.isFetchingLLM) {
+            // ── Mid-generation recovery ──────────────────────────────────────
+            try {
+                const story = await this.apiCall(`/stories/${this.currentStoryId}`);
+                const domCount = document.querySelectorAll('#sw-story-area [data-segment-id]').length;
+                const dbCount  = (story.segments || []).filter(s => !s.is_summary).length;
+
+                if (dbCount > domCount) {
+                    // Server completed generation while the client was asleep.
+                    // Set flag so the catch block in generateNext knows this is a wake-recovery
+                    // abort (not a user stop) and should call refreshWorkspace().
+                    this._wakeAbort = true;
+                    if (this.abortController) this.abortController.abort();
+                }
+            } catch (e) {
+                console.error('[StoryWriter] syncOnWake (generating) failed:', e);
+            }
+        } else {
+            // ── Idle cross-device sync ───────────────────────────────────────
+            try {
+                await this.refreshWorkspace();
+            } catch (e) {
+                console.error('[StoryWriter] syncOnWake (idle) failed:', e);
+            }
+        }
     }
 
     // ── API helper ────────────────────────────────────────────────────────────
@@ -1474,16 +1519,21 @@ class StoryWriterApp {
             await this.refreshWorkspace();
         } catch (e) {
             console.error('[StoryWriter] Generation stream error:', e);
-            const isAbort = e.message?.includes("stopped by user") || e.name === "AbortError" || e.message?.includes("abort");
-            
+            const isAbort = e.name === 'AbortError' || e.message?.includes('abort') || e.message?.includes('stopped by user');
+            const isWakeAbort = isAbort && this._wakeAbort;
+            this._wakeAbort = false; // always clear the flag
+
             if (streamDiv && streamDiv.parentNode) {
                 streamDiv.remove();
             }
-            
-            // Whether it was an abort or a network drop (like phone lock/503),
-            // the server might have saved the segment in the background.
-            // Always refresh the workspace silently to sync state.
-            await this.refreshWorkspace();
+
+            if (!isAbort || isWakeAbort) {
+                // Network drop (phone lock / 503) or a wake-recovery abort:
+                // the server likely saved the segment in the background, so refresh.
+                await this.refreshWorkspace();
+            }
+            // Plain user-stop (stop button): do NOT refresh — user intentionally stopped,
+            // and refreshWorkspace would scroll them unexpectedly.
 
             if (this.ttsPlayer) {
                 this.ttsPlayer.stop();

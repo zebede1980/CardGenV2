@@ -75,6 +75,56 @@ class AdventureHandler {
             this.currentSessionId = null;
             this.loadSessionList();
         });
+
+        // ── Phone-lock / tab-switch resilience ────────────────────────────────
+        document.addEventListener('visibilitychange', () => this.syncOnWake());
+        window.addEventListener('focus', () => this.syncOnWake());
+    }
+
+    /**
+     * Fires whenever the document becomes visible again (phone unlock, tab switch, app resume).
+     *
+     * Two behaviours depending on state:
+     *   1. Actively generating  — poll the server to see if it finished while the client was
+     *      asleep. If so, call resumeSession() to rebuild the play view from saved state.
+     *   2. Idle with play view open — silently refresh from server so changes made on another
+     *      device (e.g. desktop adding the next story beat) appear automatically.
+     */
+    async syncOnWake() {
+        if (document.visibilityState !== 'visible') return;
+        if (!this.currentSessionId) return;
+
+        if (this.isGenerating) {
+            // ── Mid-generation recovery ──────────────────────────────────────
+            try {
+                const res  = await authFetch(`/api/sw/adventures/${this.currentSessionId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                const domCount = this.storyArea
+                    ? this.storyArea.querySelectorAll('.adv-story-wrapper[data-role="assistant"]').length
+                    : 0;
+                const dbCount = (data.actions || [])
+                    .filter(a => !a.is_summarized && a.role === 'assistant').length;
+
+                if (dbCount > domCount) {
+                    // Server completed generation while the client was asleep.
+                    // Reset state before calling resumeSession to avoid re-entry guard.
+                    this.isGenerating = false;
+                    this.loadingIndicator.style.display = 'none';
+                    await this.resumeSession(this.currentSessionId);
+                }
+            } catch (e) {
+                console.error('[Adventure] syncOnWake (generating) failed:', e);
+            }
+        } else if (this.playView && this.playView.style.display !== 'none') {
+            // ── Idle cross-device sync ───────────────────────────────────────
+            try {
+                await this.resumeSession(this.currentSessionId);
+            } catch (e) {
+                console.error('[Adventure] syncOnWake (idle) failed:', e);
+            }
+        }
     }
 
     showView() {
