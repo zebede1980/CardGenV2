@@ -475,9 +475,13 @@ class AdventureHandler {
         if (parsed.includes('</think>') && !parsed.includes('<think>')) {
             parsed = '<think>\n' + parsed;
         }
-        // Case B: Opening tag present but no closing tag → close it at the end.
+        // Case B: Opening tag present but no closing tag.
+        // Do NOT inject </think> at the end — that would swallow all story text into the collapsed block.
+        // Instead strip the bare opener; content stays visible as story text.
+        // (When streaming, the next chunk that delivers </think> will re-enter this function with both
+        //  tags present, and normal extraction will run cleanly at that point.)
         if (parsed.includes('<think>') && !parsed.includes('</think>')) {
-            parsed = parsed + '\n</think>';
+            parsed = parsed.replace(/<think>/gi, '');
         }
         
         const extractTag = (match) => {
