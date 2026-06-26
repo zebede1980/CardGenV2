@@ -76,6 +76,9 @@ class RichElementParser {
             return `<details class="rich-ai-reasoning" style="margin: 0.75rem 0; background: var(--bg-tertiary, #1e1e2e); border: 1px solid var(--border, #3a3a4a); border-radius: 0.5rem; overflow: hidden;"><summary style="cursor: pointer; padding: 0.5rem 0.75rem; font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); background: var(--surface-color, #2a2a35); border-bottom: 1px solid var(--border, #3a3a4a); user-select: none;">AI Reasoning Process</summary><div style="padding: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); white-space: pre-wrap;">${this.escapeHtml(content.trim())}</div></details>`;
         });
 
+        // Final safety net: strip any stray unpaired <think> or </think> that survived upstream.
+        parsedText = parsedText.replace(/<think>/gi, '').replace(/<\/think>/gi, '');
+
         return parsedText;
     }
 

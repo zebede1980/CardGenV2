@@ -1809,9 +1809,14 @@ class RoleplayChatHandler {
         const richTags = [];
         const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
 
-        // Safety Fallback: If the AI forgot the opening <think> tag but included the closing one, inject it.
+        // Safety Fallback: Normalise malformed <think> blocks before extraction.
+        // Case A: Closing tag present but no opener → inject opener at start.
         if (parsed.includes('</think>') && !parsed.includes('<think>')) {
             parsed = '<think>\n' + parsed;
+        }
+        // Case B: Opening tag present but no closing tag → close it at the end.
+        if (parsed.includes('<think>') && !parsed.includes('</think>')) {
+            parsed = parsed + '\n</think>';
         }
 
         const extractTag = (match) => {
@@ -1824,6 +1829,8 @@ class RoleplayChatHandler {
         parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
         parsed = parsed.replace(/<scene-image[\s\S]*?<\/scene-image>/gi, extractTag);
         parsed = parsed.replace(/<think>[\s\S]*?<\/think>/gi, extractTag);
+        // Case C: Strip any stray unpaired tags that survived normalisation (last-resort defence).
+        parsed = parsed.replace(/<think>/gi, '').replace(/<\/think>/gi, '');
 
         // 2. Safely escape the remaining text
         parsed = this.escapeHtml(parsed);
