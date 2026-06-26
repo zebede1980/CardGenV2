@@ -540,10 +540,25 @@ class RoleplayChatHandler {
         if (!this.activeChatId) return;
 
         if (!this.isGenerating) {
-            this.selectChat(this.activeChatId);
+            // ── Idle cross-device sync ──────────────────────────────────────
+            // Only reload if the server actually has different messages, to avoid
+            // jarring re-renders and scroll-jumps on brief focus changes (e.g. notifications).
+            try {
+                const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
+                if (!res.ok) return;
+                const chat = await res.json();
+                const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
+                const dbCount  = chat.messages ? chat.messages.length : 0;
+                if (dbCount !== domCount) {
+                    this.selectChat(this.activeChatId);
+                }
+            } catch (e) {
+                console.error('Failed to sync chat on wake (idle)', e);
+            }
             return;
         }
 
+        // ── Mid-generation recovery ──────────────────────────────────────
         try {
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
             if (!res.ok) return;
@@ -558,7 +573,7 @@ class RoleplayChatHandler {
                 this.selectChat(this.activeChatId);
             }
         } catch (e) {
-            console.error("Failed to sync chat on wake", e);
+            console.error('Failed to sync chat on wake (generating)', e);
         }
     }
 
@@ -1520,8 +1535,14 @@ class RoleplayChatHandler {
                 }
             }
         } catch (e) {
-            if (e.name !== 'AbortError') {
+            const isAbort = e.name === 'AbortError';
+            if (!isAbort) {
                 console.error('Regen stream error', e);
+                // Network drop (e.g. phone lock): old message already deleted, new one may not have
+                // been saved yet. Reload from server to show whatever state the backend reached.
+                if (this.activeChatId) {
+                    try { await this.selectChat(this.activeChatId); } catch (_) {}
+                }
             }
         } finally {
             this.isGenerating = false;
@@ -2091,8 +2112,14 @@ class RoleplayChatHandler {
                 }
             }
         } catch (e) {
-            if (e.name !== 'AbortError') {
-                console.error('Stream error', e);
+            const isAbort = e.name === 'AbortError';
+            if (!isAbort) {
+                console.error('Chat stream error', e);
+                // Network drop (e.g. phone lock/503): reload from server to clear partial
+                // optimistic bubble and sync any content the backend saved in the background.
+                if (this.activeChatId) {
+                    try { await this.selectChat(this.activeChatId); } catch (_) {}
+                }
             }
         } finally {
             this.isGenerating = false;
