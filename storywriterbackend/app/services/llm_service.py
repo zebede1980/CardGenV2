@@ -12,7 +12,15 @@ class LLMService:
         self.temperature = settings.temperature
         self.finish_reason: Optional[str] = None
         self.last_usage: Optional[dict] = None
-        self.client = httpx.AsyncClient(timeout=120.0)
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                connect=30.0,   # fail fast if the API is unreachable
+                read=None,      # no read timeout — LLM streams can take minutes (esp. with thinking)
+                write=30.0,     # reasonable limit for sending the request body
+                pool=10.0       # max wait for a connection from the pool
+            )
+        )
+
 
     async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None) -> AsyncGenerator[str, None]:
         url = f"{self.api_base_url}/chat/completions"
