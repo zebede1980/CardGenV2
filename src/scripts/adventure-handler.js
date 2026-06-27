@@ -470,6 +470,22 @@ class AdventureHandler {
         const richTags = [];
         const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
         
+        // ── Pre-normalisation: GLM / models that use \n---\n as a separator ────────
+        // Some models (e.g. GLM 5.x) output reasoning above a markdown horizontal
+        // rule rather than inside <think> tags. Detect this and wrap the content
+        // above the FIRST \n---\n as a <think> block so the pipeline below handles
+        // it uniformly. Only apply when no <think> tag is already present.
+        if (!parsed.includes('<think>') && !parsed.includes('</think>')) {
+            const sepIdx = parsed.indexOf('\n---\n');
+            if (sepIdx > 0) {
+                const thinkContent = parsed.slice(0, sepIdx).trim();
+                const storyContent  = parsed.slice(sepIdx + 5).trim(); // 5 = len('\n---\n')
+                if (thinkContent && storyContent) {
+                    parsed = `<think>\n${thinkContent}\n</think>\n${storyContent}`;
+                }
+            }
+        }
+
         // Safety Fallback: Normalise malformed <think> blocks before extraction.
         // Case A: Closing tag present but no opener → inject opener at start.
         if (parsed.includes('</think>') && !parsed.includes('<think>')) {

@@ -539,42 +539,156 @@ class RoleplayChatHandler {
 
         if (!this.activeChatId) return;
 
-        if (!this.isGenerating) {
-            // ── Idle cross-device sync ──────────────────────────────────────
-            // Only reload if the server actually has different messages, to avoid
-            // jarring re-renders and scroll-jumps on brief focus changes (e.g. notifications).
-            try {
-                const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
-                if (!res.ok) return;
-                const chat = await res.json();
-                const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
-                const dbCount  = chat.messages ? chat.messages.length : 0;
-                if (dbCount !== domCount) {
-                    this.selectChat(this.activeChatId);
-                }
-            } catch (e) {
-                console.error('Failed to sync chat on wake (idle)', e);
-            }
-            return;
-        }
-
-        // ── Mid-generation recovery ──────────────────────────────────────
         try {
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
             if (!res.ok) return;
             const chat = await res.json();
 
-            const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
-            const dbCount = chat.messages ? chat.messages.length : 0;
+            const messages = chat.messages || [];
+            const lastMsg = messages[messages.length - 1];
 
-            // If the DB has caught up to the DOM's optimistic bubble count, the background task finished while asleep
-            if (dbCount >= domCount) {
-                if (this.abortController) this.abortController.abort(); // Safely kill the hung/stale socket
-                this.selectChat(this.activeChatId);
+            // ── Detect server-side pending generation ───────────────────────
+            // The backend always creates an empty assistant placeholder before
+            // streaming. If the last DB message is assistant with empty content,
+            // the server is still generating (or the stream died before saving).
+            const serverIsGenerating = lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '';
+
+            if (serverIsGenerating) {
+                if (!this.isGenerating) {
+                    // Client lost its stream (tab hide, phone lock, etc.) but server
+                    // is still running. Reset UI to idle and show recovery banner.
+                    if (this.abortController) { this.abortController.abort(); this.abortController = null; }
+                    this.isGenerating = false;
+                    this.els.sendBtn.style.display = '';
+                    if (this.els.impBtn) this.els.impBtn.style.display = '';
+                    if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
+                    this.els.sendBtn.disabled = false;
+                }
+                this._showPendingGenerationBanner(lastMsg.id);
+                return;
+            }
+
+            // No pending generation — dismiss any stale banner
+            this._hidePendingGenerationBanner();
+
+            const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
+            const dbCount  = messages.length;
+
+            if (this.isGenerating) {
+                // ── Mid-generation recovery ──────────────────────────────────
+                // Background task finished while client was asleep (DB caught up)
+                if (dbCount >= domCount) {
+                    if (this.abortController) this.abortController.abort();
+                    this.selectChat(this.activeChatId);
+                }
+            } else {
+                // ── Idle cross-device sync ───────────────────────────────────
+                // Only reload when DB and DOM are out of sync to avoid jarring
+                // re-renders and scroll-jumps on brief focus changes.
+                if (dbCount !== domCount) {
+                    this.selectChat(this.activeChatId);
+                }
             }
         } catch (e) {
-            console.error('Failed to sync chat on wake (generating)', e);
+            console.error('Failed to sync chat on wake', e);
         }
+    }
+
+    /**
+     * Show a non-intrusive banner above the input bar when the server is known
+     * to be mid-generation (empty assistant placeholder detected in the DB).
+     * Provides a Cancel button that deletes the placeholder row.
+     */
+    _showPendingGenerationBanner(pendingMsgId) {
+        const bannerId = 'chat-pending-gen-banner';
+        if (document.getElementById(bannerId)) {
+            // Update the stored msg id in case of re-entry
+            document.getElementById(bannerId)._pendingMsgId = pendingMsgId;
+            return;
+        }
+
+        const banner = document.createElement('div');
+        banner.id = bannerId;
+        banner._pendingMsgId = pendingMsgId;
+        banner.style.cssText = [
+            'display:flex', 'align-items:center', 'gap:0.75rem',
+            'padding:0.5rem 0.9rem', 'background:var(--surface-color,#2a2a35)',
+            'border-top:1px solid var(--border,#3a3a4a)',
+            'border-bottom:1px solid var(--border,#3a3a4a)',
+            'font-size:0.85rem', 'color:var(--text-secondary)',
+        ].join(';');
+
+        const spinner = document.createElement('span');
+        spinner.textContent = '⏳';
+        spinner.style.animation = 'none';
+
+        const label = document.createElement('span');
+        label.textContent = 'Generation in progress on the server…';
+        label.style.flex = '1';
+
+        const waitBtn = document.createElement('button');
+        waitBtn.className = 'btn-outline btn-small';
+        waitBtn.textContent = 'Reconnect';
+        waitBtn.title = 'Poll for the completed response';
+        waitBtn.onclick = async () => {
+            this._hidePendingGenerationBanner();
+            // Poll until content appears (max ~3 minutes)
+            let attempts = 0;
+            const poll = async () => {
+                try {
+                    const r = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
+                    if (!r.ok) return;
+                    const c = await r.json();
+                    const msgs = c.messages || [];
+                    const last = msgs[msgs.length - 1];
+                    if (!last || last.content !== '') {
+                        // Content arrived — reload the chat
+                        this.selectChat(this.activeChatId);
+                        return;
+                    }
+                } catch (_) {}
+                if (++attempts < 36) setTimeout(poll, 5000); // retry every 5s for 3 min
+                else this._showPendingGenerationBanner(pendingMsgId); // give up: re-show banner
+            };
+            poll();
+        };
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-outline btn-small';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.title = 'Delete the pending response and return to ready state';
+        cancelBtn.style.color = 'var(--error, #e05c5c)';
+        cancelBtn.onclick = async () => {
+            const msgId = document.getElementById(bannerId)?._pendingMsgId;
+            this._hidePendingGenerationBanner();
+            if (!msgId) { this.selectChat(this.activeChatId); return; }
+            try {
+                await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${msgId}`, { method: 'DELETE' });
+            } catch (_) {}
+            this.selectChat(this.activeChatId);
+        };
+
+        banner.appendChild(spinner);
+        banner.appendChild(label);
+        banner.appendChild(waitBtn);
+        banner.appendChild(cancelBtn);
+
+        // Insert immediately above the input row
+        const inputRow = this.els.msgInput?.closest('[class*="chat-input"], form, .chat-compose') ||
+                         this.els.sendBtn?.parentElement;
+        if (inputRow && inputRow.parentElement) {
+            inputRow.parentElement.insertBefore(banner, inputRow);
+        } else {
+            // Fallback: append to the chat view
+            const view = document.getElementById('view-roleplaychat');
+            if (view) view.appendChild(banner);
+        }
+    }
+
+    /** Remove the pending-generation banner if it exists. */
+    _hidePendingGenerationBanner() {
+        const banner = document.getElementById('chat-pending-gen-banner');
+        if (banner) banner.remove();
     }
 
     openGlobalSettings() {
@@ -1185,7 +1299,9 @@ class RoleplayChatHandler {
                 }
             }
 
+            this._hidePendingGenerationBanner();
             this.els.timeline.innerHTML = '';
+
 
             // Ensure messages are sorted chronologically (oldest first)
             const sortedMessages = (chat.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
@@ -1808,6 +1924,22 @@ class RoleplayChatHandler {
         // 1. Temporarily extract Rich XML tags to protect their inner attributes from being formatted
         const richTags = [];
         const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
+
+        // ── Pre-normalisation: GLM / models that use \n---\n as a separator ────────
+        // Some models (e.g. GLM 5.x) output reasoning above a markdown horizontal
+        // rule rather than inside <think> tags. Detect this and wrap the content
+        // above the FIRST \n---\n as a <think> block so the pipeline below handles
+        // it uniformly. Only apply when no <think> tag is already present.
+        if (!parsed.includes('<think>') && !parsed.includes('</think>')) {
+            const sepIdx = parsed.indexOf('\n---\n');
+            if (sepIdx > 0) {
+                const thinkContent = parsed.slice(0, sepIdx).trim();
+                const storyContent  = parsed.slice(sepIdx + 5).trim(); // 5 = len('\n---\n')
+                if (thinkContent && storyContent) {
+                    parsed = `<think>\n${thinkContent}\n</think>\n${storyContent}`;
+                }
+            }
+        }
 
         // Safety Fallback: Normalise malformed <think> blocks before extraction.
         // Case A: Closing tag present but no opener → inject opener at start.
