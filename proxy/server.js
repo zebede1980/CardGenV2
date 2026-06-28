@@ -127,7 +127,7 @@ async function readHistory(userId) {
     });
     if (!response.ok) return [];
     let items = await response.json();
-    return items.map(item => ({ ...item.data, id: item.id, updatedAt: item.updated_at }));
+    return items.map(item => ({ ...item.data, id: item.id, updatedAt: item.data.updatedAt || item.updated_at }));
   } catch (e) {
     return [];
   }
