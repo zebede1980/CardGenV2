@@ -1036,11 +1036,7 @@ class StoryWriterApp {
 
             const div = document.createElement('div');
             div.dataset.segmentId = seg.id;
-            div.style.padding = '1rem';
-            div.style.marginBottom = '1rem';
-            div.style.background = 'var(--bg-tertiary)';
-            div.style.borderRadius = '0.5rem';
-            div.style.borderLeft = '3px solid var(--accent)';
+            div.className = 'sw-segment-card';
 
             const content = document.createElement('div');
             content.style.lineHeight = '1.7';
@@ -1198,7 +1194,6 @@ class StoryWriterApp {
             div.appendChild(content);
             div.appendChild(editor);
             div.appendChild(imageArea);
-            div.appendChild(actions);
             area.appendChild(div);
         });
 
