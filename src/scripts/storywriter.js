@@ -535,6 +535,14 @@ class StoryWriterApp {
                     // abort (not a user stop) and should call refreshWorkspace().
                     this._wakeAbort = true;
                     if (this.abortController) this.abortController.abort();
+                } else {
+                    // Server is still generating (no new segment yet).
+                    // Ensure the UI clearly reflects the in-progress state in case
+                    // the phone lock reset button labels.
+                    const btn = document.getElementById('sw-generate-btn');
+                    const stopBtn = document.getElementById('sw-stop-btn');
+                    if (btn) { btn.textContent = 'Generating...'; btn.disabled = true; }
+                    if (stopBtn) stopBtn.style.display = 'inline-block';
                 }
             } catch (e) {
                 console.error('[StoryWriter] syncOnWake (generating) failed:', e);

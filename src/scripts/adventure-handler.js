@@ -101,35 +101,66 @@ class AdventureHandler {
     async syncOnWake() {
         if (document.visibilityState !== 'visible') return;
         if (!this.currentSessionId) return;
+        if (this.playView && this.playView.style.display === 'none') return; // Not in play mode
 
-        if (this.isGenerating) {
-            // ── Mid-generation recovery ──────────────────────────────────────
-            try {
-                const res  = await authFetch(`/api/sw/adventures/${this.currentSessionId}`);
-                if (!res.ok) return;
-                const data = await res.json();
+        try {
+            const res = await authFetch(`/api/sw/adventures/${this.currentSessionId}`);
+            if (!res.ok) return;
+            const data = await res.json();
 
-                const domCount = this.storyArea
-                    ? this.storyArea.querySelectorAll('.adv-story-wrapper[data-role="assistant"]').length
-                    : 0;
-                const dbCount = (data.actions || [])
-                    .filter(a => !a.is_summarized && a.role === 'assistant').length;
+            const actions = data.actions || [];
+            const lastAction = actions[actions.length - 1];
 
-                if (dbCount >= domCount) {
-                    // Server might be generating or completed while the client was asleep.
-                    // Delegate to resumeSession which handles pending generation polling.
-                    await this.resumeSession(this.currentSessionId);
+            // ── Detect server-side pending generation (same pattern as Chat) ─
+            // Backend creates an empty assistant action before streaming.
+            // If the last DB action is an empty assistant, server is still running.
+            const serverIsGenerating = lastAction && lastAction.role === 'assistant' && lastAction.content === '';
+
+            if (serverIsGenerating) {
+                // Ensure loading state is shown regardless of client isGenerating flag
+                this.isGenerating = true;
+                this.loadingIndicator.style.display = 'flex';
+                // Abort any stale client stream
+                if (this._abortController) { this._abortController.abort(); this._abortController = null; }
+                // Start polling if not already polling
+                if (!this._pollingInterval) {
+                    this._pollingInterval = setInterval(async () => {
+                        try {
+                            const pollRes = await window.authFetch(`/api/sw/adventures/${this.currentSessionId}`);
+                            if (!pollRes.ok) return;
+                            const pollData = await pollRes.json();
+                            const pollActions = pollData.actions || [];
+                            const pollLast = pollActions[pollActions.length - 1];
+                            if (pollLast && pollLast.role === 'assistant' && pollLast.content !== '') {
+                                clearInterval(this._pollingInterval);
+                                this._pollingInterval = null;
+                                this.isGenerating = false;
+                                this.loadingIndicator.style.display = 'none';
+                                await this.resumeSession(this.currentSessionId);
+                            }
+                        } catch(e) {}
+                    }, 3000);
                 }
-            } catch (e) {
-                console.error('[Adventure] syncOnWake (generating) failed:', e);
+                return;
             }
-        } else if (this.playView && this.playView.style.display !== 'none') {
-            // ── Idle cross-device sync ───────────────────────────────────────
-            try {
+
+            // No pending generation — check if DOM is out of date
+            const domCount = this.storyArea
+                ? this.storyArea.querySelectorAll('.adv-story-wrapper[data-role="assistant"]').length
+                : 0;
+            const dbCount = actions.filter(a => !a.is_summarized && a.role === 'assistant' && a.content !== '').length;
+
+            if (this.isGenerating && this._abortController) {
+                // Client was streaming but server already finished — abort stream and reload
+                this._wakeAbort = true;
+                this._abortController.abort();
+            } else if (dbCount !== domCount) {
+                // Idle cross-device sync: DB and DOM are out of sync, reload silently
                 await this.resumeSession(this.currentSessionId);
-            } catch (e) {
-                console.error('[Adventure] syncOnWake (idle) failed:', e);
             }
+            // If dbCount === domCount and not generating: do nothing — avoids needless re-render
+        } catch (e) {
+            console.error('[Adventure] syncOnWake failed:', e);
         }
     }
 
@@ -660,6 +691,7 @@ class AdventureHandler {
     async sendAction(content, role) {
         if (this.isGenerating) return;
         this.isGenerating = true;
+        this._wakeAbort = false;
         this.optionsArea.innerHTML = '';
         this.loadingIndicator.style.display = 'flex';
         
@@ -672,6 +704,8 @@ class AdventureHandler {
         const maxOutput = window.config?.get("adventure.maxOutputTokens") || 512;
         const repPenalty = window.config?.get("adventure.repetitionPenalty") || 1.0;
         
+        this._abortController = new AbortController();
+        
         try {
             const res = await window.authFetch(`/api/sw/adventures/${this.currentSessionId}/action`, {
                 method: 'POST',
@@ -682,7 +716,8 @@ class AdventureHandler {
                     max_input_tokens: maxInput,
                     max_output_tokens: maxOutput,
                     repetition_penalty: repPenalty
-                })
+                }),
+                signal: this._abortController.signal
             });
             
             if (!res.ok) {
@@ -752,13 +787,21 @@ class AdventureHandler {
             }
             
         } catch (e) {
+            const isAbort = e.name === 'AbortError';
+            const isWakeAbort = isAbort && this._wakeAbort;
+            this._wakeAbort = false;
+            
             console.error('[Adventure] Generation error:', e);
-            // Resiliency: Instead of showing an error when connection drops, silently reload the session
-            // since the backend likely finished the task in the background.
             wrapper.remove();
-            await this.resumeSession(this.currentSessionId);
+            
+            if (!isAbort || isWakeAbort) {
+                // Network drop or wake-recovery: server likely finished in background, reload.
+                await this.resumeSession(this.currentSessionId);
+            }
+            // Plain abort (future stop button): don't reload
         } finally {
             this.isGenerating = false;
+            this._abortController = null;
             this.loadingIndicator.style.display = 'none';
             this.scrollToBottom();
         }
