@@ -1335,7 +1335,7 @@ class StoryWriterApp {
     // ── Generate next story chunk (with optional TTS narration) ────────────────
 
     async generateNext() {
-        if (this.isFetchingLLM || !this.story) return;
+        if (this.isFetchingLLM || !this.story || this._pollingInterval) return;
         const steeringInput = document.getElementById('sw-steering');
         const steering = steeringInput.value.trim();
         const btn = document.getElementById('sw-generate-btn');
@@ -1534,8 +1534,10 @@ class StoryWriterApp {
 
             if (!isAbort || isWakeAbort) {
                 // Network drop (phone lock / 503) or a wake-recovery abort:
-                // the server likely saved the segment in the background, so refresh.
-                await this.refreshWorkspace();
+                // the server is likely still generating the segment in the background.
+                // We must poll the server until the new segment appears in the DB.
+                const baselineCount = document.querySelectorAll('#sw-story-area [data-segment-id]').length;
+                this._pollForNewSegment(baselineCount);
             }
             // Plain user-stop (stop button): do NOT refresh — user intentionally stopped,
             // and refreshWorkspace would scroll them unexpectedly.
@@ -1547,9 +1549,11 @@ class StoryWriterApp {
         } finally {
             this.isFetchingLLM = false;
             this.abortController = null;
-            btn.textContent = 'Generate Next';
-            btn.disabled = false;
-            if (stopBtn) stopBtn.style.display = 'none';
+            if (!this._pollingInterval) {
+                btn.textContent = 'Generate Next';
+                btn.disabled = false;
+                if (stopBtn) stopBtn.style.display = 'none';
+            }
             
             const isAuto = document.getElementById('sw-auto-mode')?.checked || false;
             const wasAborted = stopBtn?.dataset?.aborted === "true";
@@ -1564,14 +1568,55 @@ class StoryWriterApp {
         }
     }
 
+    async _pollForNewSegment(baselineCount) {
+        if (this._pollingInterval) return;
+        
+        const btn = document.getElementById('sw-generate-btn');
+        if (btn) {
+            btn.textContent = 'Polling...';
+            btn.disabled = true;
+        }
+        const stopBtn = document.getElementById('sw-stop-btn');
+        if (stopBtn) stopBtn.style.display = 'inline-block';
+        
+        // Polling loop
+        this._pollingInterval = setInterval(async () => {
+            try {
+                const story = await this.apiCall(`/stories/${this.currentStoryId}`);
+                const dbCount = (story.segments || []).filter(s => !s.is_summary).length;
+                if (dbCount > baselineCount) {
+                    clearInterval(this._pollingInterval);
+                    this._pollingInterval = null;
+                    await this.refreshWorkspace();
+                    
+                    if (btn) {
+                        btn.textContent = 'Generate Next';
+                        btn.disabled = false;
+                    }
+                    if (stopBtn) stopBtn.style.display = 'none';
+                }
+            } catch (e) {}
+        }, 3000);
+    }
+
     stopGeneration() {
-        if (this.isFetchingLLM) {
+        if (this.isFetchingLLM || this._pollingInterval) {
             console.debug('[StoryWriter] Stop generation triggered');
             const stopBtn = document.getElementById('sw-stop-btn');
             if (stopBtn) stopBtn.dataset.aborted = "true";
             if (this.abortController) {
                 this.abortController.abort();
                 this.abortController = null;
+            }
+            if (this._pollingInterval) {
+                clearInterval(this._pollingInterval);
+                this._pollingInterval = null;
+                const genBtn = document.getElementById('sw-generate-btn');
+                if (genBtn) {
+                    genBtn.textContent = 'Generate Next';
+                    genBtn.disabled = false;
+                }
+                if (stopBtn) stopBtn.style.display = 'none';
             }
         }
     }
