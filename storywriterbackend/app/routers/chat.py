@@ -36,7 +36,7 @@ def get_default_system_prompt() -> str:
     ]
     return "\n\n".join(modules)
 
-def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None):
+def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None, enable_cot: bool = True):
     messages = []
     
     system_parts = []
@@ -141,7 +141,7 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
-    if request.enable_cot:
+    if enable_cot:
         if speaker_name and len(chat.characters) > 1:
             messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message. You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
         elif "CHAIN OF THOUGHT" in "".join(system_parts):
@@ -667,7 +667,7 @@ async def send_message(
     # it directly into the user's input field.
     if req.impersonate:
         # Build the normal context from existing history (no new user msg saved)
-        prompt_messages = build_chat_prompt(chat, db, None, getattr(req, 'max_input_tokens', None))
+        prompt_messages = build_chat_prompt(chat, db, None, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True))
 
         # Append the user's draft text (if any) as context, then the key instruction
         impersonate_instruction = (
@@ -735,7 +735,7 @@ async def send_message(
         db.commit()
     
     # 2. Build Prompt Context (Ensuring strict caching order)
-    prompt_messages = build_chat_prompt(chat, db, speaker_name, getattr(req, 'max_input_tokens', None))
+    prompt_messages = build_chat_prompt(chat, db, speaker_name, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True))
     
     # 3. Create Placeholder Assistant Message
     assistant_msg = models.ChatMessage(
