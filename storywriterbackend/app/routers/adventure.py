@@ -358,8 +358,11 @@ async def send_action(
         finally:
             await llm.close()
             
-    asyncio.create_task(generate_task())
-    asyncio.create_task(summarize_adventure_task(session_id, current_user.id))
+    async def background_tasks():
+        await generate_task()
+        await summarize_adventure_task(session_id, current_user.id)
+        
+    asyncio.create_task(background_tasks())
     
     async def sse_generator():
         try:

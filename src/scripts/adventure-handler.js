@@ -107,11 +107,9 @@ class AdventureHandler {
                 const dbCount = (data.actions || [])
                     .filter(a => !a.is_summarized && a.role === 'assistant').length;
 
-                if (dbCount > domCount) {
-                    // Server completed generation while the client was asleep.
-                    // Reset state before calling resumeSession to avoid re-entry guard.
-                    this.isGenerating = false;
-                    this.loadingIndicator.style.display = 'none';
+                if (dbCount >= domCount) {
+                    // Server might be generating or completed while the client was asleep.
+                    // Delegate to resumeSession which handles pending generation polling.
                     await this.resumeSession(this.currentSessionId);
                 }
             } catch (e) {
@@ -278,6 +276,36 @@ class AdventureHandler {
                     }
                 }
             });
+            
+            const lastAction = data.actions[data.actions.length - 1];
+            const serverIsGenerating = lastAction && lastAction.role === 'assistant' && lastAction.content === '';
+            
+            if (serverIsGenerating) {
+                this.isGenerating = true;
+                this.loadingIndicator.style.display = 'flex';
+                
+                if (this._pollingInterval) clearInterval(this._pollingInterval);
+                this._pollingInterval = setInterval(async () => {
+                    try {
+                        const pollRes = await window.authFetch(`/api/sw/adventures/${this.currentSessionId}`);
+                        if (!pollRes.ok) return;
+                        const pollData = await pollRes.json();
+                        const pollActions = pollData.actions || [];
+                        const pollLast = pollActions[pollActions.length - 1];
+                        
+                        if (pollLast && pollLast.role === 'assistant' && pollLast.content !== '') {
+                            clearInterval(this._pollingInterval);
+                            this._pollingInterval = null;
+                            this.isGenerating = false;
+                            this.loadingIndicator.style.display = 'none';
+                            this.resumeSession(this.currentSessionId);
+                        }
+                    } catch(e) {}
+                }, 3000);
+                
+                this.scrollToBottom();
+                return;
+            }
             
             if (lastAssistantOptions && lastAssistantOptions.length > 0) {
                 this.renderOptions(lastAssistantOptions);
@@ -629,7 +657,7 @@ class AdventureHandler {
                 if (done) break;
                 
                 buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
+                const lines = buffer.split('\n\n');
                 buffer = lines.pop();
                 
                 for (const line of lines) {
