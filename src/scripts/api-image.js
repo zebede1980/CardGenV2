@@ -137,6 +137,11 @@ Object.assign(APIHandler.prototype, {
       throw new Error("Text API returned an empty image prompt");
     }
 
+    const disableShorteningCheckbox = document.getElementById("disable-prompt-shortening");
+    if (disableShorteningCheckbox && disableShorteningCheckbox.checked) {
+      return generatedPrompt.trim();
+    }
+
     return await this.truncateImagePrompt(generatedPrompt.trim());
   },
 
