@@ -10,9 +10,12 @@ Object.assign(APIHandler.prototype, {
     styleOverride = undefined,
     guidance = ""
   ) {
+    const disableShorteningCheckbox = typeof document !== "undefined" ? document.getElementById("disable-prompt-shortening") : null;
+    const skipShortening = disableShorteningCheckbox && disableShorteningCheckbox.checked;
+
     let imagePrompt;
     if (customPrompt) {
-      imagePrompt = await this.truncateImagePrompt(customPrompt);
+      imagePrompt = skipShortening ? customPrompt.trim() : await this.truncateImagePrompt(customPrompt);
     } else {
       console.log("=== GENERATING IMAGE PROMPT VIA TEXT API ===");
       console.log("Character name:", characterName);
@@ -49,7 +52,7 @@ Object.assign(APIHandler.prototype, {
     // The truncateImagePrompt step targets 1000 chars, but style tags can add ~200+ more.
     // Trim the final prompt to stay within safe bounds, at a sentence boundary if possible.
     const IMAGE_PROMPT_MAX = 1150;
-    if (finalApiPrompt.length > IMAGE_PROMPT_MAX) {
+    if (!skipShortening && finalApiPrompt.length > IMAGE_PROMPT_MAX) {
       const trimmed = finalApiPrompt.substring(0, IMAGE_PROMPT_MAX);
       const lastPeriod = trimmed.lastIndexOf(".");
       const lastComma = trimmed.lastIndexOf(",");
