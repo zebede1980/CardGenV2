@@ -249,6 +249,7 @@ class AdventureSessionOut(BaseModel):
     system_prompt: str
     created_at: datetime
     updated_at: datetime
+    characters: List[CharacterCardOut] = []
     class Config:
         from_attributes = True
 

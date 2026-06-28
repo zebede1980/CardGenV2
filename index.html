@@ -1812,30 +1812,23 @@
 
                 <!-- Adventure Mode View -->
                 <div id="view-adventure" class="tab-content" style="display: none;">
-                    <section class="input-section" id="adv-setup-view" style="margin-bottom: 2rem;">
-                        <h2 class="section-title">New Adventure</h2>
-                        <div class="content-box">
-                            <label class="label">Select Characters</label>
-                            <div id="adv-selected-chars" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; min-height: 42px; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);">
-                                <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
-                            </div>
-                            <button id="adv-add-char-btn" class="btn-outline" style="margin-bottom: 1rem;">🖼️ Add Character</button>
-                            
-                            <label class="label">Starting Scenario (Optional)</label>
-                            <textarea id="adv-starting-scenario" class="input" rows="3" placeholder="Describe how the adventure begins..."></textarea>
-                            
-                            <label class="label" style="margin-top: 1rem;">System Prompt</label>
-                            <textarea id="adv-system-prompt" class="input" rows="5" placeholder="System prompt instructions..."></textarea>
-                            
-                            <button id="adv-start-btn" class="btn-primary" style="width: 100%; margin-top: 1rem;">Begin Adventure</button>
-                        </div>
-                        
-                        <h2 class="section-title" style="margin-top: 2rem;">Load Adventure</h2>
-                        <div id="adv-list-container" class="content-box">
-                            <ul id="adv-list" class="story-list"></ul>
-                        </div>
-                    </section>
 
+                    <!-- Landing Page -->
+                    <div id="adv-landing-view">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+                            <h2 class="section-title" style="margin: 0;">⚔️ Adventures</h2>
+                            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                <button id="adv-open-global-settings" class="btn-outline" style="font-size: 0.9rem;">⚙️ Settings</button>
+                                <button id="adv-new-btn" class="btn-primary" style="padding: 0.6rem 1.4rem; font-size: 1rem;">＋ New Adventure</button>
+                            </div>
+                        </div>
+
+                        <div id="adv-session-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                            <!-- Session cards injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Play View -->
                     <section class="result-section" id="adv-play-view" style="display: none; flex-direction: column; padding-bottom: 4rem;">
                         <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
                             <button id="adv-back-btn" class="btn-outline">← Exit</button>
@@ -1855,12 +1848,43 @@
                         <div id="adv-options-area" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                             <!-- Buttons go here -->
                         </div>
-                        
+
                         <div id="adv-loading" style="display: none; justify-content: center; align-items: center; padding: 1rem;">
                             <div class="loading-spinner"></div>
                             <span style="margin-left: 0.5rem; color: var(--text-secondary);">The narrator is thinking...</span>
                         </div>
                     </section>
+                </div>
+
+                <!-- New Adventure Modal -->
+                <div id="adv-new-modal" class="modal-overlay" style="display: none;">
+                    <div class="api-settings-modal" style="max-width: 560px; width: 94%; max-height: 90vh; overflow-y: auto;">
+                        <div class="modal-header">
+                            <h2 class="modal-title">⚔️ New Adventure</h2>
+                            <button id="adv-new-modal-close" class="modal-close" title="Close">×</button>
+                        </div>
+                        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                            <div>
+                                <label class="label">Characters</label>
+                                <div id="adv-selected-chars" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; min-height: 42px; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);">
+                                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
+                                </div>
+                                <button id="adv-add-char-btn" class="btn-outline" style="font-size: 0.9rem;">🖼️ Add Character</button>
+                            </div>
+
+                            <div>
+                                <label class="label">Starting Scenario <span style="font-weight: 400; color: var(--text-secondary);">(optional)</span></label>
+                                <textarea id="adv-starting-scenario" class="input" rows="3" placeholder="Describe how the adventure begins..."></textarea>
+                            </div>
+
+                            <div>
+                                <label class="label">System Prompt <span style="font-weight: 400; color: var(--text-secondary);">(optional — overrides global settings)</span></label>
+                                <textarea id="adv-system-prompt" class="input" rows="4" placeholder="Custom system prompt for this adventure..."></textarea>
+                            </div>
+
+                            <button id="adv-start-btn" class="btn-primary" style="width: 100%; padding: 0.9rem; font-size: 1rem; margin-top: 0.25rem;">⚔️ Begin Adventure</button>
+                        </div>
+                    </div>
                 </div>
             </main>
 

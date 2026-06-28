@@ -25,14 +25,19 @@ class AdventureHandler {
             adventure: document.getElementById('tab-adventure')
         };
         
-        // Setup View
-        this.setupView = document.getElementById('adv-setup-view');
+        // Landing & Modal View
+        this.landingView = document.getElementById('adv-landing-view');
+        this.sessionGrid = document.getElementById('adv-session-grid');
+        this.newBtn = document.getElementById('adv-new-btn');
+        this.newModal = document.getElementById('adv-new-modal');
+        this.newModalClose = document.getElementById('adv-new-modal-close');
+        
+        // Modal Form Controls
         this.selectedCharsContainer = document.getElementById('adv-selected-chars');
         this.addCharBtn = document.getElementById('adv-add-char-btn');
         this.startingScenario = document.getElementById('adv-starting-scenario');
         this.systemPrompt = document.getElementById('adv-system-prompt');
         this.startBtn = document.getElementById('adv-start-btn');
-        this.listContainer = document.getElementById('adv-list');
         
         // Play View
         this.playView = document.getElementById('adv-play-view');
@@ -68,10 +73,13 @@ class AdventureHandler {
             }
         });
         
+        this.newBtn.addEventListener('click', () => this.openNewAdventureModal());
+        this.newModalClose.addEventListener('click', () => this.closeNewAdventureModal());
+        
         this.startBtn.addEventListener('click', () => this.startNewAdventure());
         this.backBtn.addEventListener('click', () => {
             this.playView.style.display = 'none';
-            this.setupView.style.display = 'block';
+            this.landingView.style.display = 'block';
             this.currentSessionId = null;
             this.loadSessionList();
         });
@@ -135,14 +143,26 @@ class AdventureHandler {
         this.tabBtns.adventure.classList.add('btn-primary');
         
         this.playView.style.display = 'none';
-        this.setupView.style.display = 'block';
+        this.landingView.style.display = 'block';
         
+        this.loadSessionList();
+    }
+    
+    openNewAdventureModal() {
         const segments = window.config?.get("adventure.systemPromptSegments") || [];
         if (this.systemPrompt) {
             this.systemPrompt.value = segments.join("\n\n");
         }
         
-        this.loadSessionList();
+        this.selectedCharacters = [];
+        this.renderSelectedCharacters();
+        if (this.startingScenario) this.startingScenario.value = '';
+        
+        this.newModal.style.display = 'flex';
+    }
+    
+    closeNewAdventureModal() {
+        this.newModal.style.display = 'none';
     }
 
     async renderSelectedCharacters() {
@@ -176,32 +196,59 @@ class AdventureHandler {
             const sessions = await authFetch('/api/sw/adventures/');
             const data = await sessions.json();
             
-            this.listContainer.innerHTML = '';
+            this.sessionGrid.innerHTML = '';
             if (data.length === 0) {
-                this.listContainer.innerHTML = '<li style="padding:1rem; color:var(--text-secondary); text-align:center;">No adventures saved yet.</li>';
+                this.sessionGrid.innerHTML = '<div style="color: var(--text-secondary); grid-column: 1 / -1;">No adventures saved yet. Click + New Adventure to begin!</div>';
                 return;
             }
             
             data.forEach(sess => {
-                const li = document.createElement('li');
-                li.className = 'story-list-item';
-                li.innerHTML = `
-                    <div style="flex:1;">
-                        <div class="story-list-title">${sess.title}</div>
-                        <div class="story-list-date">Updated: ${new Date(sess.updated_at).toLocaleString()}</div>
+                const card = document.createElement('div');
+                card.className = 'content-box';
+                card.style.cursor = 'pointer';
+                card.style.position = 'relative';
+                card.style.display = 'flex';
+                card.style.flexDirection = 'column';
+                
+                // Character Thumbnails
+                let thumbnailsHtml = '';
+                if (sess.characters && sess.characters.length > 0) {
+                    thumbnailsHtml = '<div style="display: flex; gap: -0.5rem; margin-bottom: 0.75rem;">';
+                    sess.characters.forEach((char, idx) => {
+                        const avatarUrl = this.getAvatarUrl(char.id);
+                        thumbnailsHtml += `<img src="${avatarUrl}" title="${char.name}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--surface-color); margin-left: ${idx === 0 ? '0' : '-8px'}; z-index: ${sess.characters.length - idx}; background: var(--surface-strong);">`;
+                    });
+                    thumbnailsHtml += '</div>';
+                }
+                
+                card.innerHTML = `
+                    ${thumbnailsHtml}
+                    <h3 style="margin-top: 0; margin-bottom: 0.25rem; padding-right: 2.5rem; font-size: 1.1rem; line-height: 1.3;">${sess.title}</h3>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem; flex: 1;">Updated: ${new Date(sess.updated_at).toLocaleDateString()}</div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: auto;">
+                        <button class="btn-outline btn-small resume-btn" style="flex: 1;">Resume</button>
                     </div>
-                    <button class="btn-outline btn-small resume-btn">Resume</button>
-                    <button class="btn-danger btn-small delete-btn">Delete</button>
                 `;
                 
-                li.querySelector('.resume-btn').addEventListener('click', () => this.resumeSession(sess.id));
-                li.querySelector('.delete-btn').addEventListener('click', async () => {
-                    if(confirm("Delete this adventure?")) {
+                const delBtn = document.createElement('button');
+                delBtn.textContent = '🗑️';
+                delBtn.title = 'Delete adventure';
+                delBtn.style.cssText = 'position:absolute; top:0.6rem; right:0.6rem; background:none; border:1px solid transparent; border-radius:4px; cursor:pointer; font-size:1rem; color:var(--error-color,#e55); opacity:0.55; padding:0.2rem 0.35rem; line-height:1; z-index: 2;';
+                delBtn.addEventListener('mouseenter', () => { delBtn.style.opacity = '1'; delBtn.style.borderColor = 'var(--error-color,#e55)'; delBtn.style.background = 'rgba(220,50,50,0.1)'; });
+                delBtn.addEventListener('mouseleave', () => { delBtn.style.opacity = '0.55'; delBtn.style.borderColor = 'transparent'; delBtn.style.background = 'none'; });
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if(confirm("Delete this adventure? This cannot be undone.")) {
                         await authFetch('/api/sw/adventures/' + sess.id, { method: 'DELETE' });
                         this.loadSessionList();
                     }
                 });
-                this.listContainer.appendChild(li);
+                
+                card.addEventListener('click', () => this.resumeSession(sess.id));
+                card.querySelector('.resume-btn').addEventListener('click', (e) => { e.stopPropagation(); this.resumeSession(sess.id); });
+                
+                card.appendChild(delBtn);
+                this.sessionGrid.appendChild(card);
             });
         } catch (e) {
             console.error("Failed to load adventures", e);
@@ -228,7 +275,7 @@ class AdventureHandler {
             const data = await res.json();
             this.currentSessionId = data.id;
             
-            this.setupView.style.display = 'none';
+            this.closeNewAdventureModal();
             this.playView.style.display = 'flex';
             this.titleInput.value = data.title;
             this.storyArea.innerHTML = '';
@@ -251,7 +298,7 @@ class AdventureHandler {
             const data = await res.json();
             
             this.currentSessionId = data.id;
-            this.setupView.style.display = 'none';
+            this.landingView.style.display = 'none';
             this.playView.style.display = 'flex';
             this.titleInput.value = data.title;
             
@@ -768,17 +815,10 @@ class AdventureHandler {
         document.body.appendChild(modal);
         
         // Add a settings button to the Setup view title
-        const setupTitle = document.querySelector('#adv-setup-view .section-title');
-        if (setupTitle) {
-            const settingsBtn = document.createElement('button');
-            settingsBtn.id = 'adv-open-global-settings';
-            settingsBtn.className = 'btn-outline btn-small';
-            settingsBtn.innerHTML = '⚙️ Settings';
-            settingsBtn.style.marginLeft = '1rem';
-            settingsBtn.style.fontSize = '0.9rem';
-            setupTitle.appendChild(settingsBtn);
-            
-            settingsBtn.addEventListener('click', () => this.openGlobalSettings());
+        // Bind the settings button that's already in index.html
+        const existingSettingsBtn = document.getElementById('adv-open-global-settings');
+        if (existingSettingsBtn) {
+            existingSettingsBtn.addEventListener('click', () => this.openGlobalSettings());
         }
 
         document.getElementById('adv-global-settings-close').addEventListener('click', () => {

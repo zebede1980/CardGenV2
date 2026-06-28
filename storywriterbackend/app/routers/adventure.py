@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 import asyncio
 import json
@@ -197,6 +197,7 @@ async def summarize_adventure_task(session_id: str, user_id: int):
 @router.get("/", response_model=List[schemas.AdventureSessionOut])
 def list_sessions(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return db.query(models.AdventureSession)\
+        .options(joinedload(models.AdventureSession.characters))\
         .filter(models.AdventureSession.user_id == str(current_user.id))\
         .order_by(models.AdventureSession.updated_at.desc())\
         .all()
