@@ -1063,12 +1063,7 @@ class StoryWriterApp {
             imageArea.style.display = 'none';
 
             const actions = document.createElement('div');
-            actions.style.marginTop = '0.75rem';
-            actions.style.display = 'flex';
-            actions.style.gap = '0.5rem';
-            actions.style.justifyContent = 'space-between';
-            actions.style.alignItems = 'center';
-            actions.style.flexWrap = 'wrap';
+            actions.className = 'sw-segment-actions';
 
             const playingBadge = document.createElement('span');
             playingBadge.className = 'sw-segment-playing-badge';
@@ -1078,19 +1073,20 @@ class StoryWriterApp {
 
             const editBtn = document.createElement('button');
             editBtn.className = 'btn-small';
-            editBtn.textContent = 'Edit';
+            editBtn.textContent = '✏️';
+            editBtn.title = 'Edit segment';
             editBtn.addEventListener('click', () => {
                 const editing = editor.style.display !== 'none';
                 if (editing) {
                     editor.value = seg.content;
                     editor.style.display = 'none';
                     content.style.display = '';
-                    editBtn.textContent = 'Edit';
+                    editBtn.textContent = '✏️';
                     saveBtn.style.display = 'none';
                 } else {
                     editor.style.display = 'block';
                     content.style.display = 'none';
-                    editBtn.textContent = 'Cancel';
+                    editBtn.textContent = '❌';
                     saveBtn.style.display = '';
                     editor.focus();
                 }
@@ -1098,44 +1094,46 @@ class StoryWriterApp {
 
             const saveBtn = document.createElement('button');
             saveBtn.className = 'btn-small btn-primary';
-            saveBtn.textContent = 'Save';
+            saveBtn.textContent = '💾';
+            saveBtn.title = 'Save changes';
             saveBtn.style.display = 'none';
             saveBtn.addEventListener('click', async () => {
                 const newText = editor.value;
                 saveBtn.disabled = true;
-                saveBtn.textContent = 'Saving\u2026';
+                saveBtn.textContent = '⏳';
                 try {
                     await this.apiCall(`/stories/${this.story.id}/segments/${seg.id}`, 'PUT', { content: newText });
                     seg.content = newText;
                     content.textContent = newText;
                     editor.style.display = 'none';
                     content.style.display = '';
-                    editBtn.textContent = 'Edit';
+                    editBtn.textContent = '✏️';
                     saveBtn.style.display = 'none';
                 } catch (e) {
                     alert('Failed to save: ' + e.message);
                 } finally {
                     saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save';
+                    saveBtn.textContent = '💾';
                 }
             });
 
             const playBtn = document.createElement('button');
             playBtn.className = 'btn-small';
-            playBtn.textContent = '▶ Play';
+            playBtn.textContent = '▶';
             playBtn.title = 'Play from this point in the story';
             playBtn.addEventListener('click', () => this.playFromSegmentIndex(this.story.segments.indexOf(seg)));
 
             const imgBtn = document.createElement('button');
             imgBtn.className = 'btn-small';
-            imgBtn.textContent = '\ud83c\udfa8 Generate Image';
+            imgBtn.textContent = '🎨';
+            imgBtn.title = 'Generate Image';
             imgBtn.addEventListener('click', async () => {
                 if (!window.apiHandler) {
                     alert('Image API not available. Make sure your Image API is configured in \u2699\ufe0f API Settings.');
                     return;
                 }
                 imgBtn.disabled = true;
-                imgBtn.textContent = '\ud83c\udfa8 Generating\u2026';
+                imgBtn.textContent = '⏳';
                 imageArea.style.display = 'block';
                 imageArea.innerHTML = '<span style="font-size:0.85rem; color:var(--text-secondary);">Creating scene prompt\u2026</span>';
                 try {
@@ -1168,10 +1166,10 @@ class StoryWriterApp {
                     imageArea.appendChild(promptNote);
                     imageArea.appendChild(img);
 
-                    imgBtn.textContent = '\ud83c\udfa8 Regenerate Image';
+                    imgBtn.textContent = '🎨';
                 } catch (e) {
                     imageArea.innerHTML = `<span style="font-size:0.85rem; color:var(--error-color,#e55);">Image generation failed: ${e.message}</span>`;
-                    imgBtn.textContent = '\ud83c\udfa8 Generate Image';
+                    imgBtn.textContent = '🎨';
                     console.error('[StoryWriter] Image generation error:', e);
                 } finally {
                     imgBtn.disabled = false;
@@ -1180,7 +1178,8 @@ class StoryWriterApp {
 
             const delBtn = document.createElement('button');
             delBtn.className = 'btn-small';
-            delBtn.textContent = 'Delete';
+            delBtn.textContent = '🗑️';
+            delBtn.title = 'Delete Segment';
             delBtn.addEventListener('click', async () => {
                 if (confirm('Delete segment?')) {
                     await this.apiCall(`/stories/${this.story.id}/segments/${seg.id}`, 'DELETE');
@@ -1188,11 +1187,14 @@ class StoryWriterApp {
                 }
             });
 
+            actions.appendChild(playingBadge);
             actions.appendChild(playBtn);
-            actions.appendChild(imgBtn);
-            actions.appendChild(editBtn);
-            actions.appendChild(saveBtn);
             actions.appendChild(delBtn);
+            actions.appendChild(editBtn);
+            actions.appendChild(imgBtn);
+            actions.appendChild(saveBtn);
+            
+            div.appendChild(actions);
             div.appendChild(content);
             div.appendChild(editor);
             div.appendChild(imageArea);
