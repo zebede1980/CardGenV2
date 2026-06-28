@@ -552,24 +552,29 @@ class RoleplayChatHandler {
             const messages = chat.messages || [];
             const lastMsg = messages[messages.length - 1];
 
-            // ── Detect server-side pending generation ───────────────────────
-            // The backend always creates an empty assistant placeholder before
-            // streaming. If the last DB message is assistant with empty content,
-            // the server is still generating (or the stream died before saving).
             const serverIsGenerating = lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '';
 
             if (serverIsGenerating) {
-                if (!this.isGenerating) {
-                    // Client lost its stream (tab hide, phone lock, etc.) but server
-                    // is still running. Reset UI to idle and show recovery banner.
-                    if (this.abortController) { this.abortController.abort(); this.abortController = null; }
-                    this.isGenerating = false;
-                    this.els.sendBtn.style.display = '';
-                    if (this.els.impBtn) this.els.impBtn.style.display = '';
-                    if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
-                    this.els.sendBtn.disabled = false;
+                // Client lost its stream (tab hide, phone lock, etc.) or it's frozen.
+                // Reset UI to idle and show recovery banner.
+                if (this.abortController) { 
+                    this.abortController.abort(); 
+                    this.abortController = null; 
                 }
+                this.isGenerating = false;
+                this.els.sendBtn.style.display = '';
+                if (this.els.impBtn) this.els.impBtn.style.display = '';
+                if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
+                this.els.sendBtn.disabled = false;
+                
                 this._showPendingGenerationBanner(lastMsg.id);
+                // Auto-click reconnect so it polls
+                const banner = document.getElementById('chat-pending-gen-banner');
+                const reconnectBtn = banner ? banner.querySelector('button') : null;
+                if (reconnectBtn && !banner.dataset.polling) {
+                    banner.dataset.polling = "true";
+                    reconnectBtn.click();
+                }
                 return;
             }
 
@@ -588,9 +593,18 @@ class RoleplayChatHandler {
                 }
             } else {
                 // ── Idle cross-device sync ───────────────────────────────────
-                // Only reload when DB and DOM are out of sync to avoid jarring
-                // re-renders and scroll-jumps on brief focus changes.
+                // Only reload when DB and DOM are out of sync or if a placeholder finished
+                let needsReload = false;
                 if (dbCount !== domCount) {
+                    needsReload = true;
+                } else if (dbCount > 0 && domCount > 0) {
+                    const lastDomBubble = this.els.timeline.querySelector('.chat-bubble-wrapper:last-child .chat-bubble');
+                    if (lastDomBubble && lastDomBubble.textContent.trim() === '' && lastMsg.content !== '') {
+                        needsReload = true;
+                    }
+                }
+                
+                if (needsReload) {
                     this.selectChat(this.activeChatId);
                 }
             }
@@ -636,7 +650,8 @@ class RoleplayChatHandler {
         waitBtn.textContent = 'Reconnect';
         waitBtn.title = 'Poll for the completed response';
         waitBtn.onclick = async () => {
-            this._hidePendingGenerationBanner();
+            waitBtn.disabled = true;
+            waitBtn.textContent = 'Polling...';
             // Poll until content appears (max ~3 minutes)
             let attempts = 0;
             const poll = async () => {
@@ -1306,7 +1321,13 @@ class RoleplayChatHandler {
                 }
             }
 
-            this._hidePendingGenerationBanner();
+            // Don't arbitrarily hide the banner if the server is still generating
+            const lastMsg = chat.messages && chat.messages.length > 0 ? chat.messages[chat.messages.length - 1] : null;
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
+                this._showPendingGenerationBanner(lastMsg.id);
+            } else {
+                this._hidePendingGenerationBanner();
+            }
             this.els.timeline.innerHTML = '';
 
 
