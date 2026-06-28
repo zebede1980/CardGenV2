@@ -207,6 +207,7 @@ class SendMessageRequest(BaseModel):
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
     impersonate: Optional[bool] = False
+    enable_cot: Optional[bool] = True
 
 class AdventureActionOut(BaseModel):
     id: str
@@ -265,6 +266,7 @@ class AdventureSendActionRequest(BaseModel):
     max_output_tokens: Optional[int] = None
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
+    enable_cot: Optional[bool] = True
 
 class GlobalConfigCreate(BaseModel):
     config_data: dict

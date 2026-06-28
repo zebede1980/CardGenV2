@@ -44,7 +44,7 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if chat.system_prompt:
         system_parts.append(chat.system_prompt)
         
-    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning within <think> and </think> tags. Inside these tags, you must strictly follow this 5-Phase Logic:\n1. Build Ground Truth: Establish the physical setting, time, and current reality.\n2. Map NPC Knowledge: Determine exactly what your character(s) know and don't know right now.\n3. Identify Intent: Decide the goal or motivation for this specific turn.\n4. Draft the Action/Dialogue: Plan what the character will do or say.\n5. Self-Correct: Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character.\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning. You must wrap your entire reasoning process within <think> and </think> tags. Inside the <think> block, strictly follow this 5-Phase Logic:\n- Phase 1: Build Ground Truth (Establish the physical setting, time, and current reality)\n- Phase 2: Map NPC Knowledge (Determine exactly what your character(s) know and don't know right now)\n- Phase 3: Identify Intent (Decide the goal or motivation for this specific turn)\n- Phase 4: Draft the Action/Dialogue (Plan what the character will do or say)\n- Phase 5: Self-Correct (Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character)\n\nOnly after closing the </think> tag should you write the actual prose for the user."
     
     if chat.system_prompt and "CHAIN OF THOUGHT" not in chat.system_prompt:
         system_parts.append(cot_prompt)
@@ -141,11 +141,15 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
-    if speaker_name and len(chat.characters) > 1:
-        messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message. You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
-    elif "CHAIN OF THOUGHT" in "".join(system_parts):
-        # Even for 1-on-1 chats, append a final reminder to ensure the LLM doesn't skip the CoT.
-        messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
+    if request.enable_cot:
+        if speaker_name and len(chat.characters) > 1:
+            messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message. You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
+        elif "CHAIN OF THOUGHT" in "".join(system_parts):
+            # Even for 1-on-1 chats, append a final reminder to ensure the LLM doesn't skip the CoT.
+            messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
+    else:
+        if speaker_name and len(chat.characters) > 1:
+            messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message."})
         
     return messages
 

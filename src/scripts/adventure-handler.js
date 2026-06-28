@@ -576,6 +576,10 @@ class AdventureHandler {
         const richTags = [];
         const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
         
+        // ── Pre-normalisation: full-width brackets ────────
+        // Some CJK models output full-width brackets like ＜think＞ instead of <think>.
+        parsed = parsed.replace(/＜/g, '<').replace(/＞/g, '>');
+        
         // ── Pre-normalisation: GLM / models that use \n---\n as a separator ────────
         // Some models (e.g. GLM 5.x) output reasoning above a markdown horizontal
         // rule rather than inside <think> tags. Detect this and wrap the content
@@ -715,7 +719,8 @@ class AdventureHandler {
                     role: role,
                     max_input_tokens: maxInput,
                     max_output_tokens: maxOutput,
-                    repetition_penalty: repPenalty
+                    repetition_penalty: repPenalty,
+                    enable_cot: window.config?.get("adventure.enableCot") !== false
                 }),
                 signal: this._abortController.signal
             });
@@ -836,6 +841,10 @@ class AdventureHandler {
                         <label>Repetition Penalty</label>
                         <input type="number" step="0.05" id="adv-global-rep-penalty" class="content-box" style="width: 100%;">
                     </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+                        <input type="checkbox" id="adv-global-enable-cot" style="width: 1.2rem; height: 1.2rem; cursor: pointer;" checked>
+                        <label for="adv-global-enable-cot" style="margin: 0; cursor: pointer;">Enable Chain of Thought (5-Phase Logic)</label>
+                    </div>
                     
                     <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new adventure.</p>
@@ -880,9 +889,12 @@ class AdventureHandler {
         this.systemPromptSegments = [...(window.config.get("adventure.systemPromptSegments") || [])];
         this.renderSystemPromptSegments();
         
-        document.getElementById('adv-global-max-input').value = window.config.get("adventure.maxInputTokens") || 2048;
-        document.getElementById('adv-global-max-output').value = window.config.get("adventure.maxOutputTokens") || 512;
-        document.getElementById('adv-global-rep-penalty').value = window.config.get("adventure.repetitionPenalty") || 1.0;
+        document.getElementById('adv-global-max-input').value = window.config.get("adventure.maxInputTokens") ?? 8192;
+        document.getElementById('adv-global-max-output').value = window.config.get("adventure.maxOutputTokens") ?? 1024;
+        document.getElementById('adv-global-rep-penalty').value = window.config.get("adventure.repetitionPenalty") ?? 1.0;
+        
+        const enableCotCheckbox = document.getElementById('adv-global-enable-cot');
+        if (enableCotCheckbox) enableCotCheckbox.checked = window.config.get("adventure.enableCot") !== false;
         
         document.getElementById('adv-global-settings-modal').style.display = 'flex';
     }
@@ -1002,13 +1014,12 @@ class AdventureHandler {
         if (!window.config) return;
         window.config.set("adventure.systemPromptSegments", this.systemPromptSegments);
         
-        const maxIn = parseInt(document.getElementById('adv-global-max-input').value) || 2048;
-        const maxOut = parseInt(document.getElementById('adv-global-max-output').value) || 512;
-        const repPen = parseFloat(document.getElementById('adv-global-rep-penalty').value) || 1.0;
+        window.config.set("adventure.maxInputTokens", parseInt(document.getElementById('adv-global-max-input').value, 10) || 8192);
+        window.config.set("adventure.maxOutputTokens", parseInt(document.getElementById('adv-global-max-output').value, 10) || 1024);
+        window.config.set("adventure.repetitionPenalty", parseFloat(document.getElementById('adv-global-rep-penalty').value) || 1.0);
         
-        window.config.set("adventure.maxInputTokens", maxIn);
-        window.config.set("adventure.maxOutputTokens", maxOut);
-        window.config.set("adventure.repetitionPenalty", repPen);
+        const enableCotCheckbox = document.getElementById('adv-global-enable-cot');
+        if (enableCotCheckbox) window.config.set("adventure.enableCot", enableCotCheckbox.checked);
         
         document.getElementById('adv-global-settings-modal').style.display = 'none';
         

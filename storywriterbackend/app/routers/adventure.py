@@ -45,13 +45,17 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if session_data.summary:
         system_parts.append(f"Story Summary:\n{session_data.summary}")
         
-    if getattr(session_data, "system_prompt", None):
-        system_parts.append(session_data.system_prompt)
-        
-    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning within <think> and </think> tags. Inside these tags, you must strictly follow this 5-Phase Logic:\n1. Build Ground Truth: Establish the physical setting, time, and current reality.\n2. Map NPC Knowledge: Determine exactly what your character(s) know and don't know right now.\n3. Identify Intent: Decide the goal or motivation for this specific turn.\n4. Draft the Action/Dialogue: Plan what the character will do or say.\n5. Self-Correct: Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character.\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning. You must wrap your entire reasoning process within <think> and </think> tags. Inside the <think> block, strictly follow this 5-Phase Logic:\n- Phase 1: Build Ground Truth (Establish the physical setting, time, and current reality)\n- Phase 2: Map NPC Knowledge (Determine exactly what your character(s) know and don't know right now)\n- Phase 3: Identify Intent (Decide the goal or motivation for this specific turn)\n- Phase 4: Draft the Action/Dialogue (Plan what the character will do or say)\n- Phase 5: Self-Correct (Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character)\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+    
     sys_prompt = getattr(session_data, "system_prompt", "") or ""
-    if "CHAIN OF THOUGHT" not in sys_prompt:
-        system_parts.append(cot_prompt)
+    if request and request.enable_cot:
+        if sys_prompt and "CHAIN OF THOUGHT" not in sys_prompt:
+            sys_prompt = sys_prompt + "\n\n" + cot_prompt
+        elif not sys_prompt:
+            sys_prompt = cot_prompt
+            
+    if sys_prompt:
+        system_parts.append(sys_prompt)
         
     prompt_base = [
         "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n",
@@ -126,7 +130,7 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
         
-    if "CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt:
+    if request.enable_cot and ("CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt):
         messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the story prose/actions after closing the </think> tag."})
         
     return messages

@@ -173,6 +173,10 @@ class RoleplayChatHandler {
                         <input type="checkbox" id="chat-global-filter-cjk" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
                         <label for="chat-global-filter-cjk" style="margin: 0; cursor: pointer;">Filter out Chinese/Korean characters (GLM bleed fix)</label>
                     </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="checkbox" id="chat-global-enable-cot" style="width: 1.2rem; height: 1.2rem; cursor: pointer;" checked>
+                        <label for="chat-global-enable-cot" style="margin: 0; cursor: pointer;">Enable Chain of Thought (5-Phase Logic)</label>
+                    </div>
                     
                     <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new chat.</p>
@@ -325,6 +329,7 @@ class RoleplayChatHandler {
             globalTemp: document.getElementById('chat-global-temperature'),
             globalRepPen: document.getElementById('chat-global-rep-penalty'),
             globalFilterCJK: document.getElementById('chat-global-filter-cjk'),
+            globalEnableCot: document.getElementById('chat-global-enable-cot'),
             globalPromptSegments: document.getElementById('chat-global-prompt-segments'),
             globalNewSegment: document.getElementById('chat-global-new-segment'),
             globalAddSegmentBtn: document.getElementById('chat-global-add-segment'),
@@ -698,6 +703,7 @@ class RoleplayChatHandler {
         this.els.globalTemp.value = window.config.get("chat.temperature") ?? 0.8;
         this.els.globalRepPen.value = window.config.get("chat.repetitionPenalty") ?? 1.0;
         this.els.globalFilterCJK.checked = window.config.get("chat.filterCJK") ?? false;
+        this.els.globalEnableCot.checked = window.config.get("chat.enableCot") !== false;
 
         this.systemPromptSegments = [...(window.config.get("chat.systemPromptSegments") || [])];
         this.renderSystemPromptSegments();
@@ -848,6 +854,7 @@ class RoleplayChatHandler {
         window.config.set("chat.temperature", parseFloat(this.els.globalTemp.value) || 0.8);
         window.config.set("chat.repetitionPenalty", parseFloat(this.els.globalRepPen.value) || 1.0);
         window.config.set("chat.filterCJK", this.els.globalFilterCJK.checked);
+        window.config.set("chat.enableCot", this.els.globalEnableCot.checked);
         window.config.set("chat.systemPromptSegments", this.systemPromptSegments);
 
         this.els.globalSettingsModal.style.display = 'none';
@@ -1925,6 +1932,10 @@ class RoleplayChatHandler {
         const richTags = [];
         const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
 
+        // ── Pre-normalisation: full-width brackets ────────
+        // Some CJK models output full-width brackets like ＜think＞ instead of <think>.
+        parsed = parsed.replace(/＜/g, '<').replace(/＞/g, '>');
+
         // ── Pre-normalisation: GLM / models that use \n---\n as a separator ────────
         // Some models (e.g. GLM 5.x) output reasoning above a markdown horizontal
         // rule rather than inside <think> tags. Detect this and wrap the content
@@ -2059,6 +2070,7 @@ class RoleplayChatHandler {
                 payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
                 payload.temperature = window.config.get('chat.temperature');
                 payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
+                payload.enable_cot = window.config.get('chat.enableCot') !== false;
             }
 
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
@@ -2176,6 +2188,7 @@ class RoleplayChatHandler {
                 payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
                 payload.temperature = window.config.get('chat.temperature');
                 payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
+                payload.enable_cot = window.config.get('chat.enableCot') !== false;
             }
 
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
