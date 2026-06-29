@@ -1788,8 +1788,23 @@ class RoleplayChatHandler {
         cancelBtn.className = 'btn-outline btn-small';
         cancelBtn.textContent = 'Cancel';
 
+        const insertThinkBtn = document.createElement('button');
+        insertThinkBtn.className = 'btn-outline btn-small';
+        insertThinkBtn.textContent = 'Insert </think>';
+        insertThinkBtn.title = 'Insert closing think tag at cursor position';
+        insertThinkBtn.style.marginLeft = 'auto';
+        insertThinkBtn.onclick = () => {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            textarea.value = text.substring(0, start) + '\n</think>\n' + text.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + 10;
+            textarea.focus();
+        };
+
         controls.appendChild(saveBtn);
         controls.appendChild(cancelBtn);
+        controls.appendChild(insertThinkBtn);
 
         bubbleEl.innerHTML = '';
         bubbleEl.appendChild(textarea);

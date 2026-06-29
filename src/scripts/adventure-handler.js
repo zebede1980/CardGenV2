@@ -344,15 +344,14 @@ class AdventureHandler {
                 if (action.is_summarized) return;
                 
                 if (action.role === 'user') {
-                    this.appendStorySegment(`<b>Next:</b> ${action.content}`, action.id, 'user');
-                } else if (action.role === 'assistant') {
-                    this.appendStorySegment(this.formatStory(action.content), action.id, 'assistant');
-                    if (action.options) {
+                    this.appendStorySegment(`<b>Next:</b> ${action.content}`, action.id, 'user', action.content);
+                } else {
+                    this.appendStorySegment(this.formatStory(action.content), action.id, 'assistant', action.content);
+                }    if (action.options) {
                         try {
                             lastAssistantOptions = JSON.parse(action.options);
                         } catch(e) {}
                     }
-                }
             });
             
             const lastAction = data.actions[data.actions.length - 1];
@@ -431,12 +430,13 @@ class AdventureHandler {
         });
     }
 
-    appendStorySegment(htmlContent, actionId = null, role = 'assistant') {
+    appendStorySegment(htmlContent, actionId = null, role = 'assistant', rawContent = null) {
         const wrapper = document.createElement('div');
         wrapper.className = 'adv-story-wrapper';
         wrapper.style.cssText = 'position: relative; margin-bottom: 0.5rem; display: flex; flex-direction: column;';
         if (actionId) wrapper.dataset.actionId = actionId;
         if (role) wrapper.dataset.role = role;
+        if (rawContent !== null) wrapper.dataset.rawContent = rawContent;
 
         const div = document.createElement('div');
         div.className = 'adv-story-segment';
@@ -518,31 +518,86 @@ class AdventureHandler {
 
     async editAction(actionId, wrapper) {
         const contentDiv = wrapper.querySelector('.adv-story-content');
+        if (contentDiv.querySelector('textarea')) return;
+
         const role = wrapper.dataset.role;
-        // Extract raw text. If user, remove "<b>Next:</b> " prefix.
-        let rawText = contentDiv.innerText;
-        if (role === 'user' && rawText.startsWith('Next: ')) {
-            rawText = rawText.substring(6).trim();
-        }
+        const currentContent = wrapper.dataset.rawContent || '';
+        const originalHTML = contentDiv.innerHTML;
 
-        const newText = prompt("Edit text:", rawText);
-        if (newText === null || newText === rawText) return;
+        const textarea = document.createElement('textarea');
+        textarea.className = 'content-box';
+        textarea.style.width = '100%';
+        textarea.style.minHeight = '150px';
+        textarea.style.resize = 'vertical';
+        textarea.style.fontFamily = 'inherit';
+        textarea.style.marginBottom = '0.5rem';
+        textarea.value = currentContent;
 
-        try {
-            const res = await authFetch(`/api/sw/adventures/${this.currentSessionId}/actions/${actionId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: newText })
-            });
-            const updated = await res.json();
-            if (role === 'user') {
-                contentDiv.innerHTML = `<b>Next:</b> ${updated.content}`;
-            } else {
-                contentDiv.innerHTML = this.formatStory(updated.content);
+        const controls = document.createElement('div');
+        controls.style.display = 'flex';
+        controls.style.gap = '0.5rem';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn-primary btn-small';
+        saveBtn.textContent = 'Save';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-outline btn-small';
+        cancelBtn.textContent = 'Cancel';
+
+        const insertThinkBtn = document.createElement('button');
+        insertThinkBtn.className = 'btn-outline btn-small';
+        insertThinkBtn.textContent = 'Insert </think>';
+        insertThinkBtn.title = 'Insert closing think tag at cursor position';
+        insertThinkBtn.style.marginLeft = 'auto';
+        insertThinkBtn.onclick = () => {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            textarea.value = text.substring(0, start) + '\\n</think>\\n' + text.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + 10;
+            textarea.focus();
+        };
+
+        controls.appendChild(saveBtn);
+        controls.appendChild(cancelBtn);
+        controls.appendChild(insertThinkBtn);
+
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(textarea);
+        contentDiv.appendChild(controls);
+
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.max(150, textarea.scrollHeight) + 'px';
+        textarea.focus();
+
+        cancelBtn.onclick = () => {
+            contentDiv.innerHTML = originalHTML;
+        };
+
+        saveBtn.onclick = async () => {
+            const newText = textarea.value.trim();
+            try {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving...';
+                const res = await window.authFetch(`/api/sw/adventures/${this.currentSessionId}/actions/${actionId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newText })
+                });
+                const updated = await res.json();
+                wrapper.dataset.rawContent = updated.content;
+                if (role === 'user') {
+                    contentDiv.innerHTML = `<b>Next:</b> ${updated.content}`;
+                } else {
+                    contentDiv.innerHTML = this.formatStory(updated.content);
+                }
+            } catch (e) {
+                console.error("Failed to edit action", e);
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
             }
-        } catch (e) {
-            console.error("Failed to edit action", e);
-        }
+        };
     }
 
     async regenAction(actionId, wrapper) {
@@ -685,7 +740,7 @@ class AdventureHandler {
             btn.appendChild(textSpan);
             
             btn.addEventListener('click', () => {
-                const div = this.appendStorySegment(`<b>Next:</b> ${optText}`, null, 'user');
+                const div = this.appendStorySegment(`<b>Next:</b> ${optText}`, null, 'user', optText);
                 this.sendAction(optText, "user");
             });
             this.optionsArea.appendChild(btn);
@@ -699,7 +754,7 @@ class AdventureHandler {
         this.optionsArea.innerHTML = '';
         this.loadingIndicator.style.display = 'flex';
         
-        const wrapper = this.appendStorySegment('...', null, 'assistant');
+        const wrapper = this.appendStorySegment('...', null, 'assistant', '');
         const segmentDiv = wrapper.querySelector('.adv-story-segment') || wrapper;
         let accumulatedText = "";
         
@@ -785,7 +840,7 @@ class AdventureHandler {
             wrapper.remove();
             
             const renderStory = finalCleanedStory ? finalCleanedStory : accumulatedText;
-            const newDiv = this.appendStorySegment(this.formatStory(renderStory), actionId, 'assistant');
+            const newDiv = this.appendStorySegment(this.formatStory(renderStory), actionId, 'assistant', finalCleanedStory);
             
             if (optionsParsed) {
                 this.renderOptions(optionsParsed);
