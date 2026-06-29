@@ -554,59 +554,32 @@ class RoleplayChatHandler {
 
             const serverIsGenerating = lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '';
 
-            if (serverIsGenerating) {
-                // Client lost its stream (tab hide, phone lock, etc.) or it's frozen.
-                // Reset UI to idle and show recovery banner.
+            if (serverIsGenerating || this.isGenerating) {
                 if (this.abortController) { 
                     this.abortController.abort(); 
                     this.abortController = null; 
                 }
-                this.isGenerating = false;
-                this.els.sendBtn.style.display = '';
-                if (this.els.impBtn) this.els.impBtn.style.display = '';
-                if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
-                this.els.sendBtn.disabled = false;
-                
-                this._showPendingGenerationBanner(lastMsg.id);
-                // Auto-click reconnect so it polls
-                const banner = document.getElementById('chat-pending-gen-banner');
-                const reconnectBtn = banner ? banner.querySelector('button') : null;
-                if (reconnectBtn && !banner.dataset.polling) {
-                    banner.dataset.polling = "true";
-                    reconnectBtn.click();
-                }
+                this.selectChat(this.activeChatId);
                 return;
             }
 
-            // No pending generation — dismiss any stale banner
             this._hidePendingGenerationBanner();
 
             const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
             const dbCount  = messages.length;
-
-            if (this.isGenerating) {
-                // ── Mid-generation recovery ──────────────────────────────────
-                // Background task finished while client was asleep (DB caught up)
-                if (dbCount >= domCount) {
-                    if (this.abortController) this.abortController.abort();
-                    this.selectChat(this.activeChatId);
-                }
-            } else {
-                // ── Idle cross-device sync ───────────────────────────────────
-                // Only reload when DB and DOM are out of sync or if a placeholder finished
-                let needsReload = false;
-                if (dbCount !== domCount) {
+            let needsReload = false;
+            
+            if (dbCount !== domCount) {
+                needsReload = true;
+            } else if (dbCount > 0 && domCount > 0) {
+                const lastDomBubble = this.els.timeline.querySelector('.chat-bubble-wrapper:last-child .chat-bubble');
+                if (lastDomBubble && lastDomBubble.textContent.trim() === '' && lastMsg.content !== '') {
                     needsReload = true;
-                } else if (dbCount > 0 && domCount > 0) {
-                    const lastDomBubble = this.els.timeline.querySelector('.chat-bubble-wrapper:last-child .chat-bubble');
-                    if (lastDomBubble && lastDomBubble.textContent.trim() === '' && lastMsg.content !== '') {
-                        needsReload = true;
-                    }
                 }
-                
-                if (needsReload) {
-                    this.selectChat(this.activeChatId);
-                }
+            }
+            
+            if (needsReload) {
+                this.selectChat(this.activeChatId);
             }
         } catch (e) {
             console.error('Failed to sync chat on wake', e);
@@ -618,7 +591,7 @@ class RoleplayChatHandler {
      * to be mid-generation (empty assistant placeholder detected in the DB).
      * Provides a Cancel button that deletes the placeholder row.
      */
-    _showPendingGenerationBanner(pendingMsgId) {
+    _showPendingGenerationBanner(pendingMsgId, autoPoll = false) {
         const bannerId = 'chat-pending-gen-banner';
         if (document.getElementById(bannerId)) {
             // Update the stored msg id in case of re-entry
@@ -702,6 +675,11 @@ class RoleplayChatHandler {
             // Fallback: append to the chat view
             const view = document.getElementById('view-roleplaychat');
             if (view) view.appendChild(banner);
+        }
+        
+        if (autoPoll && !banner.dataset.polling) {
+            banner.dataset.polling = "true";
+            waitBtn.click();
         }
     }
 
@@ -1324,7 +1302,7 @@ class RoleplayChatHandler {
             // Don't arbitrarily hide the banner if the server is still generating
             const lastMsg = chat.messages && chat.messages.length > 0 ? chat.messages[chat.messages.length - 1] : null;
             if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
-                this._showPendingGenerationBanner(lastMsg.id);
+                this._showPendingGenerationBanner(lastMsg.id, true);
             } else {
                 this._hidePendingGenerationBanner();
             }

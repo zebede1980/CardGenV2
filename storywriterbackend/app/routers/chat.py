@@ -9,6 +9,7 @@ import httpx
 import base64
 import urllib.parse
 import uuid
+import logging
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
@@ -782,13 +783,17 @@ async def send_message(
 
     async def generate_task():
         llm = LLMService(settings)
+        full_content = ""
+        request_id = str(uuid.uuid4())
+        logger = logging.getLogger(__name__)
+        logger.info(f"[{request_id}] LLM request started for chat {chat_id}, message {assistant_msg_id}")
+        
         try:
-            content_parts = []
             async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
-                content_parts.append(chunk)
+                full_content += chunk
                 await queue.put(chunk)
                 
-            full_content = "".join(content_parts)
+            logger.info(f"[{request_id}] LLM request completed successfully")
             
             await queue.put({
                 "type": "api_log",
@@ -802,19 +807,24 @@ async def send_message(
                     "usage": llm.last_usage
                 }
             })
-            
-            # Persist to DB in detached session
-            with SessionLocal() as bg_db:
-                msg = bg_db.query(models.ChatMessage).filter(models.ChatMessage.id == assistant_msg_id).first()
-                if msg:
-                    msg.content = full_content
-                    bg_db.commit()
-                    
-            await queue.put(None)
         except Exception as e:
+            logger.error(f"[{request_id}] LLM request failed: {e}")
+            error_msg = f"\n\n[Generation error: {str(e)}]"
+            full_content += error_msg
             await queue.put(e)
         finally:
+            # Persist to DB in detached session
+            try:
+                with SessionLocal() as bg_db:
+                    msg = bg_db.query(models.ChatMessage).filter(models.ChatMessage.id == assistant_msg_id).first()
+                    if msg:
+                        msg.content = full_content if full_content else "[Generation failed to start]"
+                        bg_db.commit()
+            except Exception as db_err:
+                logger.error(f"[{request_id}] DB save failed: {db_err}")
+                
             await llm.close()
+            await queue.put(None)
             
     # Launch background task (survives HTTP disconnect)
     asyncio.create_task(generate_task())

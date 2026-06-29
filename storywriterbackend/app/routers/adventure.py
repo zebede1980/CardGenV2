@@ -5,6 +5,7 @@ from typing import List, Optional
 import asyncio
 import json
 import uuid
+import logging
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
@@ -311,14 +312,36 @@ async def send_action(
 
     async def generate_task():
         llm = LLMService(settings)
+        full_content = ""
+        request_id = str(uuid.uuid4())
+        logger = logging.getLogger(__name__)
+        logger.info(f"[{request_id}] LLM request started for adventure {session_id}, action {assistant_action_id}")
+        
         try:
-            content_parts = []
             async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
-                content_parts.append(chunk)
+                full_content += chunk
                 await queue.put(chunk)
                 
-            full_content = "".join(content_parts)
+            logger.info(f"[{request_id}] LLM request completed successfully")
             
+            await queue.put({
+                "type": "api_log",
+                "log": {
+                    "id": log_id,
+                    "endpoint": "Adventure Action Generation",
+                    "response": {
+                        "choices": [{"message": {"content": full_content}}],
+                        "usage": llm.last_usage
+                    },
+                    "usage": llm.last_usage
+                }
+            })
+        except Exception as e:
+            logger.error(f"[{request_id}] LLM request failed: {e}")
+            error_msg = f"\n\n[Generation error: {str(e)}]"
+            full_content += error_msg
+            await queue.put(e)
+        finally:
             # Post-processing: extract the options from the text
             # Options format: [OPTION 1] Text ...
             import re
@@ -333,35 +356,26 @@ async def send_action(
                     cleaned_story = re.sub(f"\[OPTION {i}\].*?(?=\[OPTION|$)", "", cleaned_story, flags=re.IGNORECASE | re.DOTALL)
             
             cleaned_story = cleaned_story.strip()
-            
-            await queue.put({
-                "type": "api_log",
-                "log": {
-                    "id": log_id,
-                    "endpoint": "Adventure Action Generation",
-                    "response": {
-                        "choices": [{"message": {"content": full_content}}],
-                        "usage": llm.last_usage
-                    },
-                    "usage": llm.last_usage
-                }
-            })
-            
+            if not cleaned_story:
+                cleaned_story = "[Generation failed]"
+                
             # Persist to DB
-            with SessionLocal() as bg_db:
-                msg = bg_db.query(models.AdventureAction).filter(models.AdventureAction.id == assistant_action_id).first()
-                if msg:
-                    msg.content = cleaned_story
-                    if options:
-                        msg.options = json.dumps(options)
-                    bg_db.commit()
-                    
-            await queue.put({"type": "parsed_options", "options": options, "cleaned_story": cleaned_story})
-            await queue.put(None)
-        except Exception as e:
-            await queue.put(e)
-        finally:
+            try:
+                with SessionLocal() as bg_db:
+                    msg = bg_db.query(models.AdventureAction).filter(models.AdventureAction.id == assistant_action_id).first()
+                    if msg:
+                        msg.content = cleaned_story
+                        if options:
+                            msg.options = json.dumps(options)
+                        bg_db.commit()
+            except Exception as db_err:
+                logger.error(f"[{request_id}] DB save failed: {db_err}")
+                
+            if options:
+                await queue.put({"type": "parsed_options", "options": options, "cleaned_story": cleaned_story})
+                
             await llm.close()
+            await queue.put(None)
             
     async def background_tasks():
         await generate_task()
