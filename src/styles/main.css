@@ -3617,3 +3617,25 @@ body.chat-scroll-locked {
 #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing .chat-bubble {
     max-width: 100% !important;
 }
+/* COMPREHENSIVE FULL-WIDTH OVERRIDES FOR EDIT MODE */
+.chat-bubble-wrapper.is-editing,
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing,
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.user,
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.assistant {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+.chat-bubble-wrapper.is-editing .chat-bubble-content-col,
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing .chat-bubble-content-col {
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+}
+
+.chat-bubble-wrapper.is-editing .chat-bubble,
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing .chat-bubble,
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.user .chat-bubble,
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.assistant .chat-bubble {
+    max-width: 100% !important;
+    width: 100% !important;
+}
