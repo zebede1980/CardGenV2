@@ -2849,12 +2849,44 @@ textarea.content-box {
     word-wrap: break-word;
 }
 
+.chat-message-actions-container {
+    position: sticky;
+    top: 4.5rem;
+    height: 0;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    z-index: 10;
+    pointer-events: none;
+    margin-top: -1.5rem; /* Align with name row */
+}
+
 /* Message actions (edit/delete) */
 .chat-message-actions {
     display: flex;
     gap: 0.35rem;
     opacity: 0;
     transition: opacity 0.2s ease;
+    pointer-events: auto;
+    background: var(--surface-color);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.chat-message-actions.editing-active {
+    opacity: 1 !important;
+}
+
+.chat-bubble-wrapper.is-editing {
+    --chat-bubble-max-width: 100% !important;
+    max-width: 100% !important;
+    width: 100%;
+}
+
+.chat-bubble-wrapper.is-editing .chat-bubble {
+    max-width: 100% !important;
 }
 
 .chat-bubble-wrapper:hover .chat-message-actions,

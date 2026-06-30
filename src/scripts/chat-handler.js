@@ -1501,7 +1501,7 @@ class RoleplayChatHandler {
         const editBtn = document.createElement('button');
         editBtn.className = 'chat-action-btn';
         editBtn.innerHTML = '✏️ Edit';
-        editBtn.onclick = () => this.editMessage(msg, bubbleEl);
+        editBtn.onclick = () => this.editMessage(msg, bubbleEl, wrapper);
 
         const delBtn = document.createElement('button');
         delBtn.className = 'chat-action-btn';
@@ -1523,7 +1523,10 @@ class RoleplayChatHandler {
             actionsEl.appendChild(regenBtn);
         }
 
-        nameEl.appendChild(actionsEl);
+        const container = document.createElement('div');
+        container.className = 'chat-message-actions-container';
+        container.appendChild(actionsEl);
+        nameEl.parentElement.insertBefore(container, nameEl);
 
         // Refresh which assistant bubble shows the Regen button
         this._updateRegenButtons();
@@ -1739,14 +1742,16 @@ class RoleplayChatHandler {
         }
     }
 
-    async editMessage(msg, bubbleEl) {
+    async editMessage(msg, bubbleEl, wrapper) {
         if (bubbleEl.querySelector('textarea')) return;
+
+        if (wrapper) wrapper.classList.add('is-editing');
 
         const currentContent = msg.content || '';
         const originalHTML = bubbleEl.innerHTML;
 
         const textarea = document.createElement('textarea');
-        textarea.className = 'content-box';
+        textarea.className = 'content-box edit-mode-textarea';
         textarea.style.width = '100%';
         textarea.style.minHeight = '250px';
         textarea.style.resize = 'vertical';
@@ -1754,20 +1759,16 @@ class RoleplayChatHandler {
         textarea.style.marginBottom = '0.5rem';
         textarea.value = currentContent;
 
-        const controls = document.createElement('div');
-        controls.style.display = 'flex';
-        controls.style.gap = '0.5rem';
-
         const saveBtn = document.createElement('button');
-        saveBtn.className = 'btn-primary btn-small';
+        saveBtn.className = 'btn-primary btn-small edit-control-btn';
         saveBtn.textContent = 'Save';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'btn-outline btn-small';
+        cancelBtn.className = 'btn-outline btn-small edit-control-btn';
         cancelBtn.textContent = 'Cancel';
 
         const insertThinkBtn = document.createElement('button');
-        insertThinkBtn.className = 'btn-outline btn-small';
+        insertThinkBtn.className = 'btn-outline btn-small edit-control-btn';
         insertThinkBtn.textContent = 'Insert </think>';
         insertThinkBtn.title = 'Insert closing think tag at cursor position';
         insertThinkBtn.style.marginLeft = 'auto';
@@ -1780,13 +1781,30 @@ class RoleplayChatHandler {
             textarea.focus();
         };
 
-        controls.appendChild(saveBtn);
-        controls.appendChild(cancelBtn);
-        controls.appendChild(insertThinkBtn);
+        const actionsEl = wrapper ? wrapper.querySelector('.chat-message-actions') : null;
+        let originalActions = [];
+        if (actionsEl) {
+            Array.from(actionsEl.children).forEach(child => {
+                if (!child.classList.contains('edit-control-btn')) {
+                    originalActions.push({ el: child, display: child.style.display });
+                    child.style.display = 'none';
+                }
+            });
+            actionsEl.appendChild(insertThinkBtn);
+            actionsEl.appendChild(cancelBtn);
+            actionsEl.appendChild(saveBtn);
+        } else {
+            const controls = document.createElement('div');
+            controls.style.display = 'flex';
+            controls.style.gap = '0.5rem';
+            controls.appendChild(saveBtn);
+            controls.appendChild(cancelBtn);
+            controls.appendChild(insertThinkBtn);
+            bubbleEl.appendChild(controls);
+        }
 
         bubbleEl.innerHTML = '';
         bubbleEl.appendChild(textarea);
-        bubbleEl.appendChild(controls);
 
         // Auto-resize to fit content
         textarea.style.height = 'auto';
@@ -1795,6 +1813,13 @@ class RoleplayChatHandler {
         textarea.focus();
 
         cancelBtn.onclick = () => {
+            if (wrapper) wrapper.classList.remove('is-editing');
+            if (actionsEl) {
+                insertThinkBtn.remove();
+                cancelBtn.remove();
+                saveBtn.remove();
+                originalActions.forEach(item => item.el.style.display = item.display);
+            }
             bubbleEl.innerHTML = originalHTML;
         };
 
@@ -1810,6 +1835,13 @@ class RoleplayChatHandler {
                 });
                 if (res.ok) {
                     msg.content = newContent;
+                    if (wrapper) wrapper.classList.remove('is-editing');
+                    if (actionsEl) {
+                        insertThinkBtn.remove();
+                        cancelBtn.remove();
+                        saveBtn.remove();
+                        originalActions.forEach(item => item.el.style.display = item.display);
+                    }
                     bubbleEl.innerHTML = this.formatMessage(msg.content, msg.character_name);
                     if (msg.ooc_note) {
                         const oocEl = document.createElement('details');
