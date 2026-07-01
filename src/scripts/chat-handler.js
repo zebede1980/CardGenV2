@@ -165,7 +165,7 @@ class RoleplayChatHandler {
             document.head.appendChild(style);
         }
 
-
+    }
 
     setupTabIntegration() {
         const tabCardGen = document.getElementById('tab-cardgen');
