@@ -457,6 +457,16 @@ class StoryWriterApp {
             });
         }
 
+        const scriptModeCheckbox = document.getElementById('sw-script-mode');
+        if (scriptModeCheckbox) {
+            scriptModeCheckbox.addEventListener('change', (e) => {
+                if (!this.currentStoryId) return;
+                const map = window.config?.get('api.tts.scriptModeMap') || {};
+                map[this.currentStoryId] = e.target.checked;
+                window.config?.set('api.tts.scriptModeMap', map);
+            });
+        }
+
         document.getElementById('sw-generate-btn')?.addEventListener('click', () => this.generateNext());
         document.getElementById('sw-stop-btn')?.addEventListener('click', () => this.stopGeneration());
         document.getElementById('sw-save-settings-btn')?.addEventListener('click', () => this.saveSettings());
@@ -966,6 +976,12 @@ class StoryWriterApp {
 
             document.getElementById('sw-title').value = this.story.title;
             document.getElementById('sw-synopsis').value = this.story.synopsis;
+
+            const scriptModeMap = window.config?.get('api.tts.scriptModeMap') || {};
+            const scriptModeCheckbox = document.getElementById('sw-script-mode');
+            if (scriptModeCheckbox) {
+                scriptModeCheckbox.checked = !!scriptModeMap[this.currentStoryId];
+            }
 
             this.renderCards();
             this.renderSegments();
