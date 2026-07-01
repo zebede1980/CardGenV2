@@ -75,15 +75,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       modal.classList.remove("chat-mobile-params-collapsed");
     }
 
-    // iOS Safari viewport height fallback — set CSS variable
-    this._chatMobileVhUpdate = () => {
-      document.documentElement.style.setProperty(
-        "--chat-mobile-vh",
-        window.innerHeight + "px"
-      );
-    };
-    this._chatMobileVhUpdate();
-    window.addEventListener("resize", this._chatMobileVhUpdate);
+    // Note: iOS Safari viewport height fallback removed. Use CSS dvh if necessary.
 
     // Focus input
     const input = document.getElementById("chat-input");
@@ -243,11 +235,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     modal.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
 
-    // Clean up mobile viewport listener
+    // Clean up mobile viewport listener if any remains
     if (this._chatMobileVhUpdate) {
       window.removeEventListener("resize", this._chatMobileVhUpdate);
       this._chatMobileVhUpdate = null;
-      document.documentElement.style.removeProperty("--chat-mobile-vh");
     }
   },
 
@@ -631,17 +622,36 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const container = document.getElementById("chat-messages");
     if (!container) return;
 
-    container.innerHTML = "";
     const messages = this.chatTester ? this.chatTester.getMessages() : [];
+    const currentMsgIds = new Set(messages.map(m => String(m.id)));
 
+    // Remove bubbles that no longer exist
+    Array.from(container.children).forEach(bubble => {
+      if (!currentMsgIds.has(bubble.dataset.id)) {
+        bubble.remove();
+      }
+    });
+
+    // Update existing or append new in order
     for (const msg of messages) {
-      this._appendChatBubble(container, msg);
+      const existingBubble = container.querySelector(`[data-id="${msg.id}"]`);
+      const newBubble = this._createChatBubble(msg);
+      
+      if (existingBubble) {
+        if (existingBubble.innerHTML !== newBubble.innerHTML) {
+          existingBubble.replaceWith(newBubble);
+        }
+        // Ensure order is correct in case messages were inserted (unlikely in chat, but safe)
+        container.appendChild(existingBubble.parentNode ? existingBubble : newBubble);
+      } else {
+        container.appendChild(newBubble);
+      }
     }
 
     this.scrollChatToBottom();
   },
 
-  _appendChatBubble(container, msg) {
+  _createChatBubble(msg) {
     const isUser = msg.role === "user";
     const bubble = document.createElement("div");
     bubble.className = `chat-message ${isUser ? "chat-message-user" : "chat-message-character"}`;
@@ -737,7 +747,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
     }
 
-    container.appendChild(bubble);
+    return bubble;
   },
 
   _formatChatContent(text, isUser = false) {

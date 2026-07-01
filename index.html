@@ -1768,6 +1768,7 @@
                       <div class="chat-sidebar-header">
                         <h2 style="margin: 0; font-size: 1.1rem;">Chats</h2>
                         <button id="chat-new-btn" class="btn-primary btn-small">➕ New</button>
+                        <button id="chat-open-global-settings" class="btn-outline btn-small" style="margin-left: 0.5rem;" title="Global Settings">⚙️</button>
                       </div>
                       <div id="chat-session-list" class="chat-session-list">
                         <!-- Chat sessions will be dynamically injected here -->
@@ -2876,5 +2877,59 @@
                 }
             });
         </script>
+        <!-- Global Chat Settings Modal -->
+        <div id="chat-global-settings-modal" class="modal-overlay" style="display: none; z-index: 2000;">
+            <div class="api-settings-modal" style="max-width: 600px; width: 90%; max-height: 90vh; height: auto; display: flex; flex-direction: column; transition: max-width 0.2s ease, width 0.2s ease, height 0.2s ease;">
+                <div class="modal-header">
+                    <h2 class="modal-title">⚙️ Global Chat Settings</h2>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button id="chat-global-settings-maximize" class="btn-outline btn-small" style="border:none; padding: 0.2rem 0.5rem; font-size: 1.2rem; min-height: unset; height: auto;" title="Maximize">⛶</button>
+                        <button id="chat-global-settings-close" class="modal-close">×</button>
+                    </div>
+                </div>
+                <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column;">
+                    <div class="form-group">
+                        <label>Max Input Tokens (Context Window)</label>
+                        <input type="number" id="chat-global-max-input" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Output Tokens</label>
+                        <input type="number" id="chat-global-max-output" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Temperature</label>
+                        <input type="number" step="0.1" id="chat-global-temperature" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Repetition Penalty</label>
+                        <input type="number" step="0.05" id="chat-global-rep-penalty" class="content-box" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+                        <input type="checkbox" id="chat-global-filter-cjk" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
+                        <label for="chat-global-filter-cjk" style="margin: 0; cursor: pointer;">Filter out Chinese/Korean characters (GLM bleed fix)</label>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="checkbox" id="chat-global-enable-cot" style="width: 1.2rem; height: 1.2rem; cursor: pointer;" checked>
+                        <label for="chat-global-enable-cot" style="margin: 0; cursor: pointer;">Enable Chain of Thought (5-Phase Logic)</label>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new chat.</p>
+                    
+                    <div id="chat-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; flex: 1; min-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
+                        <!-- Segments injected here -->
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+                        <textarea id="chat-global-new-segment" class="content-box" style="flex: 1; resize: vertical;" rows="3" placeholder="New prompt segment (Ctrl+Enter to add)..."></textarea>
+                        <button id="chat-global-add-segment" class="btn-primary" style="height: fit-content; padding: 0.8rem 1.2rem;">Add</button>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+                        <button id="chat-global-save-btn" class="btn-primary">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </body>
 </html>

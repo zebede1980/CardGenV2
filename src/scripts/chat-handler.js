@@ -18,7 +18,6 @@ class RoleplayChatHandler {
     }
 
     init() {
-        this.injectSettingsModal();
         this.setupSidebarToggle();
         this.bindElements();
         this.fixLayout();
@@ -135,121 +134,25 @@ class RoleplayChatHandler {
         }
     }
 
-    injectSettingsModal() {
-        if (document.getElementById('chat-global-settings-modal')) return;
-
-        const modal = document.createElement('div');
-        modal.id = 'chat-global-settings-modal';
-        modal.className = 'modal-overlay';
-        modal.style.display = 'none';
-        modal.style.zIndex = '2000';
-        modal.innerHTML = `
-            <div class="api-settings-modal" style="max-width: 600px; width: 90%; max-height: 90vh; height: auto; display: flex; flex-direction: column; transition: max-width 0.2s ease, width 0.2s ease, height 0.2s ease;">
-                <div class="modal-header">
-                    <h2 class="modal-title">⚙️ Global Chat Settings</h2>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <button id="chat-global-settings-maximize" class="btn-outline btn-small" style="border:none; padding: 0.2rem 0.5rem; font-size: 1.2rem; min-height: unset; height: auto;" title="Maximize">⛶</button>
-                        <button id="chat-global-settings-close" class="modal-close">×</button>
-                    </div>
-                </div>
-                <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column;">
-                    <div class="form-group">
-                        <label>Max Input Tokens (Context Window)</label>
-                        <input type="number" id="chat-global-max-input" class="content-box" style="width: 100%;">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Output Tokens</label>
-                        <input type="number" id="chat-global-max-output" class="content-box" style="width: 100%;">
-                    </div>
-                    <div class="form-group">
-                        <label>Temperature</label>
-                        <input type="number" step="0.1" id="chat-global-temperature" class="content-box" style="width: 100%;">
-                    </div>
-                    <div class="form-group">
-                        <label>Repetition Penalty</label>
-                        <input type="number" step="0.05" id="chat-global-rep-penalty" class="content-box" style="width: 100%;">
-                    </div>
-                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
-                        <input type="checkbox" id="chat-global-filter-cjk" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
-                        <label for="chat-global-filter-cjk" style="margin: 0; cursor: pointer;">Filter out Chinese/Korean characters (GLM bleed fix)</label>
-                    </div>
-                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-                        <input type="checkbox" id="chat-global-enable-cot" style="width: 1.2rem; height: 1.2rem; cursor: pointer;" checked>
-                        <label for="chat-global-enable-cot" style="margin: 0; cursor: pointer;">Enable Chain of Thought (5-Phase Logic)</label>
-                    </div>
-                    
-                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Modular System Prompt</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">These segments are combined to form the default system prompt when starting a new chat.</p>
-                    
-                    <div id="chat-global-prompt-segments" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; flex: 1; min-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
-                        <!-- Segments injected here -->
-                    </div>
-                    
-                    <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
-                        <textarea id="chat-global-new-segment" class="content-box" style="flex: 1; resize: vertical;" rows="3" placeholder="New prompt segment (Ctrl+Enter to add)..."></textarea>
-                        <button id="chat-global-add-segment" class="btn-primary" style="height: fit-content; padding: 0.8rem 1.2rem;">Add</button>
-                    </div>
-                    
-                    <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
-                        <button id="chat-global-save-btn" class="btn-primary">Save Settings</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-
-        const newBtn = document.getElementById('chat-new-btn');
-        if (newBtn && newBtn.parentNode) {
-            const settingsBtn = document.createElement('button');
-            settingsBtn.id = 'chat-open-global-settings';
-            settingsBtn.className = 'btn-outline';
-            settingsBtn.innerHTML = '⚙️ Settings';
-            settingsBtn.style.marginLeft = '0.5rem';
-            newBtn.parentNode.insertBefore(settingsBtn, newBtn.nextSibling);
-        }
-    }
-
     fixLayout() {
-        // Prevent global horizontal overflow
-        if (!document.getElementById('chat-global-fixes')) {
-            const style = document.createElement('style');
-            style.id = 'chat-global-fixes';
-            style.textContent = `
-                html, body { overflow-x: hidden; max-width: 100%; }
-                *, *::before, *::after { box-sizing: border-box; }
-            `;
-            document.head.appendChild(style);
-        }
-
-        // Ensure the chat view uses flex layout properly
-        const viewChat = document.getElementById('view-roleplaychat');
-        if (viewChat) {
-            viewChat.style.display = 'flex';
-        }
-
-        // The parent of the timeline is the .chat-main column
-        if (this.els.timeline && this.els.timeline.parentElement) {
-            const mainArea = this.els.timeline.parentElement;
-            mainArea.style.flex = '1';
-            mainArea.style.display = 'flex';
-            mainArea.style.flexDirection = 'column';
-            mainArea.style.minWidth = '0';
-            mainArea.style.minHeight = '0';
-            mainArea.style.overflow = 'hidden';
-
-            this.els.timeline.style.flex = '1 1 0%';
-            this.els.timeline.style.overflowY = 'auto';
-            this.els.timeline.style.minHeight = '0';
-        }
-
-
-
         // Scroll-to-bottom FAB
         const fab = document.getElementById('chat-scroll-bottom-btn');
         if (fab) {
             fab.addEventListener('click', () => {
-                this.els.timeline.scrollTop = this.els.timeline.scrollHeight;
+                this.scrollToBottom(true, true);
                 fab.style.display = 'none';
+            });
+
+            this.els.timeline.addEventListener('scroll', () => {
+                const { scrollTop, scrollHeight, clientHeight } = this.els.timeline;
+                const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
+                this.isUserScrolling = !isAtBottom;
+                
+                if (this.isUserScrolling) {
+                    fab.style.display = 'flex';
+                } else {
+                    fab.style.display = 'none';
+                }
             });
         }
 
@@ -262,18 +165,7 @@ class RoleplayChatHandler {
             document.head.appendChild(style);
         }
 
-        // Initial layout adjustment
-        this.adjustChatLayout();
-    }
 
-    _resetMainLayout() {
-        const mainEl = document.querySelector('.main');
-        if (!mainEl) return;
-        mainEl.style.flex = '';
-        mainEl.style.minHeight = '';
-        mainEl.style.display = '';
-        mainEl.style.flexDirection = '';
-    }
 
     setupTabIntegration() {
         const tabCardGen = document.getElementById('tab-cardgen');
@@ -300,14 +192,14 @@ class RoleplayChatHandler {
 
                 this.loadSessionList();
                 this.loadPersonas();
-                setTimeout(() => this.adjustChatLayout(), 10);
+                document.body.classList.add('chat-active');
             });
 
             // Hide chat view and reset layout when other tabs are clicked
             const leaveChat = () => {
                 viewChat.style.display = 'none';
                 tabChat.className = 'btn-outline';
-                this._resetMainLayout();
+                document.body.classList.remove('chat-active');
             };
             if (tabCardGen) tabCardGen.addEventListener('click', leaveChat);
             if (tabStoryWriter) tabStoryWriter.addEventListener('click', leaveChat);
@@ -478,8 +370,6 @@ class RoleplayChatHandler {
 
 
 
-        window.addEventListener('resize', () => this.adjustChatLayout());
-
         document.addEventListener('visibilitychange', () => this.syncOnWake());
         window.addEventListener('focus', () => this.syncOnWake());
 
@@ -512,29 +402,6 @@ class RoleplayChatHandler {
         if (!this.els.oocToggleBtn || !this.els.oocInput) return;
         const hasContent = this.els.oocInput.value.trim().length > 0;
         this.els.oocToggleBtn.classList.toggle('has-ooc', hasContent);
-    }
-
-    adjustChatLayout() {
-        const viewChat = document.getElementById('view-roleplaychat');
-        if (!viewChat || viewChat.style.display === 'none') return;
-
-        if (viewChat.classList.contains('chat-fullscreen')) {
-            viewChat.style.height = '';
-            return;
-        }
-
-        // Clear any JS-set height and let CSS flex chain handle it naturally
-        viewChat.style.height = '';
-        viewChat.style.maxHeight = '';
-
-        // Ensure .main fills remaining space in the flex column
-        const mainEl = document.querySelector('.main');
-        if (mainEl && viewChat.style.display !== 'none') {
-            mainEl.style.flex = '1';
-            mainEl.style.minHeight = '0';
-            mainEl.style.display = 'flex';
-            mainEl.style.flexDirection = 'column';
-        }
     }
 
     async syncOnWake() {
@@ -1237,7 +1104,7 @@ class RoleplayChatHandler {
             if (sidebar) sidebar.style.display = this.preFsSidebarDisplay !== undefined ? this.preFsSidebarDisplay : '';
             if (backdrop) backdrop.style.display = '';
 
-            this.adjustChatLayout();
+
         }
 
     }
@@ -2047,13 +1914,15 @@ class RoleplayChatHandler {
         return parsed;
     }
 
-    scrollToBottom(smooth = false) {
-        if (this.els.timeline) {
-            this.els.timeline.scrollTo({
-                top: this.els.timeline.scrollHeight,
-                behavior: smooth ? 'smooth' : 'auto'
-            });
-        }
+    scrollToBottom(smooth = false, force = false) {
+        if (!this.els.timeline) return;
+        
+        if (this.isUserScrolling && !force) return;
+
+        this.els.timeline.scrollTo({
+            top: this.els.timeline.scrollHeight,
+            behavior: smooth ? 'smooth' : 'auto'
+        });
     }
 
     scrollToMessage(element) {
