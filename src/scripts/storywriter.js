@@ -1588,6 +1588,7 @@ ${text}`;
             const decoder = new TextDecoder();
             let sseBuffer = '';
             let processedTTSLength = 0;
+            let currentSpeaker = 'Narrator';
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -1627,13 +1628,12 @@ ${text}`;
                                                 const line = lines[i].trim();
                                                 if (line) {
                                                     const match = line.match(/^([^:]+):\s*(.*)/);
-                                                    let speaker = 'Narrator';
                                                     let speech = line;
                                                     if (match) {
-                                                        speaker = match[1].replace(/[*_~`]/g, '').trim();
+                                                        currentSpeaker = match[1].replace(/[*_~`]/g, '').trim();
                                                         speech = match[2].trim();
                                                     }
-                                                    const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === speaker.toLowerCase());
+                                                    const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === currentSpeaker.toLowerCase());
                                                     const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
                                                     this.ttsPlayer.enqueue(speech, voice);
                                                 }
@@ -1676,13 +1676,12 @@ ${text}`;
                             const line = lines[i].trim();
                             if (line) {
                                 const match = line.match(/^([^:]+):\s*(.*)/);
-                                let speaker = 'Narrator';
                                 let speech = line;
                                 if (match) {
-                                    speaker = match[1].replace(/[*_~`]/g, '').trim();
+                                    currentSpeaker = match[1].replace(/[*_~`]/g, '').trim();
                                     speech = match[2].trim();
                                 }
-                                const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === speaker.toLowerCase());
+                                const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === currentSpeaker.toLowerCase());
                                 const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
                                 this.ttsPlayer.enqueue(speech, voice);
                             }
