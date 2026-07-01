@@ -2861,7 +2861,8 @@ textarea.content-box {
 }
 
 .chat-bubble-wrapper:hover .chat-message-actions-bar,
-.chat-bubble-wrapper.touch-device .chat-message-actions-bar,
+.chat-bubble-wrapper.actions-visible .chat-message-actions-bar,
+.touch-device .chat-bubble-wrapper .chat-message-actions-bar,
 .chat-message-actions-bar.editing-active {
     opacity: 1;
 }

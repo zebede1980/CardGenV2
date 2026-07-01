@@ -1237,6 +1237,16 @@ class RoleplayChatHandler {
         const wrapper = document.createElement('div');
         wrapper.className = `chat-bubble-wrapper ${msg.role}`;
 
+        // Make actions visible on click (toggles visibility)
+        wrapper.addEventListener('click', (e) => {
+            if (!e.target.closest('.chat-message-actions-bar') && !e.target.closest('.chat-avatar-char-img')) {
+                document.querySelectorAll('.chat-bubble-wrapper.actions-visible').forEach(el => {
+                    if (el !== wrapper) el.classList.remove('actions-visible');
+                });
+                wrapper.classList.toggle('actions-visible');
+            }
+        });
+
         let displayCharName = msg.character_name;
         if ((!displayCharName || displayCharName === 'Routing...') && this.activeChatCharacters && this.activeChatCharacters.length === 1) {
             displayCharName = this.activeChatCharacters[0].name;
