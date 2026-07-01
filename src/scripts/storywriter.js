@@ -1434,7 +1434,8 @@ ${text}`;
             parsed.forEach(item => {
                 if (item.text && item.text.trim()) {
                     let speaker = (item.speaker || 'Narrator').replace(/[*_~`]/g, '').trim();
-                    const voice = voices[speaker] || voices['Narrator'] || defaultVoice;
+                    const voiceKey = Object.keys(voices).find(k => k.toLowerCase() === speaker.toLowerCase());
+                    const voice = voiceKey ? voices[voiceKey] : (voices['Narrator'] || defaultVoice);
                     this.ttsPlayer.enqueue(item.text, voice);
                 }
             });
@@ -1632,7 +1633,8 @@ ${text}`;
                                                         speaker = match[1].replace(/[*_~`]/g, '').trim();
                                                         speech = match[2].trim();
                                                     }
-                                                    const voice = characterVoices[speaker] || characterVoices['Narrator'] || ttsVoice;
+                                                    const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === speaker.toLowerCase());
+                                                    const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
                                                     this.ttsPlayer.enqueue(speech, voice);
                                                 }
                                             }
@@ -1680,7 +1682,8 @@ ${text}`;
                                     speaker = match[1].replace(/[*_~`]/g, '').trim();
                                     speech = match[2].trim();
                                 }
-                                const voice = characterVoices[speaker] || characterVoices['Narrator'] || ttsVoice;
+                                const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === speaker.toLowerCase());
+                                const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
                                 this.ttsPlayer.enqueue(speech, voice);
                             }
                         }
