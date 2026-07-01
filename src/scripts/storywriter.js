@@ -575,72 +575,7 @@ class StoryWriterApp {
 
     // ── Settings ──────────────────────────────────────────────────────────────
 
-    _getCharacterVoicesFromUI() {
-        const container = document.getElementById('sw-character-voices-list');
-        if (!container) return {};
-        const map = {};
-        container.querySelectorAll('.sw-character-voice-row').forEach(row => {
-            const name = row.querySelector('.sw-character-name').value.trim();
-            const voice = row.querySelector('.sw-character-voice').value;
-            if (name) map[name] = voice;
-        });
-        return map;
-    }
 
-    _renderCharacterVoicesList() {
-        const container = document.getElementById('sw-character-voices-list');
-        if (!container) return;
-        container.innerHTML = '';
-        
-        const voices = window.config?.get('api.tts.characterVoices') || {};
-        
-        const addRow = (name = '', voice = '') => {
-            const row = document.createElement('div');
-            row.className = 'sw-character-voice-row';
-            row.style.display = 'flex';
-            row.style.gap = '0.5rem';
-            
-            const nameInput = document.createElement('input');
-            nameInput.type = 'text';
-            nameInput.className = 'input sw-character-name';
-            nameInput.placeholder = 'e.g. John';
-            nameInput.value = name;
-            nameInput.style.flex = '1';
-            nameInput.style.background = 'var(--surface-color)';
-            
-            const voiceSelect = document.createElement('select');
-            voiceSelect.className = 'input sw-character-voice';
-            voiceSelect.style.flex = '1';
-            voiceSelect.style.background = 'var(--surface-color)';
-            
-            // Clone the options from the main TTS voice select
-            const mainSelect = document.getElementById('sw-tts-voice');
-            if (mainSelect) {
-                Array.from(mainSelect.options).forEach(opt => {
-                    const clone = opt.cloneNode(true);
-                    voiceSelect.appendChild(clone);
-                });
-            }
-            voiceSelect.value = voice;
-            
-            const delBtn = document.createElement('button');
-            delBtn.className = 'btn-outline btn-small';
-            delBtn.innerHTML = '🗑️';
-            delBtn.onclick = () => row.remove();
-            
-            row.appendChild(nameInput);
-            row.appendChild(voiceSelect);
-            row.appendChild(delBtn);
-            container.appendChild(row);
-        };
-
-        Object.entries(voices).forEach(([name, voice]) => addRow(name, voice));
-        
-        const addBtn = document.getElementById('sw-add-character-voice-btn');
-        if (addBtn) {
-            addBtn.onclick = () => addRow();
-        }
-    }
 
     async loadSettings() {
         try {
@@ -700,7 +635,6 @@ class StoryWriterApp {
             if (ttsEnabled) ttsEnabled.checked = this.ttsSettings.tts_enabled;
             if (autoMode)  autoMode.checked  = this.ttsSettings.auto_mode;
             if (scriptMode) scriptMode.checked = window.config.get('api.tts.scriptMode') || false;
-            this._renderCharacterVoicesList();
             if (speedSlider) {
                 speedSlider.value = this.ttsSettings.tts_speed;
                 if (speedLabel) speedLabel.textContent = this.ttsSettings.tts_speed + 'x';
@@ -766,7 +700,6 @@ class StoryWriterApp {
             window.config.set('api.tts.nanogptModel', ttsNanogptModel);
             window.config.set('api.tts.nanogptVoice', ttsNanogptVoice);
             window.config.set('api.tts.scriptMode', scriptMode);
-            window.config.set('api.tts.characterVoices', this._getCharacterVoicesFromUI());
         }
         localStorage.removeItem('sw-tts-provider');
         localStorage.removeItem('sw-tts-google-key');
@@ -887,7 +820,7 @@ class StoryWriterApp {
 
             if (statusSpan) statusSpan.textContent = speakers.length + ' voices available';
             console.debug('[StoryWriter][TTS] Loaded voices', speakers);
-            this._renderCharacterVoicesList();
+            if (this.currentStoryId) this.renderCards();
         } catch (e) {
             console.error('[StoryWriter] Failed to load TTS voices:', e);
             voiceSelect.innerHTML = '<option value="">\u2014 TTS unreachable \u2014</option>';
@@ -1055,14 +988,54 @@ class StoryWriterApp {
 
         const attachedIds = new Set(this.story.cards.map(sc => sc.card_id));
 
+        const voicesConfig = window.config?.get('api.tts.characterVoices') || {};
+        const mainSelect = document.getElementById('sw-tts-voice');
+
         this.story.cards.forEach(sc => {
             const tag = document.createElement('span');
             tag.className = 'tag';
             tag.style.display = 'inline-flex';
             tag.style.alignItems = 'center';
             tag.style.gap = '5px';
-            tag.innerHTML = `${sc.card.name} <button style="background:none; border:none; cursor:pointer; color:var(--error);" title="Detach">\u00d7</button>`;
+            tag.innerHTML = `<span>${sc.card.name}</span> <button style="background:none; border:none; cursor:pointer; color:var(--error);" title="Detach">\u00d7</button>`;
             tag.querySelector('button').addEventListener('click', () => this.detachCard(sc.card_id));
+            
+            if (mainSelect && mainSelect.options.length > 1) {
+                const voiceSelect = document.createElement('select');
+                voiceSelect.className = 'input sw-character-voice-inline';
+                voiceSelect.style.padding = '0.1rem 0.5rem';
+                voiceSelect.style.fontSize = '0.8rem';
+                voiceSelect.style.height = 'auto';
+                voiceSelect.style.marginLeft = '5px';
+                voiceSelect.style.background = 'var(--bg-primary)';
+                
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = 'Default Voice';
+                voiceSelect.appendChild(defaultOpt);
+
+                Array.from(mainSelect.options).forEach(opt => {
+                    if (opt.value) {
+                        const clone = opt.cloneNode(true);
+                        voiceSelect.appendChild(clone);
+                    }
+                });
+                
+                voiceSelect.value = voicesConfig[sc.card.name] || '';
+                
+                voiceSelect.addEventListener('change', () => {
+                    const map = window.config?.get('api.tts.characterVoices') || {};
+                    if (voiceSelect.value) {
+                        map[sc.card.name] = voiceSelect.value;
+                    } else {
+                        delete map[sc.card.name];
+                    }
+                    window.config?.set('api.tts.characterVoices', map);
+                });
+                
+                tag.insertBefore(voiceSelect, tag.querySelector('button'));
+            }
+
             container.appendChild(tag);
         });
 
