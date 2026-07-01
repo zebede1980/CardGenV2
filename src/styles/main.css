@@ -2874,6 +2874,10 @@ textarea.content-box {
     flex-wrap: wrap;
 }
 
+.chat-bubble-wrapper .chat-message-actions {
+    opacity: 1; /* Override opacity: 0 from standard chat styles */
+}
+
 .chat-bubble-wrapper.is-editing {
     --chat-bubble-max-width: 100% !important;
     max-width: 100% !important;
