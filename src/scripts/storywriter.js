@@ -1635,6 +1635,7 @@ ${text}`;
                                                     }
                                                     const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === currentSpeaker.toLowerCase());
                                                     const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
+                                                    console.debug('[StoryWriter TTS] Line parsed:', { line: speech, currentSpeaker, voiceKeyFound: !!voiceKey, assignedVoice: voice });
                                                     this.ttsPlayer.enqueue(speech, voice);
                                                 }
                                             }
