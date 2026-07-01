@@ -140,7 +140,7 @@ class TTSPlayer {
     /**
      * Add a sentence to the playback queue. Kicks off buffering and playback.
      */
-    enqueue(text) {
+    enqueue(text, voiceOverride = null) {
         if (!text || !text.trim()) return;
         
         // Clean up markdown and special characters that TTS struggles with
@@ -157,8 +157,8 @@ class TTSPlayer {
         const trimmed = cleaned.trim();
         if (!trimmed) return;
 
-        console.debug('[TTSPlayer] Enqueue sentence', trimmed);
-        this.textQueue.push(trimmed);
+        console.debug('[TTSPlayer] Enqueue sentence', trimmed, voiceOverride ? `(Voice: ${voiceOverride})` : '');
+        this.textQueue.push({text: trimmed, voiceOverride});
         this._queueLowFired = false;
         this._maybeLoadNext();
         if (!this.playing && !this.paused && this.audioQueue.length > 0) {
@@ -181,7 +181,9 @@ class TTSPlayer {
         }
 
         this.loading = true;
-        const text = this.textQueue.shift();
+        const queueItem = this.textQueue.shift();
+        const text = queueItem.text;
+        const voiceOverride = queueItem.voiceOverride;
         
         if (this.textQueue.length === 0 && !this._queueLowFired && !this.stopped) {
             this._queueLowFired = true;
@@ -192,7 +194,7 @@ class TTSPlayer {
             const res = await window.authFetch('/api/tts/synthesize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice: this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, nanogptKey: this.nanogptKey, nanogptModel: this.nanogptModel, nanogptVoice: this.nanogptVoice }),
+                body: JSON.stringify({ text, voice: voiceOverride || this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, nanogptKey: this.nanogptKey, nanogptModel: this.nanogptModel, nanogptVoice: this.nanogptVoice }),
             });
 
             if (!res.ok) {
@@ -573,6 +575,73 @@ class StoryWriterApp {
 
     // ── Settings ──────────────────────────────────────────────────────────────
 
+    _getCharacterVoicesFromUI() {
+        const container = document.getElementById('sw-character-voices-list');
+        if (!container) return {};
+        const map = {};
+        container.querySelectorAll('.sw-character-voice-row').forEach(row => {
+            const name = row.querySelector('.sw-character-name').value.trim();
+            const voice = row.querySelector('.sw-character-voice').value;
+            if (name) map[name] = voice;
+        });
+        return map;
+    }
+
+    _renderCharacterVoicesList() {
+        const container = document.getElementById('sw-character-voices-list');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        const voices = window.config?.get('api.tts.characterVoices') || {};
+        
+        const addRow = (name = '', voice = '') => {
+            const row = document.createElement('div');
+            row.className = 'sw-character-voice-row';
+            row.style.display = 'flex';
+            row.style.gap = '0.5rem';
+            
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'input sw-character-name';
+            nameInput.placeholder = 'e.g. John';
+            nameInput.value = name;
+            nameInput.style.flex = '1';
+            nameInput.style.background = 'var(--surface-color)';
+            
+            const voiceSelect = document.createElement('select');
+            voiceSelect.className = 'input sw-character-voice';
+            voiceSelect.style.flex = '1';
+            voiceSelect.style.background = 'var(--surface-color)';
+            
+            // Clone the options from the main TTS voice select
+            const mainSelect = document.getElementById('sw-tts-voice');
+            if (mainSelect) {
+                Array.from(mainSelect.options).forEach(opt => {
+                    const clone = opt.cloneNode(true);
+                    voiceSelect.appendChild(clone);
+                });
+            }
+            voiceSelect.value = voice;
+            
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-outline btn-small';
+            delBtn.innerHTML = '🗑️';
+            delBtn.onclick = () => row.remove();
+            
+            row.appendChild(nameInput);
+            row.appendChild(voiceSelect);
+            row.appendChild(delBtn);
+            container.appendChild(row);
+        };
+
+        Object.entries(voices).forEach(([name, voice]) => addRow(name, voice));
+        
+        const addBtn = document.getElementById('sw-add-character-voice-btn');
+        if (addBtn) {
+            addBtn.onclick = () => addRow();
+        }
+    }
+
     async loadSettings() {
         try {
             const s = await this.apiCall('/settings/');
@@ -618,6 +687,7 @@ class StoryWriterApp {
 
             const ttsEnabled = document.getElementById('sw-tts-enabled');
             const autoMode = document.getElementById('sw-auto-mode');
+            const scriptMode = document.getElementById('sw-script-mode');
             const voiceSelect  = document.getElementById('sw-tts-voice');
             const speedSlider  = document.getElementById('sw-tts-speed');
             const speedLabel   = document.getElementById('sw-tts-speed-label');
@@ -629,6 +699,8 @@ class StoryWriterApp {
 
             if (ttsEnabled) ttsEnabled.checked = this.ttsSettings.tts_enabled;
             if (autoMode)  autoMode.checked  = this.ttsSettings.auto_mode;
+            if (scriptMode) scriptMode.checked = window.config.get('api.tts.scriptMode') || false;
+            this._renderCharacterVoicesList();
             if (speedSlider) {
                 speedSlider.value = this.ttsSettings.tts_speed;
                 if (speedLabel) speedLabel.textContent = this.ttsSettings.tts_speed + 'x';
@@ -678,6 +750,7 @@ class StoryWriterApp {
 
         const ttsEnabled = document.getElementById('sw-tts-enabled')?.checked || false;
         const autoMode   = document.getElementById('sw-auto-mode')?.checked || false;
+        const scriptMode = document.getElementById('sw-script-mode')?.checked || false;
         const ttsVoice   = document.getElementById('sw-tts-voice')?.value || 'p230';
         const ttsSpeed   = parseFloat(document.getElementById('sw-tts-speed')?.value || '1.0');
         const ttsProvider = document.getElementById('sw-tts-provider')?.value || 'local';
@@ -692,6 +765,8 @@ class StoryWriterApp {
             window.config.set('api.tts.nanogptKey', ttsNanogptKey);
             window.config.set('api.tts.nanogptModel', ttsNanogptModel);
             window.config.set('api.tts.nanogptVoice', ttsNanogptVoice);
+            window.config.set('api.tts.scriptMode', scriptMode);
+            window.config.set('api.tts.characterVoices', this._getCharacterVoicesFromUI());
         }
         localStorage.removeItem('sw-tts-provider');
         localStorage.removeItem('sw-tts-google-key');
@@ -812,6 +887,7 @@ class StoryWriterApp {
 
             if (statusSpan) statusSpan.textContent = speakers.length + ' voices available';
             console.debug('[StoryWriter][TTS] Loaded voices', speakers);
+            this._renderCharacterVoicesList();
         } catch (e) {
             console.error('[StoryWriter] Failed to load TTS voices:', e);
             voiceSelect.innerHTML = '<option value="">\u2014 TTS unreachable \u2014</option>';
@@ -1332,14 +1408,75 @@ class StoryWriterApp {
         this._hideNarrationControls();
     }
 
+    async _extractAndPlayAudiobook(text, voices, defaultVoice) {
+        if (!text || !this.ttsPlayer || this.ttsPlayer.stopped) return;
+        
+        try {
+            const prompt = `Given the following story segment, extract all sentences and attribute them to a speaker. 
+Output exactly a JSON array of objects with keys "speaker" and "text". 
+Use "Narrator" for non-dialogue descriptive sentences. Do not include markdown formatting or any other text.
+
+Segment:
+${text}`;
+
+            const res = await (window.authFetch || fetch)('/api/text/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: [{ role: 'user', content: prompt }],
+                    model: window.config?.get('api.text.model') || '',
+                    temperature: 0.1
+                })
+            });
+
+            if (!res.ok) throw new Error('Extraction LLM failed');
+            if (this.ttsPlayer.stopped) return;
+            
+            const data = await res.json();
+            let content = data.choices?.[0]?.message?.content || '[]';
+            content = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+            
+            const parsed = JSON.parse(content);
+            if (!Array.isArray(parsed)) throw new Error('Invalid JSON format');
+            
+            parsed.forEach(item => {
+                if (item.text && item.text.trim()) {
+                    let speaker = item.speaker || 'Narrator';
+                    const voice = voices[speaker] || voices['Narrator'] || defaultVoice;
+                    this.ttsPlayer.enqueue(item.text, voice);
+                }
+            });
+            
+            this._updateNarrationProgress('Speaking...');
+        } catch (e) {
+            console.error('[StoryWriter][TTS] Failed to extract audiobook voices, falling back to default voice.', e);
+            if (this.ttsPlayer && !this.ttsPlayer.stopped) {
+                const detector = new SentenceDetector();
+                const sentences = detector.feed(text);
+                detector.flush().forEach(s => sentences.push(s));
+                sentences.forEach(s => this.ttsPlayer.enqueue(s, defaultVoice));
+                this._updateNarrationProgress('Speaking...');
+            }
+        }
+    }
+
     // ── Generate next story chunk (with optional TTS narration) ────────────────
 
     async generateNext() {
         if (this.isFetchingLLM || !this.story || this._pollingInterval) return;
         const steeringInput = document.getElementById('sw-steering');
-        const steering = steeringInput.value.trim();
+        let steering = steeringInput.value.trim();
         const btn = document.getElementById('sw-generate-btn');
         const area = document.getElementById('sw-story-area');
+
+        const scriptMode = document.getElementById('sw-script-mode')?.checked || false;
+        const characterVoices = window.config?.get('api.tts.characterVoices') || {};
+
+        let modifiedSteering = steering;
+        if (scriptMode) {
+            const scriptInstruction = "SYSTEM INSTRUCTION: You MUST write exclusively in a script format. Every line must begin with the character's name, or 'Narrator', followed by a colon. Do not write normal prose.";
+            modifiedSteering = modifiedSteering ? (modifiedSteering + "\n\n" + scriptInstruction) : scriptInstruction;
+        }
 
         this.isFetchingLLM = true;
         btn.textContent = 'Generating...';
@@ -1419,7 +1556,7 @@ class StoryWriterApp {
             const res = await window.authFetch('/api/sw/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ story_id: this.story.id, steering: steering || null }),
+                body: JSON.stringify({ story_id: this.story.id, steering: modifiedSteering || null }),
                 signal: this.abortController.signal
             });
 
@@ -1474,15 +1611,13 @@ class StoryWriterApp {
                                 // Display the chunk
                                 streamDiv.textContent += data.content;
 
-                                // Feed to sentence detector for TTS
-                                if (sentenceDetector && this.ttsPlayer && !this.ttsPlayer.stopped) {
+                                // Feed to TTS
+                                if (ttsEnabled && this.ttsPlayer && !this.ttsPlayer.stopped) {
                                     let fullText = streamDiv.textContent;
-                                    // Remove completed think blocks
-                                    fullText = fullText.replace(/<think>[\s\S]*?<\/think>/g, '');
-                                    // Remove unclosed think blocks
-                                    fullText = fullText.replace(/<think>[\s\S]*$/g, '');
                                     
-                                    // Prevent processing partial tags at the boundary
+                                    // Remove think blocks
+                                    fullText = fullText.replace(/<think>[\s\S]*?<\/think>/g, '');
+                                    fullText = fullText.replace(/<think>[\s\S]*$/g, '');
                                     const suffixes = ['<', '<t', '<th', '<thi', '<thin', '<think', '</', '</t', '</th', '</thi', '</thin', '</think'];
                                     for (const suffix of suffixes) {
                                         if (fullText.endsWith(suffix)) {
@@ -1491,13 +1626,37 @@ class StoryWriterApp {
                                         }
                                     }
                                     
-                                    if (fullText.length > processedTTSLength) {
-                                        const newText = fullText.slice(processedTTSLength);
-                                        processedTTSLength = fullText.length;
-                                        const sentences = sentenceDetector.feed(newText);
-                                        sentences.forEach(s => this.ttsPlayer.enqueue(s));
-                                        if (sentences.length > 0) {
+                                    if (scriptMode) {
+                                        // Real-time Script Mode Parsing
+                                        const lines = fullText.split('\n');
+                                        if (lines.length - 1 > processedTTSLength) {
+                                            for (let i = processedTTSLength; i < lines.length - 1; i++) {
+                                                const line = lines[i].trim();
+                                                if (line) {
+                                                    const match = line.match(/^([^:]+):\s*(.*)/);
+                                                    let speaker = 'Narrator';
+                                                    let speech = line;
+                                                    if (match) {
+                                                        speaker = match[1].trim();
+                                                        speech = match[2].trim();
+                                                    }
+                                                    const voice = characterVoices[speaker] || characterVoices['Narrator'] || ttsVoice;
+                                                    this.ttsPlayer.enqueue(speech, voice);
+                                                }
+                                            }
+                                            processedTTSLength = lines.length - 1;
                                             this._updateNarrationProgress('Speaking...');
+                                        }
+                                    } else if (sentenceDetector && Object.keys(characterVoices).length === 0) {
+                                        // Legacy real-time mode (only if no custom character voices)
+                                        if (fullText.length > processedTTSLength) {
+                                            const newText = fullText.slice(processedTTSLength);
+                                            processedTTSLength = fullText.length;
+                                            const sentences = sentenceDetector.feed(newText);
+                                            sentences.forEach(s => this.ttsPlayer.enqueue(s, ttsVoice));
+                                            if (sentences.length > 0) {
+                                                this._updateNarrationProgress('Speaking...');
+                                            }
                                         }
                                     }
                                 }
@@ -1512,10 +1671,37 @@ class StoryWriterApp {
                 }
             }
 
-            // Flush any remaining text in the sentence detector
-            if (sentenceDetector && this.ttsPlayer && !this.ttsPlayer.stopped) {
-                const remaining = sentenceDetector.flush();
-                remaining.forEach(s => this.ttsPlayer.enqueue(s));
+            if (ttsEnabled && this.ttsPlayer && !this.ttsPlayer.stopped) {
+                let fullText = streamDiv.textContent.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+                
+                if (scriptMode) {
+                    // Flush final line for script mode
+                    const lines = fullText.split('\n');
+                    if (lines.length > processedTTSLength) {
+                        for (let i = processedTTSLength; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if (line) {
+                                const match = line.match(/^([^:]+):\s*(.*)/);
+                                let speaker = 'Narrator';
+                                let speech = line;
+                                if (match) {
+                                    speaker = match[1].trim();
+                                    speech = match[2].trim();
+                                }
+                                const voice = characterVoices[speaker] || characterVoices['Narrator'] || ttsVoice;
+                                this.ttsPlayer.enqueue(speech, voice);
+                            }
+                        }
+                    }
+                } else if (Object.keys(characterVoices).length > 0) {
+                    // Audiobook Buffered Plan C Extraction
+                    this._updateNarrationProgress('Extracting speakers...');
+                    this._extractAndPlayAudiobook(fullText, characterVoices, ttsVoice);
+                } else if (sentenceDetector) {
+                    // Legacy flush
+                    const remaining = sentenceDetector.flush();
+                    remaining.forEach(s => this.ttsPlayer.enqueue(s, ttsVoice));
+                }
             }
 
             if (steeringInput.value.trim() === steering) {

@@ -1635,6 +1635,15 @@
                                     Automatically generate the next chunk after the current one finishes narrating. Hands-free listening.
                                 </p>
 
+                                <label class="label" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="sw-script-mode" />
+                                    Script Mode (Real-time Multi-Voice)
+                                </label>
+                                <p style="font-size: 0.72rem; color: var(--text-secondary); margin: 0.2rem 0 0.5rem 1.5rem;">
+                                    Forces the AI to write in a screenplay format (Name: Dialogue). Enables real-time distinct voices for different characters.
+                                </p>
+
+
                                 <div style="margin-top: 0.75rem;">
                                     <label class="label" for="sw-tts-provider">Provider</label>
                                     <select id="sw-tts-provider" class="input" style="background: var(--surface-color); max-width: 260px;">
@@ -1681,12 +1690,24 @@
                                 </div>
 
                                 <div id="sw-tts-standard-voice-container" style="margin-top: 0.75rem;">
-                                    <label class="label" for="sw-tts-voice">Voice</label>
+                                    <label class="label" for="sw-tts-voice">Default / Narrator Voice</label>
                                     <select id="sw-tts-voice" class="input" style="background: var(--surface-color); max-width: 260px;">
                                         <option value="">— Loading voices… —</option>
                                     </select>
                                     <span id="sw-tts-status" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;"></span>
                                 </div>
+
+                                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-strong);">
+                                    <h4 style="margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--text-primary);">Character Voices</h4>
+                                    <p style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                        Map specific names to distinct TTS voices. Used in Script Mode (real-time) or Standard Mode (buffered audio book).
+                                    </p>
+                                    <div id="sw-character-voices-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                        <!-- Character voice rows dynamically added here -->
+                                    </div>
+                                    <button id="sw-add-character-voice-btn" class="btn-outline btn-small" type="button">➕ Add Character Voice</button>
+                                </div>
+
 
                                 <div style="margin-top: 0.65rem; display: flex; align-items: center; gap: 0.5rem;">
                                     <button id="sw-tts-test-btn" class="btn-small" type="button">Test Voice</button>
