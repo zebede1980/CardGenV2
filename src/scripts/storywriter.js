@@ -1349,22 +1349,57 @@ class StoryWriterApp {
             }
         };
 
-        const detector = new SentenceDetector();
+        const scriptMode = document.getElementById('sw-script-mode')?.checked || false;
+        const characterVoices = window.config?.get('api.tts.characterVoices') || {};
+
         const segmentsToPlay = this.story.segments.slice(index);
         let queued = 0;
 
-        segmentsToPlay.forEach(seg => {
-            const sentences = detector.feed(seg.content + '\n');
-            sentences.forEach(sentence => {
-                this.ttsPlayer.enqueue(sentence);
-                queued += 1;
+        if (scriptMode) {
+            let currentSpeaker = 'Narrator';
+            segmentsToPlay.forEach(seg => {
+                const lines = seg.content.split('\n');
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (line) {
+                        const match = line.match(/^([^:]+):\s*(.*)/);
+                        let speech = line;
+                        if (match) {
+                            currentSpeaker = match[1].replace(/[*_~`]/g, '').trim();
+                            speech = match[2].trim();
+                        }
+                        const voiceKey = Object.keys(characterVoices).find(k => {
+                            const cleanK = k.replace(/[*_~`]/g, '').trim().toLowerCase();
+                            const cleanS = currentSpeaker.replace(/[*_~`]/g, '').trim().toLowerCase();
+                            return cleanK === cleanS || cleanK.includes(cleanS) || cleanS.includes(cleanK);
+                        });
+                        const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
+                        this.ttsPlayer.enqueue(speech, voice);
+                        queued += 1;
+                    }
+                });
             });
-        });
-
-        detector.flush().forEach(sentence => {
-            this.ttsPlayer.enqueue(sentence);
-            queued += 1;
-        });
+        } else {
+            if (Object.keys(characterVoices).length > 0) {
+                segmentsToPlay.forEach(seg => {
+                    this._extractAndPlayAudiobook(seg.content, characterVoices, ttsVoice);
+                    queued += 1;
+                });
+            } else {
+                const detector = new SentenceDetector();
+                segmentsToPlay.forEach(seg => {
+                    const sentences = detector.feed(seg.content + '\n');
+                    sentences.forEach(sentence => {
+                        this.ttsPlayer.enqueue(sentence, ttsVoice);
+                        queued += 1;
+                    });
+                });
+                detector.flush().forEach(sentence => {
+                    this.ttsPlayer.enqueue(sentence, ttsVoice);
+                    queued += 1;
+                });
+            }
+        }
 
         if (queued > 0) {
             this._updateNarrationProgress('Speaking...');
@@ -1465,6 +1500,7 @@ ${text}`;
 
         const scriptMode = document.getElementById('sw-script-mode')?.checked || false;
         const characterVoices = window.config?.get('api.tts.characterVoices') || {};
+        console.log('[StoryWriter TTS] Generation starting. Current mapped voices:', characterVoices);
 
         let modifiedSteering = steering;
         if (scriptMode) {
@@ -1634,7 +1670,11 @@ ${text}`;
                                                         currentSpeaker = match[1].replace(/[*_~`]/g, '').trim();
                                                         speech = match[2].trim();
                                                     }
-                                                    const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === currentSpeaker.toLowerCase());
+                                                    const voiceKey = Object.keys(characterVoices).find(k => {
+                                                        const cleanK = k.replace(/[*_~`]/g, '').trim().toLowerCase();
+                                                        const cleanS = currentSpeaker.replace(/[*_~`]/g, '').trim().toLowerCase();
+                                                        return cleanK === cleanS || cleanK.includes(cleanS) || cleanS.includes(cleanK);
+                                                    });
                                                     const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
                                                     console.log('[StoryWriter TTS] Line parsed:', { line: speech, currentSpeaker, voiceKeyFound: !!voiceKey, assignedVoice: voice });
                                                     this.ttsPlayer.enqueue(speech, voice);
@@ -1683,7 +1723,11 @@ ${text}`;
                                     currentSpeaker = match[1].replace(/[*_~`]/g, '').trim();
                                     speech = match[2].trim();
                                 }
-                                const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === currentSpeaker.toLowerCase());
+                                const voiceKey = Object.keys(characterVoices).find(k => {
+                                    const cleanK = k.replace(/[*_~`]/g, '').trim().toLowerCase();
+                                    const cleanS = currentSpeaker.replace(/[*_~`]/g, '').trim().toLowerCase();
+                                    return cleanK === cleanS || cleanK.includes(cleanS) || cleanS.includes(cleanK);
+                                });
                                 const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
                                 console.log('[StoryWriter TTS] Line parsed (final):', { line: speech, currentSpeaker, voiceKeyFound: !!voiceKey, assignedVoice: voice });
                                 this.ttsPlayer.enqueue(speech, voice);
