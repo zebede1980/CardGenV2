@@ -145,6 +145,9 @@ class TTSPlayer {
         
         // Clean up markdown and special characters that TTS struggles with
         let cleaned = text;
+        // Remove script-style character names if they leak into the TTS text
+        // This matches names like "Beth: ", "**Beth**: ", "Joe: "
+        cleaned = cleaned.replace(/\b\*?[A-Z][a-zA-Z0-9_-]*\*?:\s*/g, ' ');
         // Remove markdown headings
         cleaned = cleaned.replace(/^[#]+\s*/g, '');
         // Remove markdown list bullets
