@@ -2849,34 +2849,28 @@ textarea.content-box {
     word-wrap: break-word;
 }
 
-.chat-message-actions-container {
-    position: sticky;
-    top: 4.5rem;
-    height: 0;
-    width: 100%;
-    display: flex;
-    justify-content: flex-end;
-    z-index: 10;
-    pointer-events: none;
-    margin-top: -1.5rem; /* Align with name row */
-}
-
-/* Message actions (edit/delete) */
-.chat-message-actions {
+/* Message action bar — inline below bubble, anchored to message */
+.chat-message-actions-bar {
     display: flex;
     gap: 0.35rem;
+    flex-wrap: wrap;
+    margin-top: 0.35rem;
     opacity: 0;
     transition: opacity 0.2s ease;
     pointer-events: auto;
-    background: var(--surface-color);
-    padding: 0.2rem 0.4rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--border);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-.chat-message-actions.editing-active {
-    opacity: 1 !important;
+.chat-bubble-wrapper:hover .chat-message-actions-bar,
+.chat-bubble-wrapper.touch-device .chat-message-actions-bar,
+.chat-message-actions-bar.editing-active {
+    opacity: 1;
+}
+
+/* Message actions (edit/delete/regen) */
+.chat-message-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
 }
 
 .chat-bubble-wrapper.is-editing {
@@ -2889,9 +2883,18 @@ textarea.content-box {
     max-width: 100% !important;
 }
 
-.chat-bubble-wrapper:hover .chat-message-actions,
-.chat-bubble-wrapper.touch-device .chat-message-actions {
-    opacity: 1;
+/* Edit controls bar — inline below textarea */
+.chat-edit-controls-bar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+/* Legacy sticky container — keep for backward compat, but hidden */
+.chat-message-actions-container {
+    display: none;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -3308,22 +3311,71 @@ body.chat-scroll-locked {
         opacity: 0.75 !important;
     }
 
-    /* Touch-friendly, compact message action buttons */
-    #view-roleplaychat.chat-fullscreen .chat-message-actions {
-        opacity: 0.85 !important;
-        margin-left: auto !important;
-        gap: 0.25rem !important;
+    /* Inline action bar — always visible on touch, anchored to bubble */
+    #view-roleplaychat.chat-fullscreen .chat-message-actions-bar {
+        opacity: 1 !important;
+        margin-top: 0.4rem !important;
+        gap: 0.4rem !important;
     }
 
+    #view-roleplaychat.chat-fullscreen .chat-message-actions {
+        gap: 0.4rem !important;
+        flex-wrap: wrap !important;
+    }
+
+    /* Touch-friendly, larger message action buttons */
     #view-roleplaychat.chat-fullscreen .chat-message-actions .chat-action-btn {
-        padding: 0.2rem 0.4rem !important;
-        font-size: 0.72rem !important;
-        border-radius: 6px !important;
+        padding: 0.45rem 0.65rem !important;
+        font-size: 0.82rem !important;
+        border-radius: 8px !important;
         background: var(--surface-muted) !important;
         border: 1px solid var(--border) !important;
-        color: var(--text-secondary) !important;
-        min-height: unset !important;
+        color: var(--text-primary) !important;
+        min-height: 36px !important;
         height: auto !important;
+        font-weight: 500 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.3rem !important;
+        transition: background 0.15s, border-color 0.15s, transform 0.1s !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-message-actions .chat-action-btn:active {
+        transform: scale(0.96) !important;
+        background: var(--accent-soft) !important;
+        border-color: var(--accent) !important;
+    }
+
+    /* Regen button keeps its amber styling but larger */
+    #view-roleplaychat.chat-fullscreen .chat-regen-btn {
+        color: #b45309 !important;
+        border-color: #d97706 !important;
+        font-weight: 600 !important;
+    }
+
+    [data-theme="dark"] #view-roleplaychat.chat-fullscreen .chat-regen-btn {
+        color: #fbbf24 !important;
+        border-color: #d97706 !important;
+    }
+
+    /* Edit controls bar in fullscreen */
+    #view-roleplaychat.chat-fullscreen .chat-edit-controls-bar {
+        gap: 0.5rem !important;
+        margin-top: 0.6rem !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-edit-controls-bar .btn-small {
+        padding: 0.45rem 0.8rem !important;
+        font-size: 0.85rem !important;
+        min-height: 36px !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+    }
+
+    #view-roleplaychat.chat-fullscreen .chat-edit-controls-bar .btn-primary {
+        padding: 0.45rem 0.8rem !important;
+        font-size: 0.85rem !important;
+        min-height: 36px !important;
     }
 
     /* Input area - sleek floating capsule design */
@@ -3591,51 +3643,18 @@ body.chat-scroll-locked {
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
 }
-/* OVERRIDES FOR STICKY ACTIONS AND FULLSCREEN EDITING */
-.chat-message-actions-container {
-    top: 0.5rem !important;
-    align-self: flex-start !important;
-}
-
-.chat-message-actions {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
-}
-
-.chat-bubble-wrapper:hover .chat-message-actions,
-.chat-message-actions:focus-within,
-.chat-bubble-wrapper.is-editing .chat-message-actions {
-    opacity: 1 !important;
-    background: var(--bg-page) !important;
-    pointer-events: auto !important;
-}
-
-/* Fullscreen mode overrides for editing */
+/* Edit mode — full-width bubbles */
 #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing {
-    max-width: 100% !important;
-}
-
-#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing .chat-bubble {
-    max-width: 100% !important;
-}
-/* COMPREHENSIVE FULL-WIDTH OVERRIDES FOR EDIT MODE */
-.chat-bubble-wrapper.is-editing,
-#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing,
-#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.user,
-#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.assistant {
     max-width: 100% !important;
     width: 100% !important;
 }
 
-.chat-bubble-wrapper.is-editing .chat-bubble-content-col,
 #view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing .chat-bubble-content-col {
     max-width: 100% !important;
     flex: 1 1 auto !important;
 }
 
-.chat-bubble-wrapper.is-editing .chat-bubble,
-#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing .chat-bubble,
-#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.user .chat-bubble,
-#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing.assistant .chat-bubble {
+#view-roleplaychat.chat-fullscreen .chat-bubble-wrapper.is-editing .chat-bubble {
     max-width: 100% !important;
     width: 100% !important;
 }
