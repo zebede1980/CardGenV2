@@ -1433,7 +1433,7 @@ ${text}`;
             
             parsed.forEach(item => {
                 if (item.text && item.text.trim()) {
-                    let speaker = item.speaker || 'Narrator';
+                    let speaker = (item.speaker || 'Narrator').replace(/[*_~`]/g, '').trim();
                     const voice = voices[speaker] || voices['Narrator'] || defaultVoice;
                     this.ttsPlayer.enqueue(item.text, voice);
                 }
@@ -1629,7 +1629,7 @@ ${text}`;
                                                     let speaker = 'Narrator';
                                                     let speech = line;
                                                     if (match) {
-                                                        speaker = match[1].trim();
+                                                        speaker = match[1].replace(/[*_~`]/g, '').trim();
                                                         speech = match[2].trim();
                                                     }
                                                     const voice = characterVoices[speaker] || characterVoices['Narrator'] || ttsVoice;
@@ -1677,7 +1677,7 @@ ${text}`;
                                 let speaker = 'Narrator';
                                 let speech = line;
                                 if (match) {
-                                    speaker = match[1].trim();
+                                    speaker = match[1].replace(/[*_~`]/g, '').trim();
                                     speech = match[2].trim();
                                 }
                                 const voice = characterVoices[speaker] || characterVoices['Narrator'] || ttsVoice;
