@@ -192,12 +192,13 @@ class TTSPlayer {
             this._queueLowFired = true;
             if (this.onQueueLow) this.onQueueLow();
         }
-        console.debug('[TTSPlayer] Loading audio for sentence', text);
+        const payload = { text, voice: voiceOverride || this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, nanogptKey: this.nanogptKey, nanogptModel: this.nanogptModel, nanogptVoice: this.nanogptVoice };
+        console.log('[TTSPlayer] Synthesize request:', { text, requestedVoice: payload.voice, voiceOverride, defaultVoice: this.voice });
         try {
             const res = await window.authFetch('/api/tts/synthesize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice: voiceOverride || this.voice, speed: this.speed, provider: this.provider, googleApiKey: this.googleApiKey, nanogptKey: this.nanogptKey, nanogptModel: this.nanogptModel, nanogptVoice: this.nanogptVoice }),
+                body: JSON.stringify(payload),
             });
 
             if (!res.ok) {
@@ -1635,7 +1636,7 @@ ${text}`;
                                                     }
                                                     const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === currentSpeaker.toLowerCase());
                                                     const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
-                                                    console.debug('[StoryWriter TTS] Line parsed:', { line: speech, currentSpeaker, voiceKeyFound: !!voiceKey, assignedVoice: voice });
+                                                    console.log('[StoryWriter TTS] Line parsed:', { line: speech, currentSpeaker, voiceKeyFound: !!voiceKey, assignedVoice: voice });
                                                     this.ttsPlayer.enqueue(speech, voice);
                                                 }
                                             }
@@ -1684,6 +1685,7 @@ ${text}`;
                                 }
                                 const voiceKey = Object.keys(characterVoices).find(k => k.toLowerCase() === currentSpeaker.toLowerCase());
                                 const voice = voiceKey ? characterVoices[voiceKey] : (characterVoices['Narrator'] || ttsVoice);
+                                console.log('[StoryWriter TTS] Line parsed (final):', { line: speech, currentSpeaker, voiceKeyFound: !!voiceKey, assignedVoice: voice });
                                 this.ttsPlayer.enqueue(speech, voice);
                             }
                         }

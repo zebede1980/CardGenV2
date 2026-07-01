@@ -1263,6 +1263,7 @@ app.get("/api/tts/voices", async (req, res) => {
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
     const { text, voice, speed, provider, googleApiKey, nanogptKey, nanogptModel, nanogptVoice } = req.body;
+    console.log(`[Proxy] /api/tts/synthesize called. Provider: ${provider}, Voice requested: ${voice}`);
 
     // Branch: Kokoro TTS
     if (provider === "kokoro") {
