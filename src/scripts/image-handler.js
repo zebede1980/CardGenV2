@@ -829,6 +829,49 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleWebImageImport(imageUrl) {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate a character first", "warning");
+      return;
+    }
+
+    try {
+      this.showNotification("Importing image...", "info");
+      
+      if (this.currentImageUrl) {
+        this._archiveCurrentImage();
+      }
+
+      // Proxy the image request to bypass CORS
+      const token = localStorage.getItem("auth_token");
+      const headers = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/proxy-image?url=${encodeURIComponent(imageUrl)}`, { headers });
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch image");
+      }
+      
+      const blob = await response.blob();
+      this.currentImageUrl = URL.createObjectURL(blob);
+
+      const imageContainer = document.getElementById("image-content");
+      imageContainer.innerHTML = `
+        <div class="image-container">
+          <img src="${this.currentImageUrl}" alt="${this.currentCharacter.name}" class="generated-image">
+        </div>
+      `;
+
+      this.showNotification("Image imported successfully!", "success");
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+    } catch (error) {
+      console.error("Image import error:", error);
+      this.showNotification(`Image import failed: ${error.message}`, "error");
+    }
+  },
+
   async handleReferenceImageUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;

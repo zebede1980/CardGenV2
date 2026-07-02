@@ -257,6 +257,113 @@ class CharacterGeneratorApp {
 
     // Image & file uploads
     document.getElementById("upload-image-btn").addEventListener("click", () => document.getElementById("image-upload-input").click());
+
+    // Web Image Search Modal Logic
+    const webImageBtn = document.getElementById("search-web-image-btn");
+    const webSearchModal = document.getElementById("web-image-search-modal");
+    const webSearchCloseBtn = document.getElementById("web-image-search-close-btn");
+    const webSearchInput = document.getElementById("web-image-search-input");
+    const webSearchSubmitBtn = document.getElementById("web-image-search-submit-btn");
+    const webSearchResults = document.getElementById("web-image-search-results");
+    const webSearchLoading = document.getElementById("web-image-search-loading");
+
+    const webPreviewModal = document.getElementById("web-image-preview-modal");
+    const webPreviewCloseBtn = document.getElementById("web-image-preview-close-btn");
+    const webPreviewImg = document.getElementById("web-image-preview-img");
+    const webPreviewImportBtn = document.getElementById("web-image-import-btn");
+
+    if (webImageBtn) {
+      webImageBtn.addEventListener("click", () => {
+        webSearchModal.style.display = "flex";
+        webSearchInput.focus();
+      });
+    }
+    if (webSearchCloseBtn) {
+      webSearchCloseBtn.addEventListener("click", () => webSearchModal.style.display = "none");
+    }
+    if (webSearchModal) {
+      webSearchModal.addEventListener("click", (e) => {
+        if (e.target === webSearchModal) webSearchModal.style.display = "none";
+      });
+    }
+
+    if (webPreviewCloseBtn) {
+      webPreviewCloseBtn.addEventListener("click", () => webPreviewModal.style.display = "none");
+    }
+    if (webPreviewModal) {
+      webPreviewModal.addEventListener("click", (e) => {
+        if (e.target === webPreviewModal) webPreviewModal.style.display = "none";
+      });
+    }
+
+    if (webSearchSubmitBtn) {
+      webSearchSubmitBtn.addEventListener("click", async () => {
+        const query = webSearchInput.value.trim();
+        if (!query) return;
+
+        webSearchResults.innerHTML = "";
+        webSearchLoading.style.display = "block";
+        webSearchSubmitBtn.disabled = true;
+
+        try {
+          const token = localStorage.getItem("auth_token");
+          const headers = { "Content-Type": "application/json" };
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+
+          const res = await fetch("/api/search/images", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ query })
+          });
+          
+          if (!res.ok) throw new Error("Search failed");
+          const data = await res.json();
+          
+          webSearchLoading.style.display = "none";
+          webSearchSubmitBtn.disabled = false;
+
+          if (data.success && data.images) {
+            data.images.forEach(img => {
+              const div = document.createElement("div");
+              div.className = "image-result";
+              div.style.cssText = "cursor: pointer; border-radius: 0.5rem; overflow: hidden; border: 2px solid transparent; transition: border-color 0.2s; position: relative;";
+              div.innerHTML = `<img src="/api/proxy-image?url=${encodeURIComponent(img.url)}" style="width: 100%; height: 150px; object-fit: cover; display: block;" onerror="this.src='/placeholder.png'; this.onerror=null;"/>`;
+              
+              div.addEventListener("mouseover", () => div.style.borderColor = "var(--accent)");
+              div.addEventListener("mouseout", () => div.style.borderColor = "transparent");
+              
+              div.addEventListener("click", () => {
+                webPreviewImg.src = `/api/proxy-image?url=${encodeURIComponent(img.url)}`;
+                webPreviewModal.style.display = "flex";
+                
+                // Store the selected URL
+                webPreviewImportBtn.onclick = () => {
+                  webPreviewModal.style.display = "none";
+                  webSearchModal.style.display = "none";
+                  if (this.handleWebImageImport) {
+                    this.handleWebImageImport(img.url);
+                  }
+                };
+              });
+              
+              webSearchResults.appendChild(div);
+            });
+          }
+        } catch (e) {
+          console.error("Search error:", e);
+          webSearchLoading.style.display = "none";
+          webSearchSubmitBtn.disabled = false;
+          webSearchResults.innerHTML = `<p style="color: var(--error);">Search failed: ${e.message}</p>`;
+        }
+      });
+      
+      // Allow pressing enter in input
+      webSearchInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          webSearchSubmitBtn.click();
+        }
+      });
+    }
     document.getElementById("image-upload-input").addEventListener("change", (e) => this.handleImageUpload(e));
     document.getElementById("lorebook-file").addEventListener("change", (e) => this.handleLorebookUpload(e));
     const referenceImageInput = document.getElementById("reference-image-file");

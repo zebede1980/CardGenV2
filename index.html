@@ -1385,6 +1385,13 @@
                                     🕰️ History
                                 </button>
                                 <button
+                                    id="search-web-image-btn"
+                                    class="btn-small"
+                                    title="Search the web for an image to use as the character portrait."
+                                >
+                                    🌐 Search Web
+                                </button>
+                                <button
                                     id="upload-image-btn"
                                     class="btn-small"
                                     title="Upload your own image to use as the character portrait instead of AI-generating one. Accepts common image formats."
@@ -2936,6 +2943,41 @@
                     <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
                         <button id="chat-global-save-btn" class="btn-primary">Save Settings</button>
                     </div>
+                </div>
+            </div>
+        </div>
+        <!-- Web Image Search Modal -->
+        <div id="web-image-search-modal" class="modal-overlay" style="display: none;">
+            <div class="api-settings-modal" style="max-width: 800px; width: 90%; max-height: 90vh; display: flex; flex-direction: column;">
+                <div class="modal-header">
+                    <h2 class="modal-title">🌐 Web Image Search</h2>
+                    <button id="web-image-search-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                        <input type="text" id="web-image-search-input" class="content-box" placeholder="Enter search term..." style="flex: 1;" />
+                        <button id="web-image-search-submit-btn" class="btn-primary">Search</button>
+                    </div>
+                    <div id="web-image-search-loading" style="display: none; text-align: center; padding: 1rem;">
+                        Loading images...
+                    </div>
+                    <div id="web-image-search-results" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; overflow-y: auto; flex: 1; padding-right: 0.5rem;">
+                        <!-- Results will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Web Image Preview Modal -->
+        <div id="web-image-preview-modal" class="modal-overlay" style="display: none; z-index: 10001;">
+            <div class="api-settings-modal" style="max-width: 600px; width: 90%; text-align: center;">
+                <div class="modal-header">
+                    <h2 class="modal-title">Preview Image</h2>
+                    <button id="web-image-preview-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+                    <img id="web-image-preview-img" src="" style="max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 0.5rem;" />
+                    <button id="web-image-import-btn" class="btn-primary" style="padding: 0.8rem 2rem; font-size: 1.1rem;">Import This Image</button>
                 </div>
             </div>
         </div>

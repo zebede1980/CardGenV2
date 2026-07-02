@@ -8,6 +8,7 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const google = require("googlethis");
 
 // ── Auth configuration ────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || "cardgen-default-secret-change-me";
@@ -2421,6 +2422,22 @@ app.post("/api/search/character", requireAuth, async (req, res) => {
     res.json({ success: true, results });
   } catch (e) {
     console.error("[Char Search] Error:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── Google Image Search ──────────────────────────────────────────────────────
+app.post("/api/search/images", requireAuth, async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query) {
+      return res.status(400).json({ success: false, error: "Query is required" });
+    }
+    console.log(`[Image Search] Searching for: "${query}"`);
+    const images = await google.image(query, { safe: false });
+    res.json({ success: true, images: images.slice(0, 30) });
+  } catch (e) {
+    console.error("[Image Search] Error:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
