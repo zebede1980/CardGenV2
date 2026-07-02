@@ -306,35 +306,31 @@ class CharacterGeneratorApp {
         webSearchSubmitBtn.disabled = true;
 
         try {
-          const token = localStorage.getItem("cardgen_auth_token");
-          const headers = { "Content-Type": "application/json" };
-          if (token) headers["Authorization"] = `Bearer ${token}`;
-
-          const res = await fetch("/api/search/images", {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ query })
-          });
-          
-          if (!res.ok) throw new Error("Search failed");
-          const data = await res.json();
+          const res = await this.apiHandler.makeRequest("/api/search/images", { query });
+          const data = res; // makeRequest returns the parsed JSON by default when stream is false
           
           webSearchLoading.style.display = "none";
           webSearchSubmitBtn.disabled = false;
 
           if (data.success && data.images) {
+            const token = window.cardgenAuth?.getToken() || localStorage.getItem("cardgen_auth_token");
             const tokenStr = token ? '&token=' + encodeURIComponent(token) : '';
+            const baseUrl = this.apiHandler.config?.getProxyUrl() || "";
+            
             data.images.forEach(img => {
               const div = document.createElement("div");
               div.className = "image-result";
               div.style.cssText = "cursor: pointer; border-radius: 0.5rem; overflow: hidden; border: 2px solid transparent; transition: border-color 0.2s; position: relative;";
-              div.innerHTML = `<img src="/api/proxy-image?url=${encodeURIComponent(img.url)}${tokenStr}" style="width: 100%; height: 150px; object-fit: cover; display: block;" onerror="this.src='/placeholder.png'; this.onerror=null;"/>`;
+              
+              const proxyImageUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(img.url)}${tokenStr}`;
+              
+              div.innerHTML = `<img src="${proxyImageUrl}" style="width: 100%; height: 150px; object-fit: cover; display: block;" onerror="this.src='/placeholder.png'; this.onerror=null;"/>`;
               
               div.addEventListener("mouseover", () => div.style.borderColor = "var(--accent)");
               div.addEventListener("mouseout", () => div.style.borderColor = "transparent");
               
               div.addEventListener("click", () => {
-                webPreviewImg.src = `/api/proxy-image?url=${encodeURIComponent(img.url)}${tokenStr}`;
+                webPreviewImg.src = proxyImageUrl;
                 webPreviewModal.style.display = "flex";
                 
                 // Store the selected URL
