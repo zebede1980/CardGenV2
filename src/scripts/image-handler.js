@@ -843,7 +843,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       // Proxy the image request to bypass CORS
-      const token = localStorage.getItem("auth_token");
+      const token = localStorage.getItem("cardgen_auth_token");
       const headers = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 

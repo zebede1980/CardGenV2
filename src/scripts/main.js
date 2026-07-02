@@ -306,7 +306,7 @@ class CharacterGeneratorApp {
         webSearchSubmitBtn.disabled = true;
 
         try {
-          const token = localStorage.getItem("auth_token");
+          const token = localStorage.getItem("cardgen_auth_token");
           const headers = { "Content-Type": "application/json" };
           if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -323,17 +323,18 @@ class CharacterGeneratorApp {
           webSearchSubmitBtn.disabled = false;
 
           if (data.success && data.images) {
+            const tokenStr = token ? '&token=' + encodeURIComponent(token) : '';
             data.images.forEach(img => {
               const div = document.createElement("div");
               div.className = "image-result";
               div.style.cssText = "cursor: pointer; border-radius: 0.5rem; overflow: hidden; border: 2px solid transparent; transition: border-color 0.2s; position: relative;";
-              div.innerHTML = `<img src="/api/proxy-image?url=${encodeURIComponent(img.url)}" style="width: 100%; height: 150px; object-fit: cover; display: block;" onerror="this.src='/placeholder.png'; this.onerror=null;"/>`;
+              div.innerHTML = `<img src="/api/proxy-image?url=${encodeURIComponent(img.url)}${tokenStr}" style="width: 100%; height: 150px; object-fit: cover; display: block;" onerror="this.src='/placeholder.png'; this.onerror=null;"/>`;
               
               div.addEventListener("mouseover", () => div.style.borderColor = "var(--accent)");
               div.addEventListener("mouseout", () => div.style.borderColor = "transparent");
               
               div.addEventListener("click", () => {
-                webPreviewImg.src = `/api/proxy-image?url=${encodeURIComponent(img.url)}`;
+                webPreviewImg.src = `/api/proxy-image?url=${encodeURIComponent(img.url)}${tokenStr}`;
                 webPreviewModal.style.display = "flex";
                 
                 // Store the selected URL
