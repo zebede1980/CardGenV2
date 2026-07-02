@@ -843,12 +843,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       // Proxy the image request to bypass CORS
-      const token = window.cardgenAuth?.getToken() || localStorage.getItem("cardgen_auth_token");
-      const headers = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      const baseUrl = this.apiHandler.config?.getProxyUrl() || "";
-
-      const response = await fetch(`${baseUrl}/api/proxy-image?url=${encodeURIComponent(imageUrl)}`, { headers });
+      const response = await window.authFetch(`/api/proxy-image?url=${encodeURIComponent(imageUrl)}`);
       
       if (!response.ok) {
         throw new Error("Failed to fetch image");
