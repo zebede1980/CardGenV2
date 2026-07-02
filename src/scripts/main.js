@@ -326,6 +326,7 @@ class CharacterGeneratorApp {
             const limit = 20;
             
             const renderImages = () => {
+              webSearchResults.innerHTML = "";
               const currentImages = data.images.slice(offset, offset + limit);
               
               currentImages.forEach(img => {
@@ -343,7 +344,15 @@ class CharacterGeneratorApp {
               div.addEventListener("mouseout", () => div.style.borderColor = "transparent");
               
               div.addEventListener("click", () => {
+                let selectedUrl = img.url;
                 webPreviewImg.src = proxyImageUrl;
+                webPreviewImg.onerror = function() {
+                  if (this.src !== proxyPreviewUrl) {
+                    this.src = proxyPreviewUrl;
+                    selectedUrl = previewUrl; // Fallback to preview url for importing
+                  }
+                };
+                
                 webPreviewModal.style.display = "flex";
                 
                 // Store the selected URL
@@ -351,7 +360,7 @@ class CharacterGeneratorApp {
                   webPreviewModal.style.display = "none";
                   webSearchModal.style.display = "none";
                   if (this.handleWebImageImport) {
-                    this.handleWebImageImport(img.url);
+                    this.handleWebImageImport(selectedUrl);
                   }
                 };
               });
@@ -361,17 +370,33 @@ class CharacterGeneratorApp {
             
             offset += limit;
             
-            // Handle More button
-            let moreBtn = webSearchResults.querySelector(".web-search-more-btn");
-            if (moreBtn) moreBtn.remove();
+            // Handle Pagination Buttons
+            const btnContainer = document.createElement("div");
+            btnContainer.style.cssText = "grid-column: 1 / -1; display: flex; gap: 1rem; margin-top: 1rem; justify-content: center;";
+            
+            if (offset > limit) {
+              const prevBtn = document.createElement("button");
+              prevBtn.className = "btn btn-secondary";
+              prevBtn.innerText = "Previous Page";
+              prevBtn.style.cssText = "padding: 0.75rem; border-radius: 0.5rem; cursor: pointer; flex: 1;";
+              prevBtn.onclick = () => {
+                offset -= limit * 2; // Go back 2 pages then advance 1 in the flow
+                renderImages();
+              };
+              btnContainer.appendChild(prevBtn);
+            }
             
             if (offset < data.images.length) {
-              moreBtn = document.createElement("button");
-              moreBtn.className = "web-search-more-btn btn btn-secondary";
-              moreBtn.innerText = "Load More";
-              moreBtn.style.cssText = "grid-column: 1 / -1; margin-top: 1rem; padding: 0.75rem; border-radius: 0.5rem; cursor: pointer;";
-              moreBtn.onclick = () => renderImages();
-              webSearchResults.appendChild(moreBtn);
+              const nextBtn = document.createElement("button");
+              nextBtn.className = "btn btn-secondary";
+              nextBtn.innerText = "Next Page";
+              nextBtn.style.cssText = "padding: 0.75rem; border-radius: 0.5rem; cursor: pointer; flex: 1;";
+              nextBtn.onclick = () => renderImages();
+              btnContainer.appendChild(nextBtn);
+            }
+            
+            if (btnContainer.children.length > 0) {
+              webSearchResults.appendChild(btnContainer);
             }
           };
           
