@@ -872,6 +872,21 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    await this.processReferenceImageFile(file);
+    if (event.target) event.target.value = "";
+  },
+
+  async handleReferenceImagePaste(event) {
+    if (!event.clipboardData || !event.clipboardData.files.length) return;
+    
+    const file = event.clipboardData.files[0];
+    if (!file.type.startsWith("image/")) return;
+
+    event.preventDefault();
+    await this.processReferenceImageFile(file);
+  },
+
+  async processReferenceImageFile(file) {
     try {
       this.imageGenerator.validateImageFile(file);
 
@@ -900,8 +915,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
         `Reference image analysis failed: ${error.message}`,
         "warning",
       );
-    } finally {
-      event.target.value = "";
     }
   },
 

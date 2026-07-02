@@ -421,6 +421,9 @@ class CharacterGeneratorApp {
     document.getElementById("lorebook-file").addEventListener("change", (e) => this.handleLorebookUpload(e));
     const referenceImageInput = document.getElementById("reference-image-file");
     if (referenceImageInput) referenceImageInput.addEventListener("change", (e) => this.handleReferenceImageUpload(e));
+    
+    // Add paste listener for reference image
+    document.addEventListener("paste", (e) => this.handleReferenceImagePaste(e));
 
     // Creator's Notes edit tracking
     const creatorNotesTextarea = document.getElementById("creator-notes");
