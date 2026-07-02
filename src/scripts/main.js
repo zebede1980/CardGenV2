@@ -322,14 +322,22 @@ class CharacterGeneratorApp {
             const token = window.cardgenAuth?.getToken() || localStorage.getItem("cardgen_auth_token");
             const tokenStr = token ? '&token=' + encodeURIComponent(token) : '';
             
-            data.images.forEach(img => {
+            let offset = 0;
+            const limit = 20;
+            
+            const renderImages = () => {
+              const currentImages = data.images.slice(offset, offset + limit);
+              
+              currentImages.forEach(img => {
               const div = document.createElement("div");
               div.className = "image-result";
               div.style.cssText = "cursor: pointer; border-radius: 0.5rem; overflow: hidden; border: 2px solid transparent; transition: border-color 0.2s; position: relative;";
               
+              const previewUrl = img.preview?.url || img.url;
+              const proxyPreviewUrl = `/api/proxy-image?url=${encodeURIComponent(previewUrl)}${tokenStr}`;
               const proxyImageUrl = `/api/proxy-image?url=${encodeURIComponent(img.url)}${tokenStr}`;
               
-              div.innerHTML = `<img src="${proxyImageUrl}" style="width: 100%; height: 150px; object-fit: cover; display: block;" onerror="this.src='/placeholder.png'; this.onerror=null;"/>`;
+              div.innerHTML = `<img src="${proxyPreviewUrl}" style="width: 100%; height: 150px; object-fit: cover; display: block;" onerror="this.src='/placeholder.png'; this.onerror=null;"/>`;
               
               div.addEventListener("mouseover", () => div.style.borderColor = "var(--accent)");
               div.addEventListener("mouseout", () => div.style.borderColor = "transparent");
@@ -350,8 +358,26 @@ class CharacterGeneratorApp {
               
               webSearchResults.appendChild(div);
             });
-          }
-        } catch (e) {
+            
+            offset += limit;
+            
+            // Handle More button
+            let moreBtn = webSearchResults.querySelector(".web-search-more-btn");
+            if (moreBtn) moreBtn.remove();
+            
+            if (offset < data.images.length) {
+              moreBtn = document.createElement("button");
+              moreBtn.className = "web-search-more-btn btn btn-secondary";
+              moreBtn.innerText = "Load More";
+              moreBtn.style.cssText = "grid-column: 1 / -1; margin-top: 1rem; padding: 0.75rem; border-radius: 0.5rem; cursor: pointer;";
+              moreBtn.onclick = () => renderImages();
+              webSearchResults.appendChild(moreBtn);
+            }
+          };
+          
+          renderImages();
+        }
+      } catch (e) {
           console.error("Search error:", e);
           webSearchLoading.style.display = "none";
           webSearchSubmitBtn.disabled = false;

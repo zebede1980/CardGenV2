@@ -1781,7 +1781,13 @@ app.get("/api/proxy-image", requireAuth, async (req, res) => {
 
     console.log("Proxying image request for:", imageUrl);
 
-    const response = await fetch(imageUrl);
+    const response = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": new URL(imageUrl).origin + "/"
+      }
+    });
 
     if (!response.ok) {
       console.error(
@@ -2435,7 +2441,7 @@ app.post("/api/search/images", requireAuth, async (req, res) => {
     }
     console.log(`[Image Search] Searching for: "${query}"`);
     const images = await google.image(query, { safe: false });
-    res.json({ success: true, images: images.slice(0, 30) });
+    res.json({ success: true, images: images.slice(0, 100) });
   } catch (e) {
     console.error("[Image Search] Error:", e.message);
     res.status(500).json({ success: false, error: e.message });
