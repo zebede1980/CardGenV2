@@ -575,6 +575,9 @@ ${lorebookContent}`;
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (jsonMatch) cleaned = jsonMatch[0];
 
+    // Remove invalid JSON escape characters (e.g., \', \*) which models often output for markdown
+    cleaned = cleaned.replace(/\\([^"\\/bfnrtu])/g, '$1');
+
     try {
       return JSON.parse(cleaned);
     } catch (initialError) {
