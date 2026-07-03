@@ -197,8 +197,7 @@ class CharacterGeneratorApp {
     document.getElementById("generate-image-final-btn").addEventListener("click", () => this.handleRegenerateImage());
     const imageHistoryBtn = document.getElementById("image-history-btn");
     if (imageHistoryBtn) imageHistoryBtn.addEventListener("click", () => this.showImageHistory());
-    const generateFourImagesBtn = document.getElementById("generate-four-images-btn");
-    if (generateFourImagesBtn) generateFourImagesBtn.addEventListener("click", () => this.handleGenerateFourImages());
+
     const generateFourPromptsBtn = document.getElementById("generate-four-prompts-btn");
     if (generateFourPromptsBtn) generateFourPromptsBtn.addEventListener("click", () => this.handleGenerateFourPrompts());
 
