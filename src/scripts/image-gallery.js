@@ -38,6 +38,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
   closeGallery() {
     const overlay = document.getElementById("gallery-lightbox");
     if (!overlay) return;
+    
+    // Remove focus from any gallery buttons to prevent ARIA warnings when hidden
+    if (document.activeElement && overlay.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    
     overlay.classList.remove("show");
     document.body.style.overflow = "";
     overlay.setAttribute("aria-hidden", "true");
