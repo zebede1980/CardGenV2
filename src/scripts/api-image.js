@@ -10,12 +10,14 @@ Object.assign(APIHandler.prototype, {
     styleOverride = undefined,
     guidance = ""
   ) {
-    const disableShorteningCheckbox = typeof document !== "undefined" ? document.getElementById("disable-prompt-shortening") : null;
-    const skipShortening = disableShorteningCheckbox && disableShorteningCheckbox.checked;
+    const model = modelOverride || this.config.get("api.image.model");
+    const modelSettings = this.config.get("api.image.modelSettings") || {};
+    const settings = modelSettings[model] || {};
+    const promptLengthPref = settings.promptLengthPref || "detailed";
 
     let imagePrompt;
     if (customPrompt) {
-      imagePrompt = skipShortening ? customPrompt.trim() : await this.truncateImagePrompt(customPrompt);
+      imagePrompt = promptLengthPref === "short" ? await this.truncateImagePrompt(customPrompt) : customPrompt.trim();
     } else {
       console.log("=== GENERATING IMAGE PROMPT VIA TEXT API ===");
       console.log("Character name:", characterName);
@@ -43,15 +45,10 @@ Object.assign(APIHandler.prototype, {
     // The style is woven directly into the prompt by the LLM now.
     let finalApiPrompt = imagePrompt;
 
-    const model = modelOverride || this.config.get("api.image.model");
-    const modelSettings = this.config.get("api.image.modelSettings") || {};
-    const settings = modelSettings[model] || {};
-    const promptLengthPref = settings.promptLengthPref || "detailed";
-    
-    const IMAGE_PROMPT_MAX = promptLengthPref === "short" ? 800 : 2500;
+    const IMAGE_PROMPT_MAX = promptLengthPref === "short" ? 1000 : 10000;
     
     // Safety trim
-    if (!skipShortening && finalApiPrompt.length > IMAGE_PROMPT_MAX) {
+    if (promptLengthPref === "short" && finalApiPrompt.length > IMAGE_PROMPT_MAX) {
       const trimmed = finalApiPrompt.substring(0, IMAGE_PROMPT_MAX);
       const lastPeriod = trimmed.lastIndexOf(".");
       const lastComma = trimmed.lastIndexOf(",");
@@ -158,17 +155,16 @@ Object.assign(APIHandler.prototype, {
       throw new Error("Text API returned an empty image prompt");
     }
 
-    const disableShorteningCheckbox = document.getElementById("disable-prompt-shortening");
-    if (disableShorteningCheckbox && disableShorteningCheckbox.checked) {
-      return generatedPrompt.trim();
+    if (lengthPref === "short") {
+      return await this.truncateImagePrompt(generatedPrompt.trim());
     }
 
-    return await this.truncateImagePrompt(generatedPrompt.trim());
+    return generatedPrompt.trim();
   },
 
   async truncateImagePrompt(prompt) {
     const MAX_LENGTH = 1000;
-    // Target 800 chars so that style tags (~200 chars) still fit within the 1200 total limit
+    // Target 800 chars so that style tags (~200 chars) still fit within the 1000 total limit
     const AI_TARGET = 800;
 
     if (prompt.length <= MAX_LENGTH) return prompt;
