@@ -746,7 +746,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const customPromptTextarea = document.getElementById("custom-image-prompt");
     const promptEditor = document.getElementById("image-prompt-editor");
-    const regeneratePromptBtn = document.getElementById("regenerate-prompt-btn");
+    const regeneratePromptBtn = document.getElementById("draft-prompt-btn");
 
     if (!customPromptTextarea || !promptEditor) {
       this.showNotification("Prompt editor not found", "error");
@@ -783,7 +783,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } finally {
       if (regeneratePromptBtn) {
         regeneratePromptBtn.disabled = false;
-        regeneratePromptBtn.textContent = "💡 Prompt";
+        regeneratePromptBtn.textContent = "📝 Draft Prompt";
       }
     }
 

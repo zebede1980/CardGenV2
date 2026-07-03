@@ -194,7 +194,7 @@ class CharacterGeneratorApp {
     if (stopRevisionBtn) stopRevisionBtn.addEventListener("click", () => this.handleStopRevision());
 
     // Image buttons
-    document.getElementById("regenerate-image-btn").addEventListener("click", () => this.handleRegenerateImage());
+    document.getElementById("generate-image-final-btn").addEventListener("click", () => this.handleRegenerateImage());
     const imageHistoryBtn = document.getElementById("image-history-btn");
     if (imageHistoryBtn) imageHistoryBtn.addEventListener("click", () => this.showImageHistory());
     const generateFourImagesBtn = document.getElementById("generate-four-images-btn");
@@ -227,7 +227,7 @@ class CharacterGeneratorApp {
     if (imgOptModalClose) imgOptModalClose.addEventListener("click", () => this.closeImageOptionsModal());
     if (imgOptModal) imgOptModal.addEventListener("click", (e) => { if (e.target === imgOptModal) this.closeImageOptionsModal(); });
 
-    document.getElementById("regenerate-prompt-btn").addEventListener("click", () => this.handleRegeneratePrompt());
+    document.getElementById("draft-prompt-btn").addEventListener("click", () => this.handleRegeneratePrompt());
 
     const imageStyleSelect = document.getElementById("image-style");
     if (imageStyleSelect) imageStyleSelect.addEventListener("change", () => this.saveAPISettings());
@@ -1248,6 +1248,21 @@ class CharacterGeneratorApp {
       } else if (imageApiBase && imageApiKey && enableImageGeneration) {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
+          
+          // Apply sensible defaults for a brand new character
+          if (this.config.get("api.image.models") && this.config.get("api.image.models").length > 0) {
+            this.config.set("api.image.model", this.config.get("api.image.models")[0]);
+            const activeImageModelSelect = document.getElementById("active-image-model");
+            if (activeImageModelSelect) activeImageModelSelect.value = this.config.get("api.image.models")[0];
+          }
+          this.config.set("api.image.style", "realistic");
+          const styleSelect = document.getElementById("image-style");
+          if (styleSelect) styleSelect.value = "realistic";
+          
+          this.config.set("api.image.aspectRatio", "");
+          const aspectRatioSelect = document.getElementById("image-aspect-ratio");
+          if (aspectRatioSelect) aspectRatioSelect.value = "";
+          
           await this.generateImage(true);
           this.showStreamMessage("✅ Image generation complete!\n");
         } catch (imageError) {

@@ -1177,53 +1177,30 @@
                             >
                                 <div class="form-group" style="margin-bottom: 1rem;">
                                     <label for="image-style" class="label"
-                                        >Image Style (optional)</label
+                                        >Style Preset (optional)</label
                                     >
                                     <select id="image-style" class="input">
                                         <option value="">None (Default)</option>
-                                        <option value="semi-realistic">Semi-Realistic 2.5D</option>
                                         <option value="realistic">Realistic / Photography</option>
-                                        <option value="gothic">Gothic / Dark Fantasy</option>
-                                        <option value="gothic-anime">Gothic Anime</option>
-                                        <option value="90s-dark-animation">90s Dark Animation</option>
+                                        <option value="cinematic">Cinematic</option>
+                                        <option value="digital-art">Digital Art</option>
+                                        <option value="anime">Anime</option>
+                                        <option value="3d-render">3D Render</option>
                                         <option value="fantasy">Fantasy Art</option>
                                         <option value="cyberpunk">Cyberpunk</option>
-                                        <option value="3d-render">3D Render</option>
-                                        <option value="arcane">Arcane / Fortiche Style</option>
-                                        <option value="disney-pixar">Disney / Pixar 3D</option>
-                                        <option value="anime">Anime</option>
-                                        <option value="prismatic-anime">Prismatic Anime</option>
-                                        <option value="hand-drawn-anime">Hand Drawn Anime</option>
-                                        <option value="painted-anime">Painted Anime Artwork</option>
-                                        <option value="grunge-anime">Grunge Anime</option>
-                                        <option value="genshin">Genshin Impact Style</option>
-                                        <option value="ghibli">Studio Ghibli</option>
-                                        <option value="waifu">Waifu</option>
-                                        <option value="hentai">Hentai / Ecchi Anime</option>
-                                        <option value="yaoi-bl">Yaoi / BL Style</option>
-                                        <option value="sexy">Sexy / Alluring</option>
-                                        <option value="pin-up">Pin-Up / Retro Glamour</option>
-                                        <option value="frazetta">Frazetta Fantasy</option>
-                                        <option value="comic">Comic Book / Graphic Novel</option>
-                                        <option value="dark-graphic-novel">Dark Graphic Novel</option>
-                                        <option value="cinematic">Cinematic</option>
-                                        <option value="watercolor">Watercolor</option>
-                                        <option value="pixel">Pixel Art</option>
-                                        <option value="voxel">Voxel Art</option>
-                                        <option disabled>───────────────</option>
-                                        <option value="oil-painting">Oil Painting (Classical)</option>
-                                        <option value="concept-art">Concept Art (Game/Film)</option>
-                                        <option value="art-nouveau">Art Nouveau</option>
-                                        <option value="noir">Film Noir (B&amp;W)</option>
-                                        <option value="ink-sketch">Ink Sketch / Pen &amp; Ink</option>
-                                        <option value="storybook">Storybook / Whimsical</option>
-                                        <option value="manhwa">Manhwa / Webtoon</option>
-                                        <option value="manhwa-18">Manhwa 18+ / Mature</option>
-                                        <option value="chibi">Chibi</option>
-                                        <option value="vintage">Vintage / Retro</option>
-                                        <option value="propaganda-poster">Propaganda Poster</option>
-                                        <option value="stained-glass">Stained Glass</option>
-                                        <option value="ukiyo-e">Ukiyo-e / Woodblock</option>
+                                        <option value="comic-book">Comic Book</option>
+                                        <option value="gothic">Gothic / Dark</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 1rem;">
+                                    <label for="image-aspect-ratio" class="label">Aspect Ratio</label>
+                                    <select id="image-aspect-ratio" class="input">
+                                        <option value="">Default (1:1)</option>
+                                        <option value="1:1">1:1 (Square)</option>
+                                        <option value="9:16">9:16 (Portrait)</option>
+                                        <option value="16:9">16:9 (Landscape)</option>
+                                        <option value="3:4">3:4 (Portrait)</option>
+                                        <option value="4:3">4:3 (Landscape)</option>
                                     </select>
                                 </div>
                                 <div class="image-controls-wrapper">
@@ -1278,7 +1255,7 @@
                                             user-select: none;
                                         "
                                     >
-                                        ✏️ Edit Image Prompt (Advanced)
+                                        ✏️ Final Prompt Preview (Advanced)
                                     </summary>
                                     <div
                                         style="
@@ -1302,8 +1279,8 @@
                                                 id="custom-image-prompt"
                                                 class="input"
                                                 rows="10"
-                                                maxlength="1000"
-                                                placeholder="Image prompt will appear here when you click Regenerate Image..."
+                                                maxlength="2500"
+                                                placeholder="Draft prompt will appear here when you click 'Draft Prompt'..."
                                                 style="
                                                     font-family: monospace;
                                                     font-size: 0.875rem;
@@ -1328,7 +1305,7 @@
                                                     pointer-events: none;
                                                 "
                                             >
-                                                0/1000
+                                                0/2500
                                             </div>
                                         </div>
                                         <p
@@ -1338,10 +1315,7 @@
                                                 margin-top: 0.5rem;
                                             "
                                         >
-                                            💡 Tip: Edit this prompt to
-                                            customize the image appearance.
-                                            Leave empty to use auto-generated
-                                            prompt. Maximum 1000 characters.
+                                            💡 Tip: Edit this prompt before generating the final image. Maximum 2500 characters.
                                         </p>
                                     </div>
                                 </details>
@@ -1349,18 +1323,18 @@
                             <!-- Image Action Buttons -->
                             <div class="image-buttons-row" style="margin-top: 1rem; display: none" id="image-buttons-row">
                                 <button
-                                    id="regenerate-prompt-btn"
+                                    id="draft-prompt-btn"
                                     class="btn-small"
-                                    title="Generate a new image prompt based on the character's description. You can edit the prompt manually before generating the image."
+                                    title="Generate a detailed prompt using the AI, based on your settings."
                                 >
-                                    💡 Prompt
+                                    📝 Draft Prompt
                                 </button>
                                 <button
-                                    id="regenerate-image-btn"
-                                    class="btn-small"
-                                    title="Generate a new character image using the current prompt text. Edit the prompt first if you want to adjust the result."
+                                    id="generate-image-final-btn"
+                                    class="btn-small btn-primary"
+                                    title="Generate the actual image from the finalized prompt."
                                 >
-                                    🖼️ Image
+                                    🖼️ Generate Image
                                 </button>
                                 <button
                                     id="generate-four-images-btn"
@@ -2095,7 +2069,7 @@
 
                     <div class="form-group">
                         <label for="image-size" class="label"
-                            >Image Size (optional)</label
+                            >Global Image Size (optional)</label
                         >
                         <input
                             type="text"
@@ -2103,6 +2077,40 @@
                             class="input"
                             placeholder="e.g., 1024x1024, 512x512 (optional)"
                         />
+                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">Default size if Aspect Ratio is not selected in the main UI.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-steps" class="label">Steps (optional)</label>
+                        <input
+                            type="number"
+                            id="image-steps"
+                            class="input"
+                            placeholder="e.g., 20 or 50. Leave blank for default."
+                            min="1"
+                            max="150"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-cfg-scale" class="label">CFG Scale (optional)</label>
+                        <input
+                            type="number"
+                            id="image-cfg-scale"
+                            class="input"
+                            placeholder="e.g., 7.5 or 3.5. Leave blank for default."
+                            step="0.1"
+                            min="1"
+                            max="30"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-prompt-length-pref" class="label">Prompt Length Preference</label>
+                        <select id="image-prompt-length-pref" class="input">
+                            <option value="detailed">Detailed / Long (Best for heavyweight models)</option>
+                            <option value="short">Short / Direct (Best for turbo/fast models)</option>
+                        </select>
                     </div>
 
                     <!-- Image Generation Toggle -->

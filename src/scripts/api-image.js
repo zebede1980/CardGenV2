@@ -39,19 +39,16 @@ Object.assign(APIHandler.prototype, {
 
     this.lastGeneratedImagePrompt = imagePrompt;
 
-    // Bookend with style tags (prefix + suffix)
+    // We no longer bookend with style tags (prefix + suffix).
+    // The style is woven directly into the prompt by the LLM now.
     let finalApiPrompt = imagePrompt;
-    const style = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
-    if (style) {
-      const { prefix, suffix } = this.getImageStyleTags(style);
-      if (prefix) finalApiPrompt = `${prefix} ${finalApiPrompt.trim()}`;
-      if (suffix) finalApiPrompt = `${finalApiPrompt.trim()}, ${suffix}`;
-    }
 
-    // Safety trim: some image models have prompt length limits (e.g. z-image-turbo: 1200 chars).
-    // The truncateImagePrompt step targets 1000 chars, but style tags can add ~200+ more.
-    // Trim the final prompt to stay within safe bounds, at a sentence boundary if possible.
-    const IMAGE_PROMPT_MAX = 1150;
+    const model = modelOverride || this.config.get("api.image.model");
+    const promptLengthPref = this.config.get("api.image.promptLengthPref") || "detailed";
+    
+    const IMAGE_PROMPT_MAX = promptLengthPref === "short" ? 800 : 2500;
+    
+    // Safety trim
     if (!skipShortening && finalApiPrompt.length > IMAGE_PROMPT_MAX) {
       const trimmed = finalApiPrompt.substring(0, IMAGE_PROMPT_MAX);
       const lastPeriod = trimmed.lastIndexOf(".");
@@ -59,8 +56,6 @@ Object.assign(APIHandler.prototype, {
       const cutPoint = lastPeriod > IMAGE_PROMPT_MAX * 0.7 ? lastPeriod + 1 : lastComma > IMAGE_PROMPT_MAX * 0.7 ? lastComma : IMAGE_PROMPT_MAX;
       finalApiPrompt = trimmed.substring(0, cutPoint).trim();
     }
-
-    const model = modelOverride || this.config.get("api.image.model");
 
     console.log("=== SENDING TO IMAGE API ===");
     console.log("Using image model:", model);
@@ -79,7 +74,22 @@ Object.assign(APIHandler.prototype, {
     };
 
     const imageSize = this.config.get("api.image.size");
-    if (imageSize && imageSize.trim() !== "") data.size = imageSize.trim();
+    const imageAspectRatio = this.config.get("api.image.aspectRatio");
+    const imageSteps = this.config.get("api.image.steps");
+    const imageCfgScale = this.config.get("api.image.cfgScale");
+
+    if (imageAspectRatio && imageAspectRatio.trim() !== "") {
+      data.aspect_ratio = imageAspectRatio.trim();
+    } else if (imageSize && imageSize.trim() !== "") {
+      data.size = imageSize.trim();
+    }
+    
+    if (imageSteps && !isNaN(parseInt(imageSteps))) {
+      data.steps = parseInt(imageSteps);
+    }
+    if (imageCfgScale && !isNaN(parseFloat(imageCfgScale))) {
+      data.cfg_scale = parseFloat(imageCfgScale);
+    }
 
     const response = await this.makeRequest("/api/image/generations", data, true);
 
@@ -109,12 +119,15 @@ Object.assign(APIHandler.prototype, {
     throw new Error("Unexpected image API response format: " + JSON.stringify(result));
   },
 
-  async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "") {
+  async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "", styleOverride = undefined) {
     if (!characterDescription || !characterName) {
       throw new Error("Character description and name are required to generate an image prompt");
     }
 
-    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType, guidance);
+    const style = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
+    const lengthPref = this.config.get("api.image.promptLengthPref") || "detailed";
+    
+    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType, guidance, style, lengthPref);
     const model = this.config.get("api.text.model");
 
     const data = {
@@ -268,7 +281,7 @@ Object.assign(APIHandler.prototype, {
     return prompt;
   },
 
-  buildImagePromptInstruction(characterDescription, characterName, cardType = "single", guidance = "") {
+  buildImagePromptInstruction(characterDescription, characterName, cardType = "single", guidance = "", style = "", lengthPref = "detailed") {
     const personalityTraits = this.extractPersonalityTraits(characterDescription);
 
     let taskInstruction = "";
@@ -282,11 +295,20 @@ Object.assign(APIHandler.prototype, {
     if (guidance && guidance.trim()) {
       guidanceBlock = `\n\nUSER GUIDANCE (high priority — steer the image toward these specifics):\n${guidance.trim()}\n\nIncorporate the guidance above as the primary creative direction. Override or adapt profile details as needed to satisfy the guidance.`;
     }
+    
+    let styleBlock = "";
+    if (style && style.trim()) {
+      styleBlock = `\n\nSTYLE DIRECTIVE:\nEnsure the prompt commands the AI to generate an image in the style of "${style}". Weave the aesthetic, lighting, and rendering techniques appropriate for this style naturally into the description.`;
+    }
+    
+    let lengthBlock = lengthPref === "short" 
+        ? "Total output: 50-100 words. Keep it direct and concise, ideal for fast generation models."
+        : "Total output: 150-300 words. Make it highly detailed and descriptive, ideal for heavyweight generation models.";
 
     return `You are an expert at extracting visual details from character profiles to write image generation prompts.
 
 Character Name: ${characterName || "Unknown"}
-Personality Traits Detected: ${personalityTraits}${taskInstruction}${guidanceBlock}
+Personality Traits Detected: ${personalityTraits}${taskInstruction}${guidanceBlock}${styleBlock}
 
 Full Character Profile:
 ${characterDescription}
@@ -303,9 +325,9 @@ Extract these specifics from the profile text:
 Format rules:
 - Output ONE paragraph, no lists, no labels, no headers
 - Lead with the subject and physical details, weave in expression and setting naturally
-- Describe the lighting, mood, and atmosphere that fits the character's tone — integrate these naturally into the descriptive text rather than as standalone tags
-- Do NOT add comma-separated quality tags like "cinematic lighting, highly detailed" at the end — the image style controls handle that
-- Total output: 150-400 words
+- Describe the lighting, mood, and atmosphere that fits the character's tone
+- Do NOT add comma-separated quality tags like "masterpiece, highly detailed" at the end. Describe the qualities in natural language.
+- ${lengthBlock}
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
 BEGIN PROMPT:`;
