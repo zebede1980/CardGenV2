@@ -327,7 +327,7 @@ Format rules:
 - Output ONE paragraph, no lists, no labels, no headers
 - Lead with the subject and physical details, weave in expression and setting naturally
 - Describe the lighting, mood, and atmosphere that fits the character's tone
-- Do NOT add comma-separated quality tags like "masterpiece, highly detailed" at the end. Describe the qualities in natural language.
+- ALWAYS include keywords that ensure a highly detailed and high-quality image (e.g. "masterpiece, best quality, highly detailed, high resolution, 8k, professional lighting"). You may include these as comma-separated tags at the end or weave them naturally.
 - ${lengthBlock}${styleBlock}
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
