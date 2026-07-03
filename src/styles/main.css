@@ -3689,3 +3689,53 @@ body.chat-active .chat-timeline {
     overflow-y: auto;
     min-height: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sticky Edit Controls Bar (Fullscreen mode)
+   — The Save / Cancel / Insert </think> buttons are moved out of the bubble
+     and inserted as a flex child of .chat-main just above .chat-input-area,
+     so they remain visible while the user scrolls up through a long message.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The sticky bar: a flex child that never shrinks, sitting above the input */
+.chat-edit-controls-bar--sticky {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 1rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+    background: var(--surface, #1e1e2a);
+    border-top: 2px solid var(--accent, var(--border, rgba(255,255,255,0.15)));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 -3px 14px rgba(0,0,0,0.3);
+}
+
+/* Comfortable touch targets for the buttons */
+.chat-edit-controls-bar--sticky .edit-control-btn {
+    min-height: 40px;
+    padding: 0.45rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 10px;
+    flex: 1 1 auto;
+    max-width: 160px;
+}
+
+/* Give chat-main a positioning context */
+#view-roleplaychat.chat-fullscreen .chat-main {
+    position: relative;
+}
+
+/* On smaller screens make all buttons equal-width */
+@media (max-width: 480px) {
+    .chat-edit-controls-bar--sticky {
+        gap: 0.5rem;
+        padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+    }
+    .chat-edit-controls-bar--sticky .edit-control-btn {
+        max-width: none;
+        min-height: 44px; /* Apple HIG minimum tap target */
+    }
+}

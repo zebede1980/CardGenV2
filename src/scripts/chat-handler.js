@@ -1644,9 +1644,16 @@ class RoleplayChatHandler {
         textarea.style.marginBottom = '0.5rem';
         textarea.value = currentContent;
 
-        // Create inline edit controls bar below the textarea
+        // Detect fullscreen mode — controls will be sticky-pinned to chat-main bottom
+        const chatView = document.getElementById('view-roleplaychat');
+        const isFullscreen = chatView && chatView.classList.contains('chat-fullscreen');
+        const chatMain = isFullscreen ? document.querySelector('.chat-main') : null;
+
+        // Create edit controls bar
         const editControls = document.createElement('div');
-        editControls.className = 'chat-edit-controls-bar';
+        editControls.className = isFullscreen
+            ? 'chat-edit-controls-bar chat-edit-controls-bar--sticky'
+            : 'chat-edit-controls-bar';
 
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn-primary btn-small edit-control-btn';
@@ -1675,7 +1682,23 @@ class RoleplayChatHandler {
 
         bubbleEl.innerHTML = '';
         bubbleEl.appendChild(textarea);
-        bubbleEl.appendChild(editControls);
+
+        // In fullscreen mode attach the controls bar to chat-main so it can be
+        // pinned to the bottom of the window, remaining visible while scrolling.
+        // We insert it immediately before .chat-input-area so it sits in the
+        // flex column between the timeline and the message input bar.
+        // In normal mode keep them inline inside the bubble as before.
+        if (isFullscreen && chatMain) {
+            const inputArea = chatMain.querySelector('.chat-input-area');
+            if (inputArea) {
+                chatMain.insertBefore(editControls, inputArea);
+            } else {
+                chatMain.appendChild(editControls);
+            }
+        } else {
+            bubbleEl.appendChild(editControls);
+        }
+
 
         // Auto-resize to fit content
         textarea.style.height = 'auto';
@@ -1850,6 +1873,40 @@ class RoleplayChatHandler {
         // Some CJK models output full-width brackets like ＜think＞ instead of <think>.
         parsed = parsed.replace(/＜/g, '<').replace(/＞/g, '>');
 
+        // ── Pre-normalisation: <thinking> / <Thinking> variant ────────
+        // Some model families use <thinking> instead of <think>.
+        parsed = parsed.replace(/<thinking>/gi, '<think>').replace(/<\/thinking>/gi, '</think>');
+
+        // ── Pre-normalisation: </N> orphan closers ────────
+        // When the prompt used numbered phases ("1. Build Ground Truth") some models
+        // confused the number with the XML tag name and output </1>, </2> etc.
+        // If a <think> opener is present but no </think>, treat the first </N> as </think>.
+        if (parsed.includes('<think>') && !parsed.includes('</think>')) {
+            parsed = parsed.replace(/<\/\d+>/i, '</think>');
+        }
+
+        // ── Pre-normalisation: leading unknown opening tag ────────
+        // The system prompt tells the model to start with <think>. If it starts with
+        // ANY other tag (e.g. <reasoning>, <analysis>, <1>), we treat it as a think
+        // block: find the matching closing tag and normalise both to <think>/<\/think>.
+        // Only fires when no <think> tag is already present (avoid double-processing).
+        // Known rich-element tags that legitimately start a message are excluded.
+        if (!parsed.includes('<think>') && !parsed.includes('</think>')) {
+            const leadingTagMatch = parsed.match(/^<([a-zA-Z][a-zA-Z0-9_-]*|[0-9]+)>/);
+            if (leadingTagMatch) {
+                const knownRichEl = /^(text-message|task|stat-bar|scene-image)$/i;
+                const tagName = leadingTagMatch[1];
+                if (!knownRichEl.test(tagName)) {
+                    const closeRe = new RegExp(`</${tagName}>`, 'i');
+                    if (closeRe.test(parsed)) {
+                        // Normalise every occurrence of this tag to <think>/<\/think>
+                        parsed = parsed.replace(new RegExp(`<${tagName}>`, 'gi'), '<think>');
+                        parsed = parsed.replace(new RegExp(`</${tagName}>`, 'gi'), '</think>');
+                    }
+                }
+            }
+        }
+
         // ── Pre-normalisation: GLM / models that use \n---\n as a separator ────────
         // Some models (e.g. GLM 5.x) output reasoning above a markdown horizontal
         // rule rather than inside <think> tags. Detect this and wrap the content
@@ -1871,13 +1928,15 @@ class RoleplayChatHandler {
         if (parsed.includes('</think>') && !parsed.includes('<think>')) {
             parsed = '<think>\n' + parsed;
         }
-        // Case B: Opening tag present but no closing tag.
-        // Do NOT inject </think> at the end — that would swallow all story text into the collapsed block.
-        // Instead strip the bare opener; content stays visible as story text.
-        // (When streaming, the next chunk that delivers </think> will re-enter this function with both
-        //  tags present, and normal extraction will run cleanly at that point.)
+        // Case B: Opening tag present but no closing tag — we are mid-stream.
+        // Do NOT leak the raw reasoning as visible prose (the old approach stripped
+        // the opener, making all thinking text visible). Instead replace the entire
+        // unclosed block with an invisible placeholder; once </think> arrives the
+        // next formatMessage call will render the proper collapsed <details> block.
         if (parsed.includes('<think>') && !parsed.includes('</think>')) {
-            parsed = parsed.replace(/<think>/gi, '');
+            // Everything from <think> to end-of-text is still-incoming reasoning.
+            // Hide it entirely — show only whatever story text came before the tag.
+            parsed = parsed.replace(/<think>[\s\S]*/i, '<span class="chat-think-streaming" style="display:none;"></span>');
         }
 
         const extractTag = (match) => {
@@ -1889,7 +1948,14 @@ class RoleplayChatHandler {
         parsed = parsed.replace(/<task[\s\S]*?<\/task>/gi, extractTag);
         parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
         parsed = parsed.replace(/<scene-image[\s\S]*?<\/scene-image>/gi, extractTag);
-        parsed = parsed.replace(/<think>[\s\S]*?<\/think>/gi, extractTag);
+        // Use a loop to handle multiple/adjacent think blocks robustly.
+        // A single-pass lazy regex can miss content if the model emits several
+        // <think>...</think> pairs or if there are stray openers between them.
+        let prevParsed;
+        do {
+            prevParsed = parsed;
+            parsed = parsed.replace(/<think>[\s\S]*?<\/think>/gi, extractTag);
+        } while (parsed !== prevParsed);
         // Case C: Strip any stray unpaired tags that survived normalisation (last-resort defence).
         parsed = parsed.replace(/<think>/gi, '').replace(/<\/think>/gi, '');
 
@@ -2091,6 +2157,9 @@ class RoleplayChatHandler {
         const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
 
         this.abortController = new AbortController();
+        // IDs sent by backend in the metadata SSE event — captured during streaming
+        let serverUserMsgId = null;
+        let serverAiMsgId = null;
 
         try {
             const payload = {
@@ -2141,6 +2210,10 @@ class RoleplayChatHandler {
                             }
 
                             if (data.type === 'metadata') {
+                                // Capture server-assigned IDs immediately — used to attach
+                                // action buttons as soon as the stream ends (or is aborted).
+                                if (data.user_message_id) serverUserMsgId = data.user_message_id;
+                                if (data.assistant_message_id) serverAiMsgId = data.assistant_message_id;
                                 if (data.character_name) {
                                     nameTextEl.textContent = data.character_name;
                                     aiMsgObj.character_name = data.character_name;
@@ -2193,6 +2266,21 @@ class RoleplayChatHandler {
                     try { await this.selectChat(this.activeChatId); } catch (_) {}
                 }
             }
+            // On abort (Stop button) we still have the server-assigned IDs from the
+            // metadata event — attach action buttons so the partial message is usable.
+            if (isAbort) {
+                if (serverUserMsgId && userBubbleWrapper && !userMsgObj.id) {
+                    userMsgObj.id = serverUserMsgId;
+                    this.attachMessageActions(userBubbleWrapper, userMsgObj,
+                        userBubbleWrapper.querySelector('.chat-bubble'),
+                        userBubbleWrapper.querySelector('.chat-bubble-name'));
+                }
+                if (serverAiMsgId && aiBubbleWrapper && !aiMsgObj.id) {
+                    aiMsgObj.id = serverAiMsgId;
+                    this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
+                    this._updateRegenButtons();
+                }
+            }
         } finally {
             this.isGenerating = false;
             this.abortController = null;
@@ -2202,24 +2290,47 @@ class RoleplayChatHandler {
             this.els.sendBtn.disabled = false;
             this.els.msgInput.focus();
 
-            // Background fetch to assign server-generated IDs to new messages so action buttons work
-            window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(res => res.json()).then(chat => {
-                if (chat && chat.messages && this.activeChatId === chat.id) {
-                    const serverMessages = chat.messages;
-                    const lastUser = serverMessages.slice().reverse().find(m => m.role === 'user');
-                    if (lastUser && userBubbleWrapper && !userMsgObj.id) {
-                        userMsgObj.id = lastUser.id;
-                        this.attachMessageActions(userBubbleWrapper, userMsgObj, userBubbleWrapper.querySelector('.chat-bubble'), userBubbleWrapper.querySelector('.chat-bubble-name'));
+            // Attach action buttons using the IDs captured from the metadata SSE event.
+            // This is the primary path — fast and doesn't require a round-trip.
+            if (serverUserMsgId && userBubbleWrapper && !userMsgObj.id) {
+                userMsgObj.id = serverUserMsgId;
+                this.attachMessageActions(userBubbleWrapper, userMsgObj,
+                    userBubbleWrapper.querySelector('.chat-bubble'),
+                    userBubbleWrapper.querySelector('.chat-bubble-name'));
+            }
+            if (serverAiMsgId && aiBubbleWrapper && !aiMsgObj.id) {
+                aiMsgObj.id = serverAiMsgId;
+                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
+                this._updateRegenButtons();
+            }
+
+            // Fallback: if the metadata event never arrived (e.g. very early network error
+            // before the first SSE event), fetch the full chat to recover the IDs.
+            if (!userMsgObj.id || !aiMsgObj.id) {
+                window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(res => res.json()).then(chat => {
+                    if (chat && chat.messages && this.activeChatId === chat.id) {
+                        const serverMessages = chat.messages;
+                        if (!userMsgObj.id) {
+                            const lastUser = serverMessages.slice().reverse().find(m => m.role === 'user');
+                            if (lastUser && userBubbleWrapper) {
+                                userMsgObj.id = lastUser.id;
+                                this.attachMessageActions(userBubbleWrapper, userMsgObj,
+                                    userBubbleWrapper.querySelector('.chat-bubble'),
+                                    userBubbleWrapper.querySelector('.chat-bubble-name'));
+                            }
+                        }
+                        if (!aiMsgObj.id) {
+                            const lastAi = serverMessages[serverMessages.length - 1];
+                            if (lastAi && lastAi.role !== 'user') {
+                                aiMsgObj.id = lastAi.id;
+                                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
+                            }
+                        }
+                        this._updateRegenButtons();
                     }
-                    const lastAi = serverMessages[serverMessages.length - 1];
-                    if (lastAi && lastAi.role !== 'user' && !aiMsgObj.id) {
-                        aiMsgObj.id = lastAi.id;
-                        this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
-                    }
-                    // Keep regen button on the correct (last) AI bubble
-                    this._updateRegenButtons();
-                }
-            }).catch(e => console.error("Error fetching updated chat", e));
+                }).catch(e => console.error('Error fetching updated chat (fallback)', e));
+            }
+
         }
     }
 

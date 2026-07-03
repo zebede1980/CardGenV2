@@ -33,7 +33,22 @@ def get_default_system_prompt() -> str:
         "- When showing a text status, state, or location, use: <stat-bar name=\"Extraction\" value=\"In Progress\" />",
         "- When a new objective or quest is received, use: <task title=\"Objective Name\">Description of the task</task>",
         # 5-Phase Logic CoT
-        "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning within <think> and </think> tags. Inside these tags, you must strictly follow this 5-Phase Logic:\n1. Build Ground Truth: Establish the physical setting, time, and current reality.\n2. Map NPC Knowledge: Determine exactly what your character(s) know and don't know right now.\n3. Identify Intent: Decide the goal or motivation for this specific turn.\n4. Draft the Action/Dialogue: Plan what the character will do or say.\n5. Self-Correct: Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character.\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+        ("CHAIN OF THOUGHT — REQUIRED FORMAT:\n"
+         "Every response MUST use this exact two-part structure:\n\n"
+         "<think>\n"
+         "[Your private reasoning — the user never sees this]\n"
+         "• Ground Truth: What is happening right now in the scene?\n"
+         "• NPC Knowledge: What does my character know / not know?\n"
+         "• Intent: What is my character's goal this turn?\n"
+         "• Draft: What will they say or do?\n"
+         "• Self-Correct: Does this fit the persona? Avoiding repetition?\n"
+         "</think>\n"
+         "[Your actual roleplay prose — the user sees ONLY this]\n\n"
+         "CRITICAL RULES:\n"
+         "- Open with exactly <think> and close with exactly </think>. No other tag names or formats.\n"
+         "- Do NOT use --- or any other separator instead of the tags.\n"
+         "- Do NOT write story prose inside <think>. Do NOT write reasoning outside <think>.\n"
+         "- The <think> block must come FIRST, before any story text.")
     ]
     return "\n\n".join(modules)
 
@@ -45,7 +60,24 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if chat.system_prompt:
         system_parts.append(chat.system_prompt)
         
-    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning. You must wrap your entire reasoning process within <think> and </think> tags. Inside the <think> block, strictly follow this 5-Phase Logic:\n- Phase 1: Build Ground Truth (Establish the physical setting, time, and current reality)\n- Phase 2: Map NPC Knowledge (Determine exactly what your character(s) know and don't know right now)\n- Phase 3: Identify Intent (Decide the goal or motivation for this specific turn)\n- Phase 4: Draft the Action/Dialogue (Plan what the character will do or say)\n- Phase 5: Self-Correct (Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character)\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+    cot_prompt = (
+        "CHAIN OF THOUGHT — REQUIRED FORMAT:\n"
+        "Every response MUST use this exact two-part structure:\n\n"
+        "<think>\n"
+        "[Your private reasoning — the user never sees this]\n"
+        "• Ground Truth: What is happening right now in the scene?\n"
+        "• NPC Knowledge: What does my character know / not know?\n"
+        "• Intent: What is my character's goal this turn?\n"
+        "• Draft: What will they say or do?\n"
+        "• Self-Correct: Does this fit the persona? Avoiding repetition?\n"
+        "</think>\n"
+        "[Your actual roleplay prose — the user sees ONLY this]\n\n"
+        "CRITICAL RULES:\n"
+        "- Open with exactly <think> and close with exactly </think>. No other tag names or formats.\n"
+        "- Do NOT use --- or any other separator instead of the tags.\n"
+        "- Do NOT write story prose inside <think>. Do NOT write reasoning outside <think>.\n"
+        "- The <think> block must come FIRST, before any story text."
+    )
     
     if chat.system_prompt and "CHAIN OF THOUGHT" not in chat.system_prompt:
         system_parts.append(cot_prompt)
@@ -98,6 +130,11 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     # 4. Chat History
     import re as _re
     _scene_image_re = _re.compile(r'\s*<scene-image\s+[^>]*/?>\s*|</scene-image>\s*', _re.IGNORECASE)
+    # Strip <think>...</think> reasoning blocks from assistant history.
+    # The story text (after </think>) is preserved in full; only the transient
+    # internal planning text is removed.  Keeping think blocks in context causes
+    # the LLM to pattern-match on them and echo reasoning outside the tags.
+    _think_re = _re.compile(r'<think>[\s\S]*?</think>\s*', _re.IGNORECASE)
     history_messages = []
     for msg in sorted(chat.messages, key=lambda m: m.created_at):
         if msg.is_summarized:
@@ -110,6 +147,12 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         content = _scene_image_re.sub('', content).strip()
         if not content and msg.role == "assistant":
             continue  # skip messages that were only a scene image
+        # Strip <think>...</think> reasoning from assistant history — the story
+        # text that follows </think> is preserved; only the planning text is removed.
+        if msg.role == "assistant":
+            content = _think_re.sub('', content).strip()
+        if not content and msg.role == "assistant":
+            continue  # skip if the message was only a think block (e.g. aborted mid-stream)
         if msg.ooc_note:
             if content:
                 content += f"\n\n[OOC Note to AI: {msg.ooc_note}]"
@@ -143,11 +186,28 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
     if enable_cot:
+        # This final system message is placed immediately before generation so it
+        # is the last instruction the model sees.  An explicit format template
+        # (not just rules) dramatically improves compliance across model families.
+        cot_reminder = (
+            "OUTPUT FORMAT (mandatory):\n"
+            "<think>\n"
+            "(your private reasoning here)\n"
+            "</think>\n"
+            "(your story prose here)\n\n"
+            "Use EXACTLY <think> and </think>. "
+            "Do NOT use <1>, </1>, <thinking>, ---, or any other format. "
+            "The <think> block MUST appear before any story text."
+        )
         if speaker_name and len(chat.characters) > 1:
-            messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message. You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
-        elif "CHAIN OF THOUGHT" in "".join(system_parts):
-            # Even for 1-on-1 chats, append a final reminder to ensure the LLM doesn't skip the CoT.
-            messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the dialogue/actions after closing the </think> tag."})
+            messages.append({"role": "system", "content": (
+                f"Write the next reply from the perspective of {speaker_name}. "
+                f"Do NOT output '{speaker_name}:' at the start of your message.\n\n"
+                + cot_reminder
+            )})
+        else:
+            # Covers both default-prompt chats and custom-prompt chats that include CoT.
+            messages.append({"role": "system", "content": cot_reminder})
     else:
         if speaker_name and len(chat.characters) > 1:
             messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message."})
