@@ -30,9 +30,7 @@ class Config {
           size: "",
           style: "",
           aspectRatio: "",
-          steps: "",
-          cfgScale: "",
-          promptLengthPref: "detailed",
+          modelSettings: {},
           timeout: 180000,
         },
         tts: {
@@ -144,14 +142,13 @@ class Config {
     // No special handling needed when using proxy server
 
     // Load image API settings from form
-    const imageBaseUrl = document
-      .getElementById("image-api-base")
-      ?.value?.trim();
+    const imageBaseUrl = document.getElementById("image-api-base")?.value?.trim();
     const imageApiKey = document.getElementById("image-api-key")?.value?.trim();
     const imageSize = document.getElementById("image-size")?.value?.trim();
     const imageSteps = document.getElementById("image-steps")?.value?.trim();
     const imageCfgScale = document.getElementById("image-cfg-scale")?.value?.trim();
     const imagePromptLengthPref = document.getElementById("image-prompt-length-pref")?.value;
+    const imageModelSettingsSelector = document.getElementById("model-settings-selector")?.value;
     const imageStyle = document.getElementById("image-style")?.value;
     const imageAspectRatio = document.getElementById("image-aspect-ratio")?.value;
     
@@ -162,9 +159,15 @@ class Config {
       this.config.api.image.baseUrl = imageBaseUrl;
     if (imageApiKey !== undefined) this.config.api.image.apiKey = imageApiKey;
     if (imageSize !== undefined) this.config.api.image.size = imageSize;
-    if (imageSteps !== undefined) this.config.api.image.steps = imageSteps;
-    if (imageCfgScale !== undefined) this.config.api.image.cfgScale = imageCfgScale;
-    if (imagePromptLengthPref !== undefined) this.config.api.image.promptLengthPref = imagePromptLengthPref;
+    
+    if (imageModelSettingsSelector) {
+        if (!this.config.api.image.modelSettings) this.config.api.image.modelSettings = {};
+        this.config.api.image.modelSettings[imageModelSettingsSelector] = {
+            steps: imageSteps !== undefined ? imageSteps : "",
+            cfgScale: imageCfgScale !== undefined ? imageCfgScale : "",
+            promptLengthPref: imagePromptLengthPref !== undefined ? imagePromptLengthPref : "detailed"
+        };
+    }
     if (imageStyle !== undefined) this.config.api.image.style = imageStyle;
     if (imageAspectRatio !== undefined) this.config.api.image.aspectRatio = imageAspectRatio;
 
@@ -239,9 +242,6 @@ class Config {
     const imageBaseUrl = document.getElementById("image-api-base");
     const imageApiKey = document.getElementById("image-api-key");
     const imageSize = document.getElementById("image-size");
-    const imageSteps = document.getElementById("image-steps");
-    const imageCfgScale = document.getElementById("image-cfg-scale");
-    const imagePromptLengthPref = document.getElementById("image-prompt-length-pref");
     const imageStyle = document.getElementById("image-style");
     const imageAspectRatio = document.getElementById("image-aspect-ratio");
 
@@ -249,9 +249,6 @@ class Config {
       imageBaseUrl.value = this.config.api.image.baseUrl || "";
     if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
     if (imageSize) imageSize.value = this.config.api.image.size || "";
-    if (imageSteps) imageSteps.value = this.config.api.image.steps || "";
-    if (imageCfgScale) imageCfgScale.value = this.config.api.image.cfgScale || "";
-    if (imagePromptLengthPref) imagePromptLengthPref.value = this.config.api.image.promptLengthPref || "detailed";
     if (imageStyle) imageStyle.value = this.config.api.image.style || "";
     if (imageAspectRatio) imageAspectRatio.value = this.config.api.image.aspectRatio || "";
 
@@ -281,6 +278,47 @@ class Config {
             `).join('');
         } else {
             imageModelsContainer.innerHTML = '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">Click \'Fetch Models\' to load available models.</p>';
+        }
+    }
+    
+    // Update model-settings-selector
+    const modelSettingsSelector = document.getElementById("model-settings-selector");
+    const modelSettingsContainer = document.getElementById("model-specific-settings");
+    if (modelSettingsSelector && modelSettingsContainer) {
+        const currentSelection = modelSettingsSelector.value;
+        const models = this.config.api.image.models || [];
+        
+        if (models.length > 0) {
+            modelSettingsSelector.innerHTML = '<option value="">Select a model to configure...</option>' + 
+                models.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+            
+            if (models.includes(currentSelection)) {
+                modelSettingsSelector.value = currentSelection;
+            } else {
+                modelSettingsSelector.value = models[0];
+            }
+            modelSettingsContainer.style.display = "block";
+        } else {
+            modelSettingsSelector.innerHTML = '<option value="">Select a model to configure...</option>';
+            modelSettingsSelector.value = "";
+            modelSettingsContainer.style.display = "none";
+        }
+        
+        // Populate inputs based on selection
+        const selected = modelSettingsSelector.value;
+        const imageSteps = document.getElementById("image-steps");
+        const imageCfgScale = document.getElementById("image-cfg-scale");
+        const imagePromptLengthPref = document.getElementById("image-prompt-length-pref");
+        
+        if (selected && this.config.api.image.modelSettings && this.config.api.image.modelSettings[selected]) {
+            const settings = this.config.api.image.modelSettings[selected];
+            if (imageSteps) imageSteps.value = settings.steps || "";
+            if (imageCfgScale) imageCfgScale.value = settings.cfgScale || "";
+            if (imagePromptLengthPref) imagePromptLengthPref.value = settings.promptLengthPref || "detailed";
+        } else {
+            if (imageSteps) imageSteps.value = "";
+            if (imageCfgScale) imageCfgScale.value = "";
+            if (imagePromptLengthPref) imagePromptLengthPref.value = "detailed";
         }
     }
     

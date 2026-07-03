@@ -2080,37 +2080,50 @@
                         <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">Default size if Aspect Ratio is not selected in the main UI.</p>
                     </div>
 
-                    <div class="form-group">
-                        <label for="image-steps" class="label">Steps (optional)</label>
-                        <input
-                            type="number"
-                            id="image-steps"
-                            class="input"
-                            placeholder="e.g., 20 or 50. Leave blank for default."
-                            min="1"
-                            max="150"
-                        />
-                    </div>
-
-                    <div class="form-group">
-                        <label for="image-cfg-scale" class="label">CFG Scale (optional)</label>
-                        <input
-                            type="number"
-                            id="image-cfg-scale"
-                            class="input"
-                            placeholder="e.g., 7.5 or 3.5. Leave blank for default."
-                            step="0.1"
-                            min="1"
-                            max="30"
-                        />
-                    </div>
-
-                    <div class="form-group">
-                        <label for="image-prompt-length-pref" class="label">Prompt Length Preference</label>
-                        <select id="image-prompt-length-pref" class="input">
-                            <option value="detailed">Detailed / Long (Best for heavyweight models)</option>
-                            <option value="short">Short / Direct (Best for turbo/fast models)</option>
+                    <div class="form-group" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <label for="model-settings-selector" class="label" style="display:flex; justify-content:space-between;">
+                            <span>Configure Model-Specific Settings</span>
+                            <span id="model-settings-status" style="font-size: 0.75rem; font-weight: normal; color: var(--success); display: none;">Saved!</span>
+                        </label>
+                        <select id="model-settings-selector" class="input">
+                            <option value="">Select a model to configure...</option>
                         </select>
+                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">Select a model to set its Steps, CFG Scale, and Prompt length.</p>
+                    </div>
+
+                    <div id="model-specific-settings" style="display: none; padding-left: 1rem; border-left: 2px solid var(--border); margin-bottom: 1rem; background: var(--surface-color); padding-top: 0.5rem; padding-bottom: 0.5rem; border-radius: 0 0.25rem 0.25rem 0;">
+                        <div class="form-group">
+                            <label for="image-steps" class="label">Steps (optional)</label>
+                            <input
+                                type="number"
+                                id="image-steps"
+                                class="input"
+                                placeholder="e.g., 20 or 50. Leave blank for default."
+                                min="1"
+                                max="150"
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="image-cfg-scale" class="label">CFG Scale (optional)</label>
+                            <input
+                                type="number"
+                                id="image-cfg-scale"
+                                class="input"
+                                placeholder="e.g., 7.5 or 3.5. Leave blank for default."
+                                step="0.1"
+                                min="1"
+                                max="30"
+                            />
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="image-prompt-length-pref" class="label">Prompt Length Preference</label>
+                            <select id="image-prompt-length-pref" class="input">
+                                <option value="detailed">Detailed / Long (Best for heavyweight models)</option>
+                                <option value="short">Short / Direct (Best for turbo/fast models)</option>
+                            </select>
+                        </div>
                     </div>
 
                     <!-- Image Generation Toggle -->

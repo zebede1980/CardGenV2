@@ -457,8 +457,23 @@ class CharacterGeneratorApp {
     apiStatus.addEventListener("click", () => this.handleAPIConfig());
     apiStatus.style.cursor = "pointer";
 
-    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-style, #creator-name")
-      .forEach((input) => input.addEventListener("change", () => this.saveAPISettings()));
+    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref")
+      .forEach((input) => input.addEventListener("change", () => {
+          this.saveAPISettings();
+          const status = document.getElementById("model-settings-status");
+          if (status) {
+              status.style.display = "inline";
+              setTimeout(() => status.style.display = "none", 2000);
+          }
+      }));
+      
+    const modelSettingsSelector = document.getElementById("model-settings-selector");
+    if (modelSettingsSelector) {
+        modelSettingsSelector.addEventListener("change", () => {
+            // Re-populate inputs when model selection changes without saving current unselected inputs
+            this.config.saveToForm();
+        });
+    }
 
     document.getElementById("clear-config-btn").addEventListener("click", () => this.handleClearConfig());
     document.getElementById("backup-config-btn").addEventListener("click", () => this.handleBackupConfig());

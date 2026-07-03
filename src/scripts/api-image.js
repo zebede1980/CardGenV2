@@ -44,7 +44,9 @@ Object.assign(APIHandler.prototype, {
     let finalApiPrompt = imagePrompt;
 
     const model = modelOverride || this.config.get("api.image.model");
-    const promptLengthPref = this.config.get("api.image.promptLengthPref") || "detailed";
+    const modelSettings = this.config.get("api.image.modelSettings") || {};
+    const settings = modelSettings[model] || {};
+    const promptLengthPref = settings.promptLengthPref || "detailed";
     
     const IMAGE_PROMPT_MAX = promptLengthPref === "short" ? 800 : 2500;
     
@@ -75,8 +77,8 @@ Object.assign(APIHandler.prototype, {
 
     const imageSize = this.config.get("api.image.size");
     const imageAspectRatio = this.config.get("api.image.aspectRatio");
-    const imageSteps = this.config.get("api.image.steps");
-    const imageCfgScale = this.config.get("api.image.cfgScale");
+    const imageSteps = settings.steps;
+    const imageCfgScale = settings.cfgScale;
 
     if (imageAspectRatio && imageAspectRatio.trim() !== "") {
       data.aspect_ratio = imageAspectRatio.trim();
@@ -125,7 +127,10 @@ Object.assign(APIHandler.prototype, {
     }
 
     const style = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
-    const lengthPref = this.config.get("api.image.promptLengthPref") || "detailed";
+    const imageModel = this.config.get("api.image.model");
+    const modelSettings = this.config.get("api.image.modelSettings") || {};
+    const settings = modelSettings[imageModel] || {};
+    const lengthPref = settings.promptLengthPref || "detailed";
     
     const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType, guidance, style, lengthPref);
     const model = this.config.get("api.text.model");
