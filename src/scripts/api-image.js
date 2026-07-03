@@ -299,7 +299,7 @@ Object.assign(APIHandler.prototype, {
     
     let styleBlock = "";
     if (style && style.trim()) {
-      styleBlock = `\n\nSTYLE DIRECTIVE:\nEnsure the prompt commands the AI to generate an image in the style of "${style}". Weave the aesthetic, lighting, and rendering techniques appropriate for this style naturally into the description.`;
+      styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): Generate an image in the style of "${style}". Weave the aesthetic, lighting, camera angles, and rendering techniques appropriate for this style naturally and prominently into the description.`;
     }
     
     let lengthBlock = lengthPref === "short" 
@@ -309,7 +309,7 @@ Object.assign(APIHandler.prototype, {
     return `You are an expert at extracting visual details from character profiles to write image generation prompts.
 
 Character Name: ${characterName || "Unknown"}
-Personality Traits Detected: ${personalityTraits}${taskInstruction}${guidanceBlock}${styleBlock}
+Personality Traits Detected: ${personalityTraits}${taskInstruction}${guidanceBlock}
 
 Full Character Profile:
 ${characterDescription}
@@ -328,7 +328,7 @@ Format rules:
 - Lead with the subject and physical details, weave in expression and setting naturally
 - Describe the lighting, mood, and atmosphere that fits the character's tone
 - Do NOT add comma-separated quality tags like "masterpiece, highly detailed" at the end. Describe the qualities in natural language.
-- ${lengthBlock}
+- ${lengthBlock}${styleBlock}
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
 BEGIN PROMPT:`;
