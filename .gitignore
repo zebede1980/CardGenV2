@@ -197,3 +197,7 @@ coverage/
 proxy/data/users/1781089145336/prompts.json
 proxy/data/users/1781089145336/history.json
 models.json
+
+# Local Docker Compose config — contains environment-specific settings
+# (ports, secrets, volume paths). Use docker-compose.example.yml as a template.
+docker-compose.yml
