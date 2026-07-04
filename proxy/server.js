@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 const fetch = require("node-fetch");
 require("dotenv").config({ path: "../.env" });
 
@@ -25,20 +26,38 @@ if (!process.env.INTERNAL_API_SECRET) {
 const app = express();
 const PORT = process.env.PORT || 2426;
 
-// Allow CORS from any origin in production (adjust for security as needed)
+// Allowed CORS origins — set FRONTEND_URL in .env to your public domain.
 const allowedOrigins = [
-  "http://localhost:2427",
-  "http://127.0.0.1:2427",
-  process.env.FRONTEND_URL || "http://localhost:2427",
+  ...new Set([
+    "http://localhost:2427",
+    "http://127.0.0.1:2427",
+    process.env.FRONTEND_URL,
+  ].filter(Boolean)),
 ];
 
-// Enable CORS for the frontend
+// Enable CORS for the listed origins only.
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow server-to-server requests (no Origin header) and matched origins.
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin '${origin}' not allowed`));
+      }
+    },
     credentials: true,
   }),
 );
+
+// ── Rate limiting — brute-force protection for auth endpoints ─────────────────
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15-minute window
+  max: 15,                   // max 15 attempts per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts from this IP, please try again in 15 minutes." },
+});
 
 // Increase payload limits for vision requests that include base64 images.
 app.use(express.json({ limit: "50mb" }));
@@ -268,7 +287,7 @@ app.get("/api/auth/registration-open", (req, res) => {
   res.json({ open: process.env.ALLOW_REGISTRATION === "true" });
 });
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", authRateLimiter, async (req, res) => {
   if (process.env.ALLOW_REGISTRATION !== "true") {
     return res.status(403).json({ error: "Registration is currently closed" });
   }
@@ -320,7 +339,7 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authRateLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required" });
@@ -350,7 +369,7 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   res.json({ userId: req.user.userId, username: req.user.username });
 });
 
-app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+app.post("/api/auth/change-password", authRateLimiter, requireAuth, async (req, res) => {
   const { currentPassword, newPassword, targetUsername } = req.body || {};
 
   if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
@@ -1169,7 +1188,9 @@ app.get("/health", (req, res) => {
 // ── Story Writer availability check ──────────────────────────────────────────
 // Probes the JoeAnory backend container-to-container over the shared Docker
 // network.  Returns the public URL for the browser tab if reachable.
-app.get("/api/story-app/status", async (req, res) => {
+// requireAuth: only authenticated users need to know if the Story Writer is available.
+// The internal container URL is never returned to the client — only the public URL (if set).
+app.get("/api/story-app/status", requireAuth, async (req, res) => {
   const internalUrl = (process.env.STORY_APP_URL || "").replace(/\/$/, "");
   const publicUrl = (process.env.STORY_APP_PUBLIC_URL || "").replace(/\/$/, "");
 
@@ -1187,8 +1208,11 @@ app.get("/api/story-app/status", async (req, res) => {
 
     console.log(`Story Writer connection check: Received status ${response.status} ${response.statusText}`);
     if (response.ok) {
-      console.log(`Story Writer connection check: Success! Returning public URL: ${publicUrl || internalUrl}`);
-      return res.json({ available: true, url: publicUrl || internalUrl });
+      // Return publicUrl if configured; omit the field entirely if not (never expose internal URL).
+      const result = { available: true };
+      if (publicUrl) result.url = publicUrl;
+      console.log(`Story Writer connection check: Success! Returning: ${JSON.stringify(result)}`);
+      return res.json(result);
     }
     const errorText = await response.text();
     console.log(`Story Writer connection check: Response not ok. Body: ${errorText}`);
