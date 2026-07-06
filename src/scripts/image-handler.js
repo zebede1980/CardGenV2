@@ -991,4 +991,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
     await this.refreshLibraryViews();
   },
 
+  async handleStyleImageFile(file) {
+    try {
+      const extractBtn = document.getElementById("extract-style-btn");
+      if (extractBtn) extractBtn.textContent = "⏳...";
+
+      this.imageGenerator.validateImageFile(file);
+      const dataUrl = await this.imageGenerator.prepareReferenceImageForVision(file);
+
+      this.showNotification("Analyzing style from image...", "info");
+      const styleDescription = await this.apiHandler.extractStyleFromImage(dataUrl);
+
+      const customStyleInput = document.getElementById("custom-image-style-input");
+      if (customStyleInput) {
+          customStyleInput.value = styleDescription;
+          this.saveAPISettings();
+      }
+
+      this.showNotification("Style extracted successfully!", "success");
+    } catch (error) {
+      console.error("Style extraction failed:", error);
+      this.showNotification(`Style extraction failed: ${error.message}`, "error");
+    } finally {
+      const extractBtn = document.getElementById("extract-style-btn");
+      if (extractBtn) extractBtn.textContent = "🖼️ Extract";
+    }
+  }
+
 });
