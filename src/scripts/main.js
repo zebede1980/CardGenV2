@@ -229,7 +229,38 @@ class CharacterGeneratorApp {
     document.getElementById("draft-prompt-btn").addEventListener("click", () => this.handleRegeneratePrompt());
 
     const imageStyleSelect = document.getElementById("image-style");
-    if (imageStyleSelect) imageStyleSelect.addEventListener("change", () => this.saveAPISettings());
+    if (imageStyleSelect) {
+      imageStyleSelect.addEventListener("change", (e) => {
+        const customStyleContainer = document.getElementById("custom-style-container");
+        if (customStyleContainer) customStyleContainer.style.display = e.target.value === "custom" ? "block" : "none";
+        this.saveAPISettings();
+      });
+    }
+
+    const customImageStyleInput = document.getElementById("custom-image-style-input");
+    if (customImageStyleInput) {
+        customImageStyleInput.addEventListener("input", () => this.saveAPISettings());
+        customImageStyleInput.addEventListener("paste", async (e) => {
+            if (!e.clipboardData || !e.clipboardData.files.length) return;
+            const file = e.clipboardData.files[0];
+            if (!file.type.startsWith("image/")) return;
+            e.preventDefault();
+            e.stopPropagation();
+            await window.app.handleStyleImageFile(file);
+        });
+    }
+
+    const extractStyleBtn = document.getElementById("extract-style-btn");
+    const styleImageUpload = document.getElementById("style-image-upload");
+    if (extractStyleBtn && styleImageUpload) {
+        extractStyleBtn.addEventListener("click", () => styleImageUpload.click());
+        styleImageUpload.addEventListener("change", async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            await window.app.handleStyleImageFile(file);
+            e.target.value = "";
+        });
+    }
 
     // Character field reset buttons
     const resetNameBtn = document.getElementById("reset-name-btn");

@@ -150,6 +150,7 @@ class Config {
     const imagePromptLengthPref = document.getElementById("image-prompt-length-pref")?.value;
     const imageModelSettingsSelector = document.getElementById("model-settings-selector")?.value;
     const imageStyle = document.getElementById("image-style")?.value;
+    const customImageStyle = document.getElementById("custom-image-style-input")?.value;
     const imageAspectRatio = document.getElementById("image-aspect-ratio")?.value;
     
     const imageModelCheckboxes = document.querySelectorAll(".image-model-checkbox:checked");
@@ -169,6 +170,7 @@ class Config {
         };
     }
     if (imageStyle !== undefined) this.config.api.image.style = imageStyle;
+    if (customImageStyle !== undefined) this.config.api.image.customStyleText = customImageStyle;
     if (imageAspectRatio !== undefined) this.config.api.image.aspectRatio = imageAspectRatio;
 
     // Load toggle states
@@ -243,13 +245,19 @@ class Config {
     const imageApiKey = document.getElementById("image-api-key");
     const imageSize = document.getElementById("image-size");
     const imageStyle = document.getElementById("image-style");
+    const customImageStyle = document.getElementById("custom-image-style-input");
+    const customStyleContainer = document.getElementById("custom-style-container");
     const imageAspectRatio = document.getElementById("image-aspect-ratio");
 
     if (imageBaseUrl)
       imageBaseUrl.value = this.config.api.image.baseUrl || "";
     if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
     if (imageSize) imageSize.value = this.config.api.image.size || "";
-    if (imageStyle) imageStyle.value = this.config.api.image.style || "";
+    if (imageStyle) {
+        imageStyle.value = this.config.api.image.style || "";
+        if (customStyleContainer) customStyleContainer.style.display = imageStyle.value === "custom" ? "block" : "none";
+    }
+    if (customImageStyle) customImageStyle.value = this.config.api.image.customStyleText || "";
     if (imageAspectRatio) imageAspectRatio.value = this.config.api.image.aspectRatio || "";
 
     // Save creator to form

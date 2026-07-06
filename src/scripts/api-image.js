@@ -298,7 +298,12 @@ Object.assign(APIHandler.prototype, {
     }
     
     let styleBlock = "";
-    if (style && style.trim()) {
+    if (style === "custom") {
+      const customStyleText = this.config.get("api.image.customStyleText");
+      if (customStyleText && customStyleText.trim()) {
+        styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): Generate an image in the style of "${customStyleText.trim()}". Weave the aesthetic, lighting, camera angles, and rendering techniques appropriate for this style naturally and prominently into the description.`;
+      }
+    } else if (style && style.trim()) {
       styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): Generate an image in the style of "${style}". Weave the aesthetic, lighting, camera angles, and rendering techniques appropriate for this style naturally and prominently into the description.`;
     }
     
@@ -473,6 +478,36 @@ BEGIN PROMPT:`;
     };
 
     const response = await this.makeRequest("/chat/completions", data, false, false);
+    return this.processNormalResponse(response).trim();
+  },
+
+  async extractStyleFromImage(imageDataUrl) {
+    if (!imageDataUrl) throw new Error("Image is required");
+
+    const model = this.config.get("api.text.visionModel") || this.config.get("api.text.model");
+    if (!model) throw new Error("No vision model or text model configured");
+
+    const systemPrompt =
+      "You are an expert art critic and prompt engineer. Analyze the provided image and output ONE concise paragraph describing ONLY its artistic style. Do NOT describe the subjects, characters, or actions in the image. Focus strictly on the medium (e.g. watercolor, digital art, 3D render, oil painting), lighting, shading technique, line art style, color palette, camera angle/framing (if relevant to style), and overall aesthetic vibe. Do not include preamble or labels.";
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extract the artistic style from this image." },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 200,
+      stream: false,
+    };
+
+    const response = await this.makeRequest("/api/text/chat/completions", data, false, false);
     return this.processNormalResponse(response).trim();
   },
 
