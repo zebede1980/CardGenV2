@@ -1356,6 +1356,10 @@ textarea.content-box {
     flex-shrink: 0;
     overflow: hidden;
     user-select: none;
+    align-self: flex-end;
+    position: sticky;
+    bottom: 0.5rem;
+    top: 0.5rem;
 }
 
 .chat-avatar-user {
