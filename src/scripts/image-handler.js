@@ -997,7 +997,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (extractBtn) extractBtn.textContent = "⏳...";
 
       this.imageGenerator.validateImageFile(file);
-      const dataUrl = await this.imageGenerator.prepareReferenceImageForVision(file);
+      const dataUrl = await this.prepareReferenceImageForVision(file);
 
       this.showNotification("Analyzing style from image...", "info");
       const styleDescription = await this.apiHandler.extractStyleFromImage(dataUrl);
