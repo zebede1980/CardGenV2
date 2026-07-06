@@ -301,10 +301,10 @@ Object.assign(APIHandler.prototype, {
     if (style === "custom") {
       const customStyleText = this.config.get("api.image.customStyleText");
       if (customStyleText && customStyleText.trim()) {
-        styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): Generate an image in the style of "${customStyleText.trim()}". Weave the aesthetic, lighting, camera angles, and rendering techniques appropriate for this style naturally and prominently into the description.`;
+        styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Use medium-specific keywords appropriate for this style (e.g. if it is drawn/painted, use terms like "illustration, 2D, brushstrokes, cel-shaded").`;
       }
     } else if (style && style.trim()) {
-      styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): Generate an image in the style of "${style}". Weave the aesthetic, lighting, camera angles, and rendering techniques appropriate for this style naturally and prominently into the description.`;
+      styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): The requested art style is "${style}". You MUST heavily bias the entire prompt towards this style. Use medium-specific keywords appropriate for this style (e.g. if it is drawn/painted, use terms like "illustration, 2D, brushstrokes, cel-shaded").`;
     }
     
     let lengthBlock = lengthPref === "short" 
@@ -332,7 +332,8 @@ Format rules:
 - Output ONE paragraph, no lists, no labels, no headers
 - Lead with the subject and physical details, weave in expression and setting naturally
 - Describe the lighting, mood, and atmosphere that fits the character's tone
-- ALWAYS include keywords that ensure a highly detailed and high-quality image (e.g. "masterpiece, best quality, highly detailed, high resolution, 8k, professional lighting"). You may include these as comma-separated tags at the end or weave them naturally.
+- ALWAYS include keywords that ensure a highly detailed and high-quality image (e.g. "masterpiece, best quality, highly detailed, high resolution"). You may include these as comma-separated tags at the end or weave them naturally.
+- CRITICAL AVOIDANCE: DO NOT use terms like "8k", "photograph", "hyperrealistic", "professional lighting", "real life", or "camera" UNLESS the requested style is explicitly a photograph or realistic. Using these terms will ruin 2D/illustrated/anime styles by forcing a realistic render!
 - ${lengthBlock}${styleBlock}
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
