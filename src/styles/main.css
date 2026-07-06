@@ -2776,6 +2776,10 @@ textarea.content-box {
     align-items: center;
     justify-content: center;
     font-weight: bold;
+    position: sticky;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    align-self: flex-start;
 }
 
 /* Content column */
