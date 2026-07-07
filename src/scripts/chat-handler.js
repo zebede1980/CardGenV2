@@ -1168,10 +1168,13 @@ class RoleplayChatHandler {
 
             // Don't arbitrarily hide the banner if the server is still generating
             const lastMsg = chat.messages && chat.messages.length > 0 ? chat.messages[chat.messages.length - 1] : null;
-            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
+            const serverIsGenerating = lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '';
+            if (serverIsGenerating) {
                 this._showPendingGenerationBanner(lastMsg.id, true);
+                this.isGenerating = true;
             } else {
                 this._hidePendingGenerationBanner();
+                this.isGenerating = false;
             }
             this.els.timeline.innerHTML = '';
 
@@ -1186,8 +1189,9 @@ class RoleplayChatHandler {
                 setTimeout(() => this.scrollToBottom(false), 50);
             }
 
-            this.els.msgInput.disabled = false;
-            this.els.sendBtn.disabled = false;
+            this.els.msgInput.disabled = serverIsGenerating;
+            this.els.sendBtn.disabled = serverIsGenerating;
+            if (this.els.impBtn) this.els.impBtn.disabled = serverIsGenerating;
         } catch (e) {
             console.error("Failed to load chat details", e);
         }
@@ -2282,13 +2286,22 @@ class RoleplayChatHandler {
                 }
             }
         } finally {
-            this.isGenerating = false;
+            const hasPendingBanner = !!document.getElementById('chat-pending-gen-banner');
+            this.isGenerating = hasPendingBanner;
             this.abortController = null;
             this.els.sendBtn.style.display = '';
-            if (this.els.impBtn) this.els.impBtn.style.display = '';
+            if (this.els.impBtn) {
+                this.els.impBtn.style.display = '';
+                this.els.impBtn.disabled = hasPendingBanner;
+            }
             if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
-            this.els.sendBtn.disabled = false;
-            this.els.msgInput.focus();
+            this.els.sendBtn.disabled = hasPendingBanner;
+            if (!hasPendingBanner) {
+                this.els.msgInput.disabled = false;
+                this.els.msgInput.focus();
+            } else {
+                this.els.msgInput.disabled = true;
+            }
 
             // Attach action buttons using the IDs captured from the metadata SSE event.
             // This is the primary path — fast and doesn't require a round-trip.
