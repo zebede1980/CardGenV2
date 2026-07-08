@@ -3712,12 +3712,12 @@ body.chat-active .chat-timeline {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
-    padding: 0.65rem 1rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.65rem 1rem;
     background: var(--surface, #1e1e2a);
-    border-top: 2px solid var(--accent, var(--border, rgba(255,255,255,0.15)));
+    border-bottom: 2px solid var(--accent, var(--border, rgba(255,255,255,0.15)));
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 -3px 14px rgba(0,0,0,0.3);
+    box-shadow: 0 3px 14px rgba(0,0,0,0.3);
 }
 
 /* Comfortable touch targets for the buttons */

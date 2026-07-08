@@ -1688,16 +1688,16 @@ class RoleplayChatHandler {
         bubbleEl.appendChild(textarea);
 
         // In fullscreen mode attach the controls bar to chat-main so it can be
-        // pinned to the bottom of the window, remaining visible while scrolling.
-        // We insert it immediately before .chat-input-area so it sits in the
-        // flex column between the timeline and the message input bar.
+        // pinned to the top of the chat area, remaining visible while scrolling.
+        // We insert it immediately before .chat-timeline so it sits in the
+        // flex column between the header and the timeline.
         // In normal mode keep them inline inside the bubble as before.
         if (isFullscreen && chatMain) {
-            const inputArea = chatMain.querySelector('.chat-input-area');
-            if (inputArea) {
-                chatMain.insertBefore(editControls, inputArea);
+            const timeline = chatMain.querySelector('.chat-timeline');
+            if (timeline) {
+                chatMain.insertBefore(editControls, timeline);
             } else {
-                chatMain.appendChild(editControls);
+                chatMain.insertBefore(editControls, chatMain.firstChild);
             }
         } else {
             bubbleEl.appendChild(editControls);
