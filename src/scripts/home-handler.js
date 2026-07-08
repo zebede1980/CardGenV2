@@ -125,7 +125,11 @@ class HomeHandler {
                             max-width: 100%;
                         }
                         #view-home #home-grid {
-                            grid-template-columns: 1fr !important;
+                            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+                            gap: 1rem !important;
+                        }
+                        #view-home #home-grid h3 {
+                            font-size: 1rem !important;
                         }
                     }
                 `;
