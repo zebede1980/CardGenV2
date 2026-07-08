@@ -108,6 +108,25 @@ class HomeHandler {
                             margin: 0 !important;
                             text-align: center;
                         }
+                        #view-home {
+                            max-width: 100vw;
+                            overflow-x: hidden;
+                        }
+                        #view-home > div {
+                            padding: 1rem !important;
+                        }
+                        #view-home h1 {
+                            font-size: 1.8rem !important;
+                        }
+                        #view-home button[id^="home-btn-"] {
+                            padding: 0.8rem 1rem !important;
+                            font-size: 1rem !important;
+                            width: 100%;
+                            max-width: 100%;
+                        }
+                        #view-home #home-grid {
+                            grid-template-columns: 1fr !important;
+                        }
                     }
                 `;
                 document.head.appendChild(style);
