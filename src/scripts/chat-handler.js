@@ -257,6 +257,9 @@ class RoleplayChatHandler {
             newPersonaDetail: document.getElementById('chat-new-persona-detail'),
             newPersonaCardName: document.getElementById('chat-new-persona-card-name'),
             newPersonaPickBtn: document.getElementById('chat-new-persona-pick-btn'),
+            newPersonaSavedSelectContainer: document.getElementById('chat-new-persona-saved-select-container'),
+            newPersonaSavedSelect: document.getElementById('chat-new-persona-saved-select'),
+            newPersonaSaveCheckbox: document.getElementById('chat-new-persona-save'),
 
             zoomOutBtn: document.getElementById('chat-zoom-out-btn'),
             zoomResetBtn: document.getElementById('chat-zoom-reset-btn'),
@@ -289,6 +292,26 @@ class RoleplayChatHandler {
 
         if (this.els.newAddCharBtn) {
             this.els.newAddCharBtn.addEventListener('click', () => this.openGalleryForNewChat());
+        }
+
+        if (this.els.newPersonaSavedSelect) {
+            this.els.newPersonaSavedSelect.addEventListener('change', (e) => {
+                const selectedId = e.target.value;
+                if (!selectedId) {
+                    this.els.newPersonaName.value = '';
+                    this.els.newPersonaAge.value = '';
+                    this.els.newPersonaGender.value = '';
+                    this.els.newPersonaDetail.value = '';
+                    return;
+                }
+                const persona = this.savedPersonas.find(p => String(p.id) === String(selectedId));
+                if (persona) {
+                    this.els.newPersonaName.value = persona.name || '';
+                    this.els.newPersonaAge.value = persona.age || '';
+                    this.els.newPersonaGender.value = persona.gender || '';
+                    this.els.newPersonaDetail.value = persona.detail || '';
+                }
+            });
         }
 
         const personaRadios = document.querySelectorAll('input[name="chat_user_persona_type"]');
@@ -738,6 +761,29 @@ class RoleplayChatHandler {
         this.els.newPersonaDetail.value = '';
         this.els.newPersonaCardName.textContent = 'No card selected';
         this.els.newPersonaCardName.style.color = 'var(--text-secondary)';
+        if (this.els.newPersonaSaveCheckbox) this.els.newPersonaSaveCheckbox.checked = false;
+
+        try {
+            const pRes = await window.authFetch('/api/personas');
+            if (pRes.ok) {
+                this.savedPersonas = await pRes.json();
+                if (this.savedPersonas.length > 0 && this.els.newPersonaSavedSelectContainer) {
+                    this.els.newPersonaSavedSelectContainer.style.display = 'block';
+                    this.els.newPersonaSavedSelect.innerHTML = '<option value="">-- Select a saved persona --</option>';
+                    this.savedPersonas.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.name + (p.age ? ` (${p.age})` : '');
+                        this.els.newPersonaSavedSelect.appendChild(opt);
+                    });
+                } else if (this.els.newPersonaSavedSelectContainer) {
+                    this.els.newPersonaSavedSelectContainer.style.display = 'none';
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load saved personas", e);
+        }
+
         const radioManual = document.querySelector('input[name="chat_user_persona_type"][value="manual"]');
         if (radioManual) radioManual.checked = true;
         if (this.els.newPersonaManual) this.els.newPersonaManual.style.display = 'block';
@@ -932,6 +978,23 @@ class RoleplayChatHandler {
         try {
             this.els.createSubmitBtn.disabled = true;
             this.els.createSubmitBtn.textContent = 'Creating...';
+
+            if (pType === 'manual' && this.els.newPersonaSaveCheckbox && this.els.newPersonaSaveCheckbox.checked) {
+                try {
+                    await window.authFetch('/api/personas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: userPersonaName,
+                            age: userPersonaAge,
+                            gender: userPersonaGender,
+                            detail: userPersonaDetail
+                        })
+                    });
+                } catch (e) {
+                    console.error("Failed to save persona", e);
+                }
+            }
 
             const payload = {
                 title,

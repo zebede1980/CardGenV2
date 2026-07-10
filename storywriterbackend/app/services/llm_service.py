@@ -35,7 +35,7 @@ class LLMService:
             "temperature": temperature if temperature is not None else self.temperature,
             "stream": stream,
         }
-        if repetition_penalty is not None:
+        if repetition_penalty is not None and repetition_penalty != 1.0:
             payload["repetition_penalty"] = repetition_penalty
         if stream:
             payload["stream_options"] = {"include_usage": True}
@@ -50,6 +50,10 @@ class LLMService:
                             break
                         try:
                             chunk = json.loads(data)
+                            if "error" in chunk:
+                                err_msg = chunk["error"].get("message", str(chunk["error"])) if isinstance(chunk["error"], dict) else str(chunk["error"])
+                                raise Exception(f"API Error: {err_msg}")
+                            
                             if "usage" in chunk and chunk["usage"]:
                                 self.last_usage = chunk["usage"]
                             
@@ -62,7 +66,7 @@ class LLMService:
                                 content = delta.get("content", "")
                                 if content:
                                     yield content
-                        except Exception:
+                        except json.JSONDecodeError:
                             continue
         else:
             response = await self.client.post(url, headers=headers, json=payload)

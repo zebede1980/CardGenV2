@@ -214,3 +214,14 @@ class AlternateGreeting(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     data = Column(JSON, default=dict)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class SavedUserPersona(Base):
+    __tablename__ = "saved_user_personas"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    age = Column(String, default="")
+    gender = Column(String, default="")
+    detail = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+

@@ -285,3 +285,15 @@ class ProxyDataOut(ProxyDataCreate):
     updated_at: datetime
     class Config:
         from_attributes = True
+
+class SavedUserPersonaCreate(BaseModel):
+    name: str
+    age: str = ""
+    gender: str = ""
+    detail: str = ""
+
+class SavedUserPersonaOut(SavedUserPersonaCreate):
+    id: int
+    created_at: datetime
+    class Config:
+        from_attributes = True

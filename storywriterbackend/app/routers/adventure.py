@@ -152,8 +152,8 @@ async def summarize_adventure_task(session_id: str, user_id: int):
             models.AdventureAction.is_summarized == False
         ).order_by(models.AdventureAction.order_index.asc()).all()
         
-        trigger_limit = settings.summary_threshold * 10
-        keep_recent = settings.summary_threshold * 5
+        trigger_limit = settings.summary_threshold * 3
+        keep_recent = settings.summary_threshold * 2
         
         if len(unsummarized) <= trigger_limit:
             return

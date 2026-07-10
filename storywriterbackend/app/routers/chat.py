@@ -229,8 +229,8 @@ async def summarize_chat_task(chat_id: str, user_id: int):
             models.ChatMessage.is_summarized == False
         ).order_by(models.ChatMessage.created_at.asc()).all()
         
-        trigger_limit = settings.summary_threshold * 10  # default 100
-        keep_recent = settings.summary_threshold * 5    # default 50
+        trigger_limit = settings.summary_threshold * 3  # default 30
+        keep_recent = settings.summary_threshold * 2    # default 20
         
         if len(unsummarized) <= trigger_limit:
             return
@@ -846,7 +846,15 @@ async def send_message(
         full_content = ""
         request_id = str(uuid.uuid4())
         logger = logging.getLogger(__name__)
-        logger.info(f"[{request_id}] LLM request started for chat {chat_id}, message {assistant_msg_id}")
+        
+        # Estimate total tokens being sent for debugging
+        total_chars = sum(len(m.get("content", "")) for m in prompt_messages)
+        est_tokens = total_chars // 4
+        logger.info(
+            f"[{request_id}] LLM request started for chat {chat_id}, message {assistant_msg_id}. "
+            f"Prompt msgs: {len(prompt_messages)}, Est tokens: ~{est_tokens}, "
+            f"max_input: {getattr(req, 'max_input_tokens', 'None')}, rep_penalty: {gen_repetition_penalty}"
+        )
         
         try:
             async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
