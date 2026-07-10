@@ -186,18 +186,19 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
     if enable_cot:
-        # This final system message is placed immediately before generation so it
-        # is the last instruction the model sees.  An explicit format template
-        # (not just rules) dramatically improves compliance across model families.
+        # ── CoT format reminder ──────────────────────────────────────────────
+        # Placed immediately before generation so it is the last instruction
+        # the model sees. Kept concise — the detailed rules are already in the
+        # system prompt. An explicit template dramatically improves compliance.
         cot_reminder = (
             "OUTPUT FORMAT (mandatory):\n"
             "<think>\n"
-            "(your private reasoning here)\n"
+            "(private reasoning)\n"
             "</think>\n"
-            "(your story prose here)\n\n"
-            "Use EXACTLY <think> and </think>. "
-            "Do NOT use <1>, </1>, <thinking>, ---, or any other format. "
-            "The <think> block MUST appear before any story text."
+            "(story prose)\n\n"
+            "Rules: use EXACTLY <think> and </think>. "
+            "No other tag names, no ---, no preamble before <think>. "
+            "The <think> block MUST come first."
         )
         if speaker_name and len(chat.characters) > 1:
             messages.append({"role": "system", "content": (
@@ -206,8 +207,19 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
                 + cot_reminder
             )})
         else:
-            # Covers both default-prompt chats and custom-prompt chats that include CoT.
             messages.append({"role": "system", "content": cot_reminder})
+
+        # ── Assistant prefill ────────────────────────────────────────────────
+        # Appending a partial assistant message forces the model to continue
+        # from inside the <think> block rather than outputting preamble text.
+        # This is the single most reliable technique across model families and
+        # is supported by all OpenAI-compatible APIs (Ollama, LM Studio, etc.).
+        # NOTE: The backend saves full_content from the stream, which will
+        # start with whatever the model outputs after this prefill — i.e. the
+        # reasoning text. The prefill "<think>\n" itself is NOT streamed back
+        # by the API, so we prepend it manually when saving to the DB.
+        # See the generate_task() function below where this is handled.
+        messages.append({"role": "assistant", "content": "<think>\n"})
     else:
         if speaker_name and len(chat.characters) > 1:
             messages.append({"role": "system", "content": f"Write the next reply from the perspective of {speaker_name}. Do NOT output '{speaker_name}:' at the start of your message."})
@@ -728,7 +740,9 @@ async def send_message(
     # it directly into the user's input field.
     if req.impersonate:
         # Build the normal context from existing history (no new user msg saved)
-        prompt_messages = build_chat_prompt(chat, db, None, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True))
+        # Impersonate mode writes AS the user, not the character — disable CoT
+        # so the assistant prefill is not added (it would corrupt the prompt).
+        prompt_messages = build_chat_prompt(chat, db, None, getattr(req, 'max_input_tokens', None), enable_cot=False)
 
         # Append the user's draft text (if any) as context, then the key instruction
         impersonate_instruction = (
@@ -743,6 +757,7 @@ async def send_message(
             impersonate_instruction = f"Additional context: {req.ooc_note}\n\n" + impersonate_instruction
 
         prompt_messages.append({"role": "user", "content": impersonate_instruction})
+
 
         queue.put_nowait({"type": "metadata", "character_name": None, "character_card_id": None, "user_message_id": None, "assistant_message_id": None})
 
@@ -847,6 +862,12 @@ async def send_message(
         request_id = str(uuid.uuid4())
         logger = logging.getLogger(__name__)
         
+        # Determine if CoT prefill was added (last message is assistant prefill)
+        cot_prefill = ""
+        enable_cot_flag = getattr(req, 'enable_cot', True)
+        if enable_cot_flag and prompt_messages and prompt_messages[-1].get("role") == "assistant":
+            cot_prefill = prompt_messages[-1].get("content", "")
+        
         # Estimate total tokens being sent for debugging
         total_chars = sum(len(m.get("content", "")) for m in prompt_messages)
         est_tokens = total_chars // 4
@@ -857,6 +878,12 @@ async def send_message(
         )
         
         try:
+            # If we used an assistant prefill, send it as the very first chunk
+            # so the frontend streaming display is correct from the start.
+            if cot_prefill:
+                full_content = cot_prefill
+                await queue.put(cot_prefill)
+            
             async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
                 full_content += chunk
                 await queue.put(chunk)

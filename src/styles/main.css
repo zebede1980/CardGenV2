@@ -3747,3 +3747,78 @@ body.chat-active .chat-timeline {
         min-height: 44px; /* Apple HIG minimum tap target */
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AI Reasoning / Chain-of-Thought Block  (.rich-ai-reasoning)
+   Collapsed by default. Completely invisible to the user unless deliberately
+   expanded. The <details> / <summary> pattern gives native, zero-JS toggle.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+details.rich-ai-reasoning {
+    margin: 0.5rem 0 0.75rem;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: transparent;
+}
+
+details.rich-ai-reasoning summary.rich-ai-reasoning-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary, rgba(255,255,255,0.4));
+    cursor: pointer;
+    user-select: none;
+    list-style: none;           /* hide default triangle in Firefox */
+    border-radius: 0.5rem;
+    transition: color 0.15s, background 0.15s;
+}
+
+/* Hide default disclosure triangle in WebKit */
+details.rich-ai-reasoning summary.rich-ai-reasoning-summary::-webkit-details-marker {
+    display: none;
+}
+
+details.rich-ai-reasoning summary.rich-ai-reasoning-summary:hover {
+    color: var(--text-secondary, rgba(255,255,255,0.6));
+    background: rgba(255,255,255,0.04);
+}
+
+.rich-ai-reasoning-icon {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.rich-ai-reasoning-label {
+    flex: 1;
+    font-style: italic;
+    letter-spacing: 0.01em;
+}
+
+.rich-ai-reasoning-chevron {
+    font-size: 1rem;
+    line-height: 1;
+    transition: transform 0.2s ease;
+    opacity: 0.5;
+    display: inline-block;
+}
+
+details.rich-ai-reasoning[open] .rich-ai-reasoning-chevron {
+    transform: rotate(90deg);
+}
+
+details.rich-ai-reasoning .rich-ai-reasoning-body {
+    padding: 0.65rem 0.85rem 0.75rem;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: var(--text-secondary, rgba(255,255,255,0.5));
+    white-space: pre-wrap;
+    font-style: italic;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+    word-break: break-word;
+}

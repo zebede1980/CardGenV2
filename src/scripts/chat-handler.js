@@ -1932,79 +1932,87 @@ class RoleplayChatHandler {
             parsed = parsed.replace(/[\u2E80-\u2FD5\u3190-\u319f\u3400-\u4DBF\u4E00-\u9FCC\uF900-\uFAAD\uAC00-\uD7A3]/g, '');
         }
 
-        // 1. Temporarily extract Rich XML tags to protect their inner attributes from being formatted
-        const richTags = [];
-        const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 1 — CoT Extraction
+        // Extract <think>…</think> blocks before any other processing.
+        // This single-pass pipeline handles all known model quirks:
+        //   • Full-width CJK brackets (＜think＞)
+        //   • <thinking> / <Thinking> variants
+        //   • Orphaned numeric closing tags (</1>, </2> …)
+        //   • Arbitrary leading tag names (<reasoning>, <analysis> …)
+        //   • GLM-style \n---\n separator
+        //   • Preamble text before <think> (primary bleed-through cause)
+        //   • Mid-stream unclosed blocks
+        //   • Orphaned closing tags without an opener
+        // ══════════════════════════════════════════════════════════════════
 
-        // ── Pre-normalisation: full-width brackets ────────
-        // Some CJK models output full-width brackets like ＜think＞ instead of <think>.
+        // 1a. Full-width bracket normalisation
         parsed = parsed.replace(/＜/g, '<').replace(/＞/g, '>');
 
-        // ── Pre-normalisation: <thinking> / <Thinking> variant ────────
-        // Some model families use <thinking> instead of <think>.
+        // 1b. <thinking> → <think> normalisation
         parsed = parsed.replace(/<thinking>/gi, '<think>').replace(/<\/thinking>/gi, '</think>');
 
-        // ── Pre-normalisation: </N> orphan closers ────────
-        // When the prompt used numbered phases ("1. Build Ground Truth") some models
-        // confused the number with the XML tag name and output </1>, </2> etc.
-        // If a <think> opener is present but no </think>, treat the first </N> as </think>.
+        // 1c. Orphaned numeric closer (e.g. </1>) → </think> when opener is present
         if (parsed.includes('<think>') && !parsed.includes('</think>')) {
             parsed = parsed.replace(/<\/\d+>/i, '</think>');
         }
 
-        // ── Pre-normalisation: leading unknown opening tag ────────
-        // The system prompt tells the model to start with <think>. If it starts with
-        // ANY other tag (e.g. <reasoning>, <analysis>, <1>), we treat it as a think
-        // block: find the matching closing tag and normalise both to <think>/<\/think>.
-        // Only fires when no <think> tag is already present (avoid double-processing).
-        // Known rich-element tags that legitimately start a message are excluded.
+        // 1d. Leading unknown tag → treat as <think> block (e.g. <reasoning>…</reasoning>)
         if (!parsed.includes('<think>') && !parsed.includes('</think>')) {
-            const leadingTagMatch = parsed.match(/^<([a-zA-Z][a-zA-Z0-9_-]*|[0-9]+)>/);
+            const leadingTagMatch = parsed.match(/^\s*<([a-zA-Z][a-zA-Z0-9_-]*|[0-9]+)>/);
             if (leadingTagMatch) {
                 const knownRichEl = /^(text-message|task|stat-bar|scene-image)$/i;
                 const tagName = leadingTagMatch[1];
-                if (!knownRichEl.test(tagName)) {
-                    const closeRe = new RegExp(`</${tagName}>`, 'i');
-                    if (closeRe.test(parsed)) {
-                        // Normalise every occurrence of this tag to <think>/<\/think>
-                        parsed = parsed.replace(new RegExp(`<${tagName}>`, 'gi'), '<think>');
-                        parsed = parsed.replace(new RegExp(`</${tagName}>`, 'gi'), '</think>');
-                    }
+                if (!knownRichEl.test(tagName) && new RegExp(`</${tagName}>`, 'i').test(parsed)) {
+                    parsed = parsed.replace(new RegExp(`<${tagName}>`, 'gi'), '<think>');
+                    parsed = parsed.replace(new RegExp(`</${tagName}>`, 'gi'), '</think>');
                 }
             }
         }
 
-        // ── Pre-normalisation: GLM / models that use \n---\n as a separator ────────
-        // Some models (e.g. GLM 5.x) output reasoning above a markdown horizontal
-        // rule rather than inside <think> tags. Detect this and wrap the content
-        // above the FIRST \n---\n as a <think> block so the pipeline below handles
-        // it uniformly. Only apply when no <think> tag is already present.
+        // 1e. GLM-style \n---\n separator → wrap as <think> block
         if (!parsed.includes('<think>') && !parsed.includes('</think>')) {
             const sepIdx = parsed.indexOf('\n---\n');
             if (sepIdx > 0) {
                 const thinkContent = parsed.slice(0, sepIdx).trim();
-                const storyContent  = parsed.slice(sepIdx + 5).trim(); // 5 = len('\n---\n')
+                const storyContent = parsed.slice(sepIdx + 5).trim();
                 if (thinkContent && storyContent) {
                     parsed = `<think>\n${thinkContent}\n</think>\n${storyContent}`;
                 }
             }
         }
 
-        // Safety Fallback: Normalise malformed <think> blocks before extraction.
-        // Case A: Closing tag present but no opener → inject opener at start.
+        // 1f. Preamble stripping — THE primary bleed-through fix.
+        // If the model emitted any text before the opening <think> tag, strip it
+        // entirely. It is stray reasoning / formatting artefact, not story prose.
+        if (parsed.includes('<think>')) {
+            const openIdx = parsed.search(/<think>/i);
+            if (openIdx > 0) {
+                parsed = parsed.slice(openIdx); // discard everything before <think>
+            }
+        }
+
+        // 1g. Orphaned </think> without opener → inject <think> at start
         if (parsed.includes('</think>') && !parsed.includes('<think>')) {
             parsed = '<think>\n' + parsed;
         }
-        // Case B: Opening tag present but no closing tag — we are mid-stream.
-        // Do NOT leak the raw reasoning as visible prose (the old approach stripped
-        // the opener, making all thinking text visible). Instead replace the entire
-        // unclosed block with an invisible placeholder; once </think> arrives the
-        // next formatMessage call will render the proper collapsed <details> block.
+
+        // 1h. Mid-stream: <think> present but no </think> yet.
+        // Replace the entire unclosed reasoning block (and anything after it)
+        // with an invisible placeholder so no raw thinking text leaks to the user.
+        // Whatever story text appeared *before* <think> was already stripped in 1f,
+        // so there is nothing visible to preserve here.
         if (parsed.includes('<think>') && !parsed.includes('</think>')) {
-            // Everything from <think> to end-of-text is still-incoming reasoning.
-            // Hide it entirely — show only whatever story text came before the tag.
             parsed = parsed.replace(/<think>[\s\S]*/i, '<span class="chat-think-streaming" style="display:none;"></span>');
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 2 — Rich-tag extraction
+        // Pull out all structured XML tags (including closed <think> blocks)
+        // into a side-array so they survive HTML-escaping untouched.
+        // ══════════════════════════════════════════════════════════════════
+        const richTags = [];
+        const placeholderRegex = /%%RICH_TAG_(\d+)%%/g;
 
         const extractTag = (match) => {
             richTags.push(match);
@@ -2015,32 +2023,35 @@ class RoleplayChatHandler {
         parsed = parsed.replace(/<task[\s\S]*?<\/task>/gi, extractTag);
         parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
         parsed = parsed.replace(/<scene-image[\s\S]*?<\/scene-image>/gi, extractTag);
-        // Use a loop to handle multiple/adjacent think blocks robustly.
-        // A single-pass lazy regex can miss content if the model emits several
-        // <think>...</think> pairs or if there are stray openers between them.
+
+        // Loop until stable — handles multiple / adjacent <think>…</think> pairs.
         let prevParsed;
         do {
             prevParsed = parsed;
             parsed = parsed.replace(/<think>[\s\S]*?<\/think>/gi, extractTag);
         } while (parsed !== prevParsed);
-        // Case C: Strip any stray unpaired tags that survived normalisation (last-resort defence).
+
+        // Last-resort: strip any surviving stray unpaired tags
         parsed = parsed.replace(/<think>/gi, '').replace(/<\/think>/gi, '');
 
-        // 2. Safely escape the remaining text
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 3 — HTML escape & Markdown
+        // ══════════════════════════════════════════════════════════════════
         parsed = this.escapeHtml(parsed);
 
-        // 3. Apply Markdown & Aesthetics
         parsed = parsed.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
         parsed = parsed.replace(/\*([^*]+)\*/g, "<em>$1</em>");
         parsed = parsed.replace(/&quot;([\s\S]*?)&quot;/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">&quot;$1&quot;</span>');
-        parsed = parsed.replace(/“([\s\S]*?)”/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">“$1”</span>');
+        parsed = parsed.replace(/\u201c([\s\S]*?)\u201d/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">&ldquo;$1&rdquo;</span>');
         parsed = parsed.replace(/^&gt; (.*)$/gm, '<blockquote style="border-left: 3px solid var(--accent); padding-left: 0.75rem; margin: 0.5rem 0; color: var(--text-secondary); font-style: italic;">$1</blockquote>');
 
-        // 4. Restore the Rich XML tags
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 4 — Restore rich tags & render
+        // ══════════════════════════════════════════════════════════════════
         parsed = parsed.replace(placeholderRegex, (match, index) => richTags[index]);
 
-        // Process <scene-image> tags
-        parsed = parsed.replace(/<scene-image\s+src="([^"]+)"\s+prompt="([^"]*)"\s*(?:><\/scene-image>|\/>)/g, (match, url, prompt) => {
+        // Process <scene-image> tags into clickable image wrappers
+        parsed = parsed.replace(/<scene-image\s+src="([^"]+)"\s+prompt="([^"]*)"\s*(?:><\/scene-image>|\/?>)/g, (match, url, prompt) => {
             return `
                 <div class="chat-scene-image-wrapper" onclick="if(window.app && window.app.openGallery) window.app.openGallery([{url: '${url}', prompt: decodeURIComponent('${encodeURIComponent(prompt)}'), label: 'Chat Scene'}]);">
                     <img src="${url}" alt="Generated Scene" class="chat-scene-image">
@@ -2049,6 +2060,7 @@ class RoleplayChatHandler {
             `;
         });
 
+        // Pass through RichElementParser for <think>, <text-message>, <task>, <stat-bar>
         if (window.RichElementParser) {
             parsed = window.RichElementParser.parse(parsed);
         }
