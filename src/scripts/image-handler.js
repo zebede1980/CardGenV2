@@ -315,58 +315,64 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       try {
-        // Get or generate the base prompt
-        const customPromptTextarea = document.getElementById("custom-image-prompt");
-        let basePrompt = customPromptTextarea?.value?.trim();
         const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
-        if (!basePrompt) {
+        
+        // Find if they selected the same style multiple times to ensure we push for more variety
+        const styleCounts = {};
+        selectedStyles.forEach(s => styleCounts[s] = (styleCounts[s] || 0) + 1);
+
+        // If the user already has a generated/typed prompt in the textarea, use it as guidance
+        // so the LLM uses it as the core idea but rewrites it in the selected style
+        const customPromptTextarea = document.getElementById("custom-image-prompt");
+        const existingPrompt = customPromptTextarea?.value?.trim();
+
+        const promises = selectedStyles.map(async (style, index) => {
           try {
-            basePrompt = await window.apiHandler.generateImagePrompt(
+            let specificGuidance = this._getGuidance() || "";
+            if (existingPrompt) {
+              specificGuidance = `Base the image heavily on this idea: "${existingPrompt}"\n\n` + specificGuidance;
+            }
+            
+            // If they selected the same style multiple times, we need to force the LLM to give us variety
+            if (styleCounts[style] > 1) {
+                const variationHint = `This is variation ${index + 1}. Ensure the composition, pose, camera angle, or framing is distinctly unique compared to other variations.`;
+                specificGuidance = specificGuidance ? `${specificGuidance}\n\n${variationHint}` : variationHint;
+            }
+
+            // 1. Generate a unique prompt for this specific style and variation
+            const generatedPrompt = await window.apiHandler.generateImagePrompt(
               this.currentCharacter.description,
               this.currentCharacter.name,
               cardType,
-              this._getGuidance(),
+              specificGuidance,
+              style
             );
-            if (customPromptTextarea) {
-              customPromptTextarea.value = basePrompt;
-              if (this.currentCharacter) this.currentCharacter.imagePrompt = basePrompt;
-              window.updatePromptCharCount();
-            }
-          } catch (e) {
-            basePrompt = window.apiHandler.buildDirectImagePrompt(
-              this.currentCharacter.description,
-              this.currentCharacter.name,
-            );
-          }
-        }
 
-        const promises = selectedStyles.map((style, index) => {
-          return window.apiHandler
-            .generateImage(
+            // 2. Generate the image using this unique prompt
+            const imageUrl = await window.apiHandler.generateImage(
               this.currentCharacter.description,
               this.currentCharacter.name,
-              basePrompt,
+              generatedPrompt,
               model,
               cardType,
               style
-            )
-            .then(async (imageUrl) => {
-              let displayUrl = imageUrl;
-              if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
-                const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-                const response = await (window.authFetch || fetch)(proxyUrl);
-                if (response.ok) {
-                  const blob = await response.blob();
-                  displayUrl = URL.createObjectURL(blob);
-                }
+            );
+
+            let displayUrl = imageUrl;
+            if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+              const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+              const response = await (window.authFetch || fetch)(proxyUrl);
+              if (response.ok) {
+                const blob = await response.blob();
+                displayUrl = URL.createObjectURL(blob);
               }
-              const label = style === "" ? "Default" : style;
-              return { url: displayUrl, prompt: basePrompt, model, label, index, styleUsed: style };
-            })
-            .catch((err) => {
-              console.error(`Variation "${style}" failed:`, err);
-              return null;
-            });
+            }
+            const label = style === "" ? "Default" : style;
+            return { url: displayUrl, prompt: generatedPrompt, model, label, index, styleUsed: style };
+          } catch (err) {
+            console.error(`Variation "${style}" failed:`, err);
+            return null;
+          }
         });
 
         const results = await Promise.all(promises);

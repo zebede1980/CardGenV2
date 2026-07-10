@@ -1932,7 +1932,7 @@
         <script src="src/scripts/main.js?v=20260516"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-display.js?v=20260514"></script>
-        <script src="src/scripts/image-handler.js?v=20260514"></script>
+        <script src="src/scripts/image-handler.js?v=20260710-fix2"></script>
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/library-handler.js?v=20260514"></script>
@@ -2802,12 +2802,21 @@
                   </div>
                   
                   <div id="chat-new-persona-manual">
+                      <div id="chat-new-persona-saved-select-container" style="margin-bottom: 0.5rem; display: none;">
+                          <select id="chat-new-persona-saved-select" class="content-box" style="width: 100%; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-color);">
+                              <option value="">-- Select a saved persona --</option>
+                          </select>
+                      </div>
                       <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
                           <input type="text" id="chat-new-persona-name" class="content-box" style="flex: 2 1 120px; min-width: 0;" placeholder="Name (e.g. User)" />
                           <input type="text" id="chat-new-persona-age" class="content-box" style="flex: 1 1 60px; min-width: 0;" placeholder="Age" />
                           <input type="text" id="chat-new-persona-gender" class="content-box" style="flex: 1 1 80px; min-width: 0;" placeholder="Gender" />
                       </div>
                       <textarea id="chat-new-persona-detail" class="content-box" rows="2" style="width:100%;" placeholder="Basic Detail (appearance, background...)"></textarea>
+                      <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                          <input type="checkbox" id="chat-new-persona-save" />
+                          <label for="chat-new-persona-save" style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;">Save this persona for later use</label>
+                      </div>
                   </div>
                   
                   <div id="chat-new-persona-card" style="display: none;">
