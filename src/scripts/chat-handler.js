@@ -764,7 +764,7 @@ class RoleplayChatHandler {
         if (this.els.newPersonaSaveCheckbox) this.els.newPersonaSaveCheckbox.checked = false;
 
         try {
-            const pRes = await window.authFetch('/api/personas');
+            const pRes = await window.authFetch('/api/sw/personas');
             if (pRes.ok) {
                 this.savedPersonas = await pRes.json();
                 if (this.savedPersonas.length > 0 && this.els.newPersonaSavedSelectContainer) {
@@ -981,7 +981,7 @@ class RoleplayChatHandler {
 
             if (pType === 'manual' && this.els.newPersonaSaveCheckbox && this.els.newPersonaSaveCheckbox.checked) {
                 try {
-                    await window.authFetch('/api/personas', {
+                    await window.authFetch('/api/sw/personas', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
