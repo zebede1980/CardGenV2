@@ -2019,6 +2019,8 @@ class RoleplayChatHandler {
             return `%%RICH_TAG_${richTags.length - 1}%%`;
         };
 
+        // Extract the mid-stream hidden span FIRST so it survives escapeHtml() in Step 3.
+        parsed = parsed.replace(/<span class="chat-think-streaming"[^>]*><\/span>/g, extractTag);
         parsed = parsed.replace(/<text-message[\s\S]*?<\/text-message>/gi, extractTag);
         parsed = parsed.replace(/<task[\s\S]*?<\/task>/gi, extractTag);
         parsed = parsed.replace(/<stat-bar[\s\S]*?(?:\/>|<\/stat-bar>|>)/gi, extractTag);
