@@ -20,6 +20,35 @@ from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
+import re as _cot_re
+
+# Regex to detect the CoT bullet-point block that models output WITHOUT wrapping in <think> tags.
+# Matches one or more lines starting with "• <Label>:" at the very start of the response,
+# followed by blank lines and then the story prose.
+_COT_BARE_PATTERN = _cot_re.compile(
+    r'^((?:\s*•\s*\S[^\n]*\n)+)\s*\n(.*)',
+    _cot_re.DOTALL | _cot_re.IGNORECASE
+)
+
+def _inject_think_tags(content: str) -> tuple[str, bool]:
+    """If `content` has no <think> tags but starts with CoT bullet lines,
+    wrap the bullet block in <think>...</think> and return (fixed_content, True).
+    Returns (content, False) if no transformation was needed."""
+    stripped = content.strip()
+    # Already has tags — nothing to do
+    if _cot_re.search(r'<think>', stripped, _cot_re.IGNORECASE):
+        return content, False
+    m = _COT_BARE_PATTERN.match(stripped)
+    if not m:
+        return content, False
+    bullet_block = m.group(1).strip()
+    prose = m.group(2).strip()
+    if not prose:
+        # Entire response was bullet points — still wrap so frontend hides it
+        return f"<think>\n{bullet_block}\n</think>", True
+    fixed = f"<think>\n{bullet_block}\n</think>\n{prose}"
+    return fixed, True
+
 def get_default_system_prompt() -> str:
     """Builds the default system prompt modularly."""
     modules = [
@@ -870,7 +899,18 @@ async def send_message(
                 await queue.put(chunk)
                 
             logger.info(f"[{request_id}] LLM request completed successfully")
-            
+
+            # ── CoT tag fallback ─────────────────────────────────────────────
+            # If CoT is enabled and the model forgot to wrap its reasoning in
+            # <think> tags, inject them now.  We emit a corrected_content event
+            # so the frontend can re-render the bubble with the think block.
+            if getattr(req, 'enable_cot', True):
+                fixed_content, was_fixed = _inject_think_tags(full_content)
+                if was_fixed:
+                    logger.info(f"[{request_id}] CoT tags injected post-generation (model omitted tags)")
+                    full_content = fixed_content
+                    await queue.put({"type": "corrected_content", "content": full_content})
+
             await queue.put({
                 "type": "api_log",
                 "log": {

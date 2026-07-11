@@ -1596,6 +1596,11 @@ class RoleplayChatHandler {
                             fullText += data.content;
                             aiMsgObj.content = fullText;
                             contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
+                        } else if (data.type === 'corrected_content') {
+                            // Backend injected <think> tags that the model forgot to output.
+                            fullText = data.content;
+                            aiMsgObj.content = fullText;
+                            contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
                         } else if (data.type === 'error') {
                             console.error('Regen generation error:', data.message);
                             contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
@@ -2325,6 +2330,12 @@ class RoleplayChatHandler {
                                 }
                             } else if (data.type === 'chunk') {
                                 fullText += data.content;
+                                aiMsgObj.content = fullText;
+                                contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
+                            } else if (data.type === 'corrected_content') {
+                                // Backend injected <think> tags that the model forgot to output.
+                                // Replace the raw streamed text with the corrected version.
+                                fullText = data.content;
                                 aiMsgObj.content = fullText;
                                 contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
                             } else if (data.type === 'error') {
