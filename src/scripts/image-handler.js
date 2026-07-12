@@ -206,6 +206,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const galleryImages = [{ url: displayUrl, prompt: finalPrompt || "", model: model || "", label: "New" }];
       this._makeImageGalleryable(grid, galleryImages);
 
+      this.openImageOptionsModal();
       this.showNotification(`Image generated! Compare and choose.`, "success");
     } catch (error) {
       console.error("Image regeneration error:", error);
@@ -416,6 +417,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const galleryImages4p = validResults.map(r => ({ url: r.url, prompt: r.prompt || "", model: r.model || "", label: r.label || `Option ${r.index + 1}` }));
         this._makeImageGalleryable(grid, galleryImages4p);
 
+        this.openImageOptionsModal();
         this.showNotification(`Generated ${validResults.length} style variations!`, "success");
       } catch (error) {
         loading.style.display = "none";
@@ -499,6 +501,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Wire gallery trigger
       this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: imagePrompt || "", model: `pollinations/${model}`, label: "Free" }]);
 
+      this.openImageOptionsModal();
       this.showNotification("Free image generated! Compare and choose.", "success");
     } catch (error) {
       console.error("Free image error:", error);
