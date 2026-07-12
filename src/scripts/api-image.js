@@ -8,7 +8,8 @@ Object.assign(APIHandler.prototype, {
     modelOverride = null,
     cardType = "single",
     styleOverride = undefined,
-    guidance = ""
+    guidance = "",
+    moodOverride = undefined
   ) {
     const model = modelOverride || this.config.get("api.image.model");
     const modelSettings = this.config.get("api.image.modelSettings") || {};
@@ -24,7 +25,7 @@ Object.assign(APIHandler.prototype, {
       console.log("Character description length:", characterDescription?.length || 0);
       if (guidance) console.log("Guidance:", guidance);
       try {
-        imagePrompt = await this.generateImagePrompt(characterDescription, characterName, cardType, guidance);
+        imagePrompt = await this.generateImagePrompt(characterDescription, characterName, cardType, guidance, styleOverride, moodOverride);
       } catch (error) {
         console.error("Failed to generate image prompt:", error);
         throw new Error(`Failed to generate image prompt: ${error.message}`);
@@ -118,18 +119,19 @@ Object.assign(APIHandler.prototype, {
     throw new Error("Unexpected image API response format: " + JSON.stringify(result));
   },
 
-  async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "", styleOverride = undefined) {
+  async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "", styleOverride = undefined, moodOverride = undefined) {
     if (!characterDescription || !characterName) {
       throw new Error("Character description and name are required to generate an image prompt");
     }
 
     const style = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
+    const mood = moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood");
     const imageModel = this.config.get("api.image.model");
     const modelSettings = this.config.get("api.image.modelSettings") || {};
     const settings = modelSettings[imageModel] || {};
     const lengthPref = settings.promptLengthPref || "detailed";
     
-    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType, guidance, style, lengthPref);
+    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType, guidance, style, lengthPref, mood);
     const model = this.config.get("api.text.model");
 
     const data = {
@@ -282,7 +284,7 @@ Object.assign(APIHandler.prototype, {
     return prompt;
   },
 
-  buildImagePromptInstruction(characterDescription, characterName, cardType = "single", guidance = "", style = "", lengthPref = "detailed") {
+  buildImagePromptInstruction(characterDescription, characterName, cardType = "single", guidance = "", style = "", lengthPref = "detailed", mood = "") {
     const personalityTraits = this.extractPersonalityTraits(characterDescription);
 
     let taskInstruction = "";
@@ -305,6 +307,12 @@ Object.assign(APIHandler.prototype, {
       }
     } else if (style && style.trim()) {
       styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): The requested art style is "${style}". You MUST heavily bias the entire prompt towards this style. Use medium-specific keywords appropriate for this style (e.g. if it is drawn/painted, use terms like "illustration, 2D, brushstrokes, cel-shaded").`;
+    }
+    
+    let moodBlock = "";
+    if (mood && mood.trim()) {
+      const formattedMood = mood.replace("-", " ");
+      moodBlock = `\n- MOOD DIRECTIVE: The requested mood is "${formattedMood}". You MUST heavily bias the entire prompt's lighting, expression, and environment to convey this mood.`;
     }
     
     let lengthBlock = lengthPref === "short" 
@@ -334,7 +342,7 @@ Format rules:
 - Describe the lighting, mood, and atmosphere that fits the character's tone
 - ALWAYS include keywords that ensure a highly detailed and high-quality image (e.g. "masterpiece, best quality, highly detailed, high resolution"). You may include these as comma-separated tags at the end or weave them naturally.
 - CRITICAL AVOIDANCE: DO NOT use terms like "8k", "photograph", "hyperrealistic", "professional lighting", "real life", or "camera" UNLESS the requested style is explicitly a photograph or realistic. Using these terms will ruin 2D/illustrated/anime styles by forcing a realistic render!
-- ${lengthBlock}${styleBlock}
+- ${lengthBlock}${styleBlock}${moodBlock}
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
 BEGIN PROMPT:`;

@@ -237,6 +237,11 @@ class CharacterGeneratorApp {
       });
     }
 
+    const imageMoodSelect = document.getElementById("image-mood");
+    if (imageMoodSelect) {
+      imageMoodSelect.addEventListener("change", () => this.saveAPISettings());
+    }
+
     const customImageStyleInput = document.getElementById("custom-image-style-input");
     if (customImageStyleInput) {
         customImageStyleInput.addEventListener("input", () => this.saveAPISettings());

@@ -1175,26 +1175,42 @@
                                 style="margin-top: 1rem; display: none"
                                 id="image-controls"
                             >
-                                <div class="form-group" style="margin-bottom: 1rem;">
-                                    <label for="image-style" class="label"
-                                        >Style Preset (optional)</label
-                                    >
-                                    <select id="image-style" class="input">
-                                        <option value="">None (Default)</option>
-                                        <option value="realistic">Realistic / Photography</option>
-                                        <option value="cinematic">Cinematic</option>
-                                        <option value="digital-art">Digital Art</option>
-                                        <option value="anime">Anime</option>
-                                        <option value="3d-render">3D Render</option>
-                                        <option value="fantasy">Fantasy Art</option>
-                                        <option value="cyberpunk">Cyberpunk</option>
-                                        <option value="comic-book">Comic Book</option>
-                                        <option value="gothic">Gothic / Dark</option>
-                                        <option value="sci-fi">Sci-Fi</option>
-                                        <option value="hentai">Hentai</option>
-                                        <option value="sexy">Sexy</option>
-                                        <option value="custom">Custom Style...</option>
-                                    </select>
+                                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                        <label for="image-style" class="label"
+                                            >Style Preset</label
+                                        >
+                                        <select id="image-style" class="input">
+                                            <option value="">None (Default)</option>
+                                            <option value="realistic">Realistic / Photography</option>
+                                            <option value="cinematic">Cinematic</option>
+                                            <option value="digital-art">Digital Art</option>
+                                            <option value="anime">Anime</option>
+                                            <option value="3d-render">3D Render</option>
+                                            <option value="fantasy">Fantasy Art</option>
+                                            <option value="comic-book">Comic Book</option>
+                                            <option value="sci-fi">Sci-Fi</option>
+                                            <option value="custom">Custom Style...</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                        <label for="image-mood" class="label"
+                                            >Mood / Vibe</label
+                                        >
+                                        <select id="image-mood" class="input">
+                                            <option value="">None (Default)</option>
+                                            <option value="bright-cheerful">Bright & Cheerful</option>
+                                            <option value="dark-gothic">Dark & Gothic</option>
+                                            <option value="somber-melancholic">Somber & Melancholic</option>
+                                            <option value="romantic-soft">Romantic & Soft</option>
+                                            <option value="energetic-dynamic">Energetic & Dynamic</option>
+                                            <option value="mysterious-eerie">Mysterious & Eerie</option>
+                                            <option value="sexy-seductive">Sexy & Seductive</option>
+                                            <option value="epic-heroic">Epic & Heroic</option>
+                                            <option value="dreamy-ethereal">Dreamy & Ethereal</option>
+                                            <option value="gritty-cinematic">Gritty & Cinematic</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="form-group" id="custom-style-container" style="margin-bottom: 1rem; display: none;">
                                     <label for="custom-image-style-input" class="label">Custom Style Description</label>

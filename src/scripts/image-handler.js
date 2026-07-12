@@ -247,33 +247,62 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Grab options from main dropdown or fallback
     const mainStyleSelect = document.getElementById("image-style");
-    let optionsHtml = '';
+    let styleOptionsHtml = '';
     if (mainStyleSelect) {
-      optionsHtml = mainStyleSelect.innerHTML;
+      styleOptionsHtml = mainStyleSelect.innerHTML;
     } else {
-      const styles = ["", "realistic", "anime", "hand-drawn-anime", "painted-anime", "grunge-anime", "waifu", "sexy", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "gothic-anime", "gothic", "art-nouveau", "noir", "ink-sketch", "storybook", "manhwa", "chibi", "vintage"];
-      optionsHtml = styles.map(s => `<option value="${s}">${s === "" ? 'Default / None' : s}</option>`).join('');
+      const styles = ["", "realistic", "anime", "hand-drawn-anime", "painted-anime", "grunge-anime", "waifu", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "sci-fi"];
+      styleOptionsHtml = styles.map(s => `<option value="${s}">${s === "" ? 'Default / None' : s}</option>`).join('');
+    }
+
+    const mainMoodSelect = document.getElementById("image-mood");
+    let moodOptionsHtml = '';
+    if (mainMoodSelect) {
+      moodOptionsHtml = mainMoodSelect.innerHTML;
+    } else {
+      const moods = ["", "bright-cheerful", "dark-gothic", "somber-melancholic", "romantic-soft", "energetic-dynamic", "mysterious-eerie", "sexy-seductive", "epic-heroic", "dreamy-ethereal", "gritty-cinematic"];
+      moodOptionsHtml = moods.map(s => `<option value="${s}">${s === "" ? 'Default / None' : s}</option>`).join('');
     }
 
     grid.innerHTML = `
       <div style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem; background: var(--surface-color); border-radius: 0.5rem; border: 1px solid var(--border);">
-        <p style="margin: 0; color: var(--text-primary); font-weight: 500;">Select up to 4 styles for your image variations:</p>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-          <select id="style-choice-0" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
-            ${optionsHtml}
-          </select>
-          <select id="style-choice-1" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
-            <option value="SKIP">-- Skip --</option>
-            ${optionsHtml}
-          </select>
-          <select id="style-choice-2" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
-            <option value="SKIP">-- Skip --</option>
-            ${optionsHtml}
-          </select>
-          <select id="style-choice-3" class="content-box" style="padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
-            <option value="SKIP">-- Skip --</option>
-            ${optionsHtml}
-          </select>
+        <p style="margin: 0; color: var(--text-primary); font-weight: 500;">Select up to 4 styles and moods for your image variations:</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+          <div style="display: flex; gap: 0.5rem;">
+            <select id="style-choice-0" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              ${styleOptionsHtml}
+            </select>
+            <select id="mood-choice-0" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              ${moodOptionsHtml}
+            </select>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <select id="style-choice-1" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              <option value="SKIP">-- Skip --</option>
+              ${styleOptionsHtml}
+            </select>
+            <select id="mood-choice-1" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              ${moodOptionsHtml}
+            </select>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <select id="style-choice-2" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              <option value="SKIP">-- Skip --</option>
+              ${styleOptionsHtml}
+            </select>
+            <select id="mood-choice-2" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              ${moodOptionsHtml}
+            </select>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <select id="style-choice-3" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              <option value="SKIP">-- Skip --</option>
+              ${styleOptionsHtml}
+            </select>
+            <select id="mood-choice-3" class="content-box" style="flex: 1; padding: 0.5rem; color: var(--text-primary); background-color: var(--bg-color); border: 1px solid var(--border); border-radius: 0.25rem;">
+              ${moodOptionsHtml}
+            </select>
+          </div>
         </div>
         <button id="start-generate-styles-btn" class="btn-primary" style="align-self: flex-start; padding: 0.5rem 2rem;">Generate Images</button>
       </div>
@@ -285,6 +314,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const firstSelect = document.getElementById("style-choice-0");
       if (firstSelect) firstSelect.value = currentStyle;
     }
+    
+    const currentMood = this.config.get("api.image.mood");
+    if (currentMood !== undefined) {
+      const firstMoodSelect = document.getElementById("mood-choice-0");
+      if (firstMoodSelect) firstMoodSelect.value = currentMood;
+    }
 
     // Set 1,2,3 to SKIP explicitly
     [1, 2, 3].forEach(i => {
@@ -294,11 +329,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const startBtn = document.getElementById("start-generate-styles-btn");
     startBtn.onclick = async () => {
-      const selectedStyles = [0, 1, 2, 3]
-        .map(i => document.getElementById(`style-choice-${i}`)?.value)
-        .filter(s => s !== undefined && s !== "SKIP");
+      const selectedVariations = [0, 1, 2, 3]
+        .map(i => ({
+          style: document.getElementById(`style-choice-${i}`)?.value,
+          mood: document.getElementById(`mood-choice-${i}`)?.value
+        }))
+        .filter(v => v.style !== undefined && v.style !== "SKIP");
 
-      if (selectedStyles.length === 0) {
+      if (selectedVariations.length === 0) {
         this.showNotification("Please select at least one style.", "warning");
         return;
       }
@@ -318,24 +356,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
       try {
         const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
         
-        // Find if they selected the same style multiple times to ensure we push for more variety
-        const styleCounts = {};
-        selectedStyles.forEach(s => styleCounts[s] = (styleCounts[s] || 0) + 1);
+        // Find if they selected the same style+mood multiple times to ensure we push for more variety
+        const variationCounts = {};
+        selectedVariations.forEach(v => {
+          const key = `${v.style}-${v.mood}`;
+          variationCounts[key] = (variationCounts[key] || 0) + 1;
+        });
 
         // If the user already has a generated/typed prompt in the textarea, use it as guidance
         // so the LLM uses it as the core idea but rewrites it in the selected style
         const customPromptTextarea = document.getElementById("custom-image-prompt");
         const existingPrompt = customPromptTextarea?.value?.trim();
 
-        const promises = selectedStyles.map(async (style, index) => {
+        const promises = selectedVariations.map(async (variation, index) => {
+          const style = variation.style;
+          const mood = variation.mood;
+          const countKey = `${style}-${mood}`;
+          
           try {
             let specificGuidance = this._getGuidance() || "";
             if (existingPrompt) {
               specificGuidance = `Base the image heavily on this idea: "${existingPrompt}"\n\n` + specificGuidance;
             }
             
-            // If they selected the same style multiple times, we need to force the LLM to give us variety
-            if (styleCounts[style] > 1) {
+            // If they selected the same variation multiple times, we need to force the LLM to give us variety
+            if (variationCounts[countKey] > 1) {
                 const variationHint = `This is variation ${index + 1}. Ensure the composition, pose, camera angle, or framing is distinctly unique compared to other variations.`;
                 specificGuidance = specificGuidance ? `${specificGuidance}\n\n${variationHint}` : variationHint;
             }
@@ -346,7 +391,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
               this.currentCharacter.name,
               cardType,
               specificGuidance,
-              style
+              style,
+              mood
             );
 
             // 2. Generate the image using this unique prompt
@@ -368,10 +414,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
                 displayUrl = URL.createObjectURL(blob);
               }
             }
-            const label = style === "" ? "Default" : style;
-            return { url: displayUrl, prompt: generatedPrompt, model, label, index, styleUsed: style };
+            let label = style === "" ? "Default" : style;
+            if (mood !== "") label += ` / ${mood}`;
+            return { url: displayUrl, prompt: generatedPrompt, model, label, index, styleUsed: style, moodUsed: mood };
           } catch (err) {
-            console.error(`Variation "${style}" failed:`, err);
+            console.error(`Variation "${style}" (mood: ${mood}) failed:`, err);
             return null;
           }
         });
@@ -399,10 +446,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
           
           wrapper.onclick = () => {
             const styleSelect = document.getElementById("image-style");
-            if (styleSelect) {
-                styleSelect.value = res.styleUsed;
-                this.saveAPISettings(); // from CharacterGeneratorApp
-            }
+            if (styleSelect) styleSelect.value = res.styleUsed;
+            const moodSelect = document.getElementById("image-mood");
+            if (moodSelect) moodSelect.value = res.moodUsed;
+            
+            if (styleSelect || moodSelect) this.saveAPISettings(); // from CharacterGeneratorApp
             this.selectImageOption(res.url, res.prompt, res.model, validResults);
           };
           

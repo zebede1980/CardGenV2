@@ -150,6 +150,7 @@ class Config {
     const imagePromptLengthPref = document.getElementById("image-prompt-length-pref")?.value;
     const imageModelSettingsSelector = document.getElementById("model-settings-selector")?.value;
     const imageStyle = document.getElementById("image-style")?.value;
+    const imageMood = document.getElementById("image-mood")?.value;
     const customImageStyle = document.getElementById("custom-image-style-input")?.value;
     const imageAspectRatio = document.getElementById("image-aspect-ratio")?.value;
     
@@ -170,6 +171,7 @@ class Config {
         };
     }
     if (imageStyle !== undefined) this.config.api.image.style = imageStyle;
+    if (imageMood !== undefined) this.config.api.image.mood = imageMood;
     if (customImageStyle !== undefined) this.config.api.image.customStyleText = customImageStyle;
     if (imageAspectRatio !== undefined) this.config.api.image.aspectRatio = imageAspectRatio;
 
@@ -245,6 +247,7 @@ class Config {
     const imageApiKey = document.getElementById("image-api-key");
     const imageSize = document.getElementById("image-size");
     const imageStyle = document.getElementById("image-style");
+    const imageMood = document.getElementById("image-mood");
     const customImageStyle = document.getElementById("custom-image-style-input");
     const customStyleContainer = document.getElementById("custom-style-container");
     const imageAspectRatio = document.getElementById("image-aspect-ratio");
@@ -257,6 +260,7 @@ class Config {
         imageStyle.value = this.config.api.image.style || "";
         if (customStyleContainer) customStyleContainer.style.display = imageStyle.value === "custom" ? "block" : "none";
     }
+    if (imageMood) imageMood.value = this.config.api.image.mood || "";
     if (customImageStyle) customImageStyle.value = this.config.api.image.customStyleText || "";
     if (imageAspectRatio) imageAspectRatio.value = this.config.api.image.aspectRatio || "";
 
