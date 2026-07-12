@@ -42,9 +42,29 @@ Object.assign(APIHandler.prototype, {
 
     this.lastGeneratedImagePrompt = imagePrompt;
 
-    // We no longer bookend with style tags (prefix + suffix).
-    // The style is woven directly into the prompt by the LLM now.
+    // We previously stopped bookending with style tags, but to strongly enforce styles
+    // and moods, we are explicitly re-introducing them under the hood before sending to the API.
     let finalApiPrompt = imagePrompt;
+
+    const activeStyle = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
+    const activeMood = moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood");
+
+    if (activeStyle && activeStyle !== "custom") {
+      const styleTags = this.getImageStyleTags(activeStyle);
+      if (styleTags && (styleTags.prefix || styleTags.suffix)) {
+        finalApiPrompt = `${styleTags.prefix ? styleTags.prefix + " " : ""}${finalApiPrompt}${styleTags.suffix ? ", " + styleTags.suffix : ""}`;
+      }
+    } else if (activeStyle === "custom") {
+      const customStyleText = this.config.get("api.image.customStyleText");
+      if (customStyleText && customStyleText.trim()) {
+        finalApiPrompt = `${finalApiPrompt}, in the style of ${customStyleText.trim()}, masterpiece, best quality, highly detailed`;
+      }
+    }
+
+    if (activeMood && activeMood.trim()) {
+      const formattedMood = activeMood.replace(/-/g, " ");
+      finalApiPrompt = `${finalApiPrompt}, ${formattedMood} mood, ${formattedMood} atmosphere, evocative lighting`;
+    }
 
     const IMAGE_PROMPT_MAX = promptLengthPref === "short" ? 1000 : 10000;
     
@@ -303,16 +323,16 @@ Object.assign(APIHandler.prototype, {
     if (style === "custom") {
       const customStyleText = this.config.get("api.image.customStyleText");
       if (customStyleText && customStyleText.trim()) {
-        styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Use medium-specific keywords appropriate for this style (e.g. if it is drawn/painted, use terms like "illustration, 2D, brushstrokes, cel-shaded").`;
+        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. "illustration", "3D render", "oil painting").`;
       }
     } else if (style && style.trim()) {
-      styleBlock = `\n- STYLE DIRECTIVE (CRITICAL): The requested art style is "${style}". You MUST heavily bias the entire prompt towards this style. Use medium-specific keywords appropriate for this style (e.g. if it is drawn/painted, use terms like "illustration, 2D, brushstrokes, cel-shaded").`;
+      styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${style}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. "illustration", "3D render", "oil painting").`;
     }
     
     let moodBlock = "";
     if (mood && mood.trim()) {
-      const formattedMood = mood.replace("-", " ");
-      moodBlock = `\n- MOOD DIRECTIVE: The requested mood is "${formattedMood}". You MUST heavily bias the entire prompt's lighting, expression, and environment to convey this mood.`;
+      const formattedMood = mood.replace(/-/g, " ");
+      moodBlock = `\n- MOOD DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested mood is "${formattedMood}". You MUST dictate the lighting, character expression, and environmental atmosphere to vividly convey this mood.`;
     }
     
     let lengthBlock = lengthPref === "short" 
