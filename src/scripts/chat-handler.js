@@ -803,6 +803,11 @@ class RoleplayChatHandler {
                     if (card) {
                         this.newChatSelectedCards.push(card);
                         this.renderNewChatSelectedChars();
+                        // Pre-fill the chat title with the character's name
+                        const charName = card.name || card.characterName || '';
+                        if (charName && !this.els.newTitle.value) {
+                            this.els.newTitle.value = charName;
+                        }
                     }
                 }
             } else {
