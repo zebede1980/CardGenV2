@@ -31,9 +31,9 @@ class RoleplayChatHandler {
         const activeView = document.getElementById('chat-active-view');
         if (lobby) lobby.style.display = 'flex';
         if (activeView) activeView.style.display = 'none';
-        // Scroll lobby back to top
         const grid = document.getElementById('chat-session-list');
         if (grid) grid.scrollTop = 0;
+        document.body.classList.remove('chat-in-chat');
     }
 
     showChatView() {
@@ -41,6 +41,7 @@ class RoleplayChatHandler {
         const activeView = document.getElementById('chat-active-view');
         if (lobby) lobby.style.display = 'none';
         if (activeView) activeView.style.display = 'flex';
+        document.body.classList.add('chat-in-chat');
     }
 
 
@@ -110,6 +111,7 @@ class RoleplayChatHandler {
                 viewChat.style.display = 'none';
                 tabChat.className = 'btn-outline';
                 document.body.classList.remove('chat-active');
+                document.body.classList.remove('chat-in-chat');
             };
             if (tabCardGen) tabCardGen.addEventListener('click', leaveChat);
             if (tabStoryWriter) tabStoryWriter.addEventListener('click', leaveChat);
@@ -959,10 +961,117 @@ class RoleplayChatHandler {
             const res = await window.authFetch('/api/sw/chats/');
             if (!res.ok) return;
             this.chats = await res.json();
+
+            // Pre-fill character data from localStorage cache
+            const cache = this._loadCharCache();
+            this.chats.forEach(chat => {
+                if (!chat.characters && cache[String(chat.id)]) {
+                    chat.characters = cache[String(chat.id)];
+                }
+            });
+
             this.renderSessionList();
+
+            // Background-fetch character data for chats not yet in cache
+            const missing = this.chats.filter(c => !c.characters || c.characters.length === 0);
+            if (missing.length > 0) {
+                this._fetchMissingCharacters(missing);
+            }
         } catch (e) {
-            console.error("Failed to load chat sessions", e);
+            console.error('Failed to load chat sessions', e);
         }
+    }
+
+    /* ── Character data cache (so lobby shows avatars without N extra API calls) ── */
+    _loadCharCache() {
+        try { return JSON.parse(localStorage.getItem('chatgen_char_cache') || '{}'); } catch { return {}; }
+    }
+
+    _saveToCharCache(chatId, chars) {
+        try {
+            const cache = this._loadCharCache();
+            cache[String(chatId)] = (chars || []).map(c => ({ id: c.id, name: c.name }));
+            localStorage.setItem('chatgen_char_cache', JSON.stringify(cache));
+        } catch {}
+    }
+
+    async _fetchMissingCharacters(chats) {
+        for (const chat of chats) {
+            try {
+                const res = await window.authFetch(`/api/sw/chats/${chat.id}`);
+                if (!res.ok) continue;
+                const detail = await res.json();
+                chat.characters = detail.characters || [];
+                this._saveToCharCache(chat.id, chat.characters);
+                this._updateCardAvatars(chat);
+            } catch {}
+        }
+    }
+
+    _updateCardAvatars(chat) {
+        const card = document.querySelector(`.chat-session-card[data-id="${chat.id}"]`);
+        if (!card) return;
+        const existingStrip = card.querySelector('.chat-card-avatars');
+        if (!existingStrip) return;
+        const newStrip = this._buildAvatarStrip(chat.characters || []);
+        existingStrip.replaceWith(newStrip);
+        const charsEl = card.querySelector('.chat-card-chars');
+        if (charsEl) charsEl.textContent = (chat.characters || []).map(c => c.name).join(', ');
+        else if (chat.characters && chat.characters.length > 0) {
+            const info = card.querySelector('.chat-card-info');
+            if (info) {
+                const el = document.createElement('div');
+                el.className = 'chat-card-chars';
+                el.textContent = chat.characters.map(c => c.name).join(', ');
+                info.insertBefore(el, info.children[1]);
+            }
+        }
+    }
+
+    _buildAvatarStrip(characters) {
+        const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || '';
+        const strip = document.createElement('div');
+
+        if (characters.length === 0) {
+            strip.className = 'chat-card-avatars';
+            const ph = document.createElement('div');
+            ph.className = 'chat-card-avatar-placeholder';
+            ph.textContent = '\uD83D\uDCAC'; // 💬
+            strip.appendChild(ph);
+        } else if (characters.length === 1) {
+            strip.className = 'chat-card-avatars';
+            const ph = document.createElement('div');
+            ph.className = 'chat-card-avatar-placeholder';
+            ph.textContent = (characters[0].name || '?')[0].toUpperCase();
+            strip.appendChild(ph);
+            const img = document.createElement('img');
+            img.className = 'chat-card-avatar';
+            img.alt = characters[0].name || '';
+            img.src = `/api/storage/cards/thumbnail?cardId=${characters[0].id}&token=${token}`;
+            img.onerror = () => { img.style.display = 'none'; };
+            strip.appendChild(img);
+        } else {
+            strip.className = 'chat-card-avatars multi';
+            const widthPct = 100 / characters.length;
+            characters.forEach((char, i) => {
+                const slot = document.createElement('div');
+                slot.style.cssText = `position:absolute; top:0; left:${widthPct * i}%; width:${widthPct}%; height:100%; overflow:hidden;`;
+                const ph = document.createElement('div');
+                ph.className = 'chat-card-avatar-placeholder';
+                ph.style.cssText = 'position:absolute; inset:0; font-size:1.8rem;';
+                ph.textContent = (char.name || '?')[0].toUpperCase();
+                slot.appendChild(ph);
+                const img = document.createElement('img');
+                img.className = 'chat-card-avatar';
+                img.alt = char.name || '';
+                img.src = `/api/storage/cards/thumbnail?cardId=${char.id}&token=${token}`;
+                img.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; object-position:top;';
+                img.onerror = () => { img.style.display = 'none'; };
+                slot.appendChild(img);
+                strip.appendChild(slot);
+            });
+        }
+        return strip;
     }
 
     renderSessionList() {
@@ -976,65 +1085,13 @@ class RoleplayChatHandler {
         }
         if (emptyEl) emptyEl.style.display = 'none';
 
-        const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || '';
-
         this.chats.forEach(chat => {
             const card = document.createElement('div');
             card.className = 'chat-session-card';
             card.dataset.id = chat.id;
 
-            /* ── Avatar strip ── */
-            const avatarStrip = document.createElement('div');
-            const characters = chat.characters || [];
-
-            if (characters.length === 0) {
-                // No characters linked — generic icon
-                avatarStrip.className = 'chat-card-avatars';
-                const ph = document.createElement('div');
-                ph.className = 'chat-card-avatar-placeholder';
-                ph.textContent = '💬';
-                avatarStrip.appendChild(ph);
-            } else if (characters.length === 1) {
-                avatarStrip.className = 'chat-card-avatars';
-                // Always show initial as background fallback
-                const ph = document.createElement('div');
-                ph.className = 'chat-card-avatar-placeholder';
-                ph.textContent = (characters[0].name || '?')[0].toUpperCase();
-                avatarStrip.appendChild(ph);
-                // Overlay with real image; hide it if it fails
-                const img = document.createElement('img');
-                img.className = 'chat-card-avatar';
-                img.alt = characters[0].name || '';
-                img.src = `/api/storage/cards/thumbnail?cardId=${characters[0].id}&token=${token}`;
-                img.onerror = () => { img.style.display = 'none'; };
-                avatarStrip.appendChild(img);
-            } else {
-                // Multiple characters — split side by side, each with fallback initial
-                avatarStrip.className = 'chat-card-avatars multi';
-                const widthPct = 100 / characters.length;
-                characters.forEach((char, i) => {
-                    const slot = document.createElement('div');
-                    slot.className = 'chat-card-avatar-slot';
-                    slot.style.cssText = `position:absolute; top:0; left:${widthPct * i}%; width:${widthPct}%; height:100%; overflow:hidden;`;
-
-                    const ph = document.createElement('div');
-                    ph.className = 'chat-card-avatar-placeholder';
-                    ph.style.cssText = 'position:absolute; inset:0; font-size:1.8rem;';
-                    ph.textContent = (char.name || '?')[0].toUpperCase();
-                    slot.appendChild(ph);
-
-                    const img = document.createElement('img');
-                    img.className = 'chat-card-avatar';
-                    img.alt = char.name || '';
-                    img.src = `/api/storage/cards/thumbnail?cardId=${char.id}&token=${token}`;
-                    img.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; object-position:top;';
-                    img.onerror = () => { img.style.display = 'none'; };
-                    slot.appendChild(img);
-
-                    avatarStrip.appendChild(slot);
-                });
-            }
-            card.appendChild(avatarStrip);
+            /* ── Avatar strip (built via helper so _updateCardAvatars can reuse it) ── */
+            card.appendChild(this._buildAvatarStrip(chat.characters || []));
 
             /* ── Text info ── */
             const info = document.createElement('div');
@@ -1181,6 +1238,8 @@ class RoleplayChatHandler {
             this.els.activeTitle.textContent = chat.title;
             this.els.activeChars.textContent = chat.characters.map(c => c.name).join(', ') || 'No characters linked';
             this.activeChatCharacters = chat.characters || [];
+            // Cache character data for lobby avatars
+            this._saveToCharCache(chatId, this.activeChatCharacters);
 
             if (this.els.speakerSelect) {
                 if (chat.characters.length > 1) {
