@@ -18,7 +18,6 @@ class RoleplayChatHandler {
     }
 
     init() {
-        this.setupSidebarToggle();
         this.bindElements();
         this.fixLayout();
         this.bindEvents();
@@ -26,113 +25,24 @@ class RoleplayChatHandler {
         this.loadPersonas();
     }
 
-    /* ── Sidebar Toggle (with mobile drawer support) ──────────────────────── */
-    setupSidebarToggle() {
-        const titleEl = document.getElementById('chat-active-title');
-        const sessionList = document.getElementById('chat-session-list');
-        const newBtn = document.getElementById('chat-new-btn');
-        if (!titleEl || !sessionList) return;
-
-        const sidebar = sessionList.closest('.chat-sidebar');
-        if (!sidebar) return;
-        sidebar.id = 'chat-sidebar-container';
-
-        const header = titleEl.closest('.chat-header');
-        if (!header) return;
-        header.style.display = 'flex';
-        header.style.alignItems = 'center';
-        header.style.gap = '0.5rem';
-
-        if (titleEl.parentElement && titleEl.parentElement !== header) {
-            titleEl.parentElement.style.flex = '1';
-            titleEl.parentElement.style.minWidth = '0';
-        }
-        titleEl.style.whiteSpace = 'nowrap';
-        titleEl.style.overflow = 'hidden';
-        titleEl.style.textOverflow = 'ellipsis';
-
-        const charsEl = document.getElementById('chat-active-characters');
-        if (charsEl) {
-            charsEl.style.whiteSpace = 'nowrap';
-            charsEl.style.overflow = 'hidden';
-            charsEl.style.textOverflow = 'ellipsis';
-        }
-
-        // Create sidebar backdrop for mobile overlay
-        if (!document.getElementById('chat-sidebar-backdrop')) {
-            const backdrop = document.createElement('div');
-            backdrop.id = 'chat-sidebar-backdrop';
-            backdrop.className = 'chat-sidebar-backdrop';
-            backdrop.addEventListener('click', () => this.closeMobileSidebar());
-            document.getElementById('view-roleplaychat').appendChild(backdrop);
-        }
-
-        if (!document.getElementById('chat-sidebar-toggle')) {
-            const toggleBtn = document.createElement('button');
-            toggleBtn.id = 'chat-sidebar-toggle';
-            toggleBtn.className = 'btn-outline';
-            toggleBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem; flex-shrink: 0;';
-            toggleBtn.innerHTML = '☰';
-            toggleBtn.title = 'Chats';
-
-            toggleBtn.addEventListener('click', () => {
-                if (window.innerWidth <= 768) {
-                    this.toggleMobileSidebar();
-                } else {
-                    this.toggleDesktopSidebar();
-                }
-            });
-
-            header.insertBefore(toggleBtn, header.firstChild);
-            this.sidebarToggleBtn = toggleBtn;
-
-            // Fullscreen toggle
-            if (!document.getElementById('chat-fullscreen-toggle')) {
-                const fsBtn = document.createElement('button');
-                fsBtn.id = 'chat-fullscreen-toggle';
-                fsBtn.className = 'btn-outline';
-                fsBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin-left: auto; display: flex; align-items: center; justify-content: center; border-radius: 0.4rem; cursor: pointer; min-height: 2.25rem; font-size: 1.2rem; flex-shrink: 0;';
-                fsBtn.innerHTML = '⛶';
-                fsBtn.title = 'Toggle Fullscreen';
-                fsBtn.addEventListener('click', () => this.toggleFullscreen());
-                header.appendChild(fsBtn);
-            }
-        }
+    /* ── Lobby / Chat-view navigation ──────────────────────────────────────── */
+    showLobby() {
+        const lobby = document.getElementById('chat-lobby');
+        const activeView = document.getElementById('chat-active-view');
+        if (lobby) lobby.style.display = 'flex';
+        if (activeView) activeView.style.display = 'none';
+        // Scroll lobby back to top
+        const grid = document.getElementById('chat-session-list');
+        if (grid) grid.scrollTop = 0;
     }
 
-    toggleMobileSidebar() {
-        const sidebar = document.getElementById('chat-sidebar-container');
-        const backdrop = document.getElementById('chat-sidebar-backdrop');
-        if (!sidebar) return;
-
-        if (sidebar.classList.contains('mobile-drawer-open')) {
-            this.closeMobileSidebar();
-        } else {
-            sidebar.classList.add('mobile-drawer-open');
-            if (backdrop) backdrop.classList.add('active');
-            if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '✕';
-        }
+    showChatView() {
+        const lobby = document.getElementById('chat-lobby');
+        const activeView = document.getElementById('chat-active-view');
+        if (lobby) lobby.style.display = 'none';
+        if (activeView) activeView.style.display = 'flex';
     }
 
-    closeMobileSidebar() {
-        const sidebar = document.getElementById('chat-sidebar-container');
-        const backdrop = document.getElementById('chat-sidebar-backdrop');
-        if (sidebar) sidebar.classList.remove('mobile-drawer-open');
-        if (backdrop) backdrop.classList.remove('active');
-        if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '☰';
-    }
-
-    toggleDesktopSidebar() {
-        const sidebar = document.getElementById('chat-sidebar-container');
-        if (!sidebar) return;
-        if (sidebar.style.display === 'none') {
-            sidebar.style.display = '';
-            if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '◀';
-        } else {
-            sidebar.style.display = 'none';
-            if (this.sidebarToggleBtn) this.sidebarToggleBtn.innerHTML = '▶';
-        }
-    }
 
     fixLayout() {
         // Scroll-to-bottom FAB
@@ -210,6 +120,8 @@ class RoleplayChatHandler {
         this.els = {
             sessionList: document.getElementById('chat-session-list'),
             newBtn: document.getElementById('chat-new-btn'),
+            backBtn: document.getElementById('chat-back-btn'),
+            lobbyEmpty: document.getElementById('chat-lobby-empty'),
 
             globalSettingsBtn: document.getElementById('chat-open-global-settings'),
             globalSettingsModal: document.getElementById('chat-global-settings-modal'),
@@ -273,6 +185,15 @@ class RoleplayChatHandler {
         this.els.newBtn.addEventListener('click', () => this.openNewChatModal());
         this.els.newCloseBtn.addEventListener('click', () => this.closeNewChatModal());
         this.els.createSubmitBtn.addEventListener('click', () => this.createNewChat());
+
+        // Back button: return to lobby
+        if (this.els.backBtn) {
+            this.els.backBtn.addEventListener('click', () => {
+                this.activeChatId = null;
+                this.showLobby();
+                this.loadSessionList();
+            });
+        }
 
         if (this.els.globalSettingsBtn) {
             this.els.globalSettingsBtn.addEventListener('click', () => this.openGlobalSettings());
@@ -430,7 +351,7 @@ class RoleplayChatHandler {
     async syncOnWake() {
         if (document.visibilityState !== 'visible') return;
 
-        this.loadSessionList(); // Refresh the sidebar in case external changes occurred
+        this.loadSessionList(); // Refresh the lobby in case external changes occurred
 
         if (!this.activeChatId) return;
 
@@ -1045,56 +966,104 @@ class RoleplayChatHandler {
     }
 
     renderSessionList() {
-        this.els.sessionList.innerHTML = '';
+        const grid = this.els.sessionList;
+        const emptyEl = this.els.lobbyEmpty;
+        grid.innerHTML = '';
+
         if (this.chats.length === 0) {
-            this.els.sessionList.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center; font-style: italic;">No chats yet</div>';
+            if (emptyEl) emptyEl.style.display = 'flex';
             return;
         }
+        if (emptyEl) emptyEl.style.display = 'none';
+
+        const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || '';
 
         this.chats.forEach(chat => {
-            const el = document.createElement('div');
-            el.className = `chat-session-item ${chat.id === this.activeChatId ? 'active' : ''}`;
-            el.dataset.id = chat.id;
+            const card = document.createElement('div');
+            card.className = 'chat-session-card';
+            card.dataset.id = chat.id;
 
-            const row = document.createElement('div');
-            row.style.display = 'flex';
-            row.style.justifyContent = 'space-between';
-            row.style.alignItems = 'flex-start';
+            /* ── Avatar strip ── */
+            const avatarStrip = document.createElement('div');
+            const characters = chat.characters || [];
+            const hasAvatars = characters.length > 0;
 
-            const textCol = document.createElement('div');
+            if (hasAvatars) {
+                avatarStrip.className = `chat-card-avatars${characters.length > 1 ? ' multi' : ''}`;
+
+                if (characters.length === 1) {
+                    // Single character: full-width cover image
+                    const img = document.createElement('img');
+                    img.className = 'chat-card-avatar';
+                    img.alt = characters[0].name || '';
+                    img.src = `/api/storage/cards/thumbnail?cardId=${characters[0].id}&token=${token}`;
+                    img.onerror = () => { img.style.display = 'none'; };
+                    avatarStrip.appendChild(img);
+                } else {
+                    // Multiple characters: split equally side by side
+                    const widthPct = 100 / characters.length;
+                    characters.forEach((char, i) => {
+                        const img = document.createElement('img');
+                        img.className = 'chat-card-avatar';
+                        img.alt = char.name || '';
+                        img.src = `/api/storage/cards/thumbnail?cardId=${char.id}&token=${token}`;
+                        img.style.width = `${widthPct}%`;
+                        img.style.left = `${widthPct * i}%`;
+                        img.onerror = () => { img.style.display = 'none'; };
+                        avatarStrip.appendChild(img);
+                    });
+                }
+            } else {
+                avatarStrip.className = 'chat-card-avatars';
+                const placeholder = document.createElement('div');
+                placeholder.className = 'chat-card-avatar-placeholder';
+                placeholder.textContent = '💬';
+                avatarStrip.appendChild(placeholder);
+            }
+            card.appendChild(avatarStrip);
+
+            /* ── Text info ── */
+            const info = document.createElement('div');
+            info.className = 'chat-card-info';
 
             const titleEl = document.createElement('div');
-            titleEl.style.fontWeight = '600';
+            titleEl.className = 'chat-card-title';
             titleEl.textContent = chat.title;
 
-            const dateEl = document.createElement('div');
-            dateEl.style.fontSize = '0.75rem';
-            dateEl.style.color = 'var(--text-secondary)';
-            dateEl.textContent = new Date(chat.updated_at).toLocaleString();
+            const charsEl = document.createElement('div');
+            charsEl.className = 'chat-card-chars';
+            charsEl.textContent = characters.map(c => c.name).join(', ');
 
+            const dateEl = document.createElement('div');
+            dateEl.className = 'chat-card-date';
+            const d = new Date(chat.updated_at);
+            dateEl.textContent = isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+            info.appendChild(titleEl);
+            if (characters.length > 0) info.appendChild(charsEl);
+            info.appendChild(dateEl);
+            card.appendChild(info);
+
+            /* ── Delete button ── */
             const delBtn = document.createElement('button');
+            delBtn.className = 'chat-card-delete';
+            delBtn.title = 'Delete chat';
             delBtn.innerHTML = '🗑️';
-            delBtn.title = "Delete Chat";
-            delBtn.style.cssText = 'background:none; border:none; cursor:pointer; padding: 0.2rem; filter: grayscale(1); opacity: 0.7;';
-            delBtn.onmouseover = () => { delBtn.style.opacity = '1'; delBtn.style.filter = 'none'; };
-            delBtn.onmouseout = () => { delBtn.style.opacity = '0.7'; delBtn.style.filter = 'grayscale(1)'; };
             delBtn.onclick = async (e) => {
                 e.stopPropagation();
-                if (confirm(`Are you sure you want to delete "${chat.title}"?`)) {
+                if (confirm(`Delete "${chat.title}"?`)) {
                     await window.authFetch(`/api/sw/chats/${chat.id}`, { method: 'DELETE' });
-                    if (this.activeChatId === chat.id) this.activeChatId = null;
+                    if (this.activeChatId === chat.id) {
+                        this.activeChatId = null;
+                        this.showLobby();
+                    }
                     this.loadSessionList();
                 }
             };
+            card.appendChild(delBtn);
 
-            textCol.appendChild(titleEl);
-            textCol.appendChild(dateEl);
-            row.appendChild(textCol);
-            row.appendChild(delBtn);
-            el.appendChild(row);
-
-            el.addEventListener('click', () => this.selectChat(chat.id));
-            this.els.sessionList.appendChild(el);
+            card.addEventListener('click', () => this.selectChat(chat.id));
+            grid.appendChild(card);
         });
     }
 
@@ -1180,18 +1149,8 @@ class RoleplayChatHandler {
     async selectChat(chatId) {
         this.activeChatId = chatId;
 
-        // Auto-close mobile sidebar drawer when a chat is selected
-        if (window.innerWidth <= 768) {
-            this.closeMobileSidebar();
-        }
-
-        document.querySelectorAll('.chat-session-item').forEach(el => {
-            if (el.dataset.id === chatId) {
-                el.classList.add('active');
-            } else {
-                el.classList.remove('active');
-            }
-        });
+        // Switch to the active chat view
+        this.showChatView();
 
         // Prevent race condition: wait for personas to load before rendering messages
         let waitCount = 0;

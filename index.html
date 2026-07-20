@@ -1767,26 +1767,40 @@
 
                 <!-- Roleplay Chat View -->
                 <div id="view-roleplaychat" class="tab-content" style="display: none;">
-                  <div class="chat-container">
-                    
-                    <!-- Sidebar: Chat Sessions -->
-                    <div class="chat-sidebar">
-                      <div class="chat-sidebar-header">
-                        <h2 style="margin: 0; font-size: 1.1rem;">Chats</h2>
-                        <button id="chat-new-btn" class="btn-primary btn-small">➕ New</button>
-                        <button id="chat-open-global-settings" class="btn-outline btn-small" style="margin-left: 0.5rem;" title="Global Settings">⚙️</button>
-                      </div>
-                      <div id="chat-session-list" class="chat-session-list">
-                        <!-- Chat sessions will be dynamically injected here -->
-                      </div>
-                    </div>
 
-                    <!-- Main Chat Area -->
+                  <!-- ═══ LOBBY VIEW ═══ -->
+                  <div id="chat-lobby">
+                    <div class="chat-lobby-topbar">
+                      <button id="chat-open-global-settings" class="chat-lobby-options-btn btn-outline" title="Global Settings">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>
+                        Options
+                      </button>
+                      <h1 class="chat-lobby-heading">Chats</h1>
+                      <button id="chat-new-btn" class="chat-lobby-new-btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        New
+                      </button>
+                    </div>
+                    <div id="chat-session-list" class="chat-session-grid">
+                      <!-- Chat cards dynamically injected here -->
+                    </div>
+                    <div id="chat-lobby-empty" class="chat-lobby-empty" style="display:none;">
+                      <div class="chat-lobby-empty-icon">💬</div>
+                      <p class="chat-lobby-empty-title">No chats yet</p>
+                      <p class="chat-lobby-empty-sub">Tap <strong>New</strong> to start your first roleplay</p>
+                    </div>
+                  </div>
+
+                  <!-- ═══ ACTIVE CHAT VIEW ═══ -->
+                  <div id="chat-active-view" style="display:none;">
                     <div class="chat-main">
                       <div class="chat-header">
+                        <button id="chat-back-btn" class="chat-back-btn btn-outline" title="Back to chats">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
                         <div class="chat-header-info">
-                          <h2 id="chat-active-title" style="margin: 0; font-size: 1.25rem;">Select a Chat</h2>
-                          <span id="chat-active-characters" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                          <h2 id="chat-active-title" style="margin: 0; font-size: 1.1rem;">Chat</h2>
+                          <span id="chat-active-characters" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
                         </div>
                         <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                           <div class="chat-zoom-controls" style="display: flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden;">
@@ -1823,6 +1837,7 @@
                       </div>
                     </div>
                   </div>
+
                 </div>
 
                 <!-- Adventure Mode View -->
