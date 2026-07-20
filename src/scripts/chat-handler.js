@@ -986,39 +986,53 @@ class RoleplayChatHandler {
             /* ── Avatar strip ── */
             const avatarStrip = document.createElement('div');
             const characters = chat.characters || [];
-            const hasAvatars = characters.length > 0;
 
-            if (hasAvatars) {
-                avatarStrip.className = `chat-card-avatars${characters.length > 1 ? ' multi' : ''}`;
+            if (characters.length === 0) {
+                // No characters linked — generic icon
+                avatarStrip.className = 'chat-card-avatars';
+                const ph = document.createElement('div');
+                ph.className = 'chat-card-avatar-placeholder';
+                ph.textContent = '💬';
+                avatarStrip.appendChild(ph);
+            } else if (characters.length === 1) {
+                avatarStrip.className = 'chat-card-avatars';
+                // Always show initial as background fallback
+                const ph = document.createElement('div');
+                ph.className = 'chat-card-avatar-placeholder';
+                ph.textContent = (characters[0].name || '?')[0].toUpperCase();
+                avatarStrip.appendChild(ph);
+                // Overlay with real image; hide it if it fails
+                const img = document.createElement('img');
+                img.className = 'chat-card-avatar';
+                img.alt = characters[0].name || '';
+                img.src = `/api/storage/cards/thumbnail?cardId=${characters[0].id}&token=${token}`;
+                img.onerror = () => { img.style.display = 'none'; };
+                avatarStrip.appendChild(img);
+            } else {
+                // Multiple characters — split side by side, each with fallback initial
+                avatarStrip.className = 'chat-card-avatars multi';
+                const widthPct = 100 / characters.length;
+                characters.forEach((char, i) => {
+                    const slot = document.createElement('div');
+                    slot.className = 'chat-card-avatar-slot';
+                    slot.style.cssText = `position:absolute; top:0; left:${widthPct * i}%; width:${widthPct}%; height:100%; overflow:hidden;`;
 
-                if (characters.length === 1) {
-                    // Single character: full-width cover image
+                    const ph = document.createElement('div');
+                    ph.className = 'chat-card-avatar-placeholder';
+                    ph.style.cssText = 'position:absolute; inset:0; font-size:1.8rem;';
+                    ph.textContent = (char.name || '?')[0].toUpperCase();
+                    slot.appendChild(ph);
+
                     const img = document.createElement('img');
                     img.className = 'chat-card-avatar';
-                    img.alt = characters[0].name || '';
-                    img.src = `/api/storage/cards/thumbnail?cardId=${characters[0].id}&token=${token}`;
+                    img.alt = char.name || '';
+                    img.src = `/api/storage/cards/thumbnail?cardId=${char.id}&token=${token}`;
+                    img.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; object-position:top;';
                     img.onerror = () => { img.style.display = 'none'; };
-                    avatarStrip.appendChild(img);
-                } else {
-                    // Multiple characters: split equally side by side
-                    const widthPct = 100 / characters.length;
-                    characters.forEach((char, i) => {
-                        const img = document.createElement('img');
-                        img.className = 'chat-card-avatar';
-                        img.alt = char.name || '';
-                        img.src = `/api/storage/cards/thumbnail?cardId=${char.id}&token=${token}`;
-                        img.style.width = `${widthPct}%`;
-                        img.style.left = `${widthPct * i}%`;
-                        img.onerror = () => { img.style.display = 'none'; };
-                        avatarStrip.appendChild(img);
-                    });
-                }
-            } else {
-                avatarStrip.className = 'chat-card-avatars';
-                const placeholder = document.createElement('div');
-                placeholder.className = 'chat-card-avatar-placeholder';
-                placeholder.textContent = '💬';
-                avatarStrip.appendChild(placeholder);
+                    slot.appendChild(img);
+
+                    avatarStrip.appendChild(slot);
+                });
             }
             card.appendChild(avatarStrip);
 

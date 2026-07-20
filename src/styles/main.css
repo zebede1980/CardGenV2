@@ -2540,6 +2540,8 @@ textarea.content-box {
     display: flex;
     flex-direction: column;
     flex: 1;
+    width: 100%;
+    box-sizing: border-box;
     min-height: 0;
     overflow: hidden;
 }
@@ -2579,10 +2581,12 @@ textarea.content-box {
 /* Chat session grid */
 .chat-session-grid {
     flex: 1;
+    width: 100%;
+    box-sizing: border-box;
     overflow-y: auto;
     padding: 1.25rem;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 1rem;
     align-content: start;
 }
@@ -3852,10 +3856,23 @@ body.chat-scroll-locked {
     width: 100% !important;
 }
 
-/* Layout overrides when chat tab is active (Replaces JS Layout manipulations) */
-body.chat-active, body.chat-active html {
-    overflow-x: hidden;
-    max-width: 100%;
+/* Layout overrides when chat tab is active */
+body.chat-active {
+    height: 100dvh;
+    overflow: hidden;
+}
+body.chat-active #app-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+body.chat-active .container {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 body.chat-active .main {
     flex: 1;
@@ -3867,12 +3884,25 @@ body.chat-active .main {
 }
 body.chat-active #view-roleplaychat {
     display: flex !important;
+    flex: 1;
+    min-height: 0;
+}
+body.chat-active #chat-active-view {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 body.chat-active .chat-timeline {
     flex: 1 1 0%;
     overflow-y: auto;
     min-height: 0;
 }
+/* Lobby takes full width in its flex container */
+body.chat-active #chat-lobby {
+    flex: 1;
+    min-height: 0;
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Sticky Edit Controls Bar (Fullscreen mode)
