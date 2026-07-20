@@ -1,5 +1,5 @@
 // URL Import Module — extends CharacterGeneratorApp prototype
-// Handles importing character cards from JanitorAI and Chub.ai URLs
+// Handles importing character cards from JannyAi.com URLs
 Object.assign(CharacterGeneratorApp.prototype, {
 
   /* ── Open / Close Modal ────────────────────────────────────────────────── */
@@ -16,17 +16,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     document.body.style.overflow = "hidden";
     setTimeout(() => document.getElementById("url-import-input")?.focus(), 100);
 
-    // Inject token input if not exists
+    // Token input removed for JannyAi
     const urlInput = document.getElementById("url-import-input");
-    if (urlInput && !document.getElementById("url-import-token-input")) {
-      const tokenInput = document.createElement("input");
-      tokenInput.id = "url-import-token-input";
-      tokenInput.type = "password";
-      tokenInput.placeholder = "Chub.ai API Token (Optional, for NSFW/Private)";
-      tokenInput.className = "content-box";
-      tokenInput.style.cssText = "width:100%; padding:0.6rem 0.75rem; margin-bottom:0.75rem;";
-      urlInput.parentNode.insertBefore(tokenInput, urlInput.nextSibling);
-    }
 
     // Inject Import & Remaster button if not exists
     const confirmBtn = document.getElementById("url-import-confirm-btn");
@@ -58,7 +49,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const fetchBtn = document.getElementById("url-import-fetch-btn");
 
     const url = input?.value?.trim();
-    const token = document.getElementById("url-import-token-input")?.value?.trim();
+    const token = null;
     if (!url) {
       statusEl.innerHTML = '<span style="color:var(--error);">Please enter a URL.</span>';
       return;

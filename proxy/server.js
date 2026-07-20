@@ -2178,16 +2178,11 @@ app.get("/api/st/thumbnail", requireAuth, async (req, res) => {
   }
 });
 
-// ── URL Import — Scrape JanitorAI / Chub.ai character pages ──────────────────
+// ── URL Import — Scrape JannyAi character pages ──────────────────
 const ALLOWED_IMPORT_DOMAINS = [
-  "janitorai.com",
-  "www.janitorai.com",
-  "chub.ai",
-  "www.chub.ai",
-  "characterhub.org",
-  "www.characterhub.org",
   "jannyai.com",
   "www.jannyai.com",
+  "api.jannyai.com",
 ];
 
 function isAllowedImportUrl(urlStr) {
@@ -2223,36 +2218,18 @@ app.post("/api/import/url", requireAuth, async (req, res) => {
       },
     };
 
-    // Direct API fetch for JanitorAI & JannyAI
-    const janitorMatch = url.match(/(?:janitorai\.com|jannyai\.com)\/characters\/([a-f0-9\-]+)/i);
-    if (janitorMatch) {
+    // Direct API fetch for JannyAI
+    const jannyMatch = url.match(/(?:api\.)?jannyai\.com\/characters\/([^\/?#]+)/i);
+    if (jannyMatch) {
       try {
-        const apiRes = await fetch(`https://api.janitorai.com/characters/${janitorMatch[1]}`, fetchOptions);
+        const apiRes = await fetch(`https://api.jannyai.com/characters/${jannyMatch[1]}`, fetchOptions);
         if (apiRes.ok) {
           const data = await apiRes.json();
           if (data && (data.name || data.description || data.first_mes || data.firstMessage)) {
             character = normalizeCharacterFields(data, url);
           }
         }
-      } catch (e) { console.warn("[URL Import] Janitor API direct fetch failed:", e.message); }
-    }
-
-    // Direct API fetch for Chub.ai
-    const chubMatch = url.match(/(?:chub\.ai|characterhub\.org)\/characters\/([^\/]+)\/([^\/?#]+)/i);
-    if (!character && chubMatch) {
-      try {
-        const chubHeaders = { ...fetchOptions.headers };
-        if (token) chubHeaders["Authorization"] = `Bearer ${token}`;
-
-        const apiRes = await fetch(`https://api.chub.ai/api/characters/${chubMatch[1]}/${chubMatch[2]}?full=true`, { headers: chubHeaders });
-        if (apiRes.ok) {
-          const data = await apiRes.json();
-          const node = data.node || data;
-          if (node && (node.name || node.description || node.first_mes || node.firstMessage)) {
-            character = normalizeCharacterFields(node, url);
-          }
-        }
-      } catch (e) { console.warn("[URL Import] Chub API direct fetch failed:", e.message); }
+      } catch (e) { console.warn("[URL Import] JannyAI API direct fetch failed:", e.message); }
     }
 
     // 15-second timeout
