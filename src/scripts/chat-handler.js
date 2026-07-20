@@ -1111,7 +1111,7 @@ class RoleplayChatHandler {
             dateEl.textContent = isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
             info.appendChild(titleEl);
-            if (characters.length > 0) info.appendChild(charsEl);
+            if ((chat.characters || []).length > 0) info.appendChild(charsEl);
             info.appendChild(dateEl);
             card.appendChild(info);
 
