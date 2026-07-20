@@ -1103,7 +1103,7 @@ class RoleplayChatHandler {
 
             const charsEl = document.createElement('div');
             charsEl.className = 'chat-card-chars';
-            charsEl.textContent = characters.map(c => c.name).join(', ');
+            charsEl.textContent = (chat.characters || []).map(c => c.name).join(', ');
 
             const dateEl = document.createElement('div');
             dateEl.className = 'chat-card-date';
