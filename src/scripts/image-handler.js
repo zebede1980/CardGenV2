@@ -967,13 +967,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   updateImageHistoryButton() {
     const btn = document.getElementById("image-history-btn");
-    if (!btn) return;
-    const count = this.imageHistoryUrls ? this.imageHistoryUrls.length : 0;
-    if (count > 0) {
-      btn.style.display = "inline-flex";
-      btn.textContent = `🕰️ History (${count})`;
-    } else {
-      btn.style.display = "none";
+    if (btn) {
+      const count = this.imageHistoryUrls ? this.imageHistoryUrls.length : 0;
+      if (count > 0) {
+        btn.style.display = "inline-flex";
+        btn.textContent = `🕰️ History (${count})`;
+      } else {
+        btn.style.display = "none";
+      }
+    }
+    if (typeof this.updateCropButtonVisibility === "function") {
+      this.updateCropButtonVisibility();
     }
   },
 

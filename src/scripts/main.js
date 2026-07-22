@@ -292,6 +292,10 @@ class CharacterGeneratorApp {
 
     // Image & file uploads
     document.getElementById("upload-image-btn").addEventListener("click", () => document.getElementById("image-upload-input").click());
+    const cropBtn = document.getElementById("crop-image-btn");
+    if (cropBtn) {
+      cropBtn.addEventListener("click", () => this.openCropModal());
+    }
 
     // Web Image Search Modal Logic
     const webImageBtn = document.getElementById("search-web-image-btn");
