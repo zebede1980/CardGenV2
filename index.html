@@ -3092,7 +3092,7 @@
         </div>
         <!-- Image Crop Modal -->
         <div id="image-crop-modal" class="modal-overlay" style="display: none; z-index: 10005;">
-            <div class="crop-modal-content" style="max-width: 900px; width: 95%; max-height: 92vh; display: flex; flex-direction: column; background: var(--surface-color, #1e1e2e); border: 1px solid var(--border, #313244); border-radius: 0.75rem; overflow: hidden; color: var(--text-color, #cdd6f4); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+            <div class="crop-modal-content">
                 <div class="modal-header" style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #313244); display: flex; justify-content: space-between; align-items: center; background: var(--surface-strong, #181825);">
                     <h2 class="modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                         ✂️ Crop Character Portrait
@@ -3122,9 +3122,9 @@
                     </div>
 
                     <!-- Main Interactive Canvas & Crop Workspace -->
-                    <div id="crop-workspace" style="position: relative; flex: 1; width: 100%; max-height: 60vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #0b0b10; border-radius: 0.5rem; user-select: none; border: 1px solid var(--border, #313244);">
+                    <div id="crop-workspace">
                         <div id="crop-stage" style="position: relative; display: inline-block;">
-                            <canvas id="crop-canvas" style="display: block; max-width: 100%; max-height: 58vh; pointer-events: none;"></canvas>
+                            <canvas id="crop-canvas"></canvas>
                             
                             <!-- Dimmed Backdrop Overlay around selection box -->
                             <div id="crop-mask-top" class="crop-mask" style="position: absolute; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.65); pointer-events: none;"></div>

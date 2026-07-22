@@ -19,6 +19,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!btn) return;
     if (this.currentImageUrl) {
       btn.style.display = "inline-flex";
+      btn.style.alignItems = "center";
+      btn.style.justifyContent = "center";
     } else {
       btn.style.display = "none";
     }
@@ -76,7 +78,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         btn.classList.toggle("active", btn.dataset.ratio === "free");
       });
 
-      this._renderCropStage();
+      requestAnimationFrame(() => {
+        this._renderCropStage();
+      });
       this._initCropListenersOnce();
 
     } catch (error) {
@@ -108,13 +112,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const naturalH = isRotatedQuarter ? img.naturalWidth : img.naturalHeight;
 
     // Calculate maximum available stage bounds
-    const maxW = workspace.clientWidth - 32;
-    const maxH = workspace.clientHeight - 32;
+    const maxW = Math.max(50, (workspace.clientWidth || 300) - 8);
+    const maxH = Math.max(50, (workspace.clientHeight || 300) - 8);
 
     let stageW = naturalW;
     let stageH = naturalH;
 
-    const scale = Math.min(maxW / naturalW, maxH / naturalH, 1);
+    const scale = Math.min(maxW / naturalW, maxH / naturalH);
     stageW = Math.round(naturalW * scale);
     stageH = Math.round(naturalH * scale);
 
@@ -244,6 +248,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
     document.getElementById("image-crop-close-btn")?.addEventListener("click", () => this.closeCropModal());
     document.getElementById("crop-cancel-btn")?.addEventListener("click", () => this.closeCropModal());
     document.getElementById("crop-apply-btn")?.addEventListener("click", () => this.applyCrop());
+
+    window.addEventListener("resize", () => {
+      const cropModal = document.getElementById("image-crop-modal");
+      if (cropModal && cropModal.style.display !== "none") {
+        this._renderCropStage(false);
+      }
+    });
 
     // Aspect ratio buttons
     document.getElementById("crop-aspect-buttons")?.addEventListener("click", (e) => {

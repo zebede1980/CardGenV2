@@ -971,6 +971,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const count = this.imageHistoryUrls ? this.imageHistoryUrls.length : 0;
       if (count > 0) {
         btn.style.display = "inline-flex";
+        btn.style.alignItems = "center";
+        btn.style.justifyContent = "center";
         btn.textContent = `🕰️ History (${count})`;
       } else {
         btn.style.display = "none";

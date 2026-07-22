@@ -252,6 +252,10 @@ textarea.content-box {
     font-weight: 600;
     line-height: 1.1;
     padding: 0.7rem 1.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     transition:
         transform var(--transition),
         box-shadow var(--transition),
@@ -532,10 +536,104 @@ textarea.content-box {
     display: flex;
     flex-wrap: wrap;
     gap: 0.46rem;
+    align-items: center;
+    justify-content: center;
 }
 
-.image-buttons-row>.btn-small {
+.image-buttons-row > .btn-small,
+.image-buttons-row > button {
     flex: 1 1 110px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+#image-history-btn,
+#crop-image-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* Image Crop Modal Styles */
+.crop-modal-content {
+    max-width: 950px;
+    width: 95%;
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-color, #1e1e2e);
+    border: 1px solid var(--border, #313244);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    color: var(--text-color, #cdd6f4);
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+}
+
+#crop-workspace {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 280px;
+    max-height: 68vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #0b0b10;
+    border-radius: 0.5rem;
+    user-select: none;
+    border: 1px solid var(--border, #313244);
+}
+
+#crop-canvas {
+    display: block;
+    max-width: 100%;
+    max-height: 66vh;
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    .crop-modal-content {
+        width: 98vw;
+        height: 96vh;
+        max-height: 96vh;
+        border-radius: 0.5rem;
+    }
+
+    #image-crop-modal .modal-body {
+        padding: 0.5rem !important;
+        gap: 0.5rem !important;
+    }
+
+    #image-crop-modal .modal-header,
+    #image-crop-modal .modal-footer {
+        padding: 0.6rem 0.75rem !important;
+    }
+
+    .crop-controls-bar {
+        padding: 0.35rem 0.5rem !important;
+        gap: 0.35rem !important;
+    }
+
+    .crop-aspect-btn {
+        padding: 0.25rem 0.45rem !important;
+        font-size: 0.75rem !important;
+    }
+
+    #crop-workspace {
+        flex: 1;
+        min-height: 320px;
+        max-height: 72vh;
+        height: 100%;
+    }
+
+    #crop-canvas {
+        max-width: 100%;
+        max-height: 70vh;
+    }
 }
 
 /* Free image dropdown */
