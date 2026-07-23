@@ -187,6 +187,16 @@ WRITING_STYLE_PRESETS = {
             "- Blend rapid sensory cuts, technological slang/neologisms, neon-drenched grime, and sharp urban edge."
         ),
         "post_reminder": "Maintain a cyberpunk tech-grime style with fast sensory cuts, neon atmosphere, and edgy tone."
+    },
+    "sensual_erotic": {
+        "name": "Sensual & Erotic",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Sensual & Erotic:\n"
+            "- Focus deeply on physical awareness, sensual tactile descriptions, skin-to-skin touch, warmth, and anatomical intimacy.\n"
+            "- Emphasize visceral bodily reactions (quickened breath, racing pulse, shivers, heat, intense sensation, and arousal).\n"
+            "- Deliver uninhibited, highly detailed, and passionate descriptions of physical intimacy, romance, and desire."
+        ),
+        "post_reminder": "Maintain a sensual, erotic style focusing on intense physical awareness, tactile intimacy, and passionate detail."
     }
 }
 
