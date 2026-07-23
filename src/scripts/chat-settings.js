@@ -4,6 +4,7 @@ const initChatSettings = () => {
     const closeBtn = document.getElementById('chat-settings-close-btn');
     const titleInput = document.getElementById('chat-settings-title');
     const promptInput = document.getElementById('chat-settings-system-prompt');
+    const styleSelect = document.getElementById('chat-settings-writing-style');
     const saveBtn = document.getElementById('chat-settings-save-btn');
 
     if (!settingsBtn || !modal) return;
@@ -21,6 +22,7 @@ const initChatSettings = () => {
                 const chat = await res.json();
                 titleInput.value = chat.title || '';
                 promptInput.value = chat.system_prompt || '';
+                if (styleSelect) styleSelect.value = chat.writing_style || '';
                 modal.classList.add('show');
             }
         } catch (e) {
@@ -41,7 +43,11 @@ const initChatSettings = () => {
             const res = await window.authFetch(`/api/sw/chats/${chatId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: titleInput.value.trim(), system_prompt: promptInput.value.trim() })
+                body: JSON.stringify({
+                    title: titleInput.value.trim(),
+                    system_prompt: promptInput.value.trim(),
+                    writing_style: styleSelect ? styleSelect.value : ''
+                })
             });
             
             if (res.ok) {

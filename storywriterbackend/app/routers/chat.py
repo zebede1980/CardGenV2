@@ -81,6 +81,115 @@ def get_default_system_prompt() -> str:
     ]
     return "\n\n".join(modules)
 
+WRITING_STYLE_PRESETS = {
+    "descriptive": {
+        "name": "Rich & Descriptive",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Rich & Descriptive:\n"
+            "- Emphasize vivid sensory details (sights, textures, ambient sounds, lighting, smells).\n"
+            "- Paint atmospheric environmental settings that bring every scene to life before and during character actions.\n"
+            "- Pacing should feel immersive and deliberate, savoring subtle physical interactions."
+        ),
+        "post_reminder": "Maintain a rich, highly descriptive writing style with vivid sensory details and atmospheric prose."
+    },
+    "action": {
+        "name": "Fast-Paced & Action-Oriented",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Fast-Paced & Action-Oriented:\n"
+            "- Write with high momentum, sharp sentence structure, and dynamic kinetic energy.\n"
+            "- Keep dialogue direct and punchy, emphasizing immediate physical movement and tactical reactions.\n"
+            "- Maintain high stakes and continuous forward momentum without lingering on lengthy expositions."
+        ),
+        "post_reminder": "Maintain a fast-paced, action-oriented tone with punchy sentences and dynamic momentum."
+    },
+    "literary": {
+        "name": "Literary & Eloquent",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Literary & Eloquent:\n"
+            "- Write in elegant, highly polished prose with sophisticated vocabulary and lyrical sentence cadence.\n"
+            "- Weave character introspections, subtle emotional subtext, and rich thematic observations throughout.\n"
+            "- Produce narrative prose that feels artistic, eloquent, and deeply atmospheric."
+        ),
+        "post_reminder": "Maintain an eloquent, literary style with polished prose, rich vocabulary, and subtle subtext."
+    },
+    "dark_gritty": {
+        "name": "Dark & Gritty",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Dark & Gritty:\n"
+            "- Use a raw, visceral, and unvarnished writing tone with palpable tension.\n"
+            "- Highlight stark environmental realism, moral ambiguity, physical weariness, and emotional weight.\n"
+            "- Do not sanitize or sugarcoat descriptions; capture the harsh, intense reality of the situation."
+        ),
+        "post_reminder": "Maintain a dark, gritty tone with raw visceral realism and unvarnished tension."
+    },
+    "witty_banter": {
+        "name": "Witty & Sarcastic",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Witty & Sarcastic:\n"
+            "- Focus heavily on sharp verbal exchanges, clever banter, and playful or sarcastic undertones.\n"
+            "- Keep character dialogue quick, inventive, and humorously observant.\n"
+            "- Balance clever comedy and dry wit seamlessly with ongoing character dynamics."
+        ),
+        "post_reminder": "Maintain a witty, sarcastic tone with sharp dialogue, clever banter, and humorous timing."
+    },
+    "romantic_intimate": {
+        "name": "Emotional & Intimate",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Emotional & Intimate:\n"
+            "- Focus deeply on internal emotional states, heartbeats, subtle body language, and physical closeness.\n"
+            "- Capture delicate emotional nuances, unspoken feelings, eye contact, and deep personal connection.\n"
+            "- Prioritize emotional intimacy and relationship dynamics throughout."
+        ),
+        "post_reminder": "Maintain an intimate, emotionally resonant style focusing on subtle dynamics and personal closeness."
+    },
+    "gothic_horror": {
+        "name": "Gothic & Foreboding",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Gothic & Foreboding:\n"
+            "- Establish an ominous, eerie, and claustrophobic atmosphere laden with psychological tension.\n"
+            "- Use unsettling sensory cues, shadowed environments, creepy quietude, and a lingering sense of dread.\n"
+            "- Frame character observations with foreboding imagery."
+        ),
+        "post_reminder": "Maintain a gothic, foreboding tone with unsettling sensory details and psychological tension."
+    },
+    "classic_novelist": {
+        "name": "Classic 19th-Century Novelist",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Classic 19th-Century Novelist:\n"
+            "- Write in the style of classic 19th-century literature (Charles Dickens, Alexandre Dumas, Victor Hugo).\n"
+            "- Employ expansive, ornate prose, formal dialogue, and deliberate, thorough character observations."
+        ),
+        "post_reminder": "Maintain a classic 19th-century novelist style with ornate prose and formal dialogue."
+    },
+    "hardboiled_noir": {
+        "name": "Hardboiled Noir",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Hardboiled Noir:\n"
+            "- Write in a hardboiled noir style (Raymond Chandler, Dashiell Hammett).\n"
+            "- Feature cynical internal commentary, crisp snappy dialogue, rain-slicked/shadowed ambiance, and noir grit."
+        ),
+        "post_reminder": "Maintain a hardboiled noir style with cynical observations, crisp dialogue, and atmospheric grit."
+    },
+    "epic_fantasy": {
+        "name": "High Epic Fantasy",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — High Epic Fantasy:\n"
+            "- Write in high epic fantasy prose (J.R.R. Tolkien style).\n"
+            "- Employ a mythic cadence, noble and formal dialogue, grand world descriptions, and a sense of ancient history."
+        ),
+        "post_reminder": "Maintain a high epic fantasy style with mythic cadence, noble phrasing, and grand scope."
+    },
+    "cyberpunk_neon": {
+        "name": "Cyberpunk & Tech-Grime",
+        "guidelines": (
+            "WRITING STYLE & TONE GUIDELINES — Cyberpunk & Tech-Grime:\n"
+            "- Write in a high-tech, low-life cyberpunk style (William Gibson style).\n"
+            "- Blend rapid sensory cuts, technological slang/neologisms, neon-drenched grime, and sharp urban edge."
+        ),
+        "post_reminder": "Maintain a cyberpunk tech-grime style with fast sensory cuts, neon atmosphere, and edgy tone."
+    }
+}
+
 def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None, enable_cot: bool = True):
     messages = []
     
@@ -112,6 +221,11 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         system_parts.append(cot_prompt)
     elif not chat.system_prompt:
         system_parts.append(cot_prompt)
+
+    # Writing Style Guidelines in System Prompt
+    if getattr(chat, 'writing_style', None) and chat.writing_style in WRITING_STYLE_PRESETS:
+        style_info = WRITING_STYLE_PRESETS[chat.writing_style]
+        system_parts.append(style_info["guidelines"])
         
     # User Persona
     if chat.user_persona_name:
@@ -211,6 +325,10 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         if card.post_history_instructions:
             post_history_parts.append(f"[{card.name} Note]: {card.post_history_instructions}")
             
+    if getattr(chat, 'writing_style', None) and chat.writing_style in WRITING_STYLE_PRESETS:
+        style_info = WRITING_STYLE_PRESETS[chat.writing_style]
+        post_history_parts.append(f"[Writing Style Instruction]: {style_info['post_reminder']}")
+
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
@@ -406,6 +524,7 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
         user_id=str(current_user.id),
         title=chat_in.title,
         system_prompt=chat_in.system_prompt.strip() if chat_in.system_prompt else get_default_system_prompt(),
+        writing_style=chat_in.writing_style or "",
         user_persona_name=chat_in.user_persona_name,
         user_persona_age=chat_in.user_persona_age,
         user_persona_gender=chat_in.user_persona_gender,
@@ -467,6 +586,8 @@ def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session =
         chat.title = chat_in.title
     if chat_in.system_prompt is not None:
         chat.system_prompt = chat_in.system_prompt
+    if chat_in.writing_style is not None:
+        chat.writing_style = chat_in.writing_style
         
     db.commit()
     db.refresh(chat)

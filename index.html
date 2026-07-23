@@ -2912,6 +2912,22 @@
                   <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Choose the opening message for this roleplay.</p>
               </div>
 
+              <label class="label">Writing Style / Author Tone</label>
+              <select id="chat-new-writing-style" class="content-box" style="width:100%; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-color);">
+                  <option value="">Default (Card's Natural Voice)</option>
+                  <option value="descriptive">🎨 Rich & Descriptive (Sensory details, vivid scenes)</option>
+                  <option value="action">⚡ Fast-Paced & Action-Oriented (Punchy, dynamic momentum)</option>
+                  <option value="literary">📚 Literary & Eloquent (Poetic, polished prose)</option>
+                  <option value="dark_gritty">🏚️ Dark & Gritty (Visceral, raw, tense)</option>
+                  <option value="witty_banter">🎭 Witty & Sarcastic (Sharp banter, clever dialogue)</option>
+                  <option value="romantic_intimate">💖 Emotional & Intimate (Subtle dynamics, deep feelings)</option>
+                  <option value="gothic_horror">🦇 Gothic & Foreboding (Eerie, claustrophobic dread)</option>
+                  <option value="classic_novelist">✒️ Classic 19th-Century Novelist (Ornate, Dickens/Hugo style)</option>
+                  <option value="hardboiled_noir">🕵️ Hardboiled Noir (Cynical, rain-slicked, Raymond Chandler)</option>
+                  <option value="epic_fantasy">⚔️ High Epic Fantasy (Mythic cadence, Tolkien style)</option>
+                  <option value="cyberpunk_neon">🌆 Cyberpunk & Tech-Grime (Neon, high-tech low-life)</option>
+              </select>
+
               <label class="label">Custom System Prompt (Optional)</label>
               <textarea id="chat-new-system-prompt" class="content-box" rows="3" style="width:100%; margin-bottom: 1rem;" placeholder="Special rules or jailbreaks for this specific chat..."></textarea>
               <button id="chat-create-submit-btn" class="btn-primary" style="width:100%;">Start Chatting</button>
@@ -2930,6 +2946,22 @@
               <label class="label">Chat Title</label>
               <input type="text" id="chat-settings-title" class="content-box" style="width:100%; margin-bottom: 1rem;" />
               
+              <label class="label">Writing Style / Author Tone</label>
+              <select id="chat-settings-writing-style" class="content-box" style="width:100%; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-color);">
+                  <option value="">Default (Card's Natural Voice)</option>
+                  <option value="descriptive">🎨 Rich & Descriptive (Sensory details, vivid scenes)</option>
+                  <option value="action">⚡ Fast-Paced & Action-Oriented (Punchy, dynamic momentum)</option>
+                  <option value="literary">📚 Literary & Eloquent (Poetic, polished prose)</option>
+                  <option value="dark_gritty">🏚️ Dark & Gritty (Visceral, raw, tense)</option>
+                  <option value="witty_banter">🎭 Witty & Sarcastic (Sharp banter, clever dialogue)</option>
+                  <option value="romantic_intimate">💖 Emotional & Intimate (Subtle dynamics, deep feelings)</option>
+                  <option value="gothic_horror">🦇 Gothic & Foreboding (Eerie, claustrophobic dread)</option>
+                  <option value="classic_novelist">✒️ Classic 19th-Century Novelist (Ornate, Dickens/Hugo style)</option>
+                  <option value="hardboiled_noir">🕵️ Hardboiled Noir (Cynical, rain-slicked, Raymond Chandler)</option>
+                  <option value="epic_fantasy">⚔️ High Epic Fantasy (Mythic cadence, Tolkien style)</option>
+                  <option value="cyberpunk_neon">🌆 Cyberpunk & Tech-Grime (Neon, high-tech low-life)</option>
+              </select>
+
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                 <label class="label" style="margin: 0;">System Prompt (Jailbreaks, Rules)</label>
                 <button type="button" class="btn-small btn-outline" onclick="roleplayChatHandler.resetToGlobalSystemPrompt('chat-settings-system-prompt')" title="Reset this chat's system prompt to the global baseline configured in settings">🔄 Reset to Global</button>

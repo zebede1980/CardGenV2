@@ -162,6 +162,7 @@ class RoleplayChatHandler {
             newSelectedChars: document.getElementById('chat-new-selected-chars'),
             newAddCharBtn: document.getElementById('chat-new-add-char-btn'),
             newSysPrompt: document.getElementById('chat-new-system-prompt'),
+            newWritingStyle: document.getElementById('chat-new-writing-style'),
             createSubmitBtn: document.getElementById('chat-create-submit-btn'),
             newPersonaManual: document.getElementById('chat-new-persona-manual'),
             newPersonaCard: document.getElementById('chat-new-persona-card'),
@@ -676,6 +677,7 @@ class RoleplayChatHandler {
         this.newChatSelectedCards = [];
         this.renderNewChatSelectedChars();
         this.els.newTitle.value = '';
+        if (this.els.newWritingStyle) this.els.newWritingStyle.value = '';
 
         this.userPersonaSelectedCard = null;
         this.els.newPersonaName.value = '';
@@ -927,6 +929,7 @@ class RoleplayChatHandler {
             const payload = {
                 title,
                 system_prompt: sysPrompt,
+                writing_style: this.els.newWritingStyle?.value || "",
                 card_ids: cardIds,
                 user_persona_name: userPersonaName,
                 user_persona_age: userPersonaAge,
