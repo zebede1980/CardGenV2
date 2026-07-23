@@ -1166,8 +1166,8 @@ class CharacterGeneratorApp {
       return this.handleInspireGenerate();
     }
 
-    if (generationMode === "classic" && !concept) {
-      this.showNotification("Please enter a character concept", "warning");
+    if (generationMode === "classic" && !concept && !referenceImageDescription) {
+      this.showNotification("Please enter a character concept or reference image description", "warning");
       return;
     }
     if (generationMode === "search" && !searchQuery) {
@@ -1210,11 +1210,15 @@ class CharacterGeneratorApp {
       const pov = document.getElementById("pov-select").value;
       const cardType = document.getElementById("card-type-select")?.value || "single";
       let effectiveConcept = concept;
-      if (generationMode === "classic" && referenceImageDescription) {
-        effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+      if (generationMode === "classic") {
+        if (concept && referenceImageDescription) {
+          effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+        } else if (!concept && referenceImageDescription) {
+          effectiveConcept = `Create a complete, original character based on and inspired by this visual reference description:\n${referenceImageDescription}`;
+        }
       }
 
-      const saveConcept = generationMode === "classic" ? concept : searchQuery;
+      const saveConcept = generationMode === "classic" ? (concept || referenceImageDescription) : searchQuery;
       const promptSaved = await this.savePromptToLibrary({
         concept: saveConcept, characterName, pov, cardType,
         lorebookData: this.lorebookData,

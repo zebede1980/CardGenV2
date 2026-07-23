@@ -209,17 +209,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   validateInput() {
     const concept = document.getElementById("character-concept").value.trim();
+    const referenceImageDescription = document
+      .getElementById("reference-image-description")
+      ?.value?.trim();
     const characterName = document
       .getElementById("character-name")
       .value.trim();
 
     const errors = [];
 
-    if (!concept) {
-      errors.push("Character concept is required");
-    } else if (concept.length < 10) {
+    if (!concept && !referenceImageDescription) {
+      errors.push("Character concept or reference image description is required");
+    } else if (concept && concept.length < 10) {
       errors.push("Character concept should be at least 10 characters");
-    } else if (concept.length > 1000) {
+    } else if (concept && concept.length > 1000) {
       errors.push("Character concept should be less than 1000 characters");
     }
 

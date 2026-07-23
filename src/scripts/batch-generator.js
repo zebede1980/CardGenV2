@@ -30,8 +30,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const cardType = document.getElementById("card-type-select")?.value || "single";
     const referenceImageDescription = document.getElementById("reference-image-description")?.value?.trim();
 
-    if (!concept) {
-      this.showNotification("Please enter a character concept", "warning");
+    if (!concept && !referenceImageDescription) {
+      this.showNotification("Please enter a character concept or reference image description", "warning");
       return;
     }
 
@@ -61,7 +61,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Build effective concept
     let effectiveConcept = concept;
-    if (referenceImageDescription) effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+    if (concept && referenceImageDescription) {
+      effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+    } else if (!concept && referenceImageDescription) {
+      effectiveConcept = `Create a complete, original character based on and inspired by this visual reference description:\n${referenceImageDescription}`;
+    }
 
     try {
       // Generate first variant with streaming (shown in the stream box)
