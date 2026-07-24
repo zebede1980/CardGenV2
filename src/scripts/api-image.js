@@ -99,7 +99,23 @@ Object.assign(APIHandler.prototype, {
     const imageCfgScale = settings.cfgScale;
 
     if (imageAspectRatio && imageAspectRatio.trim() !== "") {
-      data.aspect_ratio = imageAspectRatio.trim();
+      const ratio = imageAspectRatio.trim();
+      data.aspect_ratio = ratio;
+      
+      // Provide explicit width, height, and size for compatibility with NanoGPT / OpenRouter Flux models
+      const ratioMap = {
+        "1:1": { width: 1024, height: 1024 },
+        "9:16": { width: 768, height: 1344 },
+        "16:9": { width: 1344, height: 768 },
+        "3:4": { width: 896, height: 1152 },
+        "4:3": { width: 1152, height: 896 }
+      };
+      const dims = ratioMap[ratio];
+      if (dims) {
+        data.width = dims.width;
+        data.height = dims.height;
+        data.size = `${dims.width}x${dims.height}`;
+      }
     } else if (imageSize && imageSize.trim() !== "") {
       data.size = imageSize.trim();
     }
