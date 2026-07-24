@@ -388,8 +388,9 @@ BEGIN PROMPT:`;
   getImageStyleTags(style) {
     const s = (prefix, suffix) => ({ prefix, suffix });
     switch (style) {
+      case "2.5d-realistic-anime":
       case "semi-realistic":
-        return s("High-quality 2.5D semi-realistic illustration of", "detailed digital painting, modern manhwa cover art style, highly detailed features, glossy textures, cinematic dual lighting, dramatic atmosphere, masterpiece");
+        return s("High-quality 2.5D semi-realistic anime illustration of", "detailed digital painting, 2.5D anime aesthetic, semi-realistic anime render, modern manhwa cover art style, highly detailed features, glossy textures, cinematic dual lighting, dramatic atmosphere, masterpiece");
       case "realistic":
         return s("A hyper-realistic photograph of", "DSLR photo, 85mm portrait lens, natural lighting, shallow depth of field, 8k resolution, photorealistic, highly detailed skin and features, masterpiece");
       case "anime":

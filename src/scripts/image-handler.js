@@ -251,7 +251,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (mainStyleSelect) {
       styleOptionsHtml = mainStyleSelect.innerHTML;
     } else {
-      const styles = ["", "realistic", "anime", "hand-drawn-anime", "painted-anime", "grunge-anime", "waifu", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "sci-fi"];
+      const styles = ["", "2.5d-realistic-anime", "realistic", "anime", "hand-drawn-anime", "painted-anime", "grunge-anime", "waifu", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "sci-fi"];
       styleOptionsHtml = styles.map(s => `<option value="${s}">${s === "" ? 'Default / None' : s}</option>`).join('');
     }
 
