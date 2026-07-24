@@ -712,8 +712,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!file) return;
 
     if (!this.currentCharacter) {
-      this.showNotification("Please generate or select a character first", "warning");
-      return;
+      const nameInput = document.getElementById("character-name")?.value?.trim();
+      this.currentCharacter = {
+        name: nameInput || "Character",
+        description: "",
+        personality: "",
+        scenario: "",
+        firstMessage: "",
+      };
     }
 
     try {
@@ -748,12 +754,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // ═══ PORTRAIT UPLOAD & PASTE MODAL METHODS ═══
   openPortraitUploadModal() {
     if (!this.currentCharacter) {
-      this.showNotification("Please generate or select a character first", "warning");
-      return;
+      const nameInput = document.getElementById("character-name")?.value?.trim();
+      this.currentCharacter = {
+        name: nameInput || "Character",
+        description: "",
+        personality: "",
+        scenario: "",
+        firstMessage: "",
+      };
     }
 
     const modal = document.getElementById("image-upload-modal");
-    if (!modal) return;
+    if (!modal) {
+      console.warn("Portrait upload modal not found in DOM, falling back to file picker");
+      document.getElementById("image-upload-input")?.click();
+      return;
+    }
 
     this.pendingPortraitFile = null;
     this.resetPortraitModalPreview();
