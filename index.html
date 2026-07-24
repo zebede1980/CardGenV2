@@ -364,9 +364,6 @@
                                 class="input"
                                 accept="image/*"
                             />
-                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.3rem;">
-                                💡 <strong>Reference Image Paste:</strong> Paste an image while on this tab to generate a vision description.
-                            </p>
                             <div
                                 id="reference-image-preview"
                                 style="
@@ -1428,9 +1425,15 @@
                                     id="upload-image-btn"
                                     class="btn-small"
                                     title="Upload your own image to use as the character portrait instead of AI-generating one. Accepts common image formats."
-                                    onclick="if(window.app && typeof window.app.openPortraitUploadModal==='function'){window.app.openPortraitUploadModal();}else{document.getElementById('image-upload-input').click();}"
                                 >
                                     📁 Upload
+                                </button>
+                                <button
+                                    id="paste-image-btn"
+                                    class="btn-small"
+                                    title="Paste an image from your clipboard (Ctrl+V) to use as the character portrait."
+                                >
+                                    📋 Paste
                                 </button>
                                 <button
                                     id="crop-image-btn"
@@ -2004,17 +2007,17 @@
         <script src="src/scripts/api.js?v=20260218"></script>
         <script src="src/scripts/api-character.js?v=20260513"></script>
         <script src="src/scripts/character-search.js?v=20260526"></script>
-        <script src="src/scripts/api-image.js?v=20260724-v2"></script>
+        <script src="src/scripts/api-image.js?v=20260724-v3"></script>
         <script src="src/scripts/api-lorebook.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260218"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260215-fix1"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
-        <script src="src/scripts/main.js?v=20260724-v2"></script>
+        <script src="src/scripts/main.js?v=20260724-v3"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-display.js?v=20260514"></script>
-        <script src="src/scripts/image-handler.js?v=20260724-v2"></script>
+        <script src="src/scripts/image-handler.js?v=20260724-v3"></script>
         <script src="src/scripts/image-cropper.js?v=20260722"></script>
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
@@ -2052,42 +2055,7 @@
                     </div>
                 </div>
             </div>
-        <!-- Image Upload/Paste Modal for Character Portrait -->
-        <div id="image-upload-modal" class="modal-overlay">
-            <div class="api-settings-modal" style="max-width: 520px; width: 92%;">
-                <div class="modal-header">
-                    <h2 class="modal-title">📁 Upload or Paste Character Portrait</h2>
-                    <button id="image-upload-modal-close" class="modal-close" title="Close">×</button>
-                </div>
-                <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
-                        Upload a file, drag & drop an image, or press <strong>Ctrl+V / Cmd+V</strong> to paste from your clipboard.
-                    </p>
-
-                    <div id="portrait-drop-zone" class="portrait-drop-zone">
-                        <div id="portrait-drop-prompt" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
-                            <span style="font-size: 2.5rem;">📋</span>
-                            <div style="font-weight: 600; font-size: 1rem; color: var(--text-main);">Paste Image (Ctrl+V) or Drag & Drop Here</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Supports PNG, JPG, WebP</div>
-                            <button type="button" id="portrait-modal-browse-btn" class="btn-primary btn-small" style="margin-top: 0.5rem;">📁 Browse Files...</button>
-                        </div>
-                        <div id="portrait-modal-preview-wrap" style="display: none; flex-direction: column; align-items: center; gap: 0.75rem;">
-                            <img id="portrait-modal-preview-img" style="max-height: 220px; max-width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border); object-fit: contain;" alt="Portrait Preview" />
-                            <span id="portrait-modal-file-info" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
-                            <button type="button" id="portrait-modal-change-btn" class="btn-outline btn-small">Change Image</button>
-                        </div>
-                    </div>
-
-                    <input type="file" id="portrait-modal-file-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;" />
-
-                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
-                        <button type="button" id="portrait-modal-cancel-btn" class="btn-outline">Cancel</button>
-                        <button type="button" id="portrait-modal-submit-btn" class="btn-primary" disabled>Set Portrait</button>
-                    </div>
-                </div>
-            </div>
         </div>
-
         <div id="api-settings-modal" class="modal-overlay">
             <div class="api-settings-modal">
                 <div class="modal-header">
@@ -3238,4 +3206,29 @@
             </div>
         </div>
     </body>
+
+    <!-- Paste Image Modal for Character Portrait -->
+    <div id="paste-image-modal" style="display:none; position:fixed; inset:0; background:rgba(14,23,37,0.7); z-index:10010; align-items:center; justify-content:center; padding:1rem;">
+        <div style="background:var(--surface-strong, #1e1e2e); border:1px solid var(--border, #313244); border-radius:var(--radius-md, 0.75rem); max-width:480px; width:100%; padding:1.5rem; display:flex; flex-direction:column; gap:1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="margin:0; font-size:1.1rem; font-weight:600; color:var(--text-main, #cdd6f4);">📋 Paste Character Portrait</h2>
+                <button id="paste-modal-close-btn" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--text-secondary, #a6adc8); line-height:1;">×</button>
+            </div>
+            <p style="margin:0; font-size:0.85rem; color:var(--text-secondary, #a6adc8);">Copy an image to your clipboard, then press <strong>Ctrl+V</strong> (or <strong>Cmd+V</strong> on Mac) anywhere in this box.</p>
+            <div id="paste-modal-dropzone" style="border:2px dashed var(--accent, #6366f1); border-radius:0.5rem; padding:2.5rem 1rem; text-align:center; cursor:default; background:rgba(99,102,241,0.05); transition:background 0.2s;">
+                <div style="font-size:2.5rem; margin-bottom:0.5rem;">📋</div>
+                <div id="paste-modal-hint" style="font-size:1rem; font-weight:600; color:var(--text-main, #cdd6f4);">Press Ctrl+V to paste your image here</div>
+                <div style="font-size:0.8rem; color:var(--text-secondary, #a6adc8); margin-top:0.25rem;">PNG, JPG, WebP supported</div>
+            </div>
+            <div id="paste-modal-preview-wrap" style="display:none; flex-direction:column; align-items:center; gap:0.75rem;">
+                <img id="paste-modal-preview-img" style="max-height:200px; max-width:100%; border-radius:0.5rem; border:1px solid var(--border, #313244); object-fit:contain;" alt="Preview" />
+                <span id="paste-modal-file-info" style="font-size:0.8rem; color:var(--text-secondary, #a6adc8);"></span>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+                <button id="paste-modal-cancel-btn" class="btn-outline">Cancel</button>
+                <button id="paste-modal-submit-btn" class="btn-primary" disabled>Set Portrait</button>
+            </div>
+        </div>
+    </div>
+
 </html>

@@ -291,17 +291,7 @@ class CharacterGeneratorApp {
     }
 
     // Image & file uploads
-    const uploadBtn = document.getElementById("upload-image-btn");
-    if (uploadBtn) {
-      uploadBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (typeof this.openPortraitUploadModal === "function") {
-          this.openPortraitUploadModal();
-        } else {
-          document.getElementById("image-upload-input")?.click();
-        }
-      });
-    }
+    document.getElementById("upload-image-btn").addEventListener("click", () => document.getElementById("image-upload-input").click());
     const cropBtn = document.getElementById("crop-image-btn");
     if (cropBtn) {
       cropBtn.addEventListener("click", () => this.openCropModal());
@@ -467,7 +457,7 @@ class CharacterGeneratorApp {
       });
     }
     document.getElementById("image-upload-input").addEventListener("change", (e) => this.handleImageUpload(e));
-    this.initPortraitUploadModalEvents();
+    this.initPasteImageModal();
     document.getElementById("lorebook-file").addEventListener("change", (e) => this.handleLorebookUpload(e));
     const referenceImageInput = document.getElementById("reference-image-file");
     if (referenceImageInput) referenceImageInput.addEventListener("change", (e) => this.handleReferenceImageUpload(e));

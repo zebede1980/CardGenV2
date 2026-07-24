@@ -251,7 +251,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (mainStyleSelect) {
       styleOptionsHtml = mainStyleSelect.innerHTML;
     } else {
-      const styles = ["", "2.5d-realistic-anime", "realistic", "anime", "hand-drawn-anime", "painted-anime", "grunge-anime", "waifu", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "sci-fi"];
+      const styles = ["", "realistic", "anime", "hand-drawn-anime", "painted-anime", "grunge-anime", "waifu", "comic", "cinematic", "fantasy", "cyberpunk", "3d-render", "watercolor", "pixel", "oil-painting", "concept-art", "sci-fi"];
       styleOptionsHtml = styles.map(s => `<option value="${s}">${s === "" ? 'Default / None' : s}</option>`).join('');
     }
 
@@ -699,32 +699,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   async handleImageUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      await this.processUploadedImageFile(file);
-    } finally {
-      if (event.target) event.target.value = "";
-    }
-  },
-
-  async processUploadedImageFile(file) {
+    const file = event.target.files[0];
     if (!file) return;
 
     if (!this.currentCharacter) {
-      const nameInput = document.getElementById("character-name")?.value?.trim();
-      this.currentCharacter = {
-        name: nameInput || "Character",
-        description: "",
-        personality: "",
-        scenario: "",
-        firstMessage: "",
-      };
+      this.showNotification("Please generate a character first", "warning");
+      event.target.value = "";
+      return;
     }
 
     try {
       if (!file.type.startsWith("image/")) {
-        throw new Error("Please select or paste a valid image file (PNG, JPG, WebP)");
+        throw new Error("Please select an image file");
       }
 
       if (this.currentImageUrl) {
@@ -734,180 +720,60 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.currentImageUrl = URL.createObjectURL(file);
 
       const imageContainer = document.getElementById("image-content");
-      if (imageContainer) {
-        imageContainer.innerHTML = `
-          <div class="image-container">
-            <img src="${this.currentImageUrl}" alt="${this.currentCharacter.name || 'Character'}" class="generated-image">
-          </div>
-        `;
-      }
+      imageContainer.innerHTML = `
+        <div class="image-container">
+          <img src="${this.currentImageUrl}" alt="${this.currentCharacter.name}" class="generated-image">
+        </div>
+      `;
 
-      this.showNotification("Character image updated successfully!", "success");
+      this.showNotification("Image uploaded successfully!", "success");
       await this.saveCardToLibrary();
       await this.refreshLibraryViews();
     } catch (error) {
       console.error("Image upload error:", error);
       this.showNotification(`Image upload failed: ${error.message}`, "error");
+    } finally {
+      event.target.value = "";
     }
   },
 
-  // ═══ PORTRAIT UPLOAD & PASTE MODAL METHODS ═══
-  openPortraitUploadModal() {
+  async handleWebImageImport(imageUrl) {
     if (!this.currentCharacter) {
-      const nameInput = document.getElementById("character-name")?.value?.trim();
-      this.currentCharacter = {
-        name: nameInput || "Character",
-        description: "",
-        personality: "",
-        scenario: "",
-        firstMessage: "",
-      };
-    }
-
-    const modal = document.getElementById("image-upload-modal");
-    if (!modal) {
-      console.warn("Portrait upload modal not found in DOM, falling back to file picker");
-      document.getElementById("image-upload-input")?.click();
+      this.showNotification("Please generate a character first", "warning");
       return;
     }
 
-    this.pendingPortraitFile = null;
-    this.resetPortraitModalPreview();
-
-    modal.classList.add("show");
-    document.body.style.overflow = "hidden";
-  },
-
-  closePortraitUploadModal() {
-    const modal = document.getElementById("image-upload-modal");
-    if (modal) modal.classList.remove("show");
-    document.body.style.overflow = "";
-    this.pendingPortraitFile = null;
-  },
-
-  resetPortraitModalPreview() {
-    const dropPrompt = document.getElementById("portrait-drop-prompt");
-    const previewWrap = document.getElementById("portrait-modal-preview-wrap");
-    const submitBtn = document.getElementById("portrait-modal-submit-btn");
-    const fileInput = document.getElementById("portrait-modal-file-input");
-
-    if (dropPrompt) dropPrompt.style.display = "flex";
-    if (previewWrap) previewWrap.style.display = "none";
-    if (submitBtn) submitBtn.disabled = true;
-    if (fileInput) fileInput.value = "";
-    this.pendingPortraitFile = null;
-  },
-
-  setPortraitModalPreview(file) {
-    if (!file || !file.type.startsWith("image/")) {
-      this.showNotification("Please select or paste a valid image file", "warning");
-      return;
-    }
-
-    this.pendingPortraitFile = file;
-
-    const dropPrompt = document.getElementById("portrait-drop-prompt");
-    const previewWrap = document.getElementById("portrait-modal-preview-wrap");
-    const previewImg = document.getElementById("portrait-modal-preview-img");
-    const fileInfo = document.getElementById("portrait-modal-file-info");
-    const submitBtn = document.getElementById("portrait-modal-submit-btn");
-
-    if (previewImg) {
-      previewImg.src = URL.createObjectURL(file);
-    }
-    if (fileInfo) {
-      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-      fileInfo.textContent = `${file.name || 'Pasted Clipboard Image'} (${sizeMb} MB)`;
-    }
-
-    if (dropPrompt) dropPrompt.style.display = "none";
-    if (previewWrap) previewWrap.style.display = "flex";
-    if (submitBtn) submitBtn.disabled = false;
-  },
-
-  async applyPortraitModalImage() {
-    if (!this.pendingPortraitFile) return;
-    const fileToApply = this.pendingPortraitFile;
-    this.closePortraitUploadModal();
-    await this.processUploadedImageFile(fileToApply);
-  },
-
-  initPortraitUploadModalEvents() {
-    const modal = document.getElementById("image-upload-modal");
-    if (!modal) return;
-
-    const closeBtn = document.getElementById("image-upload-modal-close");
-    const cancelBtn = document.getElementById("portrait-modal-cancel-btn");
-    const submitBtn = document.getElementById("portrait-modal-submit-btn");
-    const browseBtn = document.getElementById("portrait-modal-browse-btn");
-    const changeBtn = document.getElementById("portrait-modal-change-btn");
-    const fileInput = document.getElementById("portrait-modal-file-input");
-    const dropZone = document.getElementById("portrait-drop-zone");
-
-    if (closeBtn) closeBtn.addEventListener("click", () => this.closePortraitUploadModal());
-    if (cancelBtn) cancelBtn.addEventListener("click", () => this.closePortraitUploadModal());
-    if (submitBtn) submitBtn.addEventListener("click", () => this.applyPortraitModalImage());
-    
-    if (browseBtn) browseBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      fileInput?.click();
-    });
-    if (changeBtn) changeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.resetPortraitModalPreview();
-      fileInput?.click();
-    });
-    if (fileInput) {
-      fileInput.addEventListener("change", (e) => {
-        const file = e.target.files?.[0];
-        if (file) this.setPortraitModalPreview(file);
-      });
-    }
-
-    if (dropZone) {
-      dropZone.addEventListener("click", (e) => {
-        if (!this.pendingPortraitFile && e.target !== browseBtn && e.target !== changeBtn) {
-          fileInput?.click();
-        }
-      });
-      dropZone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        dropZone.classList.add("drag-over");
-      });
-      dropZone.addEventListener("dragleave", (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("drag-over");
-      });
-      dropZone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("drag-over");
-        const file = e.dataTransfer?.files?.[0];
-        if (file) this.setPortraitModalPreview(file);
-      });
-    }
-
-    // Modal-scoped clipboard paste listener
-    document.addEventListener("paste", (e) => {
-      if (!modal.classList.contains("show")) return;
-      if (!e.clipboardData || !e.clipboardData.files.length) return;
-
-      const file = e.clipboardData.files[0];
-      if (!file.type.startsWith("image/")) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-      this.setPortraitModalPreview(file);
-    });
-
-    modal.addEventListener("click", (e) => {
-      if (e.target === modal) this.closePortraitUploadModal();
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && modal.classList.contains("show")) {
-        this.closePortraitUploadModal();
+    try {
+      this.showNotification("Importing image...", "info");
+      
+      if (this.currentImageUrl) {
+        this._archiveCurrentImage();
       }
-    });
+
+      // Proxy the image request to bypass CORS
+      const response = await window.authFetch(`/api/proxy-image?url=${encodeURIComponent(imageUrl)}`);
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch image");
+      }
+      
+      const blob = await response.blob();
+      this.currentImageUrl = URL.createObjectURL(blob);
+
+      const imageContainer = document.getElementById("image-content");
+      imageContainer.innerHTML = `
+        <div class="image-container">
+          <img src="${this.currentImageUrl}" alt="${this.currentCharacter.name}" class="generated-image">
+        </div>
+      `;
+
+      this.showNotification("Image imported successfully!", "success");
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+    } catch (error) {
+      console.error("Image import error:", error);
+      this.showNotification(`Image import failed: ${error.message}`, "error");
+    }
   },
 
   async handleReferenceImageUpload(event) {
@@ -919,27 +785,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   async handleReferenceImagePaste(event) {
-    // Prevent cross-over: ignore paste if portrait modal or API modal is open
-    const portraitModal = document.getElementById("image-upload-modal");
-    if (portraitModal && portraitModal.classList.contains("show")) return;
-
-    const apiModal = document.getElementById("api-settings-modal");
-    if (apiModal && apiModal.classList.contains("show")) return;
-
-    // Ignore if any other modal is active
-    const activeModal = document.querySelector(".modal-overlay.show");
-    if (activeModal) return;
-
-    // Ignore if paste target is customImageStyleInput or another focused input
-    if (event.target && event.target.id === "custom-image-style-input") return;
-
-    // Ensure we are on main generator tab or target is inside reference image group
-    const activeTab = document.querySelector(".tab-content:not([style*='display: none'])");
-    if (activeTab && activeTab.id !== "view-generator" && activeTab.id !== "view-create") {
-      const refGroup = document.getElementById("reference-image-file")?.closest(".form-group");
-      if (!refGroup || !refGroup.contains(event.target)) return;
-    }
-
     if (!event.clipboardData || !event.clipboardData.files.length) return;
     
     const file = event.clipboardData.files[0];
@@ -1234,6 +1079,83 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const extractBtn = document.getElementById("extract-style-btn");
       if (extractBtn) extractBtn.textContent = "🖼️ Extract";
     }
-  }
+  },
+
+  // ═══ PASTE IMAGE MODAL ═══
+  // Opened by the "📋 Paste" button — completely independent of the Upload button.
+  initPasteImageModal() {
+    const pasteBtn     = document.getElementById("paste-image-btn");
+    const modal        = document.getElementById("paste-image-modal");
+    const closeBtn     = document.getElementById("paste-modal-close-btn");
+    const cancelBtn    = document.getElementById("paste-modal-cancel-btn");
+    const submitBtn    = document.getElementById("paste-modal-submit-btn");
+    const previewWrap  = document.getElementById("paste-modal-preview-wrap");
+    const previewImg   = document.getElementById("paste-modal-preview-img");
+    const fileInfo     = document.getElementById("paste-modal-file-info");
+    const dropzone     = document.getElementById("paste-modal-dropzone");
+
+    if (!modal || !pasteBtn) return;
+
+    let pendingFile = null;
+
+    const openModal = () => {
+      pendingFile = null;
+      if (previewWrap) previewWrap.style.display = "none";
+      if (dropzone) dropzone.style.display = "";
+      if (submitBtn) submitBtn.disabled = true;
+      if (previewImg) previewImg.src = "";
+      modal.style.display = "flex";
+      document.body.style.overflow = "hidden";
+    };
+
+    const closeModal = () => {
+      modal.style.display = "none";
+      document.body.style.overflow = "";
+      pendingFile = null;
+    };
+
+    const showPreview = (file) => {
+      if (!file || !file.type.startsWith("image/")) {
+        this.showNotification("Please paste a valid image (PNG, JPG, WebP)", "warning");
+        return;
+      }
+      pendingFile = file;
+      if (previewImg)  previewImg.src = URL.createObjectURL(file);
+      if (fileInfo)    fileInfo.textContent = `${file.name || "Clipboard Image"} (${(file.size / 1048576).toFixed(2)} MB)`;
+      if (previewWrap) previewWrap.style.display = "flex";
+      if (dropzone)    dropzone.style.display = "none";
+      if (submitBtn)   submitBtn.disabled = false;
+    };
+
+    pasteBtn.addEventListener("click", openModal);
+    if (closeBtn)  closeBtn.addEventListener("click", closeModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+    if (submitBtn) {
+      submitBtn.addEventListener("click", async () => {
+        if (!pendingFile) return;
+        const file = pendingFile;
+        closeModal();
+        await this.processUploadedImageFile(file);
+      });
+    }
+
+    // Scoped paste listener — only active when this modal is open
+    document.addEventListener("paste", (e) => {
+      if (modal.style.display !== "flex") return;
+      if (!e.clipboardData?.files?.length) return;
+      const file = e.clipboardData.files[0];
+      if (!file.type.startsWith("image/")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showPreview(file);
+    });
+
+    // Escape to close
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modal.style.display === "flex") closeModal();
+    });
+  },
 
 });
