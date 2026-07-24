@@ -291,7 +291,17 @@ class CharacterGeneratorApp {
     }
 
     // Image & file uploads
-    document.getElementById("upload-image-btn").addEventListener("click", () => this.openPortraitUploadModal());
+    const uploadBtn = document.getElementById("upload-image-btn");
+    if (uploadBtn) {
+      uploadBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (typeof this.openPortraitUploadModal === "function") {
+          this.openPortraitUploadModal();
+        } else {
+          document.getElementById("image-upload-input")?.click();
+        }
+      });
+    }
     const cropBtn = document.getElementById("crop-image-btn");
     if (cropBtn) {
       cropBtn.addEventListener("click", () => this.openCropModal());
