@@ -1141,16 +1141,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
       });
     }
 
-    // Scoped paste listener — only active when this modal is open
+    // Scoped paste listener — capture phase so it fires before the global
+    // reference-image paste handler; stopImmediatePropagation prevents that
+    // handler from also receiving the event when this modal is open.
     document.addEventListener("paste", (e) => {
       if (modal.style.display !== "flex") return;
       if (!e.clipboardData?.files?.length) return;
       const file = e.clipboardData.files[0];
       if (!file.type.startsWith("image/")) return;
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       showPreview(file);
-    });
+    }, { capture: true });
 
     // Escape to close
     document.addEventListener("keydown", (e) => {
