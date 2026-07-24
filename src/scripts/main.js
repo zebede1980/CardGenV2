@@ -242,6 +242,11 @@ class CharacterGeneratorApp {
       imageMoodSelect.addEventListener("change", () => this.saveAPISettings());
     }
 
+    const imageAspectRatioSelect = document.getElementById("image-aspect-ratio");
+    if (imageAspectRatioSelect) {
+      imageAspectRatioSelect.addEventListener("change", () => this.saveAPISettings());
+    }
+
     const customImageStyleInput = document.getElementById("custom-image-style-input");
     if (customImageStyleInput) {
         customImageStyleInput.addEventListener("input", () => this.saveAPISettings());
@@ -497,7 +502,7 @@ class CharacterGeneratorApp {
     apiStatus.addEventListener("click", () => this.handleAPIConfig());
     apiStatus.style.cursor = "pointer";
 
-    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref")
+    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref, #image-is-flux")
       .forEach((input) => input.addEventListener("change", () => {
           this.saveAPISettings();
           const status = document.getElementById("model-settings-status");
@@ -1317,10 +1322,6 @@ class CharacterGeneratorApp {
           this.config.set("api.image.style", "realistic");
           const styleSelect = document.getElementById("image-style");
           if (styleSelect) styleSelect.value = "realistic";
-          
-          this.config.set("api.image.aspectRatio", "");
-          const aspectRatioSelect = document.getElementById("image-aspect-ratio");
-          if (aspectRatioSelect) aspectRatioSelect.value = "";
           
           await this.generateImage(true);
           this.showStreamMessage("✅ Image generation complete!\n");

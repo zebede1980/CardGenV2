@@ -148,6 +148,7 @@ class Config {
     const imageSteps = document.getElementById("image-steps")?.value?.trim();
     const imageCfgScale = document.getElementById("image-cfg-scale")?.value?.trim();
     const imagePromptLengthPref = document.getElementById("image-prompt-length-pref")?.value;
+    const imageIsFlux = document.getElementById("image-is-flux")?.checked;
     const imageModelSettingsSelector = document.getElementById("model-settings-selector")?.value;
     const imageStyle = document.getElementById("image-style")?.value;
     const imageMood = document.getElementById("image-mood")?.value;
@@ -167,7 +168,8 @@ class Config {
         this.config.api.image.modelSettings[imageModelSettingsSelector] = {
             steps: imageSteps !== undefined ? imageSteps : "",
             cfgScale: imageCfgScale !== undefined ? imageCfgScale : "",
-            promptLengthPref: imagePromptLengthPref !== undefined ? imagePromptLengthPref : "detailed"
+            promptLengthPref: imagePromptLengthPref !== undefined ? imagePromptLengthPref : "detailed",
+            isFlux: imageIsFlux !== undefined ? imageIsFlux : false
         };
     }
     if (imageStyle !== undefined) this.config.api.image.style = imageStyle;
@@ -321,16 +323,19 @@ class Config {
         const imageSteps = document.getElementById("image-steps");
         const imageCfgScale = document.getElementById("image-cfg-scale");
         const imagePromptLengthPref = document.getElementById("image-prompt-length-pref");
+        const imageIsFlux = document.getElementById("image-is-flux");
         
         if (selected && this.config.api.image.modelSettings && this.config.api.image.modelSettings[selected]) {
             const settings = this.config.api.image.modelSettings[selected];
             if (imageSteps) imageSteps.value = settings.steps || "";
             if (imageCfgScale) imageCfgScale.value = settings.cfgScale || "";
             if (imagePromptLengthPref) imagePromptLengthPref.value = settings.promptLengthPref || "detailed";
+            if (imageIsFlux) imageIsFlux.checked = settings.isFlux || false;
         } else {
             if (imageSteps) imageSteps.value = "";
             if (imageCfgScale) imageCfgScale.value = "";
             if (imagePromptLengthPref) imagePromptLengthPref.value = "detailed";
+            if (imageIsFlux) imageIsFlux.checked = false;
         }
     }
     
