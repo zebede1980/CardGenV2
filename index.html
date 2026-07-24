@@ -1428,6 +1428,7 @@
                                     id="upload-image-btn"
                                     class="btn-small"
                                     title="Upload your own image to use as the character portrait instead of AI-generating one. Accepts common image formats."
+                                    onclick="if(window.app && typeof window.app.openPortraitUploadModal==='function'){window.app.openPortraitUploadModal();}else{document.getElementById('image-upload-input').click();}"
                                 >
                                     📁 Upload
                                 </button>
