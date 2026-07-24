@@ -4167,3 +4167,22 @@ details.rich-ai-reasoning .rich-ai-reasoning-body {
     font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
     word-break: break-word;
 }
+
+/* Portrait Upload & Paste Modal Drop Zone */
+.portrait-drop-zone {
+    border: 2px dashed var(--accent, #6366f1);
+    border-radius: var(--radius-md, 0.5rem);
+    padding: 2rem 1rem;
+    text-align: center;
+    background: rgba(99, 102, 241, 0.04);
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    position: relative;
+}
+
+.portrait-drop-zone:hover,
+.portrait-drop-zone.drag-over {
+    background: rgba(99, 102, 241, 0.12) !important;
+    border-color: var(--accent-hover, #4f46e5) !important;
+}
+

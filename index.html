@@ -364,6 +364,9 @@
                                 class="input"
                                 accept="image/*"
                             />
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.3rem;">
+                                💡 <strong>Reference Image Paste:</strong> Paste an image while on this tab to generate a vision description.
+                            </p>
                             <div
                                 id="reference-image-preview"
                                 style="
@@ -2047,7 +2050,42 @@
                     </div>
                 </div>
             </div>
+        <!-- Image Upload/Paste Modal for Character Portrait -->
+        <div id="image-upload-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 520px; width: 92%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">📁 Upload or Paste Character Portrait</h2>
+                    <button id="image-upload-modal-close" class="modal-close" title="Close">×</button>
+                </div>
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+                        Upload a file, drag & drop an image, or press <strong>Ctrl+V / Cmd+V</strong> to paste from your clipboard.
+                    </p>
+
+                    <div id="portrait-drop-zone" class="portrait-drop-zone">
+                        <div id="portrait-drop-prompt" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 2.5rem;">📋</span>
+                            <div style="font-weight: 600; font-size: 1rem; color: var(--text-main);">Paste Image (Ctrl+V) or Drag & Drop Here</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Supports PNG, JPG, WebP</div>
+                            <button type="button" id="portrait-modal-browse-btn" class="btn-primary btn-small" style="margin-top: 0.5rem;">📁 Browse Files...</button>
+                        </div>
+                        <div id="portrait-modal-preview-wrap" style="display: none; flex-direction: column; align-items: center; gap: 0.75rem;">
+                            <img id="portrait-modal-preview-img" style="max-height: 220px; max-width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border); object-fit: contain;" alt="Portrait Preview" />
+                            <span id="portrait-modal-file-info" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            <button type="button" id="portrait-modal-change-btn" class="btn-outline btn-small">Change Image</button>
+                        </div>
+                    </div>
+
+                    <input type="file" id="portrait-modal-file-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;" />
+
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button type="button" id="portrait-modal-cancel-btn" class="btn-outline">Cancel</button>
+                        <button type="button" id="portrait-modal-submit-btn" class="btn-primary" disabled>Set Portrait</button>
+                    </div>
+                </div>
+            </div>
         </div>
+
         <div id="api-settings-modal" class="modal-overlay">
             <div class="api-settings-modal">
                 <div class="modal-header">
