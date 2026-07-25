@@ -607,8 +607,11 @@ BEGIN PROMPT:`;
       throw new Error("Forge returned no images in response");
     }
 
-    // images[0] is a raw base64 PNG — decode it to a blob URL
-    const byteChars = atob(images[0]);
+    // images[0] is a raw base64 PNG — decode it to a blob URL.
+    // Forge may line-wrap the base64 string at 76 chars (RFC 2045).
+    // atob() throws on any whitespace, so strip it first.
+    const cleanB64 = images[0].replace(/\s/g, "");
+    const byteChars = atob(cleanB64);
     const byteArray = new Uint8Array(byteChars.length);
     for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
     const blob = new Blob([byteArray], { type: "image/png" });
