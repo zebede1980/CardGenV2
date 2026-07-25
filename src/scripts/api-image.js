@@ -570,14 +570,35 @@ BEGIN PROMPT:`;
     const forgeUrl = (this.config.get("api.image.localForge.url") || "http://127.0.0.1:7860").replace(/\/$/, "");
     const txt2imgUrl = `${forgeUrl}/sdapi/v1/txt2img`;
 
+    // Read steps & cfg_scale from the shared Settings fields (same ones used by cloud API).
+    // Default cfg_scale to 7 — safe for SDXL/SD1.5; FLUX users should set it to 1 via Settings.
+    const settingsSteps   = parseInt(this.config.get("api.image.settings.steps"))   || 25;
+    const settingsCfg     = parseFloat(this.config.get("api.image.settings.cfgScale")) || 1;
+
+    // Resolve width/height from aspect ratio setting
+    const aspectRatio = this.config.get("api.image.aspectRatio") || "3:4";
+    const ratioMap = {
+      "1:1":  { width: 1024, height: 1024 },
+      "9:16": { width: 768,  height: 1344 },
+      "16:9": { width: 1344, height: 768  },
+      "3:4":  { width: 896,  height: 1152 },
+      "4:3":  { width: 1152, height: 896  },
+    };
+    const dims = ratioMap[aspectRatio] || ratioMap["3:4"];
+
     const forgePayload = {
       prompt,
-      steps: 25,
-      cfg_scale: 1,
-      width: 896,
-      height: 1152,
+      steps:        settingsSteps,
+      cfg_scale:    settingsCfg,
+      width:        dims.width,
+      height:       dims.height,
       sampler_name: "Euler",
+      scheduler:    "Simple",
+      override_settings: {
+        sd_vae: "ae.safetensors"
+      }
     };
+    console.log("🔧 Forge payload:", JSON.stringify(forgePayload));
 
     let response;
     try {
