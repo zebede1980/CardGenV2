@@ -607,14 +607,37 @@ BEGIN PROMPT:`;
       throw new Error("Forge returned no images in response");
     }
 
+    // ── DIAGNOSTIC (temporary) ──────────────────────────────────────────────
+    console.group("🔧 Forge response diagnostics");
+    console.log("images array length:", images.length);
+    images.forEach((img, i) => {
+      const preview = typeof img === "string" ? img.slice(0, 80) : img;
+      console.log(`images[${i}] type=${typeof img} length=${typeof img === "string" ? img.length : "N/A"} starts-with:`, preview);
+    });
+    console.groupEnd();
+    // ── END DIAGNOSTIC ───────────────────────────────────────────────────────
+
     // images[0] is a raw base64 PNG — decode it to a blob URL.
     // Forge may line-wrap the base64 string at 76 chars (RFC 2045).
     // atob() throws on any whitespace, so strip it first.
-    const cleanB64 = images[0].replace(/\s/g, "");
+    const rawImg = images[0];
+    // Handle case where Forge already prefixes with "data:..."
+    if (typeof rawImg === "string" && rawImg.startsWith("data:")) {
+      console.log("🔧 Forge returned a data URI directly — using as-is");
+      // Create blob from it for consistency
+      const res2 = await fetch(rawImg);
+      const blob2 = await res2.blob();
+      return URL.createObjectURL(blob2);
+    }
+    const cleanB64 = rawImg.replace(/\s/g, "");
+    console.log("🔧 cleanB64 length:", cleanB64.length, "first 40 chars:", cleanB64.slice(0, 40));
     const byteChars = atob(cleanB64);
     const byteArray = new Uint8Array(byteChars.length);
     for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
-    const blob = new Blob([byteArray], { type: "image/png" });
+    // Detect mime type from PNG/JPEG magic bytes
+    const mimeType = (byteArray[0] === 0xFF && byteArray[1] === 0xD8) ? "image/jpeg" : "image/png";
+    console.log("🔧 Binary size:", byteArray.length, "bytes | detected mime:", mimeType, "| first bytes:", byteArray[0], byteArray[1], byteArray[2], byteArray[3]);
+    const blob = new Blob([byteArray], { type: mimeType });
     return URL.createObjectURL(blob);
   },
 
