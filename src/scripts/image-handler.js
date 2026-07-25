@@ -474,20 +474,32 @@ Object.assign(CharacterGeneratorApp.prototype, {
     };
   },
 
-  async handleFreeImage(service, model) {
+  async handleForgeImage() {
     if (!this.currentCharacter) {
       this.showNotification("Please generate a character first", "warning");
       return;
     }
 
+    const forgeEnabled = this.config.get("api.image.localForge.enabled");
+    const forgeUrl = this.config.get("api.image.localForge.url") || "http://127.0.0.1:7860";
+
+    if (!forgeEnabled) {
+      this.showNotification(
+        "Local Forge is not enabled. Go to ⚙️ Settings → Image API Settings → Local WebUI Forge and toggle it on.",
+        "warning",
+        6000,
+      );
+      return;
+    }
+
     this.openImageOptionsModal();
     const modalTitle = document.querySelector("#image-options-modal .modal-title");
-    if (modalTitle) modalTitle.innerHTML = `🆓 Free Image — ${model}`;
+    if (modalTitle) modalTitle.innerHTML = `🔧 Local Forge`;
 
     const grid = document.getElementById("image-options-grid");
     const loading = document.getElementById("image-options-loading");
     const loadingText = loading.querySelector("p");
-    if (loadingText) loadingText.textContent = `Generating via Pollinations.ai (${model})… this may take up to a minute.`;
+    if (loadingText) loadingText.textContent = `Generating locally via Forge (${forgeUrl})… this may take a minute.`;
 
     grid.innerHTML = "";
     loading.style.display = "block";
@@ -519,7 +531,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
       }
 
-      const blobUrl = await window.apiHandler.generateFreeImage(imagePrompt, service, model);
+      const blobUrl = await window.apiHandler.generateForgeImage(imagePrompt);
 
       loading.style.display = "none";
 
@@ -527,35 +539,35 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._insertCurrentImageCard(grid, [blobUrl]);
       if (this.currentImageUrl) {
         const mt = document.querySelector("#image-options-modal .modal-title");
-        if (mt) mt.innerHTML = `🆓 Compare & Choose — ${model}`;
+        if (mt) mt.innerHTML = `🔧 Compare & Choose — Local Forge`;
       }
 
       const wrapper = document.createElement("div");
       wrapper.style.cssText = "cursor:pointer;border:2px solid transparent;border-radius:0.5rem;overflow:hidden;transition:border-color 0.2s;background:var(--surface-color);width:100%;position:relative;";
       wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
       wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
-      wrapper.onclick = () => this.selectImageOption(blobUrl, imagePrompt, `pollinations/${model}`, [{ url: blobUrl }]);
+      wrapper.onclick = () => this.selectImageOption(blobUrl, imagePrompt, `local-forge`, [{ url: blobUrl }]);
 
       wrapper.innerHTML = `
         <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--accent);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">NEW</div>
-        <img src="${blobUrl}" style="width: 100%; height: auto; display: block;" alt="Free generated image">
+        <img src="${blobUrl}" style="width: 100%; height: auto; display: block;" alt="Forge generated image">
         <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
-          <button class="btn-primary" style="width: 100%;">Use New Image</button>
-          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">Pollinations.ai · ${model}</div>
+          <button class="btn-primary" style="width: 100%;">Use This Image</button>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">🔧 Local Forge · ${forgeUrl}</div>
         </div>
       `;
       grid.appendChild(wrapper);
 
       // Wire gallery trigger
-      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: imagePrompt || "", model: `pollinations/${model}`, label: "Free" }]);
+      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: imagePrompt || "", model: "local-forge", label: "Local Forge" }]);
 
       this.openImageOptionsModal();
-      this.showNotification("Free image generated! Compare and choose.", "success");
+      this.showNotification("Local Forge image generated! Compare and choose.", "success");
     } catch (error) {
-      console.error("Free image error:", error);
+      console.error("Forge image error:", error);
       loading.style.display = "none";
       this.closeImageOptionsModal();
-      this.showNotification(`Free image failed: ${error.message}`, "error");
+      this.showNotification(`🔧 Forge failed: ${error.message}`, "error");
     }
   },
 

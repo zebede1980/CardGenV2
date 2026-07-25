@@ -32,6 +32,10 @@ class Config {
           aspectRatio: "",
           modelSettings: {},
           timeout: 180000,
+          localForge: {
+            enabled: false,
+            url: "http://127.0.0.1:7860",
+          },
         },
         tts: {
           provider: "local",
@@ -183,6 +187,13 @@ class Config {
     )?.checked;
     if (enableImageGeneration !== undefined)
       this.config.app.enableImageGeneration = enableImageGeneration;
+
+    // Load Local Forge settings
+    const forgeUrl = document.getElementById("local-forge-url")?.value?.trim();
+    const forgeEnabled = document.getElementById("local-forge-enabled")?.checked;
+    if (!this.config.api.image.localForge) this.config.api.image.localForge = {};
+    if (forgeUrl !== undefined) this.config.api.image.localForge.url = forgeUrl || "http://127.0.0.1:7860";
+    if (forgeEnabled !== undefined) this.config.api.image.localForge.enabled = forgeEnabled;
 
     // Load creator setting
     const creator = document.getElementById("creator-name")?.value?.trim();
@@ -351,6 +362,15 @@ class Config {
     if (enableImageGeneration)
       enableImageGeneration.checked =
         this.config.app.enableImageGeneration !== false;
+
+    // Save Local Forge settings to form
+    const forgeUrlEl = document.getElementById("local-forge-url");
+    if (forgeUrlEl) forgeUrlEl.value = this.config.api.image.localForge?.url || "http://127.0.0.1:7860";
+    const forgeEnabledEl = document.getElementById("local-forge-enabled");
+    if (forgeEnabledEl) forgeEnabledEl.checked = this.config.api.image.localForge?.enabled || false;
+    // Sync the visual toggle state
+    const forgeToggleContainer = document.getElementById("local-forge-url-container");
+    if (forgeToggleContainer) forgeToggleContainer.style.display = forgeEnabledEl?.checked ? "block" : "none";
   }
 
   deepMerge(target, source) {

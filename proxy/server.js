@@ -1671,6 +1671,85 @@ app.post("/api/image/free", requireAuth, async (req, res) => {
   }
 });
 
+// Proxy endpoint for local WebUI Forge image generation
+// Accepts { prompt, forge_url } — returns the generated image as an image/png blob
+app.post("/api/image/forge", requireAuth, async (req, res) => {
+  try {
+    const { prompt, forge_url } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ error: { code: "400", message: "prompt is required" } });
+    }
+
+    const forgeHost = (forge_url || "http://127.0.0.1:7860").replace(/\/$/, "");
+    const txt2imgUrl = `${forgeHost}/sdapi/v1/txt2img`;
+
+    console.log("Local Forge image request →", txt2imgUrl);
+    console.log("Prompt length:", prompt.length);
+
+    const forgePayload = {
+      prompt,
+      steps: 25,
+      cfg_scale: 1,
+      width: 896,
+      height: 1152,
+      sampler_name: "Euler",
+    };
+
+    let forgeRes;
+    try {
+      forgeRes = await fetch(txt2imgUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(forgePayload),
+        timeout: 300000, // 5 min — local GPU can be slow on first run
+      });
+    } catch (connErr) {
+      console.error("Forge connection error:", connErr.message);
+      return res.status(503).json({
+        error: {
+          code: "503",
+          message: "Cannot connect to WebUI Forge",
+          details: `Make sure Forge is running with the --api flag at ${forgeHost}. (${connErr.message})`,
+        },
+      });
+    }
+
+    if (forgeRes.status === 404) {
+      return res.status(502).json({
+        error: {
+          code: "502",
+          message: "WebUI Forge API not found (404)",
+          details: "Make sure Forge is launched with the --api flag: python webui.py --api",
+        },
+      });
+    }
+
+    if (!forgeRes.ok) {
+      const errText = await forgeRes.text().catch(() => forgeRes.statusText);
+      console.error("Forge API error:", forgeRes.status, errText);
+      return res.status(forgeRes.status).json({
+        error: { code: forgeRes.status.toString(), message: `Forge returned ${forgeRes.status}`, details: errText },
+      });
+    }
+
+    const forgeData = await forgeRes.json();
+    const images = forgeData.images;
+    if (!images || images.length === 0) {
+      return res.status(500).json({ error: { code: "500", message: "Forge returned no images in response" } });
+    }
+
+    // images[0] is a raw base64 string (no data URI prefix)
+    const imgBuffer = Buffer.from(images[0], "base64");
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Length", imgBuffer.length);
+    res.send(imgBuffer);
+  } catch (error) {
+    console.error("Forge proxy error:", error);
+    res.status(500).json({ error: { code: "500", message: "Forge proxy error", details: error.message } });
+  }
+});
+
 // Proxy endpoint for image API
 app.post("/api/image/generations", requireAuth, async (req, res) => {
   try {

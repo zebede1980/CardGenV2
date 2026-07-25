@@ -16,6 +16,21 @@ const initChatSettings = () => {
             return;
         }
 
+        // Update the active image provider banner
+        const forgeEnabled = window.config?.get('api.image.localForge.enabled') || false;
+        const forgeUrl = window.config?.get('api.image.localForge.url') || 'http://127.0.0.1:7860';
+        const providerIcon = document.getElementById('chat-image-provider-icon');
+        const providerLabel = document.getElementById('chat-image-provider-label');
+        if (providerIcon && providerLabel) {
+            if (forgeEnabled) {
+                providerIcon.textContent = '🔧';
+                providerLabel.textContent = `Local Forge (${forgeUrl})`;
+            } else {
+                providerIcon.textContent = '☁️';
+                providerLabel.textContent = 'Cloud API (NanoGPT / configured)';
+            }
+        }
+
         try {
             const res = await window.authFetch(`/api/sw/chats/${chatId}`);
             if (res.ok) {

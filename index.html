@@ -1443,23 +1443,13 @@
                                 >
                                     ✂️ Crop
                                 </button>
-                                <div class="free-image-dropdown-wrapper" id="free-image-dropdown-wrapper">
-                                    <button
-                                        id="free-image-btn"
-                                        class="btn-small"
-                                        title="Generate an image using Pollinations.ai — completely free, no API key needed. Click to choose a style."
-                                    >
-                                        🆓 Free Image ▾
-                                    </button>
-                                    <div id="free-image-menu" class="free-image-menu" style="display:none;">
-                                        <div class="free-image-menu-header">Pollinations.ai · Free, No Key</div>
-                                        <button class="free-image-option" data-service="pollinations" data-model="flux">FLUX (High Quality)</button>
-                                        <button class="free-image-option" data-service="pollinations" data-model="flux-realism">FLUX Realism</button>
-                                        <button class="free-image-option" data-service="pollinations" data-model="flux-anime">FLUX Anime</button>
-                                        <button class="free-image-option" data-service="pollinations" data-model="flux-3d">FLUX 3D</button>
-                                        <button class="free-image-option" data-service="pollinations" data-model="turbo">Turbo (Fast SDXL)</button>
-                                    </div>
-                                </div>
+                                <button
+                                    id="local-forge-btn"
+                                    class="btn-small"
+                                    title="Generate an image using your local WebUI Forge instance. Enable in ⚙️ Settings → Image API Settings → Local WebUI Forge."
+                                >
+                                    🔧 Local Forge
+                                </button>
                                 <input
                                     type="file"
                                     id="image-upload-input"
@@ -2259,6 +2249,32 @@
                         </p>
                     </div>
 
+                     <hr style="border-color: var(--border); margin: 1.5rem 0;" />
+
+                    <!-- Local Forge Image Provider -->
+                    <div class="form-group" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-color);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                            <label class="label" style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                🔧 <span>Local WebUI Forge</span>
+                                <span style="font-size: 0.7rem; font-weight: 400; color: var(--text-secondary); background: rgba(99,102,241,0.12); padding: 0.1rem 0.4rem; border-radius: 999px;">Roleplay Chat</span>
+                            </label>
+                            <label class="switch" style="margin: 0;">
+                                <input type="checkbox" id="local-forge-enabled" onchange="document.getElementById('local-forge-url-container').style.display = this.checked ? 'block' : 'none';">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                            When enabled, the <strong>🔧 Local Forge</strong> button on the Character Gen screen uses your local WebUI Forge instance for image generation. Forge must be launched with the <code style="background: rgba(255,255,255,0.08); padding: 0.1rem 0.3rem; border-radius: 3px;">--api</code> flag.
+                        </p>
+                        <div id="local-forge-url-container" style="display: none;">
+                            <label for="local-forge-url" class="label">Forge Host URL</label>
+                            <input type="text" id="local-forge-url" class="input" placeholder="http://127.0.0.1:7860" />
+                            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.3rem;">
+                                Default params: steps=25 · cfg_scale=1 · 896×1152 · sampler=Euler
+                            </p>
+                        </div>
+                    </div>
+
                     <hr style="border-color: var(--border); margin: 1.5rem 0;" />
 
                     <h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">🪪 Card Metadata</h3>
@@ -2988,6 +3004,13 @@
               </p>
 
               <button id="chat-settings-save-btn" class="btn-primary" style="width:100%;">Save Settings</button>
+
+              <!-- Active image provider indicator -->
+              <div id="chat-image-provider-banner" style="margin-top: 1rem; padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border); background: var(--surface-color); color: var(--text-secondary);">
+                <span id="chat-image-provider-icon">☁️</span>
+                <span>Scene images will use: <strong id="chat-image-provider-label">Cloud API (NanoGPT)</strong></span>
+                <a href="#" onclick="document.getElementById('chat-settings-modal').classList.remove('show'); document.getElementById('settings-btn')?.click(); return false;" style="margin-left: auto; font-size: 0.75rem; color: var(--accent); text-decoration: none;">Change ↗</a>
+              </div>
             </div>
           </div>
         </div>

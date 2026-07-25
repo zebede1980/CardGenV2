@@ -1685,38 +1685,57 @@ class RoleplayChatHandler {
     async handleGenerateSceneImage(messageId, wrapper, bubbleEl) {
         if (!this.activeChatId) return;
 
-        // Gather Configured Image Settings
-        const base_url = window.config?.get("api.image.baseUrl") || null;
-        const api_key = window.config?.get("api.image.apiKey") || null;
+        // Determine which image provider to use
+        const forgeEnabled = window.config?.get("api.image.localForge.enabled") || false;
+        const forgeUrl = window.config?.get("api.image.localForge.url") || "http://127.0.0.1:7860";
+
+        // Cloud (NanoGPT / OpenAI-compatible) credentials — only used when Forge is off
+        const base_url = forgeEnabled ? null : (window.config?.get("api.image.baseUrl") || null);
+        const api_key = forgeEnabled ? null : (window.config?.get("api.image.apiKey") || null);
         const models = window.config?.get("api.image.models") || [];
-        const model = models.length > 0 ? models[0] : null; // Use the first selected model
+        const model = models.length > 0 ? models[0] : null;
         const size = window.config?.get("api.image.size") || "1024x1024";
 
         // Inject loading spinner inside the bubble
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'chat-scene-image-loading';
+        const providerLabel = forgeEnabled ? `🔧 Forge (${forgeUrl})` : '☁️ Cloud API';
         loadingDiv.innerHTML = `
             <div class="loading-spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
-            <span>Visualizing scene...</span>
+            <span>Visualizing scene via ${providerLabel}...</span>
         `;
         loadingDiv.id = `loading-image-${messageId}`;
         bubbleEl.appendChild(loadingDiv);
         this.scrollToBottom();
 
         try {
+            const payload = { base_url, api_key, model, size };
+            if (forgeEnabled) payload.forge_url = forgeUrl;
+
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${messageId}/generate-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ base_url, api_key, model, size })
+                body: JSON.stringify(payload)
             });
 
             if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(errText);
+                let errDetail = `Server error ${res.status}`;
+                try {
+                    const errJson = await res.json();
+                    errDetail = errJson.detail || errDetail;
+                } catch (_) {
+                    errDetail = await res.text() || errDetail;
+                }
+
+                // Surface Forge-specific guidance clearly
+                if (forgeEnabled && (res.status === 503 || res.status === 502)) {
+                    throw new Error(`🔧 Local Forge unreachable: ${errDetail}`);
+                }
+                throw new Error(errDetail);
             }
 
             loadingDiv.remove();
-            // Refresh the message context directly from the DB to sync the newly appended XML tag
+            // Refresh the message from DB to sync the newly appended <scene-image> XML tag
             const msgRes = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
             if (msgRes.ok) {
                 const chat = await msgRes.json();
@@ -1729,7 +1748,7 @@ class RoleplayChatHandler {
         } catch (error) {
             console.error('Image generation error:', error);
             loadingDiv.innerHTML = `<span style="color: var(--error);">⚠️ ${this.escapeHtml(error.message)}</span>`;
-            setTimeout(() => loadingDiv.remove(), 4000);
+            setTimeout(() => loadingDiv.remove(), 5000);
         }
     }
 

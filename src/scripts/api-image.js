@@ -563,19 +563,19 @@ BEGIN PROMPT:`;
     return this.processNormalResponse(response).trim();
   },
 
-  // Free image generation via Pollinations.ai — no API key required.
+  // Local image generation via WebUI Forge — no cloud API key required.
   // Returns a blob URL pointing to the generated image.
-  async generateFreeImage(prompt, service, model) {
-    const seed = Math.floor(Math.random() * 2147483647);
-    const response = await authFetch("/api/image/free", {
+  async generateForgeImage(prompt) {
+    const forgeUrl = this.config.get("api.image.localForge.url") || "http://127.0.0.1:7860";
+    const response = await authFetch("/api/image/forge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, service, model, width: 768, height: 1024, seed }),
+      body: JSON.stringify({ prompt, forge_url: forgeUrl }),
     });
     if (!response.ok) {
       let detail = response.statusText;
-      try { const j = await response.json(); detail = j.error?.message || detail; } catch (_) {}
-      throw new Error(`Free image error (${response.status}): ${detail}`);
+      try { const j = await response.json(); detail = j.error?.details || j.error?.message || detail; } catch (_) {}
+      throw new Error(`Forge error (${response.status}): ${detail}`);
     }
     const blob = await response.blob();
     return URL.createObjectURL(blob);

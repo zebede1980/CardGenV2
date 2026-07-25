@@ -653,6 +653,7 @@ class ImageGenParams(BaseModel):
     api_key: Optional[str] = None
     model: Optional[str] = None
     size: Optional[str] = "1024x1024"
+    forge_url: Optional[str] = None  # WebUI Forge host, e.g. http://127.0.0.1:7860
 
 @router.post("/{chat_id}/messages/{message_id}/generate-image")
 async def generate_scene_image(
@@ -720,9 +721,51 @@ async def generate_scene_image(
     finally:
         await llm.close()
         
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        if params.base_url and params.api_key:
-            # Configured OpenAI-compatible API
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        if params.forge_url:
+            # ── Local WebUI Forge provider ────────────────────────────────────
+            forge_host = params.forge_url.rstrip("/")
+            txt2img_endpoint = f"{forge_host}/sdapi/v1/txt2img"
+            forge_payload = {
+                "prompt": image_prompt,
+                "steps": 25,
+                "cfg_scale": 1,
+                "width": 896,
+                "height": 1152,
+                "sampler_name": "Euler",
+            }
+            try:
+                img_res = await client.post(txt2img_endpoint, json=forge_payload)
+                if img_res.status_code == 404:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=(
+                            "WebUI Forge returned 404. Make sure Forge is running with the "
+                            "--api flag enabled (launch with: python webui.py --api)."
+                        ),
+                    )
+                img_res.raise_for_status()
+                res_data = img_res.json()
+                images_list = res_data.get("images", [])
+                if not images_list:
+                    raise Exception("Forge returned no images in response")
+                img_b64 = images_list[0]
+                image_url = f"data:image/png;base64,{img_b64}"
+            except HTTPException:
+                raise
+            except httpx.ConnectError:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        f"Cannot connect to WebUI Forge at {forge_host}. "
+                        "Make sure Forge is running and the host URL is correct."
+                    ),
+                )
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Forge image generation failed: {str(e)}")
+
+        elif params.base_url and params.api_key:
+            # ── Configured OpenAI-compatible API (e.g. NanoGPT) ──────────────
             endpoint = params.base_url
             if not endpoint.endswith("/images/generations"):
                 endpoint = f"{endpoint.rstrip('/')}/images/generations"
@@ -763,7 +806,7 @@ async def generate_scene_image(
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Image API generation failed: {str(e)}")
         else:
-            # Fallback to Pollinations directly
+            # ── Fallback: Pollinations (no API key required) ──────────────────
             encoded_prompt = urllib.parse.quote(image_prompt)
             pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=768&nologo=true"
             if params.model:
