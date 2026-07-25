@@ -594,9 +594,6 @@ BEGIN PROMPT:`;
       height:       dims.height,
       sampler_name: "Euler",
       scheduler:    "Simple",
-      override_settings: {
-        sd_vae: "ae.safetensors"
-      }
     };
     console.log("🔧 Forge payload:", JSON.stringify(forgePayload));
 
