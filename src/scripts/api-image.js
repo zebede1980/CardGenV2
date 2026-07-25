@@ -563,21 +563,55 @@ BEGIN PROMPT:`;
     return this.processNormalResponse(response).trim();
   },
 
-  // Local image generation via WebUI Forge — no cloud API key required.
-  // Returns a blob URL pointing to the generated image.
+  // Local image generation via WebUI Forge — called directly from the browser,
+  // bypassing the proxy server (which runs in Docker and can't reach host 127.0.0.1).
+  // Forge's API has CORS open by default when launched with --api.
   async generateForgeImage(prompt) {
-    const forgeUrl = this.config.get("api.image.localForge.url") || "http://127.0.0.1:7860";
-    const response = await authFetch("/api/image/forge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, forge_url: forgeUrl }),
-    });
+    const forgeUrl = (this.config.get("api.image.localForge.url") || "http://127.0.0.1:7860").replace(/\/$/, "");
+    const txt2imgUrl = `${forgeUrl}/sdapi/v1/txt2img`;
+
+    const forgePayload = {
+      prompt,
+      steps: 25,
+      cfg_scale: 1,
+      width: 896,
+      height: 1152,
+      sampler_name: "Euler",
+    };
+
+    let response;
+    try {
+      // Direct browser fetch — no proxy, so host-local Forge is reachable
+      response = await fetch(txt2imgUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(forgePayload),
+      });
+    } catch (connErr) {
+      throw new Error(
+        `Cannot connect to Forge at ${forgeUrl}. ` +
+        `Make sure it is running with the --api flag and that no firewall is blocking port 7860. ` +
+        `(${connErr.message})`
+      );
+    }
+
     if (!response.ok) {
       let detail = response.statusText;
-      try { const j = await response.json(); detail = j.error?.details || j.error?.message || detail; } catch (_) {}
-      throw new Error(`Forge error (${response.status}): ${detail}`);
+      try { const j = await response.json(); detail = j.detail || j.error?.message || detail; } catch (_) {}
+      throw new Error(`Forge returned ${response.status}: ${detail}`);
     }
-    const blob = await response.blob();
+
+    const data = await response.json();
+    const images = data.images;
+    if (!images || images.length === 0) {
+      throw new Error("Forge returned no images in response");
+    }
+
+    // images[0] is a raw base64 PNG — decode it to a blob URL
+    const byteChars = atob(images[0]);
+    const byteArray = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([byteArray], { type: "image/png" });
     return URL.createObjectURL(blob);
   },
 
