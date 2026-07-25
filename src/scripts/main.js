@@ -546,6 +546,16 @@ class CharacterGeneratorApp {
       });
     }
 
+    // Local Forge toggle + URL — save immediately on change so config is persisted
+    const localForgeEnabledToggle = document.getElementById("local-forge-enabled");
+    if (localForgeEnabledToggle) {
+      localForgeEnabledToggle.addEventListener("change", () => this.saveAPISettings());
+    }
+    const localForgeUrlInput = document.getElementById("local-forge-url");
+    if (localForgeUrlInput) {
+      localForgeUrlInput.addEventListener("input", () => this.saveAPISettings());
+    }
+
     // API Settings Modal
     const apiSettingsBtn = document.getElementById("api-settings-btn");
     const modalOverlay = document.getElementById("api-settings-modal");
