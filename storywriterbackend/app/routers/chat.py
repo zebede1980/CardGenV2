@@ -654,6 +654,8 @@ class ImageGenParams(BaseModel):
     model: Optional[str] = None
     size: Optional[str] = "1024x1024"
     forge_url: Optional[str] = None  # WebUI Forge host, e.g. http://127.0.0.1:7860
+    steps: Optional[int] = None
+    cfg_scale: Optional[float] = None
 
 @router.post("/{chat_id}/messages/{message_id}/generate-image")
 async def generate_scene_image(
@@ -728,8 +730,8 @@ async def generate_scene_image(
             txt2img_endpoint = f"{forge_host}/sdapi/v1/txt2img"
             forge_payload = {
                 "prompt": image_prompt,
-                "steps": 25,
-                "cfg_scale": 1,
+                "steps": params.steps if params.steps is not None else 25,
+                "cfg_scale": params.cfg_scale if params.cfg_scale is not None else 7.0,
                 "width": 896,
                 "height": 1152,
                 "sampler_name": "Euler",
