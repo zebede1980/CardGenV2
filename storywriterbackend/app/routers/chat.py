@@ -750,7 +750,16 @@ async def generate_scene_image(
                 if not images_list:
                     raise Exception("Forge returned no images in response")
                 img_b64 = images_list[0]
-                image_url = f"data:image/png;base64,{img_b64}"
+                # Forge may return the base64 string with embedded newlines
+                # (RFC 2045 line-wrapping at 76 chars).  Strip all whitespace
+                # before building the data URI — a single stray newline in the
+                # attribute value causes browsers to render a solid black rect.
+                if isinstance(img_b64, str) and img_b64.startswith("data:"):
+                    # Already a full data URI — use as-is (strip surrounding ws)
+                    image_url = img_b64.strip()
+                else:
+                    img_b64 = "".join(img_b64.split())  # remove all whitespace
+                    image_url = f"data:image/png;base64,{img_b64}"
             except HTTPException:
                 raise
             except httpx.ConnectError:
