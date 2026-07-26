@@ -561,6 +561,7 @@ textarea.content-box {
 .crop-modal-content {
     max-width: 950px;
     width: 95%;
+    height: 88vh;
     max-height: 94vh;
     display: flex;
     flex-direction: column;
@@ -577,7 +578,6 @@ textarea.content-box {
     flex: 1;
     width: 100%;
     min-height: 280px;
-    max-height: 68vh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -591,7 +591,7 @@ textarea.content-box {
 #crop-canvas {
     display: block;
     max-width: 100%;
-    max-height: 66vh;
+    max-height: 100%;
     pointer-events: none;
 }
 
