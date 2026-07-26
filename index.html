@@ -597,12 +597,22 @@
                 <section class="result-section" style="display: none">
                     <div style="display: flex; flex-direction: column; gap: 2rem;">
                         <div class="character-preview">
-                            <h2
-                                class="section-title"
-                                style="margin: 0 0 1rem 0"
-                            >
-                                Character
-                            </h2>
+                            <div style="display: flex; align-items: center; gap: 1rem; margin: 0 0 1rem 0">
+                                <h2
+                                    class="section-title"
+                                    style="margin: 0"
+                                >
+                                    Character
+                                </h2>
+                                <button
+                                    class="btn-small btn-outline info-btn"
+                                    style="border-radius: 0.4rem; padding: 0.5rem;"
+                                    title="View all character fields in a scrollable popup"
+                                    onclick="if(window.cardGallery && window.app && window.app.currentCharacter) window.cardGallery.showInfo(window.app.currentCharacter);"
+                                >
+                                    ℹ️ Info
+                                </button>
+                            </div>
                             <div
                                 style="
                                     background: var(--accent-soft);
