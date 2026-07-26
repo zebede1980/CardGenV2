@@ -1201,16 +1201,16 @@
 
                         <div class="image-preview" style="border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; background: var(--surface-color); margin-bottom: 1.5rem;">
                             <h2 class="section-title">Image</h2>
-                            <div id="image-content" class="content-box">
-                                <div class="image-placeholder">
-                                    <div class="loading-spinner"></div>
-                                </div>
-                            </div>
+                            <details style="margin-bottom: 1rem;">
+                                <summary style="cursor: pointer; font-weight: 500; padding: 0.5rem; background: rgba(139, 92, 246, 0.1); border-radius: 0.375rem; user-select: none; margin-bottom: 0.5rem;">
+                                    ⚙️ Image Settings & Controls
+                                </summary>
+                                <div style="padding-top: 0.5rem;">
 
                             <!-- Image Controls -->
                             <div
                                 class="image-controls"
-                                style="margin-top: 1rem; display: none"
+                                style="margin-top: 0;"
                                 id="image-controls"
                             >
                                 <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
@@ -1304,7 +1304,7 @@
                             <!-- Image Prompt Editor -->
                             <div
                                 id="image-prompt-editor"
-                                style="margin-top: 1rem; display: none"
+                                style="margin-top: 1rem;"
                             >
                                 <details style="margin-bottom: 1rem">
                                     <summary
@@ -1383,7 +1383,7 @@
                                 </details>
                             </div>
                             <!-- Image Action Buttons -->
-                            <div class="image-buttons-row" style="margin-top: 1rem; display: none" id="image-buttons-row">
+                            <div class="image-buttons-row" style="margin-top: 1rem;" id="image-buttons-row">
                                 <button
                                     id="draft-prompt-btn"
                                     class="btn-small"
@@ -1456,6 +1456,14 @@
                                     accept="image/png,image/jpeg,image/jpg"
                                     style="display: none"
                                 />
+                            </div>
+                                </div>
+                            </details>
+
+                            <div id="image-content" class="content-box">
+                                <div class="image-placeholder">
+                                    <div class="loading-spinner"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
