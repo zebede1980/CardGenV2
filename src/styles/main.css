@@ -4089,8 +4089,14 @@ body.chat-in-chat .chat-timeline {
 /* On smaller screens make all buttons equal-width */
 @media (max-width: 480px) {
     .chat-edit-controls-bar--sticky {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10000;
         gap: 0.5rem;
-        padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+        padding: calc(0.55rem + env(safe-area-inset-top, 0px)) 0.75rem 0.55rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
     .chat-edit-controls-bar--sticky .edit-control-btn {
         max-width: none;
