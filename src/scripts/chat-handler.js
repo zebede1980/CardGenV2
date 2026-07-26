@@ -1775,16 +1775,12 @@ class RoleplayChatHandler {
         textarea.style.marginBottom = '0.5rem';
         textarea.value = currentContent;
 
-        // Detect fullscreen mode — controls will be sticky-pinned to chat-main bottom
-        const chatView = document.getElementById('view-roleplaychat');
-        const isFullscreen = chatView && chatView.classList.contains('chat-fullscreen');
-        const chatMain = isFullscreen ? document.querySelector('.chat-main') : null;
+        // Pin controls to chat-main bottom for all modes
+        const chatMain = bubbleEl.closest('.chat-main') || document.querySelector('.chat-main');
 
         // Create edit controls bar
         const editControls = document.createElement('div');
-        editControls.className = isFullscreen
-            ? 'chat-edit-controls-bar chat-edit-controls-bar--sticky'
-            : 'chat-edit-controls-bar';
+        editControls.className = 'chat-edit-controls-bar chat-edit-controls-bar--sticky';
 
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn-primary btn-small edit-control-btn';
@@ -1797,14 +1793,14 @@ class RoleplayChatHandler {
         const insertThinkBtn = document.createElement('button');
         insertThinkBtn.className = 'btn-outline btn-small edit-control-btn';
         insertThinkBtn.textContent = 'Insert </think>';
-        insertThinkBtn.title = 'Insert closing think tag at cursor position';
+        insertThinkBtn.title = 'Insert closing think tag at cursor position and save';
         insertThinkBtn.onclick = () => {
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             const text = textarea.value;
             textarea.value = text.substring(0, start) + '\n</think>\n' + text.substring(end);
             textarea.selectionStart = textarea.selectionEnd = start + 10;
-            textarea.focus();
+            saveBtn.click();
         };
 
         editControls.appendChild(insertThinkBtn);
@@ -1814,17 +1810,16 @@ class RoleplayChatHandler {
         bubbleEl.innerHTML = '';
         bubbleEl.appendChild(textarea);
 
-        // In fullscreen mode attach the controls bar to chat-main so it can be
-        // pinned to the top of the chat area, remaining visible while scrolling.
-        // We insert it immediately before .chat-timeline so it sits in the
-        // flex column between the header and the timeline.
-        // In normal mode keep them inline inside the bubble as before.
-        if (isFullscreen && chatMain) {
-            const timeline = chatMain.querySelector('.chat-timeline');
-            if (timeline) {
-                chatMain.insertBefore(editControls, timeline);
+        // Attach the controls bar to chat-main so it is pinned to the bottom of the chat area,
+        // remaining visible while scrolling.
+        // We insert it immediately before .chat-input-area so it sits in the
+        // flex column between the timeline and the input area.
+        if (chatMain) {
+            const inputArea = chatMain.querySelector('.chat-input-area');
+            if (inputArea) {
+                chatMain.insertBefore(editControls, inputArea);
             } else {
-                chatMain.insertBefore(editControls, chatMain.firstChild);
+                chatMain.appendChild(editControls);
             }
         } else {
             bubbleEl.appendChild(editControls);

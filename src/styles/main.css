@@ -3186,8 +3186,13 @@ textarea.content-box {
     width: 100%;
 }
 
+.chat-bubble-wrapper.is-editing .chat-bubble-content-col {
+    align-items: stretch !important;
+}
+
 .chat-bubble-wrapper.is-editing .chat-bubble {
     max-width: 100% !important;
+    width: 100% !important;
 }
 
 /* Edit controls bar — inline below textarea */
