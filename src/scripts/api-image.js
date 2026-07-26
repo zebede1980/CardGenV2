@@ -340,10 +340,32 @@ Object.assign(APIHandler.prototype, {
     if (style === "custom") {
       const customStyleText = this.config.get("api.image.customStyleText");
       if (customStyleText && customStyleText.trim()) {
-        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. "illustration", "3D render", "oil painting").`;
+        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords.`;
       }
     } else if (style && style.trim()) {
-      styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${style}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. "illustration", "3D render", "oil painting").`;
+      let styleName = style.replace(/-/g, " ");
+      let mediumExamples = `"illustration", "3D render", "digital painting"`;
+      
+      if (style === "realistic") {
+        styleName = "Realistic / Photography";
+        mediumExamples = `"photograph", "DSLR photo", "cinematic photography"`;
+      } else if (style.includes("anime") || style === "waifu") {
+        mediumExamples = `"anime illustration", "cel shading", "2D art"`;
+      } else if (style === "cinematic") {
+        mediumExamples = `"cinematic film still", "movie scene", "anamorphic"`;
+      } else if (style === "3d-render") {
+        mediumExamples = `"3D render", "octane render", "CGI"`;
+      } else if (style === "oil-painting") {
+        mediumExamples = `"oil on canvas", "impasto", "classical painting"`;
+      } else if (style === "watercolor") {
+        mediumExamples = `"watercolor painting", "ink and wash", "translucent"`;
+      } else if (style === "comic" || style === "comic-book") {
+        mediumExamples = `"comic book art", "graphic novel", "ink outlines"`;
+      } else if (style === "digital-art") {
+        mediumExamples = `"digital illustration", "concept art", "digital painting"`;
+      }
+
+      styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. ${mediumExamples}).`;
     }
     
     let moodBlock = "";
@@ -426,13 +448,18 @@ BEGIN PROMPT:`;
       case "sexy":
         return s("A glamorous, alluring portrait of", "masterpiece, best quality, glamorous lighting, confident pose, elegant figure, radiant skin, cinematic composition, highly detailed");
       case "comic":
+      case "comic-book":
         return s("Western comic book art of", "comic book style, graphic novel, bold ink outlines, halftone shading, dynamic composition, vibrant comic colors, professional illustration");
       case "cinematic":
         return s("A cinematic film still of", "cinematic photography, anamorphic lens, dramatic chiaroscuro lighting, volumetric light, movie still, epic composition, photorealistic, masterpiece");
+      case "digital-art":
+        return s("High-quality digital illustration of", "digital painting, highly detailed, concept art, trending on artstation, masterpiece, professional illustration");
       case "fantasy":
         return s("Epic digital fantasy art of", "fantasy digital painting, stylized illustration, detailed fantasy art, dramatic lighting, epic atmosphere, intricate costume design, masterpiece");
       case "cyberpunk":
         return s("Cyberpunk digital art of", "cyberpunk aesthetic, neon-lit rain-soaked streets, dark futuristic dystopia, holographic signage, synthwave color palette, high tech low life, highly detailed");
+      case "sci-fi":
+        return s("Sci-fi digital art of", "science fiction illustration, futuristic, highly detailed, dramatic lighting, high tech, digital painting, masterpiece");
       case "3d-render":
         return s("A high-quality 3D render of", "octane render, Unreal Engine 5, ray tracing, subsurface scattering, physically based rendering, studio lighting, CGI, masterpiece");
       case "watercolor":
