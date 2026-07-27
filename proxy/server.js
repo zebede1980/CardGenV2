@@ -9,7 +9,7 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const google = require("googlethis");
+
 
 // ── Auth configuration ────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || "cardgen-default-secret-change-me";
@@ -2512,7 +2512,9 @@ app.post("/api/search/character", requireAuth, async (req, res) => {
   }
 });
 
-// ── Google Image Search ──────────────────────────────────────────────────────
+// ── Image Search ──────────────────────────────────────────────────────────────
+const { imageSearch } = require("@mudbill/duckduckgo-images-api");
+
 app.post("/api/search/images", requireAuth, async (req, res) => {
   try {
     const { query } = req.body;
@@ -2520,7 +2522,7 @@ app.post("/api/search/images", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Query is required" });
     }
     console.log(`[Image Search] Searching for: "${query}"`);
-    const images = await google.image(query, { safe: false });
+    const images = await imageSearch({ query, moderate: false });
     res.json({ success: true, images: images.slice(0, 100) });
   } catch (e) {
     console.error("[Image Search] Error:", e.message);
