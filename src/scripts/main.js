@@ -640,6 +640,7 @@ class CharacterGeneratorApp {
     const injectLorebookBtn = document.getElementById("inject-lorebook-btn");
     const entriesList = document.getElementById("lorebook-entries-list");
     const topicSuggestions = document.getElementById("lorebook-topic-suggestions");
+    const lorebookSummary = document.getElementById("lorebook-summary");
 
     if (manageLorebookBtn) manageLorebookBtn.addEventListener("click", () => this.openLorebookManager());
     if (lorebookModalCloseBtn) lorebookModalCloseBtn.addEventListener("click", () => this.closeLorebookManager());
@@ -655,6 +656,15 @@ class CharacterGeneratorApp {
       if (!target) return;
       if (target.dataset.action === "edit-lorebook-entry") this.handleEditLorebookEntry(target.dataset.id);
       if (target.dataset.action === "delete-lorebook-entry") this.handleDeleteLorebookEntry(target.dataset.id);
+    });
+    if (lorebookSummary) lorebookSummary.addEventListener("click", (e) => {
+      const target = e.target.closest("div[data-action='edit-lorebook-entry']");
+      if (!target) return;
+      this.openLorebookManager();
+      // Need a slight delay to ensure the modal is visible and DOM is updated
+      setTimeout(() => {
+        this.handleEditLorebookEntry(target.dataset.id);
+      }, 50);
     });
     if (topicSuggestions) topicSuggestions.addEventListener("click", (e) => {
       const target = e.target.closest("button.topic-suggestion");

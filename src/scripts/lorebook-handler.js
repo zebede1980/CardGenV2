@@ -242,7 +242,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     summaryEl.innerHTML = this.lorebookEntries
       .map(
         (entry) => `
-        <div style="display: flex; align-items: flex-start; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); gap: 0.5rem;">
+        <div data-action="edit-lorebook-entry" data-id="${entry.id}" style="display: flex; align-items: flex-start; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); gap: 0.5rem; cursor: pointer; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='var(--border)'" onmouseout="this.style.backgroundColor='transparent'">
           <div style="flex: 1; min-width: 0;">
             <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(entry.keys.join(", "))}:</span>
             <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 5rem); vertical-align: bottom;">&nbsp;${escapeHtml(entry.content.substring(0, 80).replace(/\n/g, " "))}${entry.content.length > 80 ? "\u2026" : ""}</span>
