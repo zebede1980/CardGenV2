@@ -349,6 +349,8 @@ Object.assign(APIHandler.prototype, {
       if (style === "realistic") {
         styleName = "Realistic / Photography";
         mediumExamples = `"photograph", "DSLR photo", "cinematic photography"`;
+      } else if (style === "2.5d-realistic-anime") {
+        mediumExamples = `"2.5D anime render", "semi-realistic", "intricate digital shading"`;
       } else if (style.includes("anime") || style === "waifu") {
         mediumExamples = `"anime illustration", "cel shading", "2D art"`;
       } else if (style === "cinematic") {
@@ -361,6 +363,10 @@ Object.assign(APIHandler.prototype, {
         mediumExamples = `"watercolor painting", "ink and wash", "translucent"`;
       } else if (style === "comic" || style === "comic-book") {
         mediumExamples = `"comic book art", "graphic novel", "ink outlines"`;
+      } else if (style === "fantasy") {
+        mediumExamples = `"high fantasy illustration", "mythological art", "ethereal lighting"`;
+      } else if (style === "sci-fi") {
+        mediumExamples = `"cyberpunk", "sci-fi concept art", "futuristic render"`;
       } else if (style === "digital-art") {
         mediumExamples = `"digital illustration", "concept art", "digital painting"`;
       }
