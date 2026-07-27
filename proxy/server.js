@@ -2522,8 +2522,17 @@ app.post("/api/search/images", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Query is required" });
     }
     console.log(`[Image Search] Searching for: "${query}"`);
-    const images = await imageSearch({ query, moderate: false });
-    res.json({ success: true, images: images.slice(0, 100) });
+    const results = await imageSearch({ query, moderate: false });
+    
+    // Map DuckDuckGo response to match what the frontend expects
+    const images = results.slice(0, 100).map(img => ({
+      url: img.image,
+      thumbnail: img.thumbnail,
+      title: img.title,
+      source: img.url
+    }));
+    
+    res.json({ success: true, images });
   } catch (e) {
     console.error("[Image Search] Error:", e.message);
     res.status(500).json({ success: false, error: e.message });
