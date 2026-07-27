@@ -413,9 +413,9 @@ Extract these specifics from the profile text:
 Format rules:
 - Output ONE paragraph, no lists, no labels, no headers
 - Lead with the subject and physical details, weave in expression and setting naturally
-- Describe the lighting, mood, and atmosphere that fits the character's tone
+- Describe the lighting, mood, and atmosphere that fits the character's tone. To avoid flat images, ALWAYS specify dynamic lighting conditions (e.g., "volumetric lighting", "cinematic lighting", "deep dramatic shadows", "high contrast", "HDR") to ensure the image has striking depth and dimension.
 ${qualityBlock}
-- CRITICAL AVOIDANCE: DO NOT use terms like "8k", "photograph", "hyperrealistic", "professional lighting", "real life", or "camera" UNLESS the requested style is explicitly a photograph or realistic. Using these terms will ruin 2D/illustrated/anime styles by forcing a realistic render!
+- CRITICAL AVOIDANCE: DO NOT use terms like "photograph", "real life", or "camera" UNLESS the requested style is explicitly a photograph or realistic. However, you MAY and SHOULD use lighting and depth terms (like "studio lighting" or "dramatic shadows") for any style to maintain visual depth!
 - ${lengthBlock}${styleBlock}${moodBlock}${fluxBlock}
 - Do NOT start with "Here is" or any preamble — begin the prompt directly
 
