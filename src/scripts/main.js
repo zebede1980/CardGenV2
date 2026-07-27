@@ -305,6 +305,9 @@ class CharacterGeneratorApp {
     if (webImageBtn) {
       webImageBtn.addEventListener("click", () => {
         webSearchModal.style.display = "flex";
+        if (this.currentCharacter && this.currentCharacter.name && !webSearchInput.value) {
+          webSearchInput.value = this.currentCharacter.name;
+        }
         webSearchInput.focus();
       });
     }

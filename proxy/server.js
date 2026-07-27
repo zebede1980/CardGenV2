@@ -2522,7 +2522,7 @@ app.post("/api/search/images", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Query is required" });
     }
     console.log(`[Image Search] Searching for: "${query}"`);
-    const results = await imageSearch({ query, moderate: false });
+    const results = await imageSearch({ query, safe: false });
     
     // Map DuckDuckGo response to match what the frontend expects
     const images = results.slice(0, 100).map(img => ({
