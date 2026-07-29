@@ -336,8 +336,9 @@ class HomeHandler {
             }
 
             tile.innerHTML = `
-                <div style="width: 100%; aspect-ratio: 1/1; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;">
+                <div style="position: relative; width: 100%; aspect-ratio: 1/1; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;">
                     <img src="${imgSrc}" alt="${this.escapeHtml(cardName)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width: 100%; height: 100%; object-fit: cover;">
+                    <button class="delete-card-btn" style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 2.2rem; height: 2.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(220,50,50,0.9)'" onmouseout="this.style.background='rgba(0,0,0,0.6)'" title="Delete Character">🗑️</button>
                 </div>
                 <h3 style="margin: 0; font-size: 1.2rem; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(cardName)}">${this.escapeHtml(cardName)}</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; width: 100%; margin-top: auto;">
@@ -347,6 +348,11 @@ class HomeHandler {
                     <button class="btn-small btn-primary chat-btn" style="border-radius: 0.4rem; padding: 0.5rem;">💬 Chat</button>
                 </div>
             `;
+
+            tile.querySelector('.delete-card-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showDeleteConfirmation('card', card, imgSrc);
+            });
 
             // Info Button: Uses existing gallery mode info modal
             tile.querySelector('.info-btn').addEventListener('click', (e) => {
@@ -536,17 +542,21 @@ class HomeHandler {
 
             // Avatar Container
             let avatarHtml = '';
+            let modalImgSrc = fallbackSvg;
             if (characters.length === 0) {
                 avatarHtml = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:2.5rem; color:var(--text-secondary);">💬</div>`;
             } else if (characters.length === 1) {
                 const char = characters[0];
                 const imgSrc = char.id ? `/api/storage/cards/thumbnail?cardId=${char.id}${authToken ? '&token=' + encodeURIComponent(authToken) : ''}` : fallbackSvg;
+                modalImgSrc = imgSrc;
                 avatarHtml = `<img src="${imgSrc}" alt="${this.escapeHtml(char.name)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width:100%; height:100%; object-fit:cover; object-position:top;">`;
             } else {
                 const widthPct = 100 / characters.length;
                 let slotsHtml = '';
+                modalImgSrc = [];
                 characters.forEach((char, i) => {
                     const imgSrc = char.id ? `/api/storage/cards/thumbnail?cardId=${char.id}${authToken ? '&token=' + encodeURIComponent(authToken) : ''}` : fallbackSvg;
+                    modalImgSrc.push(imgSrc);
                     slotsHtml += `
                         <div style="position:absolute; top:0; left:${widthPct * i}%; width:${widthPct}%; height:100%; overflow:hidden; border-right:${i < characters.length - 1 ? '1px solid var(--border)' : 'none'};">
                             <img src="${imgSrc}" alt="${this.escapeHtml(char.name)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width:100%; height:100%; object-fit:cover; object-position:top;">
@@ -561,8 +571,9 @@ class HomeHandler {
             const dateStr = isNaN(d) ? '' : this.formatRelativeDate(d);
 
             tile.innerHTML = `
-                <div style="width: 100%; aspect-ratio: 16/9; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary);">
+                <div style="position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary);">
                     ${avatarHtml}
+                    <button class="delete-chat-btn" style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 2.2rem; height: 2.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: background 0.2s; z-index: 10;" onmouseover="this.style.background='rgba(220,50,50,0.9)'" onmouseout="this.style.background='rgba(0,0,0,0.6)'" title="Delete Chat">🗑️</button>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem; flex: 1;">
                     <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(chat.title)}">
@@ -577,6 +588,11 @@ class HomeHandler {
                     <button class="btn-small btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; border-radius: 0.4rem;">Continue ➔</button>
                 </div>
             `;
+
+            tile.querySelector('.delete-chat-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showDeleteConfirmation('chat', chat, modalImgSrc);
+            });
 
             // Click handler: opens chat view and selects active chat session
             tile.addEventListener('click', async (e) => {
@@ -605,6 +621,84 @@ class HomeHandler {
         if (diffDays === 1) return 'Yesterday';
         if (diffDays < 7) return `${diffDays}d ago`;
         return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    showDeleteConfirmation(type, item, imgSrc) {
+        // Create modal container
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        `;
+
+        const title = type === 'card' 
+            ? (item.characterName || (item.character && item.character.name) || item.name || 'Unknown Character')
+            : (item.title || 'Roleplay Chat');
+
+        const details = type === 'card'
+            ? `<div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; max-height: 100px; overflow-y: auto;">
+                ${this.escapeHtml((item.character?.description || '').substring(0, 150))}${item.character?.description?.length > 150 ? '...' : ''}
+               </div>`
+            : `<div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                Characters: ${this.escapeHtml((item.characters || []).map(c => c.name).join(', ') || 'Unknown')}
+               </div>`;
+
+        const content = document.createElement('div');
+        content.style.cssText = `
+            background: var(--surface-strong); border: 1px solid var(--border-strong);
+            border-radius: 1rem; padding: 2rem; max-width: 400px; width: 90%;
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        `;
+
+        const imgHtml = type === 'chat' && Array.isArray(imgSrc) 
+            ? `<div style="position:relative; width:100%; height:100%;">${imgSrc.map((src, i) => `<div style="position:absolute; top:0; left:${(100/imgSrc.length)*i}%; width:${100/imgSrc.length}%; height:100%; overflow:hidden; border-right:${i < imgSrc.length - 1 ? '1px solid var(--border)' : 'none'};"><img src="${src}" style="width:100%; height:100%; object-fit:cover; object-position:top;"></div>`).join('')}</div>`
+            : `<img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover;">`;
+
+        content.innerHTML = `
+            <h2 style="margin: 0 0 1rem 0; color: #e55; font-size: 1.5rem;">Are you sure?</h2>
+            <div style="width: 200px; height: 200px; border-radius: 0.5rem; overflow: hidden; margin-bottom: 1.5rem; border: 2px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                ${imgHtml}
+            </div>
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">${this.escapeHtml(title)}</h3>
+            ${details}
+            <p style="margin: 0 0 1.5rem 0; font-size: 0.95rem; color: var(--text-primary);">This action cannot be undone.</p>
+            <div style="display: flex; gap: 1rem; width: 100%;">
+                <button class="btn-outline" id="cancel-delete-btn" style="flex: 1; padding: 0.75rem; font-size: 1rem;">Cancel</button>
+                <button class="btn-primary" id="confirm-delete-btn" style="flex: 1; padding: 0.75rem; background: #e55; border-color: #e55; font-size: 1rem;">Yes, Delete</button>
+            </div>
+        `;
+
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+
+        content.querySelector('#cancel-delete-btn').addEventListener('click', () => {
+            modal.remove();
+        });
+
+        content.querySelector('#confirm-delete-btn').addEventListener('click', async () => {
+            const btn = content.querySelector('#confirm-delete-btn');
+            btn.disabled = true;
+            btn.textContent = 'Deleting...';
+            try {
+                if (type === 'card') {
+                    await window.characterStorage.deleteCard(item.id);
+                    this.loadCards(); // refresh grid
+                } else if (type === 'chat') {
+                    const res = await window.authFetch(`/api/sw/chats/${item.id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Failed to delete chat');
+                    this.loadRecentChats(); // refresh grid
+                }
+                modal.remove();
+            } catch (err) {
+                console.error('Delete failed:', err);
+                btn.disabled = false;
+                btn.textContent = 'Error - Try Again';
+                alert('Failed to delete. Check console for details.');
+            }
+        });
     }
 }
 
