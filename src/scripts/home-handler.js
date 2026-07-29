@@ -74,9 +74,16 @@ class HomeHandler {
                     </div>
                 </div>
 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                    <h2 style="margin: 0; font-size: 1.8rem; color: var(--text-primary);">Your Characters</h2>
-                    <input type="text" id="home-search" class="content-box" placeholder="Search characters..." style="max-width: 300px; padding: 0.6rem 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+                    <h2 id="home-characters-heading" style="margin: 0; font-size: 1.8rem; color: var(--text-primary); scroll-margin-top: 120px;">Your Characters</h2>
+                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+                        <div id="home-pagination-top" style="display: none; align-items: center; gap: 0.5rem;">
+                            <button id="home-prev-btn-top" class="btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Prev</button>
+                            <span id="home-page-indicator-top" style="color: var(--text-primary); font-weight: 500; font-size: 0.85rem;"></span>
+                            <button id="home-next-btn-top" class="btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Next</button>
+                        </div>
+                        <input type="text" id="home-search" class="content-box" placeholder="Search characters..." style="max-width: 250px; padding: 0.6rem 1rem;">
+                    </div>
                 </div>
                 
                 <div id="home-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1.5rem;">
@@ -202,20 +209,27 @@ class HomeHandler {
 
         document.getElementById('home-search')?.addEventListener('input', (e) => this.filterCards(e.target.value));
 
-        document.getElementById('home-prev-btn')?.addEventListener('click', () => {
+        const handlePrev = () => {
             if (this.currentPage > 1) {
                 this.currentPage--;
                 this.updateView();
+                document.getElementById('home-characters-heading')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-        });
+        };
 
-        document.getElementById('home-next-btn')?.addEventListener('click', () => {
+        const handleNext = () => {
             const totalPages = Math.ceil(this.filteredCards.length / this.itemsPerPage);
             if (this.currentPage < totalPages) {
                 this.currentPage++;
                 this.updateView();
+                document.getElementById('home-characters-heading')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-        });
+        };
+
+        document.getElementById('home-prev-btn')?.addEventListener('click', handlePrev);
+        document.getElementById('home-next-btn')?.addEventListener('click', handleNext);
+        document.getElementById('home-prev-btn-top')?.addEventListener('click', handlePrev);
+        document.getElementById('home-next-btn-top')?.addEventListener('click', handleNext);
     }
 
     async loadCards() {
@@ -276,14 +290,24 @@ class HomeHandler {
         this.renderGrid(pageCards);
 
         const paginationDiv = document.getElementById('home-pagination');
+        const paginationDivTop = document.getElementById('home-pagination-top');
+        
         if (paginationDiv) {
             if (totalItems > this.itemsPerPage) {
                 paginationDiv.style.display = 'flex';
                 document.getElementById('home-page-indicator').textContent = `Page ${this.currentPage} of ${totalPages}`;
                 document.getElementById('home-prev-btn').disabled = this.currentPage === 1;
                 document.getElementById('home-next-btn').disabled = this.currentPage === totalPages;
+                
+                if (paginationDivTop) {
+                    paginationDivTop.style.display = 'flex';
+                    document.getElementById('home-page-indicator-top').textContent = `Page ${this.currentPage} of ${totalPages}`;
+                    document.getElementById('home-prev-btn-top').disabled = this.currentPage === 1;
+                    document.getElementById('home-next-btn-top').disabled = this.currentPage === totalPages;
+                }
             } else {
                 paginationDiv.style.display = 'none';
+                if (paginationDivTop) paginationDivTop.style.display = 'none';
             }
         }
     }
