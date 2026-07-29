@@ -4197,24 +4197,22 @@ details.rich-ai-reasoning .rich-ai-reasoning-body {
     border-color: var(--accent-hover, #4f46e5) !important;
 }
 
-/* Allow the lobby grid to scroll with the page on mobile, fixing the squished fixed-height issue */
-@media (max-width: 768px) {
-    body.chat-active:not(.chat-in-chat) {
-        height: auto;
-        overflow: auto;
-    }
-    body.chat-active:not(.chat-in-chat) #app-root,
-    body.chat-active:not(.chat-in-chat) .container,
-    body.chat-active:not(.chat-in-chat) .main,
-    body.chat-active:not(.chat-in-chat) #view-roleplaychat,
-    body.chat-active:not(.chat-in-chat) #chat-lobby {
-        height: auto;
-        min-height: auto;
-        overflow: visible;
-        display: flex;
-    }
-    body.chat-active:not(.chat-in-chat) .chat-session-grid {
-        min-height: 350px;
-        overflow: visible;
-    }
+/* Allow the lobby grid to scroll with the page on all devices, fixing the squished fixed-height issue */
+body.chat-active:not(.chat-in-chat) {
+    height: auto !important;
+    overflow: auto !important;
+}
+body.chat-active:not(.chat-in-chat) #app-root,
+body.chat-active:not(.chat-in-chat) .container,
+body.chat-active:not(.chat-in-chat) .main,
+body.chat-active:not(.chat-in-chat) #view-roleplaychat,
+body.chat-active:not(.chat-in-chat) #chat-lobby {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    display: flex;
+}
+body.chat-active:not(.chat-in-chat) .chat-session-grid {
+    min-height: 500px;
+    overflow: visible !important;
 }
