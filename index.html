@@ -1101,8 +1101,10 @@
                                         gap: 0.5rem;
                                     "
                                 >
-                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
+                                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                         Creator's Notes
+                                        <span id="creator-notes-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
+                                        <span style="font-size: 0.75rem; color: var(--text-muted, #888); font-style: italic; font-weight: normal;" title="Creator's Notes are metadata shown on card-sharing sites — they are not sent to the LLM during roleplay.">⚠️ not sent to LLM</span>
                                     </h3>
                                     <div style="display: flex; gap: 0.5rem; flex: 1; justify-content: flex-end; min-width: 250px;">
                                         <input type="text" id="creator-notes-prompt" class="input" placeholder="Optional: Guide the notes generation..." style="height: 2.25rem; padding: 0.25rem 0.5rem; font-size: 0.875rem; flex: 1; max-width: 300px;" />
@@ -1165,8 +1167,10 @@
                                 <!-- Lorebook Generator Section -->
                                 <div class="character-field lorebook-section" style="margin-bottom: 0;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
+                                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                             Lorebook
+                                            <span id="lorebook-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
+                                            <span style="font-size: 0.75rem; color: var(--text-muted, #888); font-style: italic; font-weight: normal;" title="Lorebook entries are only injected into the prompt when their trigger keywords appear in recent chat history — they are NOT always sent.">⚡ keyword-triggered</span>
                                         </h3>
                                     </div>
                                     <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
@@ -1187,8 +1191,10 @@
                                 <!-- Alternate Greetings Section -->
                                 <div class="character-field alt-greetings-section" style="margin-bottom: 0;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">
+                                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                                             Alternate Greetings
+                                            <span id="alt-greetings-token-count" style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);"></span>
+                                            <span style="font-size: 0.75rem; color: var(--text-muted, #888); font-style: italic; font-weight: normal;" title="Alternate Greetings are card metadata for selecting a different opening — they are never sent to the LLM during roleplay.">⚠️ not sent to LLM</span>
                                         </h3>
                                     </div>
                                     <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
@@ -1204,8 +1210,9 @@
                                 </div>
                             </div>
 
-                            <div style="text-align: right; margin-bottom: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
-                                <span id="total-token-count" style="font-size: 0.95rem; font-weight: 500; color: var(--text-secondary);"></span>
+                            <div style="text-align: right; margin-bottom: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+                                <span id="core-token-count" style="font-size: 0.95rem; font-weight: 600; color: var(--text-color);" title="Tokens from fields that are always sent to the LLM every turn: Name, Description, Personality, Scenario, First Message, Example Messages, Post-History Instructions."></span>
+                                <span id="total-token-count" style="font-size: 0.825rem; font-weight: normal; color: var(--text-secondary);" title="Full card total including Lorebook (keyword-triggered only) and Alternate Greetings (never sent to LLM)."></span>
                             </div>
                         </div>
 

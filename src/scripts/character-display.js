@@ -14,42 +14,72 @@ Object.assign(CharacterGeneratorApp.prototype, {
   updateTokenCounts() {
     if (!this.currentCharacter) return;
 
-    let totalTokens = 0;
+    // ── Core fields: always sent to the LLM every turn ────────────────────────
+    const coreFields = [
+      ["name",                   "name-token-count"],
+      ["description",            "description-token-count"],
+      ["personality",            "personality-token-count"],
+      ["scenario",               "scenario-token-count"],
+      ["firstMessage",           "first-message-token-count"],
+      ["mesExample",             "example-messages-token-count"],
+      ["postHistoryInstructions","post-history-token-count"],
+    ];
 
-    const updateFieldCount = (field, elementId) => {
+    let coreTokens = 0;
+    coreFields.forEach(([field, elementId]) => {
       const text = this.currentCharacter[field] || "";
       const tokens = this.estimateTokens(text);
-      totalTokens += tokens;
+      coreTokens += tokens;
       const el = document.getElementById(elementId);
-      if (el) {
-        el.textContent = `(~${tokens} tokens)`;
-      }
-    };
+      if (el) el.textContent = `(~${tokens} tokens)`;
+    });
 
-    updateFieldCount("name", "name-token-count");
-    updateFieldCount("description", "description-token-count");
-    updateFieldCount("personality", "personality-token-count");
-    updateFieldCount("scenario", "scenario-token-count");
-    updateFieldCount("firstMessage", "first-message-token-count");
-    updateFieldCount("mesExample", "example-messages-token-count");
-    updateFieldCount("postHistoryInstructions", "post-history-token-count");
+    // ── Creator's Notes: card metadata, never sent to LLM ─────────────────────
+    const creatorNotesText = this.currentCharacter.creatorNotes || "";
+    const creatorNotesTokens = this.estimateTokens(creatorNotesText);
+    const creatorNotesEl = document.getElementById("creator-notes-token-count");
+    if (creatorNotesEl) creatorNotesEl.textContent = `(~${creatorNotesTokens} tokens)`;
 
+    // ── Lorebook: keyword-triggered, NOT always sent ───────────────────────────
     let lorebookTokens = 0;
     this.lorebookEntries.forEach((entry) => {
       lorebookTokens += this.estimateTokens(entry.keys.join(", "));
       lorebookTokens += this.estimateTokens(entry.content);
     });
-    totalTokens += lorebookTokens;
+    const lorebookEl = document.getElementById("lorebook-token-count");
+    if (lorebookEl) {
+      lorebookEl.textContent = lorebookTokens > 0 ? `(~${lorebookTokens} tokens)` : "";
+    }
 
+    // ── Alternate Greetings: card metadata, never sent to LLM ─────────────────
     let altGreetingsTokens = 0;
     this.altGreetings.forEach((greeting) => {
       altGreetingsTokens += this.estimateTokens(greeting.content);
     });
-    totalTokens += altGreetingsTokens;
+    const altGreetingsEl = document.getElementById("alt-greetings-token-count");
+    if (altGreetingsEl) {
+      altGreetingsEl.textContent = altGreetingsTokens > 0 ? `(~${altGreetingsTokens} tokens)` : "";
+    }
+
+    // ── Totals display ────────────────────────────────────────────────────────
+    const fullCardTokens = coreTokens + creatorNotesTokens + lorebookTokens + altGreetingsTokens;
+
+    const coreEl = document.getElementById("core-token-count");
+    if (coreEl) {
+      coreEl.textContent = `Always sent to LLM: ~${coreTokens.toLocaleString()} tokens`;
+    }
 
     const totalEl = document.getElementById("total-token-count");
     if (totalEl) {
-      totalEl.textContent = `Approx. Total: ${totalTokens} tokens`;
+      const extras = [];
+      if (lorebookTokens > 0) extras.push(`lorebook ~${lorebookTokens.toLocaleString()}`);
+      if (creatorNotesTokens > 0) extras.push(`creator notes ~${creatorNotesTokens.toLocaleString()}`);
+      if (altGreetingsTokens > 0) extras.push(`alt greetings ~${altGreetingsTokens.toLocaleString()}`);
+      if (extras.length > 0) {
+        totalEl.textContent = `Full card total: ~${fullCardTokens.toLocaleString()} tokens (incl. ${extras.join(", ")} — conditional/not sent)`;
+      } else {
+        totalEl.textContent = "";
+      }
     }
   },
 
