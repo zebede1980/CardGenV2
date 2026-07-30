@@ -22,17 +22,41 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 
 import re as _cot_re
 
-# Regex to detect the CoT bullet-point block that models output WITHOUT wrapping in <think> tags.
-# Matches one or more lines starting with "• <Label>:" at the very start of the response,
-# followed by blank lines and then the story prose.
+# ── Shared Chain-of-Thought prompt text ─────────────────────────────────────
+# Single source of truth used by both get_default_system_prompt() and
+# build_chat_prompt().  Numbered steps are intentional — they create a clear
+# sequential obligation that models honour more reliably than bullet points.
+_COT_PROMPT_TEXT = (
+    "CHAIN OF THOUGHT — MANDATORY REASONING FORMAT:\n"
+    "Before writing ANY story prose you MUST complete all five numbered steps "
+    "inside a <think>...</think> block. Skipping this block or any step is not allowed.\n\n"
+    "<think>\n"
+    "1. Ground Truth — What is the exact physical setting, time, and immediate situation right now?\n"
+    "2. NPC Knowledge — What does my character know, believe, and NOT know at this precise moment?\n"
+    "3. Intent — What is my character's concrete goal or motivation for THIS turn specifically?\n"
+    "4. Draft — What will they say or do? (Write a rough version here first.)\n"
+    "5. Self-Correct — Does this draft fit the established persona? Is it avoiding repetition? "
+    "Adjust if necessary before writing the final prose.\n"
+    "</think>\n"
+    "[Your final story prose goes here — the user ONLY sees this section]\n\n"
+    "CRITICAL RULES:\n"
+    "1. Your response MUST open with <think> — no preamble, no greeting, no text before it.\n"
+    "2. Use EXACTLY <think> and </think>. No other tag names, no ---, no variations.\n"
+    "3. Do NOT write story prose inside <think>. Do NOT write reasoning outside <think>.\n"
+    "4. The </think> tag MUST be closed before the story prose begins."
+)
+
+# Regex to detect the CoT block that models output WITHOUT wrapping in <think> tags.
+# Matches one or more lines starting with a bullet (• or -) OR a numbered step (1., 2.)
+# at the very start of the response, followed by blank line(s) then the story prose.
 _COT_BARE_PATTERN = _cot_re.compile(
-    r'^((?:\s*•\s*\S[^\n]*\n)+)\s*\n(.*)',
+    r'^((?:\s*(?:•|-|\d+\.)\s+\S[^\n]*\n)+)\s*\n(.*)',
     _cot_re.DOTALL | _cot_re.IGNORECASE
 )
 
 def _inject_think_tags(content: str) -> tuple[str, bool]:
-    """If `content` has no <think> tags but starts with CoT bullet lines,
-    wrap the bullet block in <think>...</think> and return (fixed_content, True).
+    """If `content` has no <think> tags but starts with bare CoT lines (bullets or
+    numbered steps), wrap the block in <think>...</think> and return (fixed_content, True).
     Returns (content, False) if no transformation was needed."""
     stripped = content.strip()
     # Already has tags — nothing to do
@@ -41,12 +65,12 @@ def _inject_think_tags(content: str) -> tuple[str, bool]:
     m = _COT_BARE_PATTERN.match(stripped)
     if not m:
         return content, False
-    bullet_block = m.group(1).strip()
+    cot_block = m.group(1).strip()
     prose = m.group(2).strip()
     if not prose:
-        # Entire response was bullet points — still wrap so frontend hides it
-        return f"<think>\n{bullet_block}\n</think>", True
-    fixed = f"<think>\n{bullet_block}\n</think>\n{prose}"
+        # Entire response was CoT lines — still wrap so frontend hides it
+        return f"<think>\n{cot_block}\n</think>", True
+    fixed = f"<think>\n{cot_block}\n</think>\n{prose}"
     return fixed, True
 
 def get_default_system_prompt() -> str:
@@ -61,23 +85,8 @@ def get_default_system_prompt() -> str:
         "- When showing health, stamina, or numerical progress, use: <stat-bar name=\"Health\" value=\"80\" max=\"100\" />",
         "- When showing a text status, state, or location, use: <stat-bar name=\"Extraction\" value=\"In Progress\" />",
         "- When a new objective or quest is received, use: <task title=\"Objective Name\">Description of the task</task>",
-        # 5-Phase Logic CoT
-        ("CHAIN OF THOUGHT — REQUIRED FORMAT:\n"
-         "Every response MUST use this exact two-part structure:\n\n"
-         "<think>\n"
-         "[Your private reasoning — the user never sees this]\n"
-         "• Ground Truth: What is happening right now in the scene?\n"
-         "• NPC Knowledge: What does my character know / not know?\n"
-         "• Intent: What is my character's goal this turn?\n"
-         "• Draft: What will they say or do?\n"
-         "• Self-Correct: Does this fit the persona? Avoiding repetition?\n"
-         "</think>\n"
-         "[Your actual roleplay prose — the user sees ONLY this]\n\n"
-         "CRITICAL RULES:\n"
-         "- Open with exactly <think> and close with exactly </think>. No other tag names or formats.\n"
-         "- Do NOT use --- or any other separator instead of the tags.\n"
-         "- Do NOT write story prose inside <think>. Do NOT write reasoning outside <think>.\n"
-         "- The <think> block must come FIRST, before any story text.")
+        # CoT — shared constant, placed last so it is the freshest part of the default system prompt
+        _COT_PROMPT_TEXT,
     ]
     return "\n\n".join(modules)
 
@@ -204,39 +213,16 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     messages = []
     
     system_parts = []
-    # 1. System Prompt
+
+    # 1. System Prompt (user-authored)
     if chat.system_prompt:
         system_parts.append(chat.system_prompt)
-        
-    cot_prompt = (
-        "CHAIN OF THOUGHT — REQUIRED FORMAT:\n"
-        "Every response MUST use this exact two-part structure:\n\n"
-        "<think>\n"
-        "[Your private reasoning — the user never sees this]\n"
-        "• Ground Truth: What is happening right now in the scene?\n"
-        "• NPC Knowledge: What does my character know / not know?\n"
-        "• Intent: What is my character's goal this turn?\n"
-        "• Draft: What will they say or do?\n"
-        "• Self-Correct: Does this fit the persona? Avoiding repetition?\n"
-        "</think>\n"
-        "[Your actual roleplay prose — the user sees ONLY this]\n\n"
-        "CRITICAL RULES:\n"
-        "- Open with exactly <think> and close with exactly </think>. No other tag names or formats.\n"
-        "- Do NOT use --- or any other separator instead of the tags.\n"
-        "- Do NOT write story prose inside <think>. Do NOT write reasoning outside <think>.\n"
-        "- The <think> block must come FIRST, before any story text."
-    )
-    
-    if chat.system_prompt and "CHAIN OF THOUGHT" not in chat.system_prompt:
-        system_parts.append(cot_prompt)
-    elif not chat.system_prompt:
-        system_parts.append(cot_prompt)
 
-    # Writing Style Guidelines in System Prompt
+    # Writing Style Guidelines
     if getattr(chat, 'writing_style', None) and chat.writing_style in WRITING_STYLE_PRESETS:
         style_info = WRITING_STYLE_PRESETS[chat.writing_style]
         system_parts.append(style_info["guidelines"])
-        
+
     # User Persona
     if chat.user_persona_name:
         persona_str = f"User Persona:\nName: {chat.user_persona_name}"
@@ -247,28 +233,28 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         if chat.user_persona_detail:
             persona_str += f"\nDetails: {chat.user_persona_detail}"
         system_parts.append(persona_str)
-        
+
     # Pre-calculate recent history text for lorebook extraction
     recent_history_text = " ".join([m.content for m in sorted(chat.messages, key=lambda m: m.created_at)[-5:]])
 
     # 2. Character Cards
     for card in chat.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
-        
+
         if card.mes_example:
             card_text += f"\nExample Messages:\n{card.mes_example}"
-            
+
         if card.character_book:
             relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
             if relevant_lore:
                 card_text += "\nLorebook:\n" + "\n".join(relevant_lore)
-                
+
         system_parts.append(f"Character: {card.name}\n{card_text}")
-        
+
     # 3. Dynamic Memory & Summary
     if chat.summary:
         system_parts.append(f"Story Summary:\n{chat.summary}")
-        
+
     active_memories = db.query(models.ChatMemory).filter(
         models.ChatMemory.chat_id == chat.id,
         models.ChatMemory.is_active == True
@@ -276,7 +262,14 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if active_memories:
         facts = "\n".join([f"- {m.fact}" for m in active_memories])
         system_parts.append(f"Important Facts:\n{facts}")
-        
+
+    # 4. Chain-of-Thought instruction — placed LAST in the system block so it is
+    #    the freshest, most prominent instruction before the conversation history.
+    #    Positioning it early (e.g. position 2) causes it to be buried under
+    #    character cards and persona text, reducing adherence.
+    if enable_cot and (not chat.system_prompt or "CHAIN OF THOUGHT" not in chat.system_prompt):
+        system_parts.append(_COT_PROMPT_TEXT)
+
     if system_parts:
         messages.append({"role": "system", "content": "\n\n".join(system_parts)})
         
@@ -343,24 +336,26 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
     if enable_cot:
-        # ── CoT format reminder ──────────────────────────────────────────────
-        # Placed immediately before generation so it is the last instruction
-        # the model sees. An explicit template (not just rules) dramatically
-        # improves compliance across standard instruct/roleplay model families.
+        # ── Per-turn CoT format reminder ─────────────────────────────────────
+        # This message is the very last thing the model sees before it generates.
+        # It re-anchors the <think> requirement with a concrete numbered template
+        # so the model cannot treat the system-prompt instruction as optional.
         # NOTE: We do NOT use an assistant prefill (partial assistant message)
         # because standard instruct models — unlike native reasoning models
         # (DeepSeek-R1, QwQ) — don't know to close the </think> tag when
         # started mid-block, causing the entire response to be hidden.
         # The system prompt + frontend preamble-stripping handles edge cases.
         cot_reminder = (
-            "OUTPUT FORMAT (mandatory):\n"
+            "YOUR NEXT RESPONSE MUST follow this exact structure — no exceptions:\n"
             "<think>\n"
-            "(private reasoning)\n"
+            "1. Ground Truth: [setting/situation]\n"
+            "2. NPC Knowledge: [what the character knows/doesn't know]\n"
+            "3. Intent: [character's goal this turn]\n"
+            "4. Draft: [rough version of response]\n"
+            "5. Self-Correct: [check persona fit and avoid repetition]\n"
             "</think>\n"
-            "(story prose)\n\n"
-            "Rules: use EXACTLY <think> and </think>. "
-            "No other tag names, no ---, no preamble before <think>. "
-            "The <think> block MUST come first."
+            "[Story prose here — this is the ONLY part the user sees]\n\n"
+            "Open with <think>. Close with </think>. No preamble. No other tag names. No --- separators."
         )
         if speaker_name and len(chat.characters) > 1:
             messages.append({"role": "system", "content": (
