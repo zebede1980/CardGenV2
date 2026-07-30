@@ -798,8 +798,23 @@ Object.assign(CharacterGeneratorApp.prototype, {
     try {
       let characterData = null;
       let imageUrl = null;
+      let fileBase64 = null;
+      const fileName = file.name;
+      const fileType = file.type || (fileName.toLowerCase().endsWith(".png") ? "image/png" : "application/json");
 
-      if (file.type === "image/png" || file.name.toLowerCase().endsWith(".png")) {
+      // Read the whole file as base64 for persistence
+      fileBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // result is a data URL like "data:image/png;base64,..." — strip prefix
+          const dataUrl = reader.result;
+          resolve(dataUrl.split(",")[1] || dataUrl);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      if (fileType === "image/png" || fileName.toLowerCase().endsWith(".png")) {
         const extracted = await this.pngEncoder.extractCharacterData(file);
         characterData = this.normalizeCharacterFromSpec(extracted);
         imageUrl = URL.createObjectURL(file);
@@ -812,12 +827,75 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (!characterData) throw new Error("Unable to parse card content");
 
       const id = `review-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      this._reviewQueue.push({ id, name: characterData.name || file.name, imageUrl, characterData, file });
+      this._reviewQueue.push({ id, name: characterData.name || fileName, imageUrl, characterData, file, fileBase64, fileName, fileType });
       this._renderReviewTray();
-      this.showNotification(`"${characterData.name || file.name}" added to Review Queue — click the 👁 Review Queue button to view`, "success");
+      this._saveReviewQueueToStorage();
+      this.showNotification(`“${characterData.name || fileName}” added to Review Queue — scroll down to see it`, "success");
     } catch (err) {
       console.error("Review queue add failed:", err);
       this.showNotification(`Could not add to review queue: ${err.message}`, "error");
+    }
+  },
+
+  _saveReviewQueueToStorage() {
+    try {
+      const serializable = this._reviewQueue.map(e => ({
+        id: e.id,
+        name: e.name,
+        characterData: e.characterData,
+        fileBase64: e.fileBase64,
+        fileName: e.fileName,
+        fileType: e.fileType,
+      }));
+      localStorage.setItem("reviewQueue", JSON.stringify(serializable));
+    } catch (err) {
+      // Quota exceeded or private mode — fail silently
+      console.warn("Review queue: could not persist to localStorage:", err.message);
+    }
+  },
+
+  _loadReviewQueueFromStorage() {
+    try {
+      const raw = localStorage.getItem("reviewQueue");
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!Array.isArray(saved) || saved.length === 0) return;
+
+      saved.forEach(e => {
+        // Reconstruct object URL from base64 for image display
+        let imageUrl = null;
+        let file = null;
+        if (e.fileBase64) {
+          try {
+            const byteStr = atob(e.fileBase64);
+            const arr = new Uint8Array(byteStr.length);
+            for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+            const blob = new Blob([arr], { type: e.fileType || "application/octet-stream" });
+            file = new File([blob], e.fileName || "card", { type: e.fileType });
+            if (e.fileType === "image/png" || (e.fileName || "").toLowerCase().endsWith(".png")) {
+              imageUrl = URL.createObjectURL(blob);
+            }
+          } catch (decodeErr) {
+            console.warn("Review queue: could not decode stored entry", e.id, decodeErr);
+          }
+        }
+        this._reviewQueue.push({
+          id: e.id,
+          name: e.name,
+          characterData: e.characterData,
+          imageUrl,
+          file,
+          fileBase64: e.fileBase64,
+          fileName: e.fileName,
+          fileType: e.fileType,
+        });
+      });
+
+      if (this._reviewQueue.length > 0) {
+        this._renderReviewTray();
+      }
+    } catch (err) {
+      console.warn("Review queue: failed to restore from localStorage:", err);
     }
   },
 
@@ -844,6 +922,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       clearAllBtn.addEventListener("click", () => {
         this._reviewQueue.forEach(e => { if (e.imageUrl) URL.revokeObjectURL(e.imageUrl); });
         this._reviewQueue = [];
+        this._saveReviewQueueToStorage();
         this._closeReviewModal();
         this._renderReviewTray();
       });
@@ -938,6 +1017,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const entry = this._reviewQueue.find(e => e.id === id);
     if (entry && entry.imageUrl) URL.revokeObjectURL(entry.imageUrl);
     this._reviewQueue = this._reviewQueue.filter(e => e.id !== id);
+    this._saveReviewQueueToStorage();
     this._renderReviewTray();
 
     // If modal is open and we deleted the current entry, adjust or close
@@ -1114,16 +1194,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const tray = document.getElementById("review-tray");
     const toggle = document.getElementById("review-tray-toggle");
     const closeBtn = document.getElementById("review-tray-close");
-    if (!tray || !toggle) return;
 
-    toggle.addEventListener("click", () => {
-      tray.style.display = "flex";
-      tray.classList.add("open");
+    if (toggle) toggle.addEventListener("click", () => {
+      if (tray) { tray.style.display = "flex"; tray.classList.add("open"); }
     });
     if (closeBtn) closeBtn.addEventListener("click", () => {
-      tray.classList.remove("open");
-      tray.style.display = "none";
+      if (tray) { tray.classList.remove("open"); tray.style.display = "none"; }
     });
+
+    // Restore persisted queue from previous session
+    this._loadReviewQueueFromStorage();
   },
 
 
