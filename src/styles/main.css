@@ -1343,6 +1343,47 @@ textarea.content-box {
     vertical-align: middle;
 }
 
+/* ── Review Queue inline page section ───────────────────────────────────── */
+.review-queue-section {
+    margin-top: 2rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-strong);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.review-queue-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    background: var(--surface-muted);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.review-queue-section-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.review-queue-section-hint {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.review-queue-section-cards {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    overflow-x: auto;
+    flex-wrap: wrap;
+}
+.review-queue-section-cards::-webkit-scrollbar { height: 4px; }
+.review-queue-section-cards::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
 /* ── btn-ghost / btn-danger (review queue buttons) ──────────────────────── */
 .btn-ghost {
     background: transparent;

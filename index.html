@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20260729-1" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20260730-2" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -1632,6 +1632,18 @@
                         </div>
                     </details>
                 </section>
+
+                <!-- ── Review Queue Section (inline, bottom of page) ── -->
+                <section id="review-queue-section" class="review-queue-section" style="display:none;">
+                    <div class="review-queue-section-header">
+                        <span class="review-queue-section-title">👁 Review Queue</span>
+                        <span id="review-queue-section-count" class="review-queue-toolbar-count">0</span>
+                        <span class="review-queue-section-hint">Cards queued for review — click any card to read it, then save or discard</span>
+                        <button id="review-queue-clear-all-btn" class="btn-ghost" style="margin-left:auto; font-size:0.8rem; padding:0.3rem 0.75rem;">Clear All</button>
+                    </div>
+                    <div id="review-queue-section-cards" class="review-queue-section-cards"></div>
+                </section>
+
                 </div>
 
                 <!-- Story Writer View -->

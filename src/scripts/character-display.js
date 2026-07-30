@@ -827,66 +827,110 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const badge = document.getElementById("review-tray-badge");
     const countEl = document.getElementById("review-tray-count");
     const cardsEl = document.getElementById("review-tray-cards");
-    if (!tray || !toggle || !cardsEl) return;
 
     const count = this._reviewQueue.length;
 
-    // Show/hide the floating toggle FAB
+    // ── Inline page section (primary UI) ─────────────────────────────────
+    const pageSection = document.getElementById("review-queue-section");
+    const pageSectionCards = document.getElementById("review-queue-section-cards");
+    const pageSectionCount = document.getElementById("review-queue-section-count");
+    if (pageSection) pageSection.style.display = count > 0 ? "" : "none";
+    if (pageSectionCount) pageSectionCount.textContent = count;
+
+    // Wire Clear All once
+    const clearAllBtn = document.getElementById("review-queue-clear-all-btn");
+    if (clearAllBtn && !clearAllBtn._wired) {
+      clearAllBtn._wired = true;
+      clearAllBtn.addEventListener("click", () => {
+        this._reviewQueue.forEach(e => { if (e.imageUrl) URL.revokeObjectURL(e.imageUrl); });
+        this._reviewQueue = [];
+        this._closeReviewModal();
+        this._renderReviewTray();
+      });
+    }
+
+    // Render inline cards
+    if (pageSectionCards) {
+      pageSectionCards.innerHTML = "";
+      this._reviewQueue.forEach((entry, idx) => {
+        const card = document.createElement("div");
+        card.className = "review-tray-card";
+        card.title = `Click to review: ${entry.name}`;
+        card.innerHTML = `
+          <div class="review-tray-card-img">
+            ${entry.imageUrl
+              ? `<img src="${entry.imageUrl}" alt="${entry.name}">`
+              : `<span class="review-tray-card-no-img">?</span>`}
+          </div>
+          <div class="review-tray-card-name">${entry.name}</div>
+          <button class="review-tray-card-remove" title="Remove from queue">&times;</button>
+        `;
+        card.addEventListener("click", (e) => {
+          if (e.target.closest(".review-tray-card-remove")) return;
+          this._openReviewModal(idx);
+        });
+        card.querySelector(".review-tray-card-remove").addEventListener("click", (e) => {
+          e.stopPropagation();
+          this._removeFromReviewQueue(entry.id);
+        });
+        pageSectionCards.appendChild(card);
+      });
+    }
+
+    // ── Floating FAB + toolbar button (secondary/backup) ──────────────────
     if (toggle) toggle.style.display = count > 0 ? "flex" : "none";
     if (badge) badge.textContent = count;
     if (countEl) countEl.textContent = count;
 
-    // Show/update the toolbar button
     const toolbarBtn = document.getElementById("review-queue-toolbar-btn");
     const toolbarCount = document.getElementById("review-queue-toolbar-count");
     if (toolbarBtn) {
       toolbarBtn.style.display = count > 0 ? "" : "none";
       if (toolbarCount) toolbarCount.textContent = count;
-      // Wire click only once
       if (!toolbarBtn._reviewWired) {
         toolbarBtn._reviewWired = true;
         toolbarBtn.addEventListener("click", () => {
-          const trayEl = document.getElementById("review-tray");
-          if (trayEl) {
-            trayEl.style.display = "flex";
-            trayEl.classList.add("open");
-          }
+          pageSection?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }
     }
 
-    // Render thumbnail cards
-    cardsEl.innerHTML = "";
-    this._reviewQueue.forEach((entry, idx) => {
-      const card = document.createElement("div");
-      card.className = "review-tray-card";
-      card.title = entry.name;
-      card.innerHTML = `
-        <div class="review-tray-card-img">
-          ${entry.imageUrl
-            ? `<img src="${entry.imageUrl}" alt="${entry.name}">`
-            : `<span class="review-tray-card-no-img">?</span>`}
-        </div>
-        <div class="review-tray-card-name">${entry.name}</div>
-        <button class="review-tray-card-remove" data-id="${entry.id}" title="Remove">&times;</button>
-      `;
-      card.addEventListener("click", (e) => {
-        if (e.target.closest(".review-tray-card-remove")) return;
-        this._openReviewModal(idx);
+    // Sync old tray cards too (for the slide-up tray if anyone uses it)
+    if (cardsEl) {
+      cardsEl.innerHTML = "";
+      this._reviewQueue.forEach((entry, idx) => {
+        const card = document.createElement("div");
+        card.className = "review-tray-card";
+        card.title = entry.name;
+        card.innerHTML = `
+          <div class="review-tray-card-img">
+            ${entry.imageUrl
+              ? `<img src="${entry.imageUrl}" alt="${entry.name}">`
+              : `<span class="review-tray-card-no-img">?</span>`}
+          </div>
+          <div class="review-tray-card-name">${entry.name}</div>
+          <button class="review-tray-card-remove" data-id="${entry.id}" title="Remove">&times;</button>
+        `;
+        card.addEventListener("click", (e) => {
+          if (e.target.closest(".review-tray-card-remove")) return;
+          this._openReviewModal(idx);
+        });
+        card.querySelector(".review-tray-card-remove").addEventListener("click", (e) => {
+          e.stopPropagation();
+          this._removeFromReviewQueue(entry.id);
+        });
+        cardsEl.appendChild(card);
       });
-      card.querySelector(".review-tray-card-remove").addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._removeFromReviewQueue(entry.id);
-      });
-      cardsEl.appendChild(card);
-    });
+    }
 
-    // Keep tray visible if it was already open
-    if (count === 0) {
-      tray.classList.remove("open");
-      tray.style.display = "none";
-    } else if (tray.classList.contains("open")) {
-      tray.style.display = "flex";
+    // Slide-up tray visibility
+    if (tray) {
+      if (count === 0) {
+        tray.classList.remove("open");
+        tray.style.display = "none";
+      } else if (tray.classList.contains("open")) {
+        tray.style.display = "flex";
+      }
     }
   },
 
