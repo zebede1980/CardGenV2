@@ -36,6 +36,10 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
         if card.mes_example:
             card_text += f"\nExample Messages:\n{card.mes_example}"
             
+        # Per-card system prompt (card-level instructions from the card author)
+        if card.system_prompt:
+            card_text += f"\nCharacter Instructions:\n{card.system_prompt}"
+
         if card.character_book:
             relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
             if relevant_lore:

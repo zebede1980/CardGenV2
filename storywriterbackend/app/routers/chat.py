@@ -244,12 +244,19 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         if card.mes_example:
             card_text += f"\nExample Messages:\n{card.mes_example}"
 
+        # Per-card system prompt (card-level instructions set by the card author,
+        # e.g. language, tone rules, or scenario-specific constraints).
+        # This is distinct from the chat-level system_prompt on RoleplayChat.
+        if card.system_prompt:
+            card_text += f"\nCharacter Instructions:\n{card.system_prompt}"
+
         if card.character_book:
             relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
             if relevant_lore:
                 card_text += "\nLorebook:\n" + "\n".join(relevant_lore)
 
         system_parts.append(f"Character: {card.name}\n{card_text}")
+
 
     # 3. Dynamic Memory & Summary
     if chat.summary:

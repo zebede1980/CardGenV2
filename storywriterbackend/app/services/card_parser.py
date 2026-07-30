@@ -86,47 +86,56 @@ def get_lorebook_entries(character_book_json: str) -> list:
 def extract_relevant_lorebook_entries(character_book_json: str, history_text: str) -> list:
     """
     Parse lorebook JSON and return a formatted list of relevant entries.
-    An entry is relevant if it is enabled and one of its keys is found in the history_text.
+
+    Injection rules (matching SillyTavern spec intent):
+    - Entries with `enabled == False` are always skipped.
+    - Entries with NO keys (constant / global entries) are ALWAYS injected —
+      they provide background world-info that applies unconditionally.
+    - Entries WITH keys are injected only when at least one key is found as a
+      substring in `history_text` (case-insensitive). `history_text` is
+      typically the last few messages of recent chat history.
     """
-    if not character_book_json or not history_text:
+    if not character_book_json:
         return []
-        
+
     try:
         book = json.loads(character_book_json)
         entries = book.get('entries', [])
     except Exception:
         return []
-        
-    history_lower = history_text.lower()
+
+    history_lower = history_text.lower() if history_text else ""
     relevant_parts = []
-    
+
     for entry in entries:
+        # Skip disabled entries
         if not entry.get("enabled", True):
             continue
-            
+
         keys = entry.get("keys", [])
         if isinstance(keys, str):
             keys = [k.strip() for k in keys.split(",") if k.strip()]
         elif not isinstance(keys, list):
             keys = []
-            
-        # Global entries (no keys) should be in the card, as requested by user.
-        # So we skip if no valid keys are provided.
+
         valid_keys = [k for k in keys if k and k.strip()]
+
         if not valid_keys:
+            # Constant / global entry — always inject regardless of history
+            name = entry.get("name", "Unnamed")
+            content = entry.get("content", "")
+            if content:
+                relevant_parts.append(f"- {name}: {content}")
             continue
-            
-        match_found = False
-        for key in valid_keys:
-            if key.lower() in history_lower:
-                match_found = True
-                break
-                
+
+        # Keyword-triggered entry — only inject if a key appears in recent history
+        match_found = any(key.lower() in history_lower for key in valid_keys)
         if match_found:
             name = entry.get("name", "Unnamed")
             content = entry.get("content", "")
             if content:
                 relevant_parts.append(f"- {name}: {content}")
-                
+
     return relevant_parts
+
 
