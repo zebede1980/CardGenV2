@@ -2815,7 +2815,54 @@
                     <div style="display: flex; flex-direction: column; gap: 0.75rem;">
                         <button id="drop-import-edit-btn" class="btn-primary" style="width: 100%; padding: 0.875rem; font-size: 1rem;" title="Load the card into the editor for viewing and manual editing">Import for Editing</button>
                         <button id="drop-import-remaster-btn" class="btn-outline" style="width: 100%; padding: 0.875rem; font-size: 1rem;" title="Import the card and immediately run a full AI rewrite to improve consistency and conciseness">✨ Import &amp; Remaster</button>
+                        <button id="drop-import-review-btn" class="btn-ghost" style="width: 100%; padding: 0.875rem; font-size: 1rem;" title="Add this card to a temporary review queue to browse without importing">👁 Review Later</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Review Tray ─────────────────────────────────────────────────── -->
+        <div id="review-tray" class="review-tray" aria-label="Card Review Queue" style="display:none;">
+            <div class="review-tray-header">
+                <span class="review-tray-title">👁 Review Queue</span>
+                <span id="review-tray-count" class="review-tray-count">0</span>
+                <button id="review-tray-close" class="review-tray-close" title="Close tray">×</button>
+            </div>
+            <div id="review-tray-cards" class="review-tray-cards"></div>
+        </div>
+
+        <!-- Floating tray toggle button -->
+        <button id="review-tray-toggle" class="review-tray-toggle" style="display:none;" title="Open Review Queue" aria-label="Open Review Queue">
+            👁 <span id="review-tray-badge">0</span>
+        </button>
+
+        <!-- ── Review Card Modal ───────────────────────────────────────────── -->
+        <div id="review-card-modal" class="modal-overlay" aria-hidden="true">
+            <div class="review-card-modal-inner">
+                <div class="review-card-modal-header">
+                    <h2 id="review-card-modal-title" class="review-card-modal-name"></h2>
+                    <button id="review-card-modal-close" class="modal-close" title="Close">×</button>
+                </div>
+                <div class="review-card-modal-body">
+                    <div id="review-card-image-col" class="review-card-image-col">
+                        <div id="review-card-image-wrap" class="review-card-image-wrap">
+                            <div id="review-card-no-image" class="review-card-no-image">No Image</div>
+                        </div>
+                        <div class="review-card-image-actions">
+                            <button id="review-card-delete-btn" class="btn-danger review-card-action-btn" title="Remove from review queue">🗑 Delete</button>
+                            <button id="review-card-save-btn" class="btn-primary review-card-action-btn" title="Import this card for editing (same as Import for Editing)">💾 Save to Library</button>
+                            <button id="review-card-remaster-btn" class="btn-outline review-card-action-btn" title="Import and AI-remaster">✨ Save &amp; Remaster</button>
+                        </div>
+                    </div>
+                    <div id="review-card-fields-col" class="review-card-fields-col">
+                        <div id="review-card-fields" class="review-card-fields"></div>
+                    </div>
+                </div>
+                <!-- Navigator -->
+                <div class="review-card-nav">
+                    <button id="review-card-prev" class="btn-ghost review-card-nav-btn" title="Previous card">← Prev</button>
+                    <span id="review-card-nav-label" class="review-card-nav-label"></span>
+                    <button id="review-card-next" class="btn-ghost review-card-nav-btn" title="Next card">Next →</button>
                 </div>
             </div>
         </div>

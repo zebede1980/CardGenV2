@@ -30,6 +30,11 @@ class CharacterGeneratorApp {
     this.isRevising = false;
     this.lastConsistencyReport = null;
 
+    // Review Queue (temporary card store)
+    this._reviewQueue = [];
+    this._reviewModalIndex = 0;
+    this._reviewModalBound = false;
+
     this.init();
   }
 
@@ -979,6 +984,11 @@ class CharacterGeneratorApp {
     // Inject API Logs UI
     if (typeof this.injectTechLogsUI === 'function') {
         this.injectTechLogsUI();
+    }
+
+    // Init Review Tray
+    if (typeof this._initReviewTray === 'function') {
+        this._initReviewTray();
     }
   }
 

@@ -760,6 +760,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const filenameEl = document.getElementById("drop-import-filename");
     const editBtn = document.getElementById("drop-import-edit-btn");
     const remasterBtn = document.getElementById("drop-import-remaster-btn");
+    const reviewBtn = document.getElementById("drop-import-review-btn");
     const cancelBtn = document.getElementById("drop-import-cancel-btn");
 
     filenameEl.textContent = file.name;
@@ -771,6 +772,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       document.body.style.overflow = "";
       editBtn.removeEventListener("click", onEdit);
       remasterBtn.removeEventListener("click", onRemaster);
+      if (reviewBtn) reviewBtn.removeEventListener("click", onReview);
       cancelBtn.removeEventListener("click", close);
       modal.removeEventListener("click", onBackdrop);
       document.removeEventListener("keydown", onEscape);
@@ -778,15 +780,290 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const onEdit = () => { close(); this.handleImportCardFile(file, false); };
     const onRemaster = () => { close(); this.handleImportCardFile(file, true); };
+    const onReview = () => { close(); this.addCardToReviewQueue(file); };
     const onBackdrop = (e) => { if (e.target === modal) close(); };
     const onEscape = (e) => { if (e.key === "Escape") close(); };
 
     editBtn.addEventListener("click", onEdit);
     remasterBtn.addEventListener("click", onRemaster);
+    if (reviewBtn) reviewBtn.addEventListener("click", onReview);
     cancelBtn.addEventListener("click", close);
     modal.addEventListener("click", onBackdrop);
     document.addEventListener("keydown", onEscape);
   },
+
+  // ── Review Queue ─────────────────────────────────────────────────────────
+
+  async addCardToReviewQueue(file) {
+    try {
+      let characterData = null;
+      let imageUrl = null;
+
+      if (file.type === "image/png" || file.name.toLowerCase().endsWith(".png")) {
+        const extracted = await this.pngEncoder.extractCharacterData(file);
+        characterData = this.normalizeCharacterFromSpec(extracted);
+        imageUrl = URL.createObjectURL(file);
+      } else {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        characterData = this.normalizeCharacterFromSpec(parsed);
+      }
+
+      if (!characterData) throw new Error("Unable to parse card content");
+
+      const id = `review-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      this._reviewQueue.push({ id, name: characterData.name || file.name, imageUrl, characterData, file });
+      this._renderReviewTray();
+      this.showNotification(`"${characterData.name || file.name}" added to review queue`, "success");
+    } catch (err) {
+      console.error("Review queue add failed:", err);
+      this.showNotification(`Could not add to review queue: ${err.message}`, "error");
+    }
+  },
+
+  _renderReviewTray() {
+    const tray = document.getElementById("review-tray");
+    const toggle = document.getElementById("review-tray-toggle");
+    const badge = document.getElementById("review-tray-badge");
+    const countEl = document.getElementById("review-tray-count");
+    const cardsEl = document.getElementById("review-tray-cards");
+    if (!tray || !toggle || !cardsEl) return;
+
+    const count = this._reviewQueue.length;
+
+    // Show/hide the floating toggle
+    toggle.style.display = count > 0 ? "flex" : "none";
+    if (badge) badge.textContent = count;
+    if (countEl) countEl.textContent = count;
+
+    // Render thumbnail cards
+    cardsEl.innerHTML = "";
+    this._reviewQueue.forEach((entry, idx) => {
+      const card = document.createElement("div");
+      card.className = "review-tray-card";
+      card.title = entry.name;
+      card.innerHTML = `
+        <div class="review-tray-card-img">
+          ${entry.imageUrl
+            ? `<img src="${entry.imageUrl}" alt="${entry.name}">`
+            : `<span class="review-tray-card-no-img">?</span>`}
+        </div>
+        <div class="review-tray-card-name">${entry.name}</div>
+        <button class="review-tray-card-remove" data-id="${entry.id}" title="Remove">&times;</button>
+      `;
+      card.addEventListener("click", (e) => {
+        if (e.target.closest(".review-tray-card-remove")) return;
+        this._openReviewModal(idx);
+      });
+      card.querySelector(".review-tray-card-remove").addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._removeFromReviewQueue(entry.id);
+      });
+      cardsEl.appendChild(card);
+    });
+
+    // Keep tray visible if it was already open
+    if (count === 0) {
+      tray.classList.remove("open");
+      tray.style.display = "none";
+    } else if (tray.classList.contains("open")) {
+      tray.style.display = "flex";
+    }
+  },
+
+  _removeFromReviewQueue(id) {
+    const entry = this._reviewQueue.find(e => e.id === id);
+    if (entry && entry.imageUrl) URL.revokeObjectURL(entry.imageUrl);
+    this._reviewQueue = this._reviewQueue.filter(e => e.id !== id);
+    this._renderReviewTray();
+
+    // If modal is open and we deleted the current entry, adjust or close
+    const modal = document.getElementById("review-card-modal");
+    if (modal && modal.classList.contains("show")) {
+      if (this._reviewQueue.length === 0) {
+        this._closeReviewModal();
+      } else {
+        this._reviewModalIndex = Math.min(this._reviewModalIndex, this._reviewQueue.length - 1);
+        this._populateReviewModal(this._reviewModalIndex);
+      }
+    }
+  },
+
+  _openReviewModal(index) {
+    if (this._reviewQueue.length === 0) return;
+    this._reviewModalIndex = Math.max(0, Math.min(index, this._reviewQueue.length - 1));
+    const modal = document.getElementById("review-card-modal");
+    if (!modal) return;
+    modal.classList.add("show");
+    modal.removeAttribute("aria-hidden");
+    document.body.style.overflow = "hidden";
+    this._populateReviewModal(this._reviewModalIndex);
+    this._bindReviewModalEvents();
+  },
+
+  _closeReviewModal() {
+    const modal = document.getElementById("review-card-modal");
+    if (!modal) return;
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  },
+
+  _populateReviewModal(index) {
+    const entry = this._reviewQueue[index];
+    if (!entry) return;
+    const cd = entry.characterData;
+
+    // Header name
+    const titleEl = document.getElementById("review-card-modal-title");
+    if (titleEl) titleEl.textContent = cd.name || "Unnamed";
+
+    // Image
+    const imgWrap = document.getElementById("review-card-image-wrap");
+    const noImg = document.getElementById("review-card-no-image");
+    if (imgWrap) {
+      // Remove previous img if any
+      imgWrap.querySelectorAll("img").forEach(el => el.remove());
+      if (entry.imageUrl) {
+        if (noImg) noImg.style.display = "none";
+        const img = document.createElement("img");
+        img.src = entry.imageUrl;
+        img.alt = cd.name;
+        img.className = "review-card-image";
+        imgWrap.appendChild(img);
+      } else {
+        if (noImg) noImg.style.display = "flex";
+      }
+    }
+
+    // Fields
+    const fieldsEl = document.getElementById("review-card-fields");
+    if (fieldsEl) {
+      fieldsEl.innerHTML = this._renderReviewFields(cd);
+    }
+
+    // Nav label
+    const navLabel = document.getElementById("review-card-nav-label");
+    if (navLabel) navLabel.textContent = `${index + 1} / ${this._reviewQueue.length}`;
+
+    // Prev/Next disabled state
+    const prevBtn = document.getElementById("review-card-prev");
+    const nextBtn = document.getElementById("review-card-next");
+    if (prevBtn) prevBtn.disabled = index === 0;
+    if (nextBtn) nextBtn.disabled = index === this._reviewQueue.length - 1;
+  },
+
+  _renderReviewFields(cd) {
+    const field = (label, value) => {
+      if (!value || !value.trim()) return "";
+      // Simple markdown-ish: bold **x**, italic *x*, headings # 
+      const html = value
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/^(#{1,3})\s+(.+)$/gm, (_, hashes, text) => {
+          const level = Math.min(hashes.length + 3, 6);
+          return `<h${level} class="rcf-heading">${text}</h${level}>`;
+        })
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+        .replace(/\n/g, "<br>");
+      return `<div class="rcf-field"><div class="rcf-label">${label}</div><div class="rcf-value">${html}</div></div>`;
+    };
+
+    return [
+      field("Description", cd.description),
+      field("Personality", cd.personality),
+      field("Scenario", cd.scenario),
+      field("First Message", cd.firstMessage),
+      field("Example Messages", cd.mesExample),
+      field("Post-History Instructions", cd.postHistoryInstructions),
+      field("Creator Notes", cd.creatorNotes),
+      (cd.tags && cd.tags.length
+        ? `<div class="rcf-field"><div class="rcf-label">Tags</div><div class="rcf-value rcf-tags">${cd.tags.map(t => `<span class="rcf-tag">${t}</span>`).join("")}</div></div>`
+        : ""),
+      (cd.alternateGreetings && cd.alternateGreetings.length
+        ? field(`Alternate Greetings (${cd.alternateGreetings.length})`, cd.alternateGreetings.join("\n\n---\n\n"))
+        : ""),
+    ].join("");
+  },
+
+  _bindReviewModalEvents() {
+    if (this._reviewModalBound) return;
+    this._reviewModalBound = true;
+
+    const modal = document.getElementById("review-card-modal");
+    const closeBtn = document.getElementById("review-card-modal-close");
+    const deleteBtn = document.getElementById("review-card-delete-btn");
+    const saveBtn = document.getElementById("review-card-save-btn");
+    const remasterBtn = document.getElementById("review-card-remaster-btn");
+    const prevBtn = document.getElementById("review-card-prev");
+    const nextBtn = document.getElementById("review-card-next");
+
+    if (closeBtn) closeBtn.addEventListener("click", () => this._closeReviewModal());
+    if (modal) modal.addEventListener("click", (e) => { if (e.target === modal) this._closeReviewModal(); });
+
+    if (deleteBtn) deleteBtn.addEventListener("click", () => {
+      const entry = this._reviewQueue[this._reviewModalIndex];
+      if (entry) this._removeFromReviewQueue(entry.id);
+    });
+
+    if (saveBtn) saveBtn.addEventListener("click", () => {
+      const entry = this._reviewQueue[this._reviewModalIndex];
+      if (!entry) return;
+      this._closeReviewModal();
+      this.handleImportCardFile(entry.file, false).then(() => {
+        this._removeFromReviewQueue(entry.id);
+      });
+    });
+
+    if (remasterBtn) remasterBtn.addEventListener("click", () => {
+      const entry = this._reviewQueue[this._reviewModalIndex];
+      if (!entry) return;
+      this._closeReviewModal();
+      this.handleImportCardFile(entry.file, true).then(() => {
+        this._removeFromReviewQueue(entry.id);
+      });
+    });
+
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+      if (this._reviewModalIndex > 0) {
+        this._reviewModalIndex--;
+        this._populateReviewModal(this._reviewModalIndex);
+      }
+    });
+
+    if (nextBtn) nextBtn.addEventListener("click", () => {
+      if (this._reviewModalIndex < this._reviewQueue.length - 1) {
+        this._reviewModalIndex++;
+        this._populateReviewModal(this._reviewModalIndex);
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      const modal = document.getElementById("review-card-modal");
+      if (!modal || !modal.classList.contains("show")) return;
+      if (e.key === "Escape") this._closeReviewModal();
+      if (e.key === "ArrowLeft") prevBtn?.click();
+      if (e.key === "ArrowRight") nextBtn?.click();
+    });
+  },
+
+  _initReviewTray() {
+    const tray = document.getElementById("review-tray");
+    const toggle = document.getElementById("review-tray-toggle");
+    const closeBtn = document.getElementById("review-tray-close");
+    if (!tray || !toggle) return;
+
+    toggle.addEventListener("click", () => {
+      tray.style.display = "flex";
+      tray.classList.add("open");
+    });
+    if (closeBtn) closeBtn.addEventListener("click", () => {
+      tray.classList.remove("open");
+      tray.style.display = "none";
+    });
+  },
+
+
 
   async handleAutoRemaster() {
     if (!this.currentCharacter) return;
