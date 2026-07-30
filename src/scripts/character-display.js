@@ -814,7 +814,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const id = `review-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       this._reviewQueue.push({ id, name: characterData.name || file.name, imageUrl, characterData, file });
       this._renderReviewTray();
-      this.showNotification(`"${characterData.name || file.name}" added to review queue`, "success");
+      this.showNotification(`"${characterData.name || file.name}" added to Review Queue — click the 👁 Review Queue button to view`, "success");
     } catch (err) {
       console.error("Review queue add failed:", err);
       this.showNotification(`Could not add to review queue: ${err.message}`, "error");
@@ -831,10 +831,29 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const count = this._reviewQueue.length;
 
-    // Show/hide the floating toggle
-    toggle.style.display = count > 0 ? "flex" : "none";
+    // Show/hide the floating toggle FAB
+    if (toggle) toggle.style.display = count > 0 ? "flex" : "none";
     if (badge) badge.textContent = count;
     if (countEl) countEl.textContent = count;
+
+    // Show/update the toolbar button
+    const toolbarBtn = document.getElementById("review-queue-toolbar-btn");
+    const toolbarCount = document.getElementById("review-queue-toolbar-count");
+    if (toolbarBtn) {
+      toolbarBtn.style.display = count > 0 ? "" : "none";
+      if (toolbarCount) toolbarCount.textContent = count;
+      // Wire click only once
+      if (!toolbarBtn._reviewWired) {
+        toolbarBtn._reviewWired = true;
+        toolbarBtn.addEventListener("click", () => {
+          const trayEl = document.getElementById("review-tray");
+          if (trayEl) {
+            trayEl.style.display = "flex";
+            trayEl.classList.add("open");
+          }
+        });
+      }
+    }
 
     // Render thumbnail cards
     cardsEl.innerHTML = "";
