@@ -1113,9 +1113,18 @@ class RoleplayChatHandler {
             const d = new Date(chat.updated_at);
             dateEl.textContent = isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
+            const msgCountEl = document.createElement('div');
+            msgCountEl.className = 'chat-card-msg-count';
+            const mc = chat.message_count ?? 0;
+            msgCountEl.textContent = `💬 ${mc} msg${mc !== 1 ? 's' : ''}`;
+
             info.appendChild(titleEl);
             if ((chat.characters || []).length > 0) info.appendChild(charsEl);
-            info.appendChild(dateEl);
+            const metaRow = document.createElement('div');
+            metaRow.className = 'chat-card-meta';
+            metaRow.appendChild(dateEl);
+            metaRow.appendChild(msgCountEl);
+            info.appendChild(metaRow);
             card.appendChild(info);
 
             /* ── Delete button ── */

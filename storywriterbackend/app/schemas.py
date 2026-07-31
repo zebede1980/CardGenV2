@@ -193,6 +193,7 @@ class RoleplayChatOut(BaseModel):
     user_persona_card_id: Optional[int]
     created_at: datetime
     updated_at: datetime
+    message_count: int = 0
     class Config:
         from_attributes = True
 

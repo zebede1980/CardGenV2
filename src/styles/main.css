@@ -3247,6 +3247,26 @@ h6.rcf-heading { font-size: 0.75rem; }
     margin-top: 0.15rem;
 }
 
+.chat-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.15rem;
+    flex-wrap: wrap;
+}
+
+.chat-card-msg-count {
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: rgba(var(--accent-rgb, 99, 102, 241), 0.12);
+    border: 1px solid rgba(var(--accent-rgb, 99, 102, 241), 0.25);
+    border-radius: 999px;
+    padding: 0.05rem 0.45rem;
+    font-weight: 600;
+    white-space: nowrap;
+    line-height: 1.6;
+}
+
 /* Delete button on card — top-right corner */
 .chat-card-delete {
     position: absolute;

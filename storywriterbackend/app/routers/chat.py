@@ -525,10 +525,25 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
 
 @router.get("/", response_model=List[schemas.RoleplayChatOut])
 def list_chats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    return db.query(models.RoleplayChat)\
-        .filter(models.RoleplayChat.user_id == str(current_user.id))\
-        .order_by(models.RoleplayChat.updated_at.desc())\
+    from sqlalchemy import func
+    msg_count_sq = (
+        db.query(func.count(models.ChatMessage.id))
+        .filter(models.ChatMessage.chat_id == models.RoleplayChat.id)
+        .correlate(models.RoleplayChat)
+        .scalar_subquery()
+    )
+    rows = (
+        db.query(models.RoleplayChat, msg_count_sq.label("message_count"))
+        .filter(models.RoleplayChat.user_id == str(current_user.id))
+        .order_by(models.RoleplayChat.updated_at.desc())
         .all()
+    )
+    results = []
+    for chat, count in rows:
+        out = schemas.RoleplayChatOut.from_orm(chat)
+        out.message_count = count or 0
+        results.append(out)
+    return results
 
 @router.post("/", response_model=schemas.RoleplayChatDetailOut)
 def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

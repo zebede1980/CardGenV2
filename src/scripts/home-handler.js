@@ -232,13 +232,14 @@ class HomeHandler {
         document.getElementById('home-next-btn-top')?.addEventListener('click', handleNext);
     }
 
-    async loadCards() {
+    async loadCards({ preservePage = false } = {}) {
         if (!window.characterStorage) return;
         try {
+            const pageToRestore = preservePage ? this.currentPage : 1;
             const allCards = await window.characterStorage.listCards();
             this.cards = allCards.filter(c => c.isPermanent);
             this.filteredCards = [...this.cards];
-            this.currentPage = 1;
+            this.currentPage = pageToRestore; // updateView() will clamp if out of range
             this.updateView();
         } catch (e) {
             console.error("Home: Failed to load cards", e);
@@ -709,7 +710,7 @@ class HomeHandler {
             try {
                 if (type === 'card') {
                     await window.characterStorage.deleteCard(item.id);
-                    this.loadCards(); // refresh grid
+                    this.loadCards({ preservePage: true }); // refresh grid, staying on current page
                 } else if (type === 'chat') {
                     const res = await window.authFetch(`/api/sw/chats/${item.id}`, { method: 'DELETE' });
                     if (!res.ok) throw new Error('Failed to delete chat');
