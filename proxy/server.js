@@ -1894,6 +1894,8 @@ app.post("/api/image/inpaint", requireAuth, async (req, res) => {
     const requestBody = {
       image,
       mask,
+      imageDataUrl: image,
+      maskDataUrl: mask,
       prompt: prompt || "clean background, natural continuation, remove text and watermark",
       model: model || "dall-e-2",
       n: 1,
