@@ -713,14 +713,14 @@ BEGIN PROMPT:`;
     const payload = {
       init_images: [cleanImg],
       mask: cleanMask,
-      prompt: prompt || "high quality, seamless continuation, clean texture, matching lighting, unbroken background",
-      negative_prompt: "text, watermark, logo, blurry, ugly, low quality, artifacts, signatures, deformed, bad anatomy",
-      inpainting_fill: 0, // 0 = fill with surrounding color to clean text/logos before diffusion
-      inpaint_full_res: false, // CRITICAL: false means inpaint in context of the whole image (prevents random miniature hallucinations)
+      prompt: prompt || "seamless background continuation, natural texture, matching lighting and color, clean uncluttered surface",
+      negative_prompt: "text, watermark, logo, label, signature, blurry, ugly, low quality, artifacts, deformed, person, face, body, character, figure, extra limbs",
+      inpainting_fill: 2, // 2 = latent noise — works best for seamless blending; model hallucinates less than fill-color (0) and generates more coherent in-context content
+      inpaint_full_res: false, // false = inpaint in context of the whole image (prevents random miniature hallucinations in corners)
       inpaint_full_res_padding: 32,
-      inpainting_mask_invert: 0, // 0 = inpaint masked area
-      mask_blur: 6,
-      denoising_strength: denoisingStrength || 0.85,
+      inpainting_mask_invert: 0, // 0 = inpaint masked area (white = regenerate)
+      mask_blur: 10, // higher blur = softer feathered edge for seamless blending
+      denoising_strength: denoisingStrength || 0.55, // low denoising = faithful to surrounding context; high = creative freedom (bad for logo removal)
       steps: settingsSteps,
       cfg_scale: settingsCfg,
       sampler_name: "Euler",
@@ -871,7 +871,11 @@ BEGIN PROMPT:`;
     console.log(`🎨 Starting Inpainting with provider: ${provider}`);
 
     if (provider === "localForge") {
-      const denoising = infillConfig.denoisingStrength ?? 0.85;
+      // Prefer the live in-modal slider value (always visible) over the settings panel slider
+      const modalSlider = document.getElementById("infill-modal-denoising") || document.getElementById("infill-denoising");
+      const denoising = modalSlider
+        ? parseFloat(modalSlider.value)
+        : (infillConfig.denoisingStrength ?? 0.55);
 
       return await this.inpaintForgeImage({
         imageBase64,

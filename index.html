@@ -2376,11 +2376,12 @@
                         <div class="form-group" style="margin-bottom: 0;">
                             <label for="infill-denoising" class="label">Forge Inpainting Denoising Strength</label>
                             <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <input type="range" id="infill-denoising" min="0.1" max="1.0" step="0.05" value="0.85" style="flex: 1;" oninput="document.getElementById('infill-denoising-val').textContent = this.value;" />
-                                <span id="infill-denoising-val" style="font-size: 0.85rem; font-weight: 600; min-width: 35px; color: var(--accent, #6366f1);">0.85</span>
+                                <input type="range" id="infill-denoising" min="0.1" max="1.0" step="0.05" value="0.55" style="flex: 1;" oninput="document.getElementById('infill-denoising-val').textContent = this.value;" />
+                                <span id="infill-denoising-val" style="font-size: 0.85rem; font-weight: 600; min-width: 35px; color: var(--accent, #6366f1);">0.55</span>
                             </div>
                             <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                Higher values (0.80 - 1.0) allow the model to replace logos/text with seamless textures.
+                                <strong>Low (0.4–0.6):</strong> Best for logo/watermark removal — faithfully blends surrounding scene into the masked area.<br>
+                                <strong>High (0.75–1.0):</strong> More creative freedom, good for replacing large areas with new content.
                             </p>
                         </div>
                     </div>
@@ -3456,15 +3457,45 @@
                     <!-- Live Brush Cursor Follower -->
                     <div id="infill-brush-cursor" style="display: none; position: fixed; pointer-events: none; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9); background: rgba(239, 68, 68, 0.25); box-shadow: 0 0 4px rgba(0,0,0,0.6); z-index: 10020; transform: translate(-50%, -50%);"></div>
 
-                    <!-- Bottom Bar: Optional In-fill Prompt / Guidance -->
-                    <div style="width: 100%; display: flex; align-items: center; gap: 0.5rem;">
+                    <!-- Bottom Bar: Optional In-fill Prompt / Guidance + Denoising Quick Control -->
+                    <div style="width: 100%; display: flex; flex-direction: column; gap: 0.4rem;">
                         <input
                             type="text"
                             id="infill-prompt-input"
                             class="input"
-                            placeholder="Optional: Leave blank for seamless background texture, or describe what to fill with..."
+                            placeholder="Optional: Leave blank to seamlessly continue the scene, or describe what to fill with..."
                             style="flex: 1; font-size: 0.85rem; padding: 0.45rem 0.75rem;"
                         />
+                        <!-- Inline Denoising Strength — synced with settings slider -->
+                        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.2rem;">
+                            <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-secondary, #a6adc8); white-space: nowrap;" title="Low = preserve scene (logo removal). High = creative freedom (replacing large areas).">
+                                🎚️ Blend strength:
+                            </span>
+                            <input
+                                type="range"
+                                id="infill-modal-denoising"
+                                min="0.1" max="1.0" step="0.05" value="0.55"
+                                style="flex: 1; cursor: pointer;"
+                                oninput="
+                                    document.getElementById('infill-modal-denoising-val').textContent = parseFloat(this.value).toFixed(2);
+                                    const s = document.getElementById('infill-denoising');
+                                    if (s) { s.value = this.value; document.getElementById('infill-denoising-val').textContent = this.value; }
+                                "
+                            />
+                            <span id="infill-modal-denoising-val" style="font-size: 0.8rem; font-weight: 600; min-width: 32px; color: var(--accent, #6366f1);">0.55</span>
+                            <button
+                                class="btn-small"
+                                style="padding: 0.1rem 0.4rem; font-size: 0.7rem; white-space: nowrap;"
+                                title="Best for logo/watermark removal"
+                                onclick="const v='0.55'; document.getElementById('infill-modal-denoising').value=v; document.getElementById('infill-modal-denoising-val').textContent=v; const s=document.getElementById('infill-denoising'); if(s){s.value=v; document.getElementById('infill-denoising-val').textContent=v;}"
+                            >Logo</button>
+                            <button
+                                class="btn-small"
+                                style="padding: 0.1rem 0.4rem; font-size: 0.7rem; white-space: nowrap;"
+                                title="More creative replacement"
+                                onclick="const v='0.80'; document.getElementById('infill-modal-denoising').value=v; document.getElementById('infill-modal-denoising-val').textContent=v; const s=document.getElementById('infill-denoising'); if(s){s.value=v; document.getElementById('infill-denoising-val').textContent=v;}"
+                            >Creative</button>
+                        </div>
                     </div>
                 </div>
 

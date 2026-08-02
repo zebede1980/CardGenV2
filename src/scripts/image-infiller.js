@@ -522,13 +522,28 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const promptInput = document.getElementById("infill-prompt-input");
       let userPrompt = promptInput?.value?.trim() || "";
 
-      // If user left prompt blank, use the character card's image prompt for style continuity
+      // If user left prompt blank, build a background-continuation hint.
+      // IMPORTANT: Do NOT pass the full character imagePrompt verbatim — it contains character
+      // descriptions (face, pose, clothing) which cause Forge to hallucinate character content
+      // inside the masked region (a corner/logo area). Instead extract only lighting/style/background
+      // terms and prepend a strong background-continuation instruction.
       if (!userPrompt) {
-        const cardPrompt = document.getElementById("custom-image-prompt")?.value?.trim();
-        if (cardPrompt) {
-          userPrompt = cardPrompt;
-        } else if (this.currentCharacter?.imagePrompt) {
-          userPrompt = this.currentCharacter.imagePrompt;
+        const rawCardPrompt =
+          document.getElementById("custom-image-prompt")?.value?.trim() ||
+          this.currentCharacter?.imagePrompt ||
+          "";
+
+        if (rawCardPrompt) {
+          // Strip common character-description tokens: leave background/style/lighting hints
+          const characterTerms = /\b(girl|boy|man|woman|male|female|person|character|face|eyes|hair|skin|body|pose|sitting|standing|holding|wearing|outfit|dress|shirt|smile|look|gaze|portrait|bust|full body|anime|realistic|photorealistic|1girl|1boy|solo|nsfw|sfw|nude|breasts|hips|thighs|beautiful|sexy|cute|handsome|looking at viewer|upper body|lower body|hands|arms|legs|feet|fingers|teeth|lips|nose|ear|cheek|forehead|chin|neck|shoulder|chest|waist|belly|back|butt)\b/gi;
+          const backgroundHint = rawCardPrompt
+            .split(",")
+            .map(t => t.trim())
+            .filter(t => !characterTerms.test(t) && t.length > 0)
+            .join(", ");
+          userPrompt = backgroundHint
+            ? `seamless background continuation, ${backgroundHint}`
+            : "";
         }
       }
 
