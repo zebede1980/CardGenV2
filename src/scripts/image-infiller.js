@@ -15,6 +15,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     history: [], // Stack of ImageData for Undo
     maxHistory: 25,
     listenersInitialized: false,
+    pendingResult: null, // Holds the inpainted URL until user confirms Save to Card
   },
 
   updateInfillButtonVisibility() {
@@ -111,6 +112,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     const cursor = document.getElementById("infill-brush-cursor");
     if (cursor) cursor.style.display = "none";
+    // Hide Save button and clear pending result so next open starts clean
+    const saveBtn = document.getElementById("infill-save-btn");
+    if (saveBtn) saveBtn.style.display = "none";
+    this._infillState.pendingResult = null;
   },
 
   _renderInfillStage() {
@@ -272,6 +277,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Apply In-fill button
     const applyBtn = document.getElementById("infill-apply-btn");
     if (applyBtn) applyBtn.addEventListener("click", () => this.handleApplyInfill());
+
+    // Save to Card button
+    const saveBtn = document.getElementById("infill-save-btn");
+    if (saveBtn) saveBtn.addEventListener("click", () => this.saveInfillToCard());
 
     // Interactive Stage Drawing & Cursor Follower
     const stage = document.getElementById("infill-stage");
@@ -501,6 +510,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   async handleApplyInfill() {
     const applyBtn = document.getElementById("infill-apply-btn");
+    const saveBtn = document.getElementById("infill-save-btn");
     const statusEl = document.getElementById("infill-status-message");
 
     try {
@@ -555,6 +565,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           In-filling...
         `;
       }
+      if (saveBtn) saveBtn.style.display = "none"; // hide Save while re-processing
       if (statusEl) {
         statusEl.innerHTML = `<span style="color: var(--accent, #6366f1);">⏳ Processing with ${chosenProvider === "localForge" ? "Local Forge" : "Infill API"}...</span>`;
       }
@@ -574,36 +585,29 @@ Object.assign(CharacterGeneratorApp.prototype, {
         throw new Error("No image was returned from In-fill provider");
       }
 
-      // Archive current image to history so user can revert or compare
-      if (typeof this._archiveCurrentImage === "function") {
-        this._archiveCurrentImage();
-      }
+      // Store the pending result — not committed to the card until user clicks Save
+      this._infillState.pendingResult = resultImageUrl;
 
-      // Update current image URL
-      this.currentImageUrl = resultImageUrl;
+      // Reload the canvas with the new result so the user can review / paint another pass
+      const resultImg = new Image();
+      await new Promise((resolve, reject) => {
+        resultImg.onload = resolve;
+        resultImg.onerror = () => reject(new Error("Failed to load inpainted result image"));
+        resultImg.src = resultImageUrl;
+      });
+      this._infillState.img = resultImg;
+      this._infillState.naturalWidth = resultImg.naturalWidth || targetW;
+      this._infillState.naturalHeight = resultImg.naturalHeight || targetH;
 
-      // Update `#image-content` container in DOM
-      const imageContainer = document.getElementById("image-content");
-      if (imageContainer) {
-        imageContainer.innerHTML = `
-          <div class="image-container">
-            <img src="${this.currentImageUrl}" alt="${this.currentCharacter?.name || "Character"}" class="generated-image">
-          </div>
-        `;
-      }
+      // Re-render stage with the fresh image (also clears the mask ready for another pass)
+      this._renderInfillStage();
 
-      this.closeInfillModal();
-      this.showNotification("✨ Image in-filled successfully! Previous image saved to History.", "success");
-
-      // Save to library and refresh views
-      if (typeof this.saveCardToLibrary === "function") {
-        await this.saveCardToLibrary();
+      // Show Save button and update status
+      if (saveBtn) saveBtn.style.display = "inline-flex";
+      if (statusEl) {
+        statusEl.innerHTML = `<span style="color: #22c55e;">✅ Result looks good? Click <strong>Save to Card</strong> — or paint another area and run again.</span>`;
       }
-      if (typeof this.refreshLibraryViews === "function") {
-        await this.refreshLibraryViews();
-      }
-      this.updateCropButtonVisibility();
-      this.updateInfillButtonVisibility();
+      this.showNotification("✨ In-fill complete — review the result, then Save to Card when ready.", "success");
 
     } catch (error) {
       console.error("Apply inpaint error:", error);
@@ -614,7 +618,69 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } finally {
       if (applyBtn) {
         applyBtn.disabled = false;
-        applyBtn.innerHTML = `✨ Remove & In-fill`;
+        applyBtn.innerHTML = `✨ Remove &amp; In-fill`;
+      }
+    }
+  },
+
+  // Commits the pending inpaint result to the card, saves to library, and closes the modal.
+  async saveInfillToCard() {
+    const pendingUrl = this._infillState.pendingResult;
+    if (!pendingUrl) {
+      this.showNotification("Nothing to save yet — run In-fill first.", "warning");
+      return;
+    }
+
+    const saveBtn = document.getElementById("infill-save-btn");
+    const statusEl = document.getElementById("infill-status-message");
+
+    try {
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<span class="loading-spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 0.4rem; border-width: 2px;"></span> Saving...`;
+      }
+
+      // Archive the old image to history so the user can revert
+      if (typeof this._archiveCurrentImage === "function") {
+        this._archiveCurrentImage();
+      }
+
+      // Commit result to card
+      this.currentImageUrl = pendingUrl;
+      this._infillState.pendingResult = null;
+
+      // Update the main image display
+      const imageContainer = document.getElementById("image-content");
+      if (imageContainer) {
+        imageContainer.innerHTML = `
+          <div class="image-container">
+            <img src="${this.currentImageUrl}" alt="${this.currentCharacter?.name || "Character"}" class="generated-image">
+          </div>
+        `;
+      }
+
+      this.closeInfillModal();
+      this.showNotification("💾 Image saved to card! Previous image archived to History.", "success");
+
+      if (typeof this.saveCardToLibrary === "function") {
+        await this.saveCardToLibrary();
+      }
+      if (typeof this.refreshLibraryViews === "function") {
+        await this.refreshLibraryViews();
+      }
+      this.updateCropButtonVisibility();
+      this.updateInfillButtonVisibility();
+
+    } catch (error) {
+      console.error("Save inpaint to card error:", error);
+      this.showNotification(`Save failed: ${error.message}`, "error");
+      if (statusEl) {
+        statusEl.innerHTML = `<span style="color: #ef4444;">❌ Save error: ${error.message}</span>`;
+      }
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = `💾 Save to Card`;
       }
     }
   }

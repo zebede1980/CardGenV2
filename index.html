@@ -3503,10 +3503,14 @@
                     <div id="infill-status-message" style="font-size: 0.8rem; color: var(--text-secondary, #a6adc8);">
                         💡 Highlight the logo or text with the brush, then click Remove & In-fill.
                     </div>
-                    <div style="display: flex; gap: 0.75rem;">
+                    <div style="display: flex; gap: 0.75rem; align-items: center;">
                         <button id="infill-cancel-btn" class="btn-secondary" style="padding: 0.55rem 1.2rem;">Cancel</button>
+                        <!-- Save to Card: revealed after a successful inpaint preview -->
+                        <button id="infill-save-btn" class="btn-primary" style="display: none; padding: 0.55rem 1.5rem; font-weight: 600; background: linear-gradient(135deg, #22c55e, #16a34a);">
+                            💾 Save to Card
+                        </button>
                         <button id="infill-apply-btn" class="btn-primary" style="padding: 0.55rem 1.5rem; font-weight: 600; background: linear-gradient(135deg, #a855f7, #6366f1);">
-                            ✨ Remove & In-fill
+                            ✨ Remove &amp; In-fill
                         </button>
                     </div>
                 </div>
