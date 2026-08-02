@@ -520,7 +520,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       // Read prompt
       const promptInput = document.getElementById("infill-prompt-input");
-      const userPrompt = promptInput?.value?.trim() || "";
+      let userPrompt = promptInput?.value?.trim() || "";
+
+      // If user left prompt blank, use the character card's image prompt for style continuity
+      if (!userPrompt) {
+        const cardPrompt = document.getElementById("custom-image-prompt")?.value?.trim();
+        if (cardPrompt) {
+          userPrompt = cardPrompt;
+        } else if (this.currentCharacter?.imagePrompt) {
+          userPrompt = this.currentCharacter.imagePrompt;
+        }
+      }
 
       // Set UI loading state
       if (applyBtn) {

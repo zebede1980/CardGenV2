@@ -713,13 +713,13 @@ BEGIN PROMPT:`;
     const payload = {
       init_images: [cleanImg],
       mask: cleanMask,
-      prompt: prompt || "",
-      negative_prompt: "text, watermark, logo, blurry, ugly, low quality, artifacts, signatures",
-      inpainting_fill: 1, // 1 = original image underlying
-      inpaint_full_res: true,
+      prompt: prompt || "high quality, seamless continuation, clean texture, matching lighting, unbroken background",
+      negative_prompt: "text, watermark, logo, blurry, ugly, low quality, artifacts, signatures, deformed, bad anatomy",
+      inpainting_fill: 0, // 0 = fill with surrounding color to clean text/logos before diffusion
+      inpaint_full_res: false, // CRITICAL: false means inpaint in context of the whole image (prevents random miniature hallucinations)
       inpaint_full_res_padding: 32,
       inpainting_mask_invert: 0, // 0 = inpaint masked area
-      mask_blur: 4,
+      mask_blur: 6,
       denoising_strength: denoisingStrength || 0.85,
       steps: settingsSteps,
       cfg_scale: settingsCfg,
