@@ -412,22 +412,49 @@ Object.assign(CharacterGeneratorApp.prototype, {
     ctx.restore();
   },
 
-  // Generates full-resolution binary mask (white on black)
-  _generateFullResMask() {
+  // Generates image and mask data URLs optimized for provider requirements (avoids 413 payload limits)
+  _getInfillPayloadData(isCloudProvider = false) {
+    const { img, naturalWidth, naturalHeight } = this._infillState;
+    if (!img) return null;
+
     const maskCanvas = document.getElementById("infill-mask-canvas");
     if (!maskCanvas) return null;
 
-    const naturalW = this._infillState.naturalWidth;
-    const naturalH = this._infillState.naturalHeight;
+    let targetW = naturalWidth;
+    let targetH = naturalHeight;
 
+    // For Cloud APIs (like Nano-GPT / OpenAI), constrain to max 1024 to prevent 413 entity size limits
+    if (isCloudProvider && Math.max(targetW, targetH) > 1024) {
+      if (targetW >= targetH) {
+        targetH = Math.round((targetH * 1024) / targetW);
+        targetW = 1024;
+      } else {
+        targetW = Math.round((targetW * 1024) / targetH);
+        targetH = 1024;
+      }
+    }
+
+    // 1. Generate base image
+    const fullCanvas = document.createElement("canvas");
+    fullCanvas.width = targetW;
+    fullCanvas.height = targetH;
+    const imgCtx = fullCanvas.getContext("2d");
+    imgCtx.drawImage(img, 0, 0, targetW, targetH);
+
+    // High quality JPEG (0.92) is visually lossless and keeps payload ~300-600KB vs 6-8MB for uncompressed PNG
+    const imageDataUrl = isCloudProvider 
+      ? fullCanvas.toDataURL("image/jpeg", 0.92) 
+      : fullCanvas.toDataURL("image/png");
+
+    // 2. Generate black & white mask matching target dimensions
     const fullMaskCanvas = document.createElement("canvas");
-    fullMaskCanvas.width = naturalW;
-    fullMaskCanvas.height = naturalH;
-    const ctx = fullMaskCanvas.getContext("2d");
+    fullMaskCanvas.width = targetW;
+    fullMaskCanvas.height = targetH;
+    const maskCtx = fullMaskCanvas.getContext("2d");
 
     // Fill with pure black #000000 (unmasked areas)
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, naturalW, naturalH);
+    maskCtx.fillStyle = "#000000";
+    maskCtx.fillRect(0, 0, targetW, targetH);
 
     // Create a temporary canvas with pure white strokes
     const tempCanvas = document.createElement("canvas");
@@ -435,7 +462,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     tempCanvas.height = maskCanvas.height;
     const tempCtx = tempCanvas.getContext("2d");
 
-    // Copy maskCanvas pixel alpha into pure white pixels
     const srcData = maskCanvas.getContext("2d").getImageData(0, 0, maskCanvas.width, maskCanvas.height);
     const destData = tempCtx.createImageData(maskCanvas.width, maskCanvas.height);
     let paintedPixelCount = 0;
@@ -454,30 +480,23 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     if (paintedPixelCount === 0) {
-      return { maskDataUrl: null, paintedPixelCount: 0 };
+      return { maskDataUrl: null, imageDataUrl: null, paintedPixelCount: 0, targetW, targetH };
     }
 
     tempCtx.putImageData(destData, 0, 0);
 
-    // Draw scaled white mask onto full resolution black canvas
-    ctx.drawImage(tempCanvas, 0, 0, naturalW, naturalH);
+    // Draw scaled white mask onto target black canvas
+    maskCtx.drawImage(tempCanvas, 0, 0, targetW, targetH);
 
     const maskDataUrl = fullMaskCanvas.toDataURL("image/png");
-    return { maskDataUrl, paintedPixelCount };
-  },
 
-  // Generates full-resolution image data URL
-  _getFullResImageDataUrl() {
-    const { img, naturalWidth, naturalHeight } = this._infillState;
-    if (!img) return null;
-
-    const fullCanvas = document.createElement("canvas");
-    fullCanvas.width = naturalWidth;
-    fullCanvas.height = naturalHeight;
-    const ctx = fullCanvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, naturalWidth, naturalHeight);
-
-    return fullCanvas.toDataURL("image/png");
+    return {
+      imageDataUrl,
+      maskDataUrl,
+      paintedPixelCount,
+      targetW,
+      targetH,
+    };
   },
 
   async handleApplyInfill() {
@@ -485,21 +504,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const statusEl = document.getElementById("infill-status-message");
 
     try {
-      const { maskDataUrl, paintedPixelCount } = this._generateFullResMask() || {};
+      // Read provider override from modal dropdown
+      const providerSelect = document.getElementById("infill-modal-provider");
+      const chosenProvider = providerSelect?.value || this.config.get("api.image.infill.provider") || "localForge";
+      const isCloudProvider = chosenProvider !== "localForge";
 
-      if (!maskDataUrl || paintedPixelCount === 0) {
+      const payloadData = this._getInfillPayloadData(isCloudProvider);
+
+      if (!payloadData || !payloadData.maskDataUrl || payloadData.paintedPixelCount === 0) {
         this.showNotification("Please paint over the logo, text, or object you want to erase first.", "warning");
         return;
       }
 
-      const imageDataUrl = this._getFullResImageDataUrl();
-      if (!imageDataUrl) {
-        throw new Error("Failed to export full resolution base image");
-      }
-
-      // Read provider override from modal dropdown
-      const providerSelect = document.getElementById("infill-modal-provider");
-      const chosenProvider = providerSelect?.value || this.config.get("api.image.infill.provider") || "localForge";
+      const { imageDataUrl, maskDataUrl, paintedPixelCount, targetW, targetH } = payloadData;
 
       // Read prompt
       const promptInput = document.getElementById("infill-prompt-input");
@@ -517,15 +534,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
         statusEl.innerHTML = `<span style="color: var(--accent, #6366f1);">⏳ Processing with ${chosenProvider === "localForge" ? "Local Forge" : "Infill API"}...</span>`;
       }
 
-      console.log(`🎨 Starting In-fill with provider: ${chosenProvider} (${paintedPixelCount} mask pixels)`);
+      console.log(`🎨 Starting In-fill with provider: ${chosenProvider} (${paintedPixelCount} mask pixels, ${targetW}x${targetH})`);
 
       const resultImageUrl = await this.apiHandler.inpaintImage({
         imageBase64: imageDataUrl,
         maskBase64: maskDataUrl,
         prompt: userPrompt,
         providerOverride: chosenProvider,
-        width: this._infillState.naturalWidth,
-        height: this._infillState.naturalHeight,
+        width: targetW,
+        height: targetH,
       });
 
       if (!resultImageUrl) {

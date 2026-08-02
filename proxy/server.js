@@ -1878,7 +1878,15 @@ app.post("/api/image/inpaint", requireAuth, async (req, res) => {
     let targetUrl = customEndpoint;
     if (!targetUrl) {
       if (apiUrl) {
-        targetUrl = apiUrl.endsWith("/images/edits") ? apiUrl : `${apiUrl.replace(/\/$/, "")}/images/edits`;
+        if (apiUrl.endsWith("/images/edits")) {
+          targetUrl = apiUrl;
+        } else if (apiUrl.endsWith("/images/generations")) {
+          targetUrl = apiUrl.replace(/\/images\/generations$/, "/images/edits");
+        } else if (apiUrl.endsWith("/generations")) {
+          targetUrl = apiUrl.replace(/\/generations$/, "/edits");
+        } else {
+          targetUrl = `${apiUrl.replace(/\/$/, "")}/images/edits`;
+        }
       } else {
         return res.status(400).json({
           error: {
