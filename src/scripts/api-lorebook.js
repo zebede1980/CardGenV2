@@ -153,6 +153,61 @@ Output a JSON array of strings with your suggestions.`;
     }
   },
 
+  async updateLorebookEntry(character, keywords, existingContent, instruction) {
+    if (!character || !keywords || !existingContent || !instruction)
+      throw new Error("Character, keywords, existing content, and an instruction are all required");
+
+    const model = this.config.get("api.text.model");
+    const charName = character.name || "{{char}}";
+
+    const systemPrompt = `You are an expert in writing and revising lorebook entries for AI roleplaying. You will be given an EXISTING lorebook entry and an UPDATE INSTRUCTION from the user. Your job is to revise the existing entry according to the instruction while preserving all information that is NOT contradicted or replaced by the instruction.
+
+RULES:
+- Apply the user's instruction faithfully — add, remove, or change only what is asked.
+- Preserve all facts and details from the existing entry that are unaffected by the instruction.
+- Keep the writing style consistent: clear, direct declarative statements; minimal flowery prose.
+- Do NOT use the character's actual name. You MUST use the exact macro string \`{{char}}\` instead of their name.
+- Do NOT repeat the keywords as headings or labels in the output.
+- Output ONLY the revised lorebook entry text, with no extra explanations or formatting.`;
+
+    const userPrompt = `Character Profile Context:
+Name: ${charName}
+Description: ${character.description}
+Scenario: ${character.scenario}
+
+Lorebook entry keywords: "${keywords}"
+
+EXISTING ENTRY (update this, do not discard it):
+${existingContent}
+
+USER'S UPDATE INSTRUCTION:
+${instruction}
+
+Now output the revised lorebook entry, incorporating the instruction while keeping everything else intact.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.6,
+      max_tokens: 1200,
+      stream: true,
+    };
+
+    try {
+      console.log(`=== STARTING LOREBOOK ENTRY UPDATE: ${keywords} ===`);
+      const response = await this.makeRequest("/chat/completions", data, false, true);
+      const output = await this.handleStreamResponse(response, () => {});
+      console.log(`Lorebook entry for "${keywords}" updated successfully.`);
+      return output.trim();
+    } catch (error) {
+      console.error(`=== LOREBOOK ENTRY UPDATE FAILED: ${keywords} ===`, error);
+      throw error;
+    }
+  },
+
   async generateLorebookEntry(character, keywords, hint = "") {
     if (!character || !keywords) throw new Error("Character and keywords are required");
 

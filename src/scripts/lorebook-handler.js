@@ -289,6 +289,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const hintInput = document.getElementById("lorebook-entry-hint");
     if (hintInput) hintInput.value = "";
     document.getElementById("cancel-lorebook-edit-btn").style.display = "none";
+    const updateBtn = document.getElementById("update-lorebook-content-btn");
+    if (updateBtn) updateBtn.style.display = "none";
   },
 
   async handleSuggestLorebookTopics() {
@@ -369,6 +371,66 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  async handleUpdateLorebookContent() {
+    const btn = document.getElementById("update-lorebook-content-btn");
+    const keysInput = document.getElementById("lorebook-entry-keys");
+    const contentTextarea = document.getElementById("lorebook-entry-content");
+    const hintInput = document.getElementById("lorebook-entry-hint");
+    if (!this.currentCharacter || !btn || !keysInput || !contentTextarea) return;
+
+    const keys = keysInput.value.trim();
+    const existingContent = contentTextarea.value.trim();
+    const instruction = hintInput ? hintInput.value.trim() : "";
+
+    if (!keys) {
+      this.showNotification(
+        "Please provide at least one key for the entry.",
+        "warning",
+      );
+      return;
+    }
+    if (!existingContent) {
+      this.showNotification(
+        "There is no existing content to update. Use \"Generate with AI\" instead.",
+        "warning",
+      );
+      return;
+    }
+    if (!instruction) {
+      this.showNotification(
+        "Please enter an update instruction in the AI Generation Hint field (e.g. \"Make it darker\" or \"Add a detail about their rivalry with the king\").",
+        "warning",
+      );
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Updating...";
+    const generateBtn = document.getElementById("generate-lorebook-content-btn");
+    if (generateBtn) generateBtn.disabled = true;
+
+    try {
+      const updated = await this.lorebookGenerator.updateEntryContent(
+        this.currentCharacter,
+        keys,
+        existingContent,
+        instruction,
+      );
+      contentTextarea.value = updated;
+      if (hintInput) hintInput.value = "";
+      this.showNotification("Entry updated successfully!", "success");
+    } catch (error) {
+      this.showNotification(
+        `Failed to update content: ${error.message}`,
+        "error",
+      );
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "✏️ Update with AI";
+      if (generateBtn) generateBtn.disabled = false;
+    }
+  },
+
   handleSaveLorebookEntry() {
     const id = document.getElementById("lorebook-entry-id").value;
     const keys = document.getElementById("lorebook-entry-keys").value.trim();
@@ -424,6 +486,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (hintInput) hintInput.value = "";
     document.getElementById("cancel-lorebook-edit-btn").style.display =
       "inline-block";
+    // Show the "Update with AI" button when editing an existing entry
+    const updateBtn = document.getElementById("update-lorebook-content-btn");
+    if (updateBtn) updateBtn.style.display = "inline-block";
     document
       .getElementById("lorebook-entry-editor")
       .scrollIntoView({ behavior: "smooth" });

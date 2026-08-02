@@ -24,6 +24,13 @@ class LorebookGenerator {
         }
         return await this.apiHandlerInstance.generateLorebookEntry(character, keywords, hint);
     }
+
+    async updateEntryContent(character, keywords, existingContent, instruction) {
+        if (!character || !keywords || !existingContent || !instruction) {
+            throw new Error("Character, keywords, existing content, and an instruction are required to update an entry.");
+        }
+        return await this.apiHandlerInstance.updateLorebookEntry(character, keywords, existingContent, instruction);
+    }
 }
 
 window.lorebookGenerator = new LorebookGenerator();

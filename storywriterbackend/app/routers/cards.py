@@ -98,9 +98,21 @@ def get_card(card_id: int, db: Session = Depends(get_db), current_user: User = D
 
 @router.delete("/{card_id}")
 def delete_card(card_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.models import RoleplayChat, StoryCard
     card = db.query(CharacterCard).filter(CharacterCard.id == card_id, CharacterCard.user_id == current_user.id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
+
+    # Null out any chats that use this card as their persona card
+    db.query(RoleplayChat).filter(RoleplayChat.user_persona_card_id == card_id).update(
+        {"user_persona_card_id": None}, synchronize_session=False
+    )
+
+    # Remove any story_cards join rows that reference this card
+    db.query(StoryCard).filter(StoryCard.card_id == card_id).delete(synchronize_session=False)
+
+    db.flush()
+
     if card.image_path and os.path.exists(card.image_path):
         os.remove(card.image_path)
     db.delete(card)

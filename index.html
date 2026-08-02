@@ -2455,7 +2455,10 @@
                             </p>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                             <button id="generate-lorebook-content-btn" class="btn-small" title="Generate the entry content with AI using the Keys you have entered and the optional hint below. The character card is used as context.">🔄 Generate with AI</button>
+                             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                                 <button id="generate-lorebook-content-btn" class="btn-small" title="Generate the entry content with AI using the Keys you have entered and the optional hint below. The character card is used as context. WARNING: This replaces any existing content.">🔄 Generate with AI</button>
+                                 <button id="update-lorebook-content-btn" class="btn-small" style="display: none;" title="Revise the existing entry content using the AI Generation Hint as an update instruction. The current content is preserved and modified — not replaced from scratch.">✏️ Update with AI</button>
+                             </div>
                             <div>
                                 <button id="save-lorebook-entry-btn" class="btn-primary">Save Entry</button>
                                 <button id="cancel-lorebook-edit-btn" class="btn-outline" style="display: none;">Cancel</button>

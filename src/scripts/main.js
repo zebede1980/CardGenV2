@@ -642,6 +642,7 @@ class CharacterGeneratorApp {
     const lorebookModalCloseBtn = document.getElementById("lorebook-modal-close-btn");
     const suggestTopicsBtn = document.getElementById("suggest-lorebook-topics-btn");
     const generateContentBtn = document.getElementById("generate-lorebook-content-btn");
+    const updateContentBtn = document.getElementById("update-lorebook-content-btn");
     const saveEntryBtn = document.getElementById("save-lorebook-entry-btn");
     const cancelEditBtn = document.getElementById("cancel-lorebook-edit-btn");
     const downloadLorebookBtn = document.getElementById("download-lorebook-btn");
@@ -655,6 +656,7 @@ class CharacterGeneratorApp {
     if (lorebookModal) lorebookModal.addEventListener("click", (e) => { if (e.target === lorebookModal) this.closeLorebookManager(); });
     if (suggestTopicsBtn) suggestTopicsBtn.addEventListener("click", () => this.handleSuggestLorebookTopics());
     if (generateContentBtn) generateContentBtn.addEventListener("click", () => this.handleGenerateLorebookContent());
+    if (updateContentBtn) updateContentBtn.addEventListener("click", () => this.handleUpdateLorebookContent());
     if (saveEntryBtn) saveEntryBtn.addEventListener("click", () => this.handleSaveLorebookEntry());
     if (cancelEditBtn) cancelEditBtn.addEventListener("click", () => this.resetLorebookEditor());
     if (downloadLorebookBtn) downloadLorebookBtn.addEventListener("click", () => this.handleDownloadLorebook());
