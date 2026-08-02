@@ -471,7 +471,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (typeof this.refreshLibraryViews === "function") {
         await this.refreshLibraryViews();
       }
+      if (typeof this.updateImageHistoryButton === "function") {
+        this.updateImageHistoryButton();
+      }
       this.updateCropButtonVisibility();
+      if (typeof this.updateInfillButtonVisibility === "function") {
+        this.updateInfillButtonVisibility();
+      }
 
     } catch (error) {
       console.error("Apply crop error:", error);

@@ -668,6 +668,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (typeof this.refreshLibraryViews === "function") {
         await this.refreshLibraryViews();
       }
+      if (typeof this.updateImageHistoryButton === "function") {
+        this.updateImageHistoryButton();
+      }
       this.updateCropButtonVisibility();
       this.updateInfillButtonVisibility();
 

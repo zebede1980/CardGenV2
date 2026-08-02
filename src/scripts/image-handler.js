@@ -1023,7 +1023,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
   _addToHistory(url) {
     if (!url) return;
     if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
-    if (this.currentImageUrl === url) return; // already the active portrait
     if (this.imageHistoryUrls.includes(url)) return; // already in history
     this.imageHistoryUrls.push(url);
     if (this.imageHistoryUrls.length > 20) {
