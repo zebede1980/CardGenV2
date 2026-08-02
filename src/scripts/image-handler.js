@@ -120,6 +120,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (loadingText)
       loadingText.textContent = "Generating image... this might take a minute.";
 
+    // Archive current image now so it's captured regardless of what the user picks
+    if (this.currentImageUrl) {
+      this._archiveCurrentImage();
+    }
+
     grid.innerHTML = "";
     loading.style.display = "block";
 
@@ -429,8 +434,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
         const validResults = results.filter((r) => r !== null);
         if (validResults.length === 0) throw new Error("All image generations failed.");
 
-        // Prepend current image for comparison
+        // Track all pending candidates
         const newBlobUrls4p = validResults.map(r => r.url);
+        this._pendingCandidateUrls = newBlobUrls4p;
+
+        if (modalTitle) modalTitle.innerHTML = "🖼️ Choose an Image Variation";
+
+        // Prepend current image for comparison
         this._insertCurrentImageCard(grid, newBlobUrls4p);
 
         validResults.forEach((res) => {
@@ -535,7 +545,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       loading.style.display = "none";
 
-      // Show current image for comparison
+      // Track pending candidate
+      this._pendingCandidateUrls = [blobUrl];
+
+      // Show current image for comparison if one exists
       this._insertCurrentImageCard(grid, [blobUrl]);
       if (this.currentImageUrl) {
         const mt = document.querySelector("#image-options-modal .modal-title");
@@ -572,7 +585,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   // Prepends a "Current Image" keep-card into the grid so the user can compare
-  // newBlobUrls — blob URLs of the freshly generated images to revoke if user keeps current
+  // newBlobUrls — URLs of the freshly generated candidate images
   _insertCurrentImageCard(grid, newBlobUrls = []) {
     if (!this.currentImageUrl) return;
     const currentUrl = this.currentImageUrl;
@@ -581,13 +594,21 @@ Object.assign(CharacterGeneratorApp.prototype, {
     wrapper.style.cssText = "cursor:pointer;border:2px solid var(--success);border-radius:0.5rem;overflow:hidden;transition:box-shadow 0.2s;background:var(--surface-color);position:relative;";
     wrapper.onmouseenter = () => { wrapper.style.boxShadow = "0 0 0 4px rgba(31,157,102,0.22)"; };
     wrapper.onmouseleave = () => { wrapper.style.boxShadow = ""; };
-    wrapper.onclick = () => {
-      // Archive the new generated images rather than discarding them
-      newBlobUrls.forEach(url => {
-        if (url && url !== currentUrl) this._addToHistory(url);
-      });
+    wrapper.onclick = async () => {
+      // Clear pending tracker since we are handling them now
+      this._pendingCandidateUrls = null;
+
+      // Archive the newly generated candidate images rather than discarding them
+      if (Array.isArray(newBlobUrls)) {
+        newBlobUrls.forEach(url => {
+          if (url && url !== currentUrl) this._addToHistory(url);
+        });
+      }
       this.closeImageOptionsModal();
-      this.showNotification("Keeping current image.", "info");
+      this.showNotification("Keeping current image. New image(s) archived in history.", "info");
+
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
     };
     wrapper.innerHTML = `
       <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--success);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">CURRENT</div>
@@ -613,9 +634,27 @@ Object.assign(CharacterGeneratorApp.prototype, {
       modal.classList.remove("show");
       document.body.style.overflow = "";
     }
+
+    // If candidate images were generated and modal closed without selection,
+    // archive them to history so nothing is lost!
+    if (this._pendingCandidateUrls && Array.isArray(this._pendingCandidateUrls) && this._pendingCandidateUrls.length > 0) {
+      const candidates = [...this._pendingCandidateUrls];
+      this._pendingCandidateUrls = null;
+      let addedAny = false;
+      candidates.forEach(url => {
+        if (url && url !== this.currentImageUrl) {
+          this._addToHistory(url);
+          addedAny = true;
+        }
+      });
+      if (addedAny) {
+        this.saveCardToLibrary().then(() => this.refreshLibraryViews()).catch(e => console.warn("Auto-save history on modal close failed:", e));
+      }
+    }
   },
 
   async selectImageOption(selectedUrl, selectedPrompt, selectedModel, allResults) {
+    this._pendingCandidateUrls = null;
     this.closeImageOptionsModal();
 
     // Archive the image being replaced
@@ -628,8 +667,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Archive all other generated images that weren't chosen
     if (Array.isArray(allResults)) {
       allResults.forEach((res) => {
-        if (res && res.url && res.url !== selectedUrl) {
-          this._addToHistory(res.url);
+        const u = (res && typeof res === "object") ? res.url : res;
+        if (u && u !== selectedUrl) {
+          this._addToHistory(u);
         }
       });
     }
@@ -956,16 +996,41 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   // ── History helpers ────────────────────────────────────────────────────────
 
+  _clearImageHistory() {
+    if (this.imageHistoryUrls && Array.isArray(this.imageHistoryUrls)) {
+      this.imageHistoryUrls.forEach((url) => {
+        if (url && typeof url === "string" && url.startsWith("blob:")) {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+        }
+      });
+    }
+    this.imageHistoryUrls = [];
+    this._pendingCandidateUrls = null;
+    this.updateImageHistoryButton();
+  },
+
+  _resetCharacterMediaState() {
+    if (this.currentImageUrl && typeof this.currentImageUrl === "string" && this.currentImageUrl.startsWith("blob:")) {
+      try { URL.revokeObjectURL(this.currentImageUrl); } catch (_) {}
+    }
+    this.currentImageUrl = null;
+    this.currentCardId = null;
+    this._clearImageHistory();
+  },
+
   // Single entry-point for adding a URL to the in-memory archive.
   // Deduplicates, enforces the 20-item cap, and refreshes the button.
   _addToHistory(url) {
     if (!url) return;
     if (!this.imageHistoryUrls) this.imageHistoryUrls = [];
-    if (this.imageHistoryUrls.includes(url)) return; // already there
+    if (this.currentImageUrl === url) return; // already the active portrait
+    if (this.imageHistoryUrls.includes(url)) return; // already in history
     this.imageHistoryUrls.push(url);
     if (this.imageHistoryUrls.length > 20) {
       const oldest = this.imageHistoryUrls.shift();
-      if (oldest && oldest.startsWith("blob:")) URL.revokeObjectURL(oldest);
+      if (oldest && typeof oldest === "string" && oldest.startsWith("blob:")) {
+        try { URL.revokeObjectURL(oldest); } catch (_) {}
+      }
     }
     this.updateImageHistoryButton();
   },
@@ -992,6 +1057,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     if (typeof this.updateCropButtonVisibility === "function") {
       this.updateCropButtonVisibility();
+    }
+    if (typeof this.updateInfillButtonVisibility === "function") {
+      this.updateInfillButtonVisibility();
     }
   },
 

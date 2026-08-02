@@ -292,6 +292,10 @@ class CharacterGeneratorApp {
     if (cropBtn) {
       cropBtn.addEventListener("click", () => this.openCropModal());
     }
+    const inpaintBtn = document.getElementById("inpaint-image-btn");
+    if (inpaintBtn) {
+      inpaintBtn.addEventListener("click", () => this.openInfillModal());
+    }
 
     // Web Image Search Modal Logic
     const webImageBtn = document.getElementById("search-web-image-btn");
@@ -563,6 +567,22 @@ class CharacterGeneratorApp {
     if (localForgeUrlInput) {
       localForgeUrlInput.addEventListener("input", () => this.saveAPISettings());
     }
+
+    // Infill / Inpainting settings listeners
+    const infillProviderSelect = document.getElementById("infill-provider");
+    if (infillProviderSelect) {
+      infillProviderSelect.addEventListener("change", () => {
+        const customContainer = document.getElementById("infill-custom-container");
+        if (customContainer) {
+          customContainer.style.display = infillProviderSelect.value === "localForge" ? "none" : "block";
+        }
+        this.saveAPISettings();
+      });
+    }
+    ["infill-model", "infill-endpoint", "infill-api-key", "infill-denoising"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", () => this.saveAPISettings());
+    });
 
     // API Settings Modal
     const apiSettingsBtn = document.getElementById("api-settings-btn");
@@ -1225,6 +1245,13 @@ class CharacterGeneratorApp {
     const imageContent = document.getElementById("image-content");
     if (imageContent) {
       imageContent.innerHTML = `<div class="image-placeholder"><div class="loading-spinner"></div></div>`;
+    }
+
+    if (typeof this._resetCharacterMediaState === "function") {
+      this._resetCharacterMediaState();
+    } else {
+      this.currentImageUrl = null;
+      this.imageHistoryUrls = [];
     }
 
     this.lorebookEntries = [];

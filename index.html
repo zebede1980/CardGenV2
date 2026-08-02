@@ -1475,6 +1475,14 @@
                                 >
                                     ✂️ Crop
                                 </button>
+                                <button
+                                    id="inpaint-image-btn"
+                                    class="btn-small"
+                                    style="display:none"
+                                    title="Inpaint / In-fill: Highlight an area (like a logo, watermark, or text) to erase and blend seamlessly."
+                                >
+                                    🎨 In-fill / Erase
+                                </button>
                                 <input
                                     type="file"
                                     id="image-upload-input"
@@ -2054,6 +2062,7 @@
         <script src="src/scripts/character-display.js?v=20260514"></script>
         <script src="src/scripts/image-handler.js?v=20260724-v4"></script>
         <script src="src/scripts/image-cropper.js?v=20260722"></script>
+        <script src="src/scripts/image-infiller.js?v=20260802"></script>
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/library-handler.js?v=20260514"></script>
@@ -2315,7 +2324,63 @@
                             <label for="local-forge-url" class="label">Forge Host URL</label>
                             <input type="text" id="local-forge-url" class="input" placeholder="http://127.0.0.1:7860" />
                             <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.3rem;">
-                                Default params: steps=25 · cfg_scale=1 · 896×1152 · sampler=Euler
+                                Default params: steps=20 · cfg_scale=1 · 896×1152 · sampler=Euler
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- In-fill / Inpainting Settings -->
+                    <div class="form-group" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-color); margin-top: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <label class="label" style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                🎨 <span>AI In-fill / Inpainting</span>
+                                <span style="font-size: 0.7rem; font-weight: 400; color: var(--text-secondary); background: rgba(168,85,247,0.12); padding: 0.1rem 0.4rem; border-radius: 999px;">Logo & Text Removal</span>
+                            </label>
+                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                            Choose your preferred AI backend when erasing logos, watermarks, or text on the Character Gen screen.
+                        </p>
+
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                            <label for="infill-provider" class="label">Default In-fill Provider</label>
+                            <select id="infill-provider" class="input">
+                                <option value="localForge">Local WebUI Forge (Diffusion Inpainting)</option>
+                                <option value="cloudApi">Cloud / OpenAI-compatible /v1/images/edits</option>
+                                <option value="customEndpoint">Dedicated / Custom Infill Server (LaMa / IOPaint / Custom API)</option>
+                            </select>
+                        </div>
+
+                        <div id="infill-custom-container" style="display: none;">
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <label for="infill-model" class="label">In-fill Model Name (optional)</label>
+                                <input type="text" id="infill-model" class="input" placeholder="e.g. dall-e-2, stabilityai/stable-diffusion-xl-inpaint, etc." />
+                                <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    If left blank, uses DALL-E 2 or your active image model.
+                                </p>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <label for="infill-endpoint" class="label">Custom Infill Endpoint URL (optional)</label>
+                                <input type="text" id="infill-endpoint" class="input" placeholder="e.g. http://127.0.0.1:8080/inpaint or https://api.openai.com/v1/images/edits" />
+                                <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    If left blank, defaults to your Image API Base URL + /images/edits.
+                                </p>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <label for="infill-api-key" class="label">Custom Infill API Key (optional)</label>
+                                <input type="password" id="infill-api-key" class="input" placeholder="Leave blank to use main Image API Key" />
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="infill-denoising" class="label">Forge Inpainting Denoising Strength</label>
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <input type="range" id="infill-denoising" min="0.1" max="1.0" step="0.05" value="0.85" style="flex: 1;" oninput="document.getElementById('infill-denoising-val').textContent = this.value;" />
+                                <span id="infill-denoising-val" style="font-size: 0.85rem; font-weight: 600; min-width: 35px; color: var(--accent, #6366f1);">0.85</span>
+                            </div>
+                            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                Higher values (0.80 - 1.0) allow the model to replace logos/text with seamless textures.
                             </p>
                         </div>
                     </div>
@@ -3326,6 +3391,93 @@
                 <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--border, #313244); display: flex; justify-content: flex-end; gap: 0.75rem; background: var(--surface-strong, #181825);">
                     <button id="crop-cancel-btn" class="btn-secondary" style="padding: 0.6rem 1.25rem;">Cancel</button>
                     <button id="crop-apply-btn" class="btn-primary" style="padding: 0.6rem 1.5rem; font-weight: 600;">✂️ Apply Crop & Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image In-fill / Inpainting Modal -->
+        <div id="image-inpaint-modal" class="modal-overlay" style="display: none; z-index: 10006;">
+            <div class="infill-modal-content">
+                <div class="modal-header" style="padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border, #313244); display: flex; justify-content: space-between; align-items: center; background: var(--surface-strong, #181825);">
+                    <h2 class="modal-title" style="margin: 0; font-size: 1.2rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; color: var(--text-color, #cdd6f4);">
+                        🎨 <span>In-fill / Erase (Object & Text Removal)</span>
+                    </h2>
+                    <button id="image-inpaint-close-btn" class="modal-close" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary, #a6adc8);">×</button>
+                </div>
+
+                <div class="modal-body" style="padding: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem; flex: 1; overflow: hidden; align-items: center;">
+                    
+                    <!-- Controls Toolbar: Tools, Brush Size, Undo, Clear, Provider -->
+                    <div class="infill-controls-bar" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; width: 100%; padding: 0.6rem 0.85rem; background: rgba(0,0,0,0.3); border-radius: 0.5rem; border: 1px solid var(--border, #313244);">
+                        
+                        <!-- Tool Mode buttons -->
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <button id="infill-tool-brush" class="btn-small infill-mode-btn active" title="Brush tool: Highlight area to erase">🖌️ Brush</button>
+                            <button id="infill-tool-eraser" class="btn-small infill-mode-btn" title="Eraser tool: Remove highlight">🧽 Eraser</button>
+                        </div>
+
+                        <!-- Brush Size Slider & Quick Presets -->
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                            <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary, #a6adc8);">Size:</span>
+                            <input type="range" id="infill-brush-size" min="6" max="100" value="30" style="width: 90px; cursor: pointer;" />
+                            <span id="infill-brush-size-val" style="font-size: 0.8rem; font-weight: 600; min-width: 32px; color: var(--accent, #6366f1);">30px</span>
+                            <div style="display: flex; gap: 0.2rem;">
+                                <button class="btn-small infill-preset-btn" data-size="15" title="Small brush (15px)" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;">S</button>
+                                <button class="btn-small infill-preset-btn" data-size="30" title="Medium brush (30px)" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;">M</button>
+                                <button class="btn-small infill-preset-btn" data-size="60" title="Large brush (60px)" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;">L</button>
+                            </div>
+                        </div>
+
+                        <!-- Undo / Clear Actions -->
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <button id="infill-undo-btn" class="btn-small btn-secondary" title="Undo last brush stroke" disabled>↶ Undo</button>
+                            <button id="infill-clear-btn" class="btn-small btn-secondary" title="Clear all painted mask">🗑️ Clear</button>
+                        </div>
+
+                        <!-- In-fill Provider Selector -->
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary, #a6adc8);">Provider:</span>
+                            <select id="infill-modal-provider" class="input" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; height: auto;">
+                                <option value="localForge">🔧 Local Forge</option>
+                                <option value="cloudApi">☁️ Cloud / OpenAI API</option>
+                                <option value="customEndpoint">🌐 Custom Infill Server</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Main Interactive Canvas & Infill Stage -->
+                    <div id="infill-workspace">
+                        <div id="infill-stage" style="position: relative; display: inline-block;">
+                            <canvas id="infill-image-canvas" style="display: block;"></canvas>
+                            <canvas id="infill-mask-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Live Brush Cursor Follower -->
+                    <div id="infill-brush-cursor" style="display: none; position: fixed; pointer-events: none; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9); background: rgba(239, 68, 68, 0.25); box-shadow: 0 0 4px rgba(0,0,0,0.6); z-index: 10020; transform: translate(-50%, -50%);"></div>
+
+                    <!-- Bottom Bar: Optional In-fill Prompt / Guidance -->
+                    <div style="width: 100%; display: flex; align-items: center; gap: 0.5rem;">
+                        <input
+                            type="text"
+                            id="infill-prompt-input"
+                            class="input"
+                            placeholder="Optional: Leave blank for seamless background texture, or describe what to fill with..."
+                            style="flex: 1; font-size: 0.85rem; padding: 0.45rem 0.75rem;"
+                        />
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--border, #313244); display: flex; justify-content: space-between; align-items: center; background: var(--surface-strong, #181825);">
+                    <div id="infill-status-message" style="font-size: 0.8rem; color: var(--text-secondary, #a6adc8);">
+                        💡 Highlight the logo or text with the brush, then click Remove & In-fill.
+                    </div>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <button id="infill-cancel-btn" class="btn-secondary" style="padding: 0.55rem 1.2rem;">Cancel</button>
+                        <button id="infill-apply-btn" class="btn-primary" style="padding: 0.55rem 1.5rem; font-weight: 600; background: linear-gradient(135deg, #a855f7, #6366f1);">
+                            ✨ Remove & In-fill
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

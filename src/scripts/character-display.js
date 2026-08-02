@@ -691,6 +691,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       if (!characterData) throw new Error("Unable to parse card content");
 
+      if (typeof this._resetCharacterMediaState === "function") {
+        this._resetCharacterMediaState();
+      } else {
+        this.currentImageUrl = null;
+        this.imageHistoryUrls = [];
+      }
+
       this.currentCharacter = characterData;
       this.originalCharacter = JSON.parse(JSON.stringify(characterData));
       this.displayCharacter();
@@ -698,14 +705,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const inputSectionDetails = document.getElementById("input-section-details");
       if (inputSectionDetails) inputSectionDetails.open = false;
 
+      const imageContainer = document.getElementById("image-content");
       if (importedImageUrl) {
         this.currentImageUrl = importedImageUrl;
-        const imageContainer = document.getElementById("image-content");
-        imageContainer.innerHTML = `
-          <div class="image-container">
-            <img src="${importedImageUrl}" alt="${characterData.name}" class="generated-image">
-          </div>
-        `;
+        if (imageContainer) {
+          imageContainer.innerHTML = `
+            <div class="image-container">
+              <img src="${importedImageUrl}" alt="${characterData.name}" class="generated-image">
+            </div>
+          `;
+        }
+      } else {
+        if (imageContainer) {
+          imageContainer.innerHTML = `<div class="image-placeholder"><div class="loading-spinner" style="display:none;"></div><p style="color:var(--text-secondary);font-size:0.875rem;">No image</p></div>`;
+        }
       }
 
       document.getElementById("image-controls").style.display = "block";

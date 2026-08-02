@@ -147,7 +147,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (this.imageHistoryUrls && this.imageHistoryUrls.length > 0) {
         for (const url of this.imageHistoryUrls) {
           try {
-            if (typeof url === 'string' && url.startsWith("data:image/")) {
+            if (typeof url === 'string' && url.startsWith("data:")) {
               imageHistoryData.push(url);
               continue;
             }
@@ -516,13 +516,26 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
         this.updateAltGreetingsCount();
 
-        if (card.imageBlob instanceof Blob) {
-          if (
-            this.currentImageUrl &&
-            this.currentImageUrl.startsWith("blob:")
-          ) {
-            URL.revokeObjectURL(this.currentImageUrl);
+        // Reset media state before loading card image/history to prevent cross-card leakage
+        if (typeof this._resetCharacterMediaState === "function") {
+          this._resetCharacterMediaState();
+        } else {
+          if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:")) {
+            try { URL.revokeObjectURL(this.currentImageUrl); } catch (_) {}
           }
+          this.currentImageUrl = null;
+          if (this.imageHistoryUrls) {
+            this.imageHistoryUrls.forEach(url => {
+              if (url && typeof url === "string" && url.startsWith("blob:")) {
+                try { URL.revokeObjectURL(url); } catch (_) {}
+              }
+            });
+          }
+          this.imageHistoryUrls = [];
+        }
+        this.currentCardId = id;
+
+        if (card.imageBlob instanceof Blob) {
           this.currentImageUrl = URL.createObjectURL(card.imageBlob);
           const imageContainer = document.getElementById("image-content");
           if (imageContainer) {
@@ -532,19 +545,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
               </div>
             `;
           }
+        } else {
+          const imageContainer = document.getElementById("image-content");
+          if (imageContainer) {
+            imageContainer.innerHTML = `<div class="image-placeholder"><div class="loading-spinner" style="display:none;"></div><p style="color:var(--text-secondary);font-size:0.875rem;">No image</p></div>`;
+          }
         }
 
-        if (this.imageHistoryUrls) {
-          this.imageHistoryUrls.forEach(url => {
-            if (url && url.startsWith("blob:")) URL.revokeObjectURL(url);
-          });
-        }
-        this.imageHistoryUrls = [];
         if (card.imageHistory && Array.isArray(card.imageHistory)) {
           for (const item of card.imageHistory) {
             if (item) {
               try {
-                if (typeof item === 'string' && item.startsWith('data:image/')) {
+                if (typeof item === 'string' && item.startsWith('data:')) {
                   this.imageHistoryUrls.push(item);
                 } else {
                   const blob = item instanceof Blob ? item : new Blob([item]);

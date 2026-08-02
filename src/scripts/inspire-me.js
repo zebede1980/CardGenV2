@@ -175,6 +175,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       imageContent.innerHTML = `<div class="image-placeholder"><div class="loading-spinner"></div></div>`;
     }
 
+    if (typeof this._resetCharacterMediaState === "function") {
+      this._resetCharacterMediaState();
+    } else {
+      this.currentImageUrl = null;
+      this.imageHistoryUrls = [];
+    }
+
     this.lorebookEntries = [];
     this.updateLorebookEntryCount();
     this.altGreetings = [];

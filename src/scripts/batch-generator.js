@@ -370,12 +370,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     this._batchSelectedIdx = idx;
 
+    // Reset media state before setting variant character
+    if (typeof this._resetCharacterMediaState === "function") {
+      this._resetCharacterMediaState();
+    } else {
+      this.currentImageUrl = null;
+      this.imageHistoryUrls = [];
+    }
+
     // Set as current character
     this.currentCharacter = variant;
     this.originalCharacter = JSON.parse(JSON.stringify(variant));
 
-    // Clear image
-    this.currentImageUrl = null;
     const imageContent = document.getElementById("image-content");
     if (imageContent) {
       imageContent.innerHTML = `

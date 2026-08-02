@@ -124,13 +124,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
         characterVersion: char.characterVersion || "",
       };
 
+      // Reset media state before setting imported character
+      if (typeof this._resetCharacterMediaState === "function") {
+        this._resetCharacterMediaState();
+      } else {
+        this.currentImageUrl = null;
+        this.imageHistoryUrls = [];
+      }
+
       // Set as current character
       this.currentCharacter = imported;
       this.originalCharacter = JSON.parse(JSON.stringify(imported));
       this.lorebookEntries = [];
       this.altGreetings = imported.alternateGreetings || [];
       this.updateAltGreetingsCount();
-      this.currentImageUrl = null;
 
       // If character_book exists, parse it into lorebook entries
       if (imported.character_book) {

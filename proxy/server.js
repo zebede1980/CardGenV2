@@ -222,10 +222,10 @@ async function deleteCardHistoryImages(imgDir, cardId) {
 
 // Save imageHistory array (base64 data-URLs) to per-card files
 async function saveCardHistoryImages(imgDir, cardId, imageHistory) {
-  if (!Array.isArray(imageHistory) || imageHistory.length === 0) return;
   if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
   // Remove any previously stored history images for this card first
   await deleteCardHistoryImages(imgDir, cardId);
+  if (!Array.isArray(imageHistory) || imageHistory.length === 0) return;
   for (let i = 0; i < imageHistory.length; i++) {
     const item = imageHistory[i];
     if (typeof item !== "string") continue;
@@ -1861,6 +1861,98 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
       error: {
         code: "500",
         message: "Internal server error in image proxy",
+        details: error.message,
+      },
+    });
+  }
+});
+
+// Proxy endpoint for Inpainting / In-fill API
+app.post("/api/image/inpaint", requireAuth, async (req, res) => {
+  try {
+    const { image, mask, prompt, model } = req.body;
+    const apiKey = req.headers["x-api-key"] || "";
+    const customEndpoint = req.headers["x-infill-endpoint"] || "";
+    const apiUrl = req.headers["x-api-url"] || "";
+
+    let targetUrl = customEndpoint;
+    if (!targetUrl) {
+      if (apiUrl) {
+        targetUrl = apiUrl.endsWith("/images/edits") ? apiUrl : `${apiUrl.replace(/\/$/, "")}/images/edits`;
+      } else {
+        return res.status(400).json({
+          error: {
+            code: "400",
+            message: "No Infill endpoint configured. Please specify a Custom Infill Endpoint or Image Base URL in Settings.",
+          },
+        });
+      }
+    }
+
+    console.log("🎨 Proxying Inpainting request to:", targetUrl);
+
+    const requestBody = {
+      image,
+      mask,
+      prompt: prompt || "clean background, natural continuation, remove text and watermark",
+      model: model || "dall-e-2",
+      n: 1,
+      response_format: "url",
+      ...req.body,
+    };
+
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
+    let response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+      timeout: 180000,
+    });
+
+    if (response.status === 401 && apiKey) {
+      delete headers["Authorization"];
+      headers["X-API-Key"] = apiKey;
+      response = await fetch(targetUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+        timeout: 180000,
+      });
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Inpaint API error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: {
+          code: response.status.toString(),
+          message: `Inpaint API Error: ${response.statusText}`,
+          details: errorText,
+        },
+      });
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("image/")) {
+      const buffer = await response.buffer();
+      res.setHeader("Content-Type", contentType);
+      return res.send(buffer);
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("Inpainting proxy error:", error);
+    res.status(500).json({
+      error: {
+        code: "500",
+        message: "Internal server error in inpainting proxy",
         details: error.message,
       },
     });

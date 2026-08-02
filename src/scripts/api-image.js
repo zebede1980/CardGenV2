@@ -696,4 +696,213 @@ BEGIN PROMPT:`;
     return URL.createObjectURL(blob);
   },
 
+  // ── Inpainting / In-fill Methods ──────────────────────────────────────────
+
+  // Direct Forge inpainting via /sdapi/v1/img2img
+  async inpaintForgeImage({ imageBase64, maskBase64, prompt = "", denoisingStrength = 0.85, width, height }) {
+    const forgeUrl = (this.config.get("api.image.localForge.url") || "http://127.0.0.1:7860").replace(/\/$/, "");
+    const img2imgUrl = `${forgeUrl}/sdapi/v1/img2img`;
+
+    const settingsSteps = parseInt(this.config.get("api.image.settings.steps")) || 20;
+    const settingsCfg = parseFloat(this.config.get("api.image.settings.cfgScale")) || 1;
+
+    // Clean base64 strings (remove data:image/...;base64, prefix if present)
+    const cleanImg = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64;
+    const cleanMask = maskBase64.includes(",") ? maskBase64.split(",")[1] : maskBase64;
+
+    const payload = {
+      init_images: [cleanImg],
+      mask: cleanMask,
+      prompt: prompt || "",
+      negative_prompt: "text, watermark, logo, blurry, ugly, low quality, artifacts, signatures",
+      inpainting_fill: 1, // 1 = original image underlying
+      inpaint_full_res: true,
+      inpaint_full_res_padding: 32,
+      inpainting_mask_invert: 0, // 0 = inpaint masked area
+      mask_blur: 4,
+      denoising_strength: denoisingStrength || 0.85,
+      steps: settingsSteps,
+      cfg_scale: settingsCfg,
+      sampler_name: "Euler",
+      scheduler: "Simple",
+      width: width || 896,
+      height: height || 1152,
+    };
+
+    console.log("🎨 Sending Inpainting request to Forge:", img2imgUrl);
+
+    let response;
+    try {
+      response = await fetch(img2imgUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (connErr) {
+      throw new Error(
+        `Cannot connect to Forge at ${forgeUrl}. ` +
+        `Ensure Forge is running with --api flag. (${connErr.message})`
+      );
+    }
+
+    if (!response.ok) {
+      let detail = response.statusText;
+      try { const j = await response.json(); detail = j.detail || j.error?.message || detail; } catch (_) {}
+      throw new Error(`Forge inpainting returned ${response.status}: ${detail}`);
+    }
+
+    const data = await response.json();
+    const images = data.images;
+    if (!images || images.length === 0) {
+      throw new Error("Forge returned no infilled image in response");
+    }
+
+    const rawImg = images[0];
+    if (typeof rawImg === "string" && rawImg.startsWith("data:")) {
+      const res2 = await fetch(rawImg);
+      const blob2 = await res2.blob();
+      return URL.createObjectURL(blob2);
+    }
+
+    const cleanB64 = rawImg.replace(/\s/g, "");
+    const byteChars = atob(cleanB64);
+    const byteArray = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+    const mimeType = (byteArray[0] === 0xFF && byteArray[1] === 0xD8) ? "image/jpeg" : "image/png";
+    const blob = new Blob([byteArray], { type: mimeType });
+    return URL.createObjectURL(blob);
+  },
+
+  // Cloud / OpenAI-compatible / Custom Inpainting API
+  async inpaintCloudImage({ imageBase64, maskBase64, imageBlob, maskBlob, prompt = "", modelOverride, endpointOverride, apiKeyOverride }) {
+    const infillConfig = this.config.get("api.image.infill") || {};
+    const model = modelOverride || infillConfig.model || this.config.get("api.image.model") || "dall-e-2";
+    const customEndpoint = endpointOverride || infillConfig.customEndpoint;
+    const apiKey = apiKeyOverride || infillConfig.customApiKey || this.config.get("api.image.apiKey");
+    const baseUrl = this.config.get("api.image.baseUrl");
+
+    let imgB64 = imageBase64;
+    let mskB64 = maskBase64;
+
+    if (!imgB64 && imageBlob) {
+      imgB64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(imageBlob);
+      });
+    }
+    if (!mskB64 && maskBlob) {
+      mskB64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(maskBlob);
+      });
+    }
+
+    const payload = {
+      image: imgB64,
+      mask: mskB64,
+      prompt: prompt && prompt.trim() ? prompt.trim() : "seamless continuation, clean background, remove text, natural texture",
+      model: model || "dall-e-2",
+      n: 1,
+      response_format: "url",
+    };
+
+    // Call proxy /api/image/inpaint to prevent CORS restrictions
+    const proxyUrl = "/api/image/inpaint";
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) headers["X-API-Key"] = apiKey;
+    if (customEndpoint) headers["X-Infill-Endpoint"] = customEndpoint;
+    if (baseUrl) headers["X-API-URL"] = baseUrl;
+
+    console.log("🎨 Sending Inpainting request via proxy:", proxyUrl);
+
+    const response = await (window.authFetch || fetch)(proxyUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let detail = response.statusText;
+      try {
+        const j = await response.json();
+        detail = j.error?.message || j.detail || j.message || detail;
+      } catch (_) {}
+      throw new Error(`Inpainting API returned ${response.status}: ${detail}`);
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("image/")) {
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    }
+
+    const data = await response.json();
+    let imageUrl = data.data?.[0]?.url || data.images?.[0] || data.image || data.url;
+    if (!imageUrl && data.data?.[0]?.b64_json) {
+      imageUrl = `data:image/png;base64,${data.data[0].b64_json}`;
+    }
+
+    if (!imageUrl) {
+      throw new Error("Inpainting API returned no image in response");
+    }
+
+    if (imageUrl.startsWith("data:") || imageUrl.startsWith("blob:")) {
+      return imageUrl;
+    }
+
+    const proxyImgRes = await (window.authFetch || fetch)(`/api/proxy-image?url=${encodeURIComponent(imageUrl)}`);
+    if (proxyImgRes.ok) {
+      const blob = await proxyImgRes.blob();
+      return URL.createObjectURL(blob);
+    }
+
+    return imageUrl;
+  },
+
+  // Main unified Infill Dispatcher
+  async inpaintImage({ imageBase64, maskBase64, imageBlob, maskBlob, prompt = "", providerOverride = null, width, height }) {
+    const infillConfig = this.config.get("api.image.infill") || {};
+    const provider = providerOverride || infillConfig.provider || "localForge";
+
+    console.log(`🎨 Starting Inpainting with provider: ${provider}`);
+
+    if (provider === "localForge") {
+      const denoising = infillConfig.denoisingStrength ?? 0.85;
+
+      return await this.inpaintForgeImage({
+        imageBase64,
+        maskBase64,
+        prompt,
+        denoisingStrength: denoising,
+        width,
+        height
+      });
+    } else {
+      let imgBlob = imageBlob;
+      let mskBlob = maskBlob;
+
+      if (!imgBlob && imageBase64) {
+        const res = await fetch(imageBase64);
+        imgBlob = await res.blob();
+      }
+      if (!mskBlob && maskBase64) {
+        const res = await fetch(maskBase64);
+        mskBlob = await res.blob();
+      }
+
+      return await this.inpaintCloudImage({
+        imageBlob: imgBlob,
+        maskBlob: mskBlob,
+        prompt,
+        modelOverride: infillConfig.model,
+        endpointOverride: infillConfig.customEndpoint,
+        apiKeyOverride: infillConfig.customApiKey,
+      });
+    }
+  },
+
 });

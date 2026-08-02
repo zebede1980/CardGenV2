@@ -639,6 +639,94 @@ textarea.content-box {
     }
 }
 
+/* Image In-fill / Inpainting Modal Styles */
+.infill-modal-content {
+    max-width: 960px;
+    width: 95%;
+    height: 88vh;
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-color, #1e1e2e);
+    border: 1px solid var(--border, #313244);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    color: var(--text-color, #cdd6f4);
+    box-shadow: 0 20px 30px -5px rgba(0,0,0,0.6);
+}
+
+#infill-workspace {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #0b0b10;
+    border-radius: 0.5rem;
+    user-select: none;
+    border: 1px solid var(--border, #313244);
+}
+
+#infill-stage {
+    position: relative;
+    display: inline-block;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+#infill-image-canvas {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    pointer-events: none;
+}
+
+#infill-mask-canvas {
+    display: block;
+    cursor: crosshair;
+}
+
+.infill-mode-btn.active {
+    background: var(--accent, #6366f1) !important;
+    color: #ffffff !important;
+    border-color: var(--accent, #6366f1) !important;
+}
+
+@media (max-width: 768px) {
+    .infill-modal-content {
+        width: 98vw;
+        height: 96vh;
+        max-height: 96vh;
+        border-radius: 0.5rem;
+    }
+
+    #image-inpaint-modal .modal-body {
+        padding: 0.5rem !important;
+        gap: 0.5rem !important;
+    }
+
+    #image-inpaint-modal .modal-header,
+    #image-inpaint-modal .modal-footer {
+        padding: 0.6rem 0.75rem !important;
+    }
+
+    .infill-controls-bar {
+        padding: 0.35rem 0.5rem !important;
+        gap: 0.35rem !important;
+    }
+
+    #infill-workspace {
+        flex: 1;
+        min-height: 320px;
+        max-height: 72vh;
+        height: 100%;
+    }
+}
+
 /* Free image dropdown */
 .free-image-dropdown-wrapper {
     position: relative;
