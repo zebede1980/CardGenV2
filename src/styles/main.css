@@ -542,7 +542,10 @@ textarea.content-box {
 
 .image-buttons-row > .btn-small,
 .image-buttons-row > button {
-    flex: 1 1 110px;
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    height: 2.5rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
