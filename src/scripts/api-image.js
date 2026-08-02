@@ -609,7 +609,7 @@ BEGIN PROMPT:`;
 
     // Read steps & cfg_scale from the shared Settings fields (same ones used by cloud API).
     // Default cfg_scale to 7 — safe for SDXL/SD1.5; FLUX users should set it to 1 via Settings.
-    const settingsSteps   = parseInt(this.config.get("api.image.settings.steps"))   || 25;
+    const settingsSteps   = parseInt(this.config.get("api.image.settings.steps"))   || 20;
     const settingsCfg     = parseFloat(this.config.get("api.image.settings.cfgScale")) || 1;
 
     // Resolve width/height from aspect ratio setting
