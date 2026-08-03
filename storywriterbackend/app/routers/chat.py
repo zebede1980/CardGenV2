@@ -584,6 +584,17 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
                     msg_content = alt_greetings[chat_in.first_message_index]
             
             if msg_content:
+                # Substitute SillyTavern template variables before storing the
+                # opening message — the user sees this text directly in the chat
+                # bubble, so literal {{char}} or {{user}} would look broken.
+                user_display_name = chat_in.user_persona_name or "User"
+                msg_content = (msg_content
+                               .replace("{{char}}", card.name or "Character")
+                               .replace("{{Char}}", card.name or "Character")
+                               .replace("{{CHAR}}", card.name or "Character")
+                               .replace("{{user}}", user_display_name)
+                               .replace("{{User}}", user_display_name)
+                               .replace("{{USER}}", user_display_name))
                 first_msg = models.ChatMessage(
                     chat_id=new_chat.id,
                     role="assistant",
