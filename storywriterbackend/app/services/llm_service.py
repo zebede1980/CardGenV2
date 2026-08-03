@@ -38,7 +38,10 @@ class LLMService:
         if repetition_penalty is not None and repetition_penalty != 1.0:
             payload["repetition_penalty"] = repetition_penalty
         if stream:
-            payload["stream_options"] = {"include_usage": True}
+            # NOTE: Do NOT add stream_options here. It is an OpenAI-specific
+            # extension that many compatible APIs (Nano-GPT, GLM, etc.) do not
+            # support — sending it can cause them to emit garbage tokens or
+            # error mid-stream. Usage is read opportunistically below.
             self.finish_reason = None
             self.last_usage = None
             async with self.client.stream("POST", url, headers=headers, json=payload) as response:

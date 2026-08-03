@@ -35,25 +35,40 @@ class ContextManager:
         # Add character cards and lorebooks
         for sc in story.cards:
             card: CharacterCard = sc.card
+
+            # Substitute SillyTavern template variables so the LLM sees real names,
+            # not literal {{char}} / {{user}} placeholders.
+            char_name = card.name or "Character"
+            def _sub(text: str) -> str:
+                if not text:
+                    return text
+                return (text
+                        .replace("{{char}}", char_name)
+                        .replace("{{Char}}", char_name)
+                        .replace("{{CHAR}}", char_name)
+                        .replace("{{user}}", "the user")
+                        .replace("{{User}}", "the user")
+                        .replace("{{USER}}", "the user"))
+
             card_parts = []
             if card.name:
                 card_parts.append(f"Name: {card.name}")
             if card.description:
-                card_parts.append(f"Description: {card.description}")
+                card_parts.append(f"Description: {_sub(card.description)}")
             if card.personality:
-                card_parts.append(f"Personality: {card.personality}")
+                card_parts.append(f"Personality: {_sub(card.personality)}")
             if card.scenario:
-                card_parts.append(f"Scenario: {card.scenario}")
+                card_parts.append(f"Scenario: {_sub(card.scenario)}")
             # card.system_prompt: per-character author instructions (e.g. language, tone)
             # Only include if non-empty; many cards leave this blank or use it for
             # site-specific metadata that would bloat context.
             if card.system_prompt and card.system_prompt.strip():
-                card_parts.append(f"Character Instructions:\n{card.system_prompt.strip()}")
+                card_parts.append(f"Character Instructions:\n{_sub(card.system_prompt.strip())}")
             # post_history_instructions is a SillyTavern field intended to come AFTER
             # the chat history. In story mode there is no turn-by-turn history, so we
             # append it here at the end of the card block as a final authoring note.
             if card.post_history_instructions and card.post_history_instructions.strip():
-                card_parts.append(f"Additional Character Notes:\n{card.post_history_instructions.strip()}")
+                card_parts.append(f"Additional Character Notes:\n{_sub(card.post_history_instructions.strip())}")
             
             # Lorebook entries
             if card.character_book:
@@ -63,6 +78,7 @@ class ContextManager:
             
             if card_parts:
                 system_parts.append("Character Card:\n" + "\n".join(card_parts))
+
 
         # Add recent steering instructions
         recent_steering = self.db.query(SteeringInstruction).filter(
