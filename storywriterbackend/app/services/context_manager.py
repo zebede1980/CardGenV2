@@ -44,10 +44,16 @@ class ContextManager:
                 card_parts.append(f"Personality: {card.personality}")
             if card.scenario:
                 card_parts.append(f"Scenario: {card.scenario}")
-            if card.system_prompt:
-                card_parts.append(f"System Prompt: {card.system_prompt}")
-            if card.post_history_instructions:
-                card_parts.append(f"Post-History Instructions: {card.post_history_instructions}")
+            # card.system_prompt: per-character author instructions (e.g. language, tone)
+            # Only include if non-empty; many cards leave this blank or use it for
+            # site-specific metadata that would bloat context.
+            if card.system_prompt and card.system_prompt.strip():
+                card_parts.append(f"Character Instructions:\n{card.system_prompt.strip()}")
+            # post_history_instructions is a SillyTavern field intended to come AFTER
+            # the chat history. In story mode there is no turn-by-turn history, so we
+            # append it here at the end of the card block as a final authoring note.
+            if card.post_history_instructions and card.post_history_instructions.strip():
+                card_parts.append(f"Additional Character Notes:\n{card.post_history_instructions.strip()}")
             
             # Lorebook entries
             if card.character_book:
@@ -83,13 +89,33 @@ class ContextManager:
             "Only output the next part of the narrative."
         )
 
-        # Estimate tokens used so far to budget for story context
-        system_text = "\n\n".join(system_parts) + "\n\n" + final_system_instruction
-        system_tokens = len(system_text) // 4
-        reserved_tokens = 500  # For the final user prompt
-        available_context_tokens = max(1000, self.context_window - system_tokens - reserved_tokens)
+        # ── Token budget ──────────────────────────────────────────────────────
+        # Reserve space for: system header parts (already built), final instruction,
+        # the user continuation prompt, AND the model's output (max_tokens).
+        # This ensures we never push so much story history that the model has no
+        # room left for its output — which is what causes gibberish.
+        system_text_so_far = "\n\n".join(system_parts) + "\n\n" + final_system_instruction
+        system_tokens_so_far = len(system_text_so_far) // 4
 
-        story_context = self._build_story_context(segments, available_context_tokens)
+        # The last segment will be the user message (separate from "Story So Far")
+        last_segment = segments[-1] if segments and not segments[-1].is_summary else None
+        user_msg_tokens = (len(last_segment.content) // 4 + 50) if last_segment else 50
+
+        # max_tokens is the output budget the LLM needs
+        output_tokens = self.settings.max_tokens
+
+        available_context_tokens = max(
+            500,
+            self.context_window
+            - system_tokens_so_far
+            - user_msg_tokens
+            - output_tokens
+        )
+
+        # Build story context, explicitly EXCLUDING the last segment
+        # (it will be sent as the user message to avoid double-sending).
+        context_segments = segments[:-1] if last_segment else segments
+        story_context = self._build_story_context(context_segments, available_context_tokens)
         if story_context:
             system_parts.append(f"Story So Far:\n{story_context}")
 
@@ -97,12 +123,15 @@ class ContextManager:
 
         messages.append({"role": "system", "content": "\n\n".join(system_parts)})
         
-        # Add the last segment as user message to continue from
-        if segments and not segments[-1].is_summary:
-            messages.append({"role": "user", "content": f"Continue the story from here:\n\n{segments[-1].content}"})
+        # User message: ask the model to continue from the most recent segment.
+        # Sending it as the user turn (not buried in the system prompt) gives the
+        # model a clear, unambiguous anchor point for the next generation.
+        if last_segment:
+            messages.append({"role": "user", "content": f"Continue the story from here:\n\n{last_segment.content}"})
         elif not segments:
             messages.append({"role": "user", "content": "Begin writing the story based on the synopsis and character cards provided."})
         else:
+            # last segment is a summary — don't repeat it, just ask to continue
             messages.append({"role": "user", "content": "Continue the story from where it left off."})
 
         return messages
@@ -137,7 +166,7 @@ class ContextManager:
                 else:
                     context_parts.append(seg.content)
                     
-        # Truncate oldest segments to fit within max_tokens
+        # Truncate oldest segments to fit within max_tokens (keep the most recent)
         final_parts = []
         current_tokens = 0
         for part in reversed(context_parts):
