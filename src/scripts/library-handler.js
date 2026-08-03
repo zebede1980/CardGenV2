@@ -233,6 +233,86 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+
+  /**
+   * Show the rich overwrite-confirmation modal and return a promise that
+   * resolves to 'overwrite' | 'savenew' | 'cancel'.
+   */
+  _showOverwriteConfirmModal(existingCard, charName) {
+    return new Promise((resolve) => {
+      const modal      = document.getElementById("overwrite-confirm-modal");
+      const msg        = document.getElementById("overwrite-confirm-msg");
+      const existImg   = document.getElementById("overwrite-existing-img");
+      const existPh    = document.getElementById("overwrite-existing-placeholder");
+      const existName  = document.getElementById("overwrite-existing-name");
+      const newImg     = document.getElementById("overwrite-new-img");
+      const newPh      = document.getElementById("overwrite-new-placeholder");
+      const newName    = document.getElementById("overwrite-new-name");
+      const btnOver    = document.getElementById("overwrite-confirm-overwrite-btn");
+      const btnNew     = document.getElementById("overwrite-confirm-savenew-btn");
+      const btnCancel  = document.getElementById("overwrite-confirm-cancel-btn");
+
+      if (!modal) {
+        // Fallback to native confirm if modal missing (shouldn't happen)
+        const r = confirm(`A character named "${charName}" already exists.\n\nOverwrite it?`);
+        resolve(r ? "overwrite" : "cancel");
+        return;
+      }
+
+      // Populate message
+      msg.textContent = `A character named "${charName}" already exists in your saved library. Please review both cards carefully before deciding.`;
+
+      // Reset image panels
+      existImg.style.display  = "none";
+      existPh.style.display   = "block";
+      newImg.style.display    = "none";
+      newPh.style.display     = "block";
+
+      // Existing card image via thumbnail endpoint
+      existName.textContent = existingCard.characterName || charName;
+      if (existingCard.id) {
+        const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(existingCard.id)}`;
+        const tmpImg = new Image();
+        tmpImg.onload = () => {
+          existImg.src = thumbUrl;
+          existImg.style.display = "block";
+          existPh.style.display  = "none";
+        };
+        tmpImg.onerror = () => { /* leave placeholder visible */ };
+        tmpImg.src = thumbUrl;
+      }
+
+      // New card image from current session
+      newName.textContent = charName;
+      if (this.currentImageUrl) {
+        newImg.src = this.currentImageUrl;
+        newImg.style.display = "block";
+        newPh.style.display  = "none";
+      }
+
+      // Show modal
+      modal.classList.add("show");
+      modal.style.display = "flex";
+
+      const cleanup = (result) => {
+        modal.classList.remove("show");
+        modal.style.display = "";
+        btnOver.removeEventListener("click", onOver);
+        btnNew.removeEventListener("click", onNew);
+        btnCancel.removeEventListener("click", onCancel);
+        resolve(result);
+      };
+
+      const onOver   = () => cleanup("overwrite");
+      const onNew    = () => cleanup("savenew");
+      const onCancel = () => cleanup("cancel");
+
+      btnOver.addEventListener("click", onOver);
+      btnNew.addEventListener("click", onNew);
+      btnCancel.addEventListener("click", onCancel);
+    });
+  },
+
   async handleSaveCardManual() {
     if (!this.currentCharacter) {
       this.showNotification("No character to save", "warning");
@@ -250,19 +330,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       );
 
       if (existingCard) {
-        const doOverwrite = confirm(
-          `A character named "${charName}" already exists in your saved library.\n\nWould you like to overwrite it?`,
-        );
-        if (doOverwrite) {
+        const choice = await this._showOverwriteConfirmModal(existingCard, charName);
+        if (choice === "overwrite") {
           saveId = existingCard.id;
+        } else if (choice === "savenew") {
+          // saveId remains null → new entry
         } else {
-          const doSaveNew = confirm(
-            `Would you like to save this as a new, separate version instead?`,
-          );
-          if (!doSaveNew) {
-            this.showNotification("Save cancelled", "info");
-            return;
-          }
+          this.showNotification("Save cancelled", "info");
+          return;
         }
       }
     }
@@ -272,6 +347,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     await this.refreshLibraryViews();
     this.showNotification("Card saved permanently!", "success");
   },
+
 
   async refreshLibraryViews() {
     if (!this.storageReady || !this.storage) {

@@ -2083,6 +2083,42 @@
         <script src="src/scripts/home-handler.js?v=20260729-2"></script>
         <!-- API Settings Modal -->
 
+        <!-- Overwrite confirmation modal with card image comparison -->
+        <div id="overwrite-confirm-modal" class="modal-overlay">
+            <div class="api-settings-modal" style="max-width: 580px; width: 94%;">
+                <div class="modal-header">
+                    <h2 class="modal-title">⚠️ Character Already Exists</h2>
+                </div>
+                <div class="modal-body">
+                    <p id="overwrite-confirm-msg" style="margin-bottom: 1.25rem; line-height: 1.6; color: var(--text-secondary);"></p>
+                    <div style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 1.5rem;">
+                        <div style="flex: 1; text-align: center;">
+                            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Existing Card</div>
+                            <div style="border: 2px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--surface-secondary); aspect-ratio: 1; display: flex; align-items: center; justify-content: center;">
+                                <img id="overwrite-existing-img" src="" alt="Existing character" style="width: 100%; height: 100%; object-fit: cover; display: none;" />
+                                <span id="overwrite-existing-placeholder" style="color: var(--text-muted); font-size: 0.8rem;">No image</span>
+                            </div>
+                            <div id="overwrite-existing-name" style="margin-top: 0.4rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);"></div>
+                        </div>
+                        <div style="display: flex; align-items: center; font-size: 1.5rem; color: var(--text-muted); padding: 0 0.25rem;">→</div>
+                        <div style="flex: 1; text-align: center;">
+                            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">New Card</div>
+                            <div style="border: 2px solid var(--accent-primary, #7c5cbf); border-radius: 8px; overflow: hidden; background: var(--surface-secondary); aspect-ratio: 1; display: flex; align-items: center; justify-content: center;">
+                                <img id="overwrite-new-img" src="" alt="New character" style="width: 100%; height: 100%; object-fit: cover; display: none;" />
+                                <span id="overwrite-new-placeholder" style="color: var(--text-muted); font-size: 0.8rem;">No image</span>
+                            </div>
+                            <div id="overwrite-new-name" style="margin-top: 0.4rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                        <button id="overwrite-confirm-overwrite-btn" class="btn-primary" style="background: var(--error, #e05252);">🔄 Overwrite Existing Card</button>
+                        <button id="overwrite-confirm-savenew-btn" class="btn-outline">➕ Save as New Separate Version</button>
+                        <button id="overwrite-confirm-cancel-btn" class="btn-outline" style="color: var(--text-secondary);">✕ Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ST push-choice modal (name changed) -->
 
         <div id="st-push-choice-modal" class="modal-overlay">
