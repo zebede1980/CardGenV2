@@ -271,7 +271,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Existing card image via thumbnail endpoint
       existName.textContent = existingCard.characterName || charName;
       if (existingCard.id) {
-        const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(existingCard.id)}`;
+        const authToken = window.cardgenAuth?.getToken() || "";
+        const thumbUrl = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(existingCard.id)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
         const tmpImg = new Image();
         tmpImg.onload = () => {
           existImg.src = thumbUrl;
