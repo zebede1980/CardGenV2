@@ -54,9 +54,25 @@ class APIHandler {
     let delay = this.config.get("app.retryDelay") || 1000;
     const maxRetries = this.config.get("app.maxRetries") || 3;
 
+    // Resumable requests carry a client-generated reference, created *before*
+    // the request goes out. Without it, a socket that dies during the initial
+    // upstream wait leaves a generation running server-side that the browser
+    // cannot name — and the retry below would silently start a second one.
+    const resumable = !!data.resumable && stream && !!window.ResumableJobs;
+    let clientRef = null;
+    if (resumable) {
+      clientRef = window.ResumableJobs.newRef();
+      data = { ...data, clientRef };
+      window.ResumableJobs.add({ clientRef, label: data.__jobLabel || "Generation" });
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await this._doMakeRequest(endpoint, data, isImageRequest, stream);
+        const response = await this._doMakeRequest(endpoint, data, isImageRequest, stream);
+        if (resumable && response) {
+          response._clientRef = clientRef;
+        }
+        return response;
       } catch (error) {
         lastError = error;
 
@@ -68,7 +84,19 @@ class APIHandler {
           error.message.includes("401") ||
           error.message.includes("400")
         ) {
+          if (resumable) window.ResumableJobs.remove(clientRef);
           throw error;
+        }
+
+        // Before retrying, check whether the generation is already running on
+        // the server. Retrying blind here is what made a dropped connection
+        // silently produce a *different* character at double the token cost.
+        if (resumable) {
+          const resumed = await this._tryResumeByClientRef(clientRef);
+          if (resumed) {
+            console.warn(`[API] Attempt ${attempt} failed (${error.message}) — resuming existing generation instead of regenerating`);
+            return resumed;
+          }
         }
 
         console.warn(`[API] Attempt ${attempt} failed: ${error.message}. Retrying in ${delay}ms...`);
@@ -78,7 +106,66 @@ class APIHandler {
         }
       }
     }
+    if (resumable) window.ResumableJobs.remove(clientRef);
     throw lastError;
+  }
+
+  /**
+   * Look for a server-side job matching this client reference and, if one
+   * exists, open a resume stream for the part not yet seen. Returns a Response
+   * that handleStreamResponse can consume exactly like an original stream, or
+   * null when there is nothing to resume.
+   */
+  async _tryResumeByClientRef(clientRef) {
+    if (!clientRef) return null;
+    try {
+      const entry = window.ResumableJobs.get(clientRef);
+      let jobId = entry?.jobId || null;
+
+      if (!jobId) {
+        const listRes = await (window.authFetch || fetch)(
+          `/api/text/jobs?clientRef=${encodeURIComponent(clientRef)}`,
+          { headers: this._authHeaders() },
+        );
+        if (!listRes.ok) return null;
+        const { jobs } = await listRes.json();
+        if (!jobs?.length) return null;
+        jobId = jobs[0].id;
+        window.ResumableJobs.update(clientRef, { jobId });
+      }
+
+      return await this._openResumeStream(jobId, entry?.offset || 0, clientRef);
+    } catch (err) {
+      console.warn("[API] resume lookup failed:", err?.message || err);
+      return null;
+    }
+  }
+
+  _authHeaders() {
+    const authToken = window.cardgenAuth?.getToken() || "";
+    return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  }
+
+  /** Open the SSE resume stream for a job, starting after `offset` characters. */
+  async _openResumeStream(jobId, offset, clientRef) {
+    const res = await (window.authFetch || fetch)(
+      `/api/text/jobs/${encodeURIComponent(jobId)}/stream?from=${offset}`,
+      { headers: { ...this._authHeaders(), Accept: "text/event-stream" } },
+    );
+
+    if (res.status === 404) {
+      // Evicted or the proxy restarted. Say so rather than silently starting a
+      // brand-new generation the user did not ask for.
+      console.warn(`[API] job ${jobId} expired before it could be resumed`);
+      if (clientRef) window.ResumableJobs.remove(clientRef);
+      return null;
+    }
+    if (!res.ok) return null;
+
+    res._clientRef = clientRef;
+    res._resumedJobId = jobId;
+    res._resumeOffset = offset;
+    return res;
   }
 
   async _doMakeRequest(endpoint, data, isImageRequest = false, stream = false) {
@@ -183,6 +270,15 @@ class APIHandler {
     if (this.requestLogs.length > 30) this.requestLogs.pop();
     const startTime = performance.now();
 
+    // Hold the screen awake for the duration of the call. For streaming
+    // requests ownership passes to handleStreamResponse, which releases when
+    // the stream ends — the work is not over just because fetch() resolved.
+    let wakeLockHeld = false;
+    if (window.wakeLockManager) {
+      window.wakeLockManager.acquire();
+      wakeLockHeld = true;
+    }
+
     try {
       const authToken = window.cardgenAuth?.getToken() || "";
       const response = await fetch(url, {
@@ -239,6 +335,9 @@ class APIHandler {
       if (stream) {
         response._logEntry = logEntry;
         response._startTime = startTime;
+        // Hand the wake lock to the stream consumer.
+        response._wakeLockHeld = wakeLockHeld;
+        wakeLockHeld = false;
         return response;
       } else if (isImageRequest) {
         response.clone().json().then(res => {
@@ -276,18 +375,22 @@ class APIHandler {
       throw error;
     } finally {
       this.currentAbortController = null;
+      // Released here for non-streaming calls and for any failure before the
+      // stream was handed over. Streaming successes cleared the flag above.
+      if (wakeLockHeld) window.wakeLockManager?.release();
     }
   }
 
-  async handleStreamResponse(response, onStream) {
-    const reader = response.body.getReader();
+  /**
+   * Consume one SSE stream into `state`, which accumulates across resumes.
+   * Returns normally when the socket ends for any reason; `state.complete`
+   * distinguishes a finished generation from a severed connection.
+   */
+  async _consumeStream(body, state, onStream, logEntry) {
+    const reader = body.getReader();
     this.currentReader = reader; // Store reader reference for cancellation
     const decoder = new TextDecoder();
     let buffer = "";
-    let fullContent = "";
-    let streamFinishReason = null;
-    const logEntry = response._logEntry;
-    const startTime = response._startTime || performance.now();
 
     try {
       while (true) {
@@ -312,17 +415,41 @@ class APIHandler {
 
             try {
               const parsed = JSON.parse(data);
+
+              // The proxy announces a resumable job before any content, so the
+              // reference can be recorded while there is still time to use it.
+              if (parsed.type === "job" && parsed.jobId) {
+                state.jobId = parsed.jobId;
+                if (state.clientRef) {
+                  window.ResumableJobs?.update(state.clientRef, { jobId: parsed.jobId });
+                }
+                continue;
+              }
+
+              if (parsed.error) {
+                state.error = parsed.error.message || String(parsed.error);
+                state.complete = true;
+                continue;
+              }
+
               const content = parsed.choices?.[0]?.delta?.content || "";
 
               if (content) {
-                fullContent += content;
-                onStream(content, fullContent);
+                state.fullContent += content;
+                if (state.clientRef) {
+                  window.ResumableJobs?.update(state.clientRef, {
+                    offset: state.fullContent.length,
+                  });
+                }
+                onStream(content, state.fullContent);
               }
 
             // The terminating chunk carries why generation stopped; remember it
-            // so we can warn about truncation once the stream completes.
+            // so we can warn about truncation once the stream completes. It is
+            // also how a finished generation is told apart from a dropped one.
             if (parsed.choices?.[0]?.finish_reason) {
-              streamFinishReason = parsed.choices[0].finish_reason;
+              state.finishReason = parsed.choices[0].finish_reason;
+              state.complete = true;
             }
 
             // Capture usage stats occasionally sent at the end of streams
@@ -338,21 +465,125 @@ class APIHandler {
           }
         }
       }
+    } catch (error) {
+      // A severed socket is not fatal for a resumable job — the caller decides
+      // whether to reconnect. Record it and let the resume loop take over.
+      state.interrupted = error;
+      if (window.config?.getDebugMode?.()) {
+        console.debug("Stream read ended:", error?.message || error);
+      }
+    } finally {
+      this.currentReader = null;
+    }
+  }
+
+  /** Resolve once the page is visible again, so we do not reconnect while locked. */
+  _waitUntilVisible() {
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const onChange = () => {
+        if (document.visibilityState === "visible") {
+          document.removeEventListener("visibilitychange", onChange);
+          resolve();
+        }
+      };
+      document.addEventListener("visibilitychange", onChange);
+    });
+  }
+
+  async handleStreamResponse(response, onStream) {
+    const logEntry = response._logEntry;
+    const startTime = response._startTime || performance.now();
+
+    const state = {
+      fullContent: "",
+      clientRef: response._clientRef || null,
+      jobId: response._resumedJobId || null,
+      finishReason: null,
+      complete: false,
+      interrupted: null,
+      error: null,
+    };
+
+    // A resume handed over by makeRequest always starts at offset 0: the
+    // original attempt never reached this method, so `onStream` has been shown
+    // nothing yet and the whole buffer must be replayed.
+
+    try {
+      await this._consumeStream(response.body, state, onStream, logEntry);
+
+      // Reconnect loop. Only resumable generations get here: without a job the
+      // stream is gone for good and the error must surface to the caller.
+      // Bounded so a persistently failing resume cannot spin forever.
+      let attempts = 0;
+      while (
+        !state.complete &&
+        state.clientRef &&
+        !this.userStopRequested &&
+        attempts < 20
+      ) {
+        attempts++;
+        await this._waitUntilVisible();
+
+        // Connectivity usually comes back a moment after the screen does, so a
+        // failed reconnect is retried with backoff rather than giving up and
+        // handing the caller a half-finished character.
+        let resumeRes = null;
+        try {
+          resumeRes = state.jobId
+            ? await this._openResumeStream(state.jobId, state.fullContent.length, state.clientRef)
+            : await this._tryResumeByClientRef(state.clientRef);
+        } catch (err) {
+          console.warn("[API] reconnect attempt failed:", err?.message || err);
+        }
+
+        if (!resumeRes) {
+          // A null result from an expired job is terminal; a thrown network
+          // error is not. _openResumeStream clears the store on eviction, so
+          // a missing entry means there is genuinely nothing left to resume.
+          if (!window.ResumableJobs?.get(state.clientRef)) break;
+          await new Promise((r) => setTimeout(r, Math.min(500 * attempts, 5000)));
+          continue;
+        }
+
+        state.interrupted = null;
+        await this._consumeStream(resumeRes.body, state, onStream, logEntry);
+      }
+
+      if (state.clientRef && (state.complete || !state.interrupted)) {
+        window.ResumableJobs?.remove(state.clientRef);
+      }
+
+      if (state.error) throw new Error(state.error);
+
+      // Nothing recoverable and the socket died — surface the original failure
+      // rather than handing back a half-built character as if it were whole.
+      if (!state.complete && state.interrupted) {
+        if (this.userStopRequested) throw new Error("Generation stopped by user.");
+        throw state.interrupted;
+      }
 
       if (logEntry) {
         logEntry.status = 200;
         logEntry.duration = performance.now() - startTime;
-        logEntry.response = fullContent;
+        logEntry.response = state.fullContent;
       }
 
-      this.noteFinishReason(streamFinishReason);
+      this.noteFinishReason(state.finishReason);
 
-      return fullContent;
+      return state.fullContent;
     } catch (error) {
       console.error("Stream processing error:", error);
       throw error;
     } finally {
       this.currentReader = null;
+      // Ownership was passed from _doMakeRequest when the stream began.
+      if (response._wakeLockHeld) {
+        response._wakeLockHeld = false;
+        window.wakeLockManager?.release();
+      }
     }
   }
 

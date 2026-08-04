@@ -67,6 +67,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       effectiveConcept = `Create a complete, original character based on and inspired by this visual reference description:\n${referenceImageDescription}`;
     }
 
+    // Hold the screen awake across the whole batch. The parallel variants use a
+    // standalone fetch rather than APIHandler, so they would not otherwise get
+    // one — and a batch is the longest-running thing CardGen does.
+    window.wakeLockManager?.acquire();
+
     try {
       // Generate first variant with streaming (shown in the stream box)
       if (batchProgress) batchProgress.textContent = `Generating variant 1 of ${VARIANT_COUNT}…`;
@@ -157,6 +162,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._batchIsGenerating = false;
       this._batchAbortController = null;
       this._setBatchButtonStates(false);
+      window.wakeLockManager?.release();
     }
   },
 

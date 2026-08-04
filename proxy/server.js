@@ -1541,13 +1541,303 @@ const DEFAULT_TEXT_TOP_P = 0.95;
 // generous — it exists to stop a black-holed connection hanging forever.
 const TEXT_UPSTREAM_TIMEOUT_MS = 10 * 60 * 1000;
 
+// ── Resumable generation jobs ────────────────────────────────────────────────
+//
+// A CardGen generation is a single streaming HTTP request with nothing
+// persisted anywhere. When an iPhone locks, iOS tears the socket down and the
+// in-flight character is unrecoverable — the tokens are spent and the result is
+// gone. Roleplay Chat, Story Writer and Adventure avoid this because the Python
+// backend detaches generation from the response and commits to Postgres.
+//
+// This gives CardGen the equivalent without moving it onto that backend: when a
+// request opts in with `resumable: true`, the upstream read loop writes into a
+// job buffer *unconditionally* and forwarding to the client becomes best-effort.
+// A client that comes back can replay from a byte it has not seen yet.
+//
+// Deliberately in-memory: a generation lasts under a minute, so a proxy restart
+// mid-flight is rare and acceptable (the client treats it as an eviction).
+
+const { randomUUID } = require("crypto");
+const { StringDecoder } = require("string_decoder");
+
+const envInt = (name, fallback) => {
+  const raw = process.env[name];
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+// Overridable so retention can be tuned in production without a code change,
+// and so the bounds are testable without waiting out minute-long timers.
+const JOB_LIMITS = {
+  // "Generate 4" uses four at once; this leaves headroom without letting a
+  // runaway client pin unbounded memory.
+  MAX_RUNNING_PER_USER: envInt("JOB_MAX_RUNNING_PER_USER", 8),
+  // A character card is ~10 KB. This is a runaway guard, not a working limit.
+  MAX_CONTENT_CHARS: envInt("JOB_MAX_CONTENT_CHARS", 1024 * 1024),
+  // Long enough for a phone left locked for a while.
+  RETENTION_MS: envInt("JOB_RETENTION_MS", 10 * 60 * 1000),
+  // Slack over the 10-minute upstream timeout.
+  MAX_RUN_MS: envInt("JOB_MAX_RUN_MS", 20 * 60 * 1000),
+  SWEEP_INTERVAL_MS: envInt("JOB_SWEEP_INTERVAL_MS", 60 * 1000),
+};
+
+/** jobId -> job record */
+const generationJobs = new Map();
+
+function jobIsExpired(job, now = Date.now()) {
+  if (job.status === "running") return now - job.createdAt > JOB_LIMITS.MAX_RUN_MS;
+  return now - (job.completedAt || job.createdAt) > JOB_LIMITS.RETENTION_MS;
+}
+
+function countRunningJobsForUser(userId) {
+  let n = 0;
+  for (const job of generationJobs.values()) {
+    if (job.userId === userId && job.status === "running" && !jobIsExpired(job)) n++;
+  }
+  return n;
+}
+
+/**
+ * `clientRef` is an id the browser generates *before* sending the request. It
+ * exists because the server-assigned id arrives in the first SSE frame, which
+ * is too late if the socket dies during the initial upstream wait — the job
+ * would be running and billing with the client unable to name it. Lookup is
+ * always scoped to the authenticated user, so a guessed ref reveals nothing.
+ */
+function createGenerationJob(userId, abortController, clientRef = null) {
+  const job = {
+    id: randomUUID(),
+    clientRef: typeof clientRef === "string" ? clientRef.slice(0, 100) : null,
+    userId,
+    status: "running",
+    content: "",
+    finishReason: null,
+    error: null,
+    createdAt: Date.now(),
+    completedAt: null,
+    subscribers: 1, // the request that created it is already attached
+    listeners: new Set(), // fn(event) for clients tailing this job live
+    abort: abortController,
+  };
+  generationJobs.set(job.id, job);
+  return job;
+}
+
+function emitToJobListeners(job, event) {
+  for (const listener of job.listeners) {
+    try {
+      listener(event);
+    } catch (err) {
+      console.error("[jobs] listener failed:", err.message);
+    }
+  }
+}
+
+/** Append assembled text, enforcing the per-job cap. Returns false if capped. */
+function appendJobContent(job, text) {
+  if (job.status !== "running" || !text) return true;
+
+  if (job.content.length + text.length > JOB_LIMITS.MAX_CONTENT_CHARS) {
+    finishGenerationJob(job, "error", {
+      error: `Generation exceeded the ${JOB_LIMITS.MAX_CONTENT_CHARS} character buffer limit`,
+    });
+    if (job.abort && !job.abort.signal.aborted) job.abort.abort();
+    return false;
+  }
+
+  job.content += text;
+  emitToJobListeners(job, { type: "delta", text });
+  return true;
+}
+
+function finishGenerationJob(job, status, { finishReason, error } = {}) {
+  if (job.status !== "running") return; // already terminal — first result wins
+  job.status = status;
+  job.completedAt = Date.now();
+  if (finishReason) job.finishReason = finishReason;
+  if (error) job.error = error;
+  emitToJobListeners(job, {
+    type: status === "error" ? "error" : "done",
+    finishReason: job.finishReason,
+    error: job.error,
+  });
+  job.listeners.clear();
+}
+
+/**
+ * Incremental SSE parser that pulls assembled text out of the provider's
+ * stream. The proxy was previously a dumb byte pipe; buffering by *assembled
+ * content* rather than raw bytes is what lets a resume offset survive differing
+ * chunk boundaries between the original stream and the replayed one.
+ */
+function makeSseContentExtractor({ onContent, onFinishReason }) {
+  let buffer = "";
+  // Multi-byte UTF-8 characters can straddle a chunk boundary; decoding each
+  // chunk independently would corrupt them.
+  const decoder = new StringDecoder("utf8");
+
+  return function feed(chunk) {
+    buffer += decoder.write(chunk);
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || ""; // keep the incomplete trailing line
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      let payload = trimmed.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      // Some providers double-wrap: "data: data: {...}"
+      if (payload.startsWith("data:")) payload = payload.slice(5).trim();
+
+      try {
+        const parsed = JSON.parse(payload);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) onContent(content);
+        const reason = parsed.choices?.[0]?.finish_reason;
+        if (reason) onFinishReason(reason);
+      } catch (_) {
+        /* keep-alive comments and non-JSON frames are not errors */
+      }
+    }
+  };
+}
+
+/** SSE frames shaped like the provider's, so the client parser needs no changes. */
+function sseDeltaFrame(text) {
+  return `data: ${JSON.stringify({
+    choices: [{ index: 0, delta: { content: text } }],
+  })}\n\n`;
+}
+
+function sseFinishFrame(finishReason) {
+  return `data: ${JSON.stringify({
+    choices: [{ index: 0, delta: {}, finish_reason: finishReason || "stop" }],
+  })}\n\n`;
+}
+
+function sseErrorFrame(message) {
+  return `data: ${JSON.stringify({ error: { message } })}\n\n`;
+}
+
+const jobSweeper = setInterval(() => {
+  const now = Date.now();
+  for (const [id, job] of generationJobs) {
+    if (!jobIsExpired(job, now)) continue;
+    if (job.status === "running") {
+      // Blew the hard cap on running duration — stop billing for it.
+      console.warn(`[jobs] hard-capping runaway job ${id}`);
+      finishGenerationJob(job, "error", { error: "Generation exceeded the maximum run time" });
+      if (job.abort && !job.abort.signal.aborted) job.abort.abort();
+      continue; // keep the terminal record around for its retention window
+    }
+    generationJobs.delete(id);
+  }
+}, JOB_LIMITS.SWEEP_INTERVAL_MS);
+// Don't hold the event loop open on shutdown.
+if (jobSweeper.unref) jobSweeper.unref();
+
+/**
+ * Resume a generation, replaying everything after `from` and then tailing live.
+ * `from` is a character count of assembled content, not a chunk index.
+ */
+app.get("/api/text/jobs/:jobId/stream", requireAuth, (req, res) => {
+  const job = generationJobs.get(req.params.jobId);
+
+  if (!job || jobIsExpired(job)) {
+    return res.status(404).json({
+      error: { code: "404", message: "Job not found or expired" },
+    });
+  }
+  if (job.userId !== req.user.userId) {
+    return res.status(403).json({
+      error: { code: "403", message: "Job belongs to another user" },
+    });
+  }
+
+  const from = Math.max(0, parseInt(req.query.from, 10) || 0);
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  // SSE needs unbuffered proxying; streaming already works through NPM, but the
+  // resume endpoint is new and should not rely on that config being inherited.
+  res.setHeader("X-Accel-Buffering", "no");
+  if (res.flushHeaders) res.flushHeaders();
+
+  // No await between reading the backlog and attaching the listener, so a chunk
+  // cannot slip through the gap and be lost or duplicated.
+  const backlog = job.content.slice(from);
+  if (backlog) res.write(sseDeltaFrame(backlog));
+
+  if (job.status !== "running") {
+    if (job.status === "error" && job.error) res.write(sseErrorFrame(job.error));
+    else res.write(sseFinishFrame(job.finishReason));
+    res.write("data: [DONE]\n\n");
+    return res.end();
+  }
+
+  job.subscribers++;
+  const listener = (event) => {
+    try {
+      if (event.type === "delta") {
+        res.write(sseDeltaFrame(event.text));
+      } else if (event.type === "error") {
+        res.write(sseErrorFrame(event.error || "Generation failed"));
+        res.write("data: [DONE]\n\n");
+        res.end();
+      } else {
+        res.write(sseFinishFrame(event.finishReason));
+        res.write("data: [DONE]\n\n");
+        res.end();
+      }
+    } catch (_) {
+      /* client vanished mid-write; the close handler cleans up */
+    }
+  };
+  job.listeners.add(listener);
+
+  res.on("close", () => {
+    job.listeners.delete(listener);
+    job.subscribers = Math.max(0, job.subscribers - 1);
+  });
+});
+
+/**
+ * List the caller's live jobs. The safety net for when Safari discards the tab
+ * entirely, or the stored jobId turns out to be stale.
+ */
+app.get("/api/text/jobs", requireAuth, (req, res) => {
+  const now = Date.now();
+  const wantRef = req.query.clientRef;
+  const list = [];
+  for (const job of generationJobs.values()) {
+    if (job.userId !== req.user.userId || jobIsExpired(job, now)) continue;
+    if (wantRef && job.clientRef !== wantRef) continue;
+    list.push({
+      id: job.id,
+      clientRef: job.clientRef,
+      status: job.status,
+      createdAt: job.createdAt,
+      completedAt: job.completedAt,
+      length: job.content.length,
+      finishReason: job.finishReason,
+      subscribers: job.subscribers,
+    });
+  }
+  list.sort((a, b) => b.createdAt - a.createdAt);
+  res.json({ jobs: list });
+});
+
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
   // Declared outside the try so the catch below can distinguish a deliberate
   // client-disconnect abort from a genuine server error.
   let clientGone = false;
+  // Set when the caller opts into resumable buffering; see the job registry above.
+  let job = null;
   try {
-    const { model, messages, max_tokens, temperature, stream } = req.body;
+    const { model, messages, max_tokens, temperature, stream, resumable, clientRef } =
+      req.body;
 
     const apiKey = req.headers["x-api-key"];
     const apiUrl = req.headers["x-api-url"];
@@ -1607,11 +1897,35 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     }
     if (requestBody.top_p === undefined) requestBody.top_p = DEFAULT_TEXT_TOP_P;
 
+    const upstreamAbort = new AbortController();
+
+    // Opting in creates a server-side buffer the generation can outlive the
+    // socket into. Only meaningful for streaming requests — a non-streaming
+    // call has nothing to resume partway through.
+    if (resumable && stream) {
+      const running = countRunningJobsForUser(req.user.userId);
+      if (running >= JOB_LIMITS.MAX_RUNNING_PER_USER) {
+        return res.status(429).json({
+          error: {
+            code: "429",
+            message: `Too many generations in flight (limit ${JOB_LIMITS.MAX_RUNNING_PER_USER}). Wait for one to finish.`,
+          },
+        });
+      }
+      job = createGenerationJob(req.user.userId, upstreamAbort, clientRef);
+    }
+
     // Abort the upstream generation if the browser goes away. Without this the
     // provider keeps generating — and billing — into a socket nobody is reading.
-    const upstreamAbort = new AbortController();
+    // Resumable jobs are the deliberate exception: there the whole point is to
+    // let generation finish into the buffer so the client can come back for it.
     const onClientClose = () => {
       clientGone = true;
+      if (job && job.status === "running") {
+        job.subscribers = Math.max(0, job.subscribers - 1);
+        console.log(`[jobs] client detached from job ${job.id}; continuing into buffer`);
+        return;
+      }
       upstreamAbort.abort();
     };
     res.on("close", onClientClose);
@@ -1650,6 +1964,11 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Text API error:", response.status, errorText);
+      if (job) {
+        finishGenerationJob(job, "error", {
+          error: `API Error: ${response.status} ${response.statusText}`,
+        });
+      }
       return res.status(response.status).json({
         error: {
           code: response.status.toString(),
@@ -1664,13 +1983,45 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
+      if (job) res.setHeader("X-Accel-Buffering", "no");
+
+      // The client must learn the job id before any content arrives, so it can
+      // persist it and still resume if the socket dies on the very next chunk.
+      let extractContent = null;
+      if (job) {
+        if (!clientGone && !res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ type: "job", jobId: job.id })}\n\n`);
+        }
+        extractContent = makeSseContentExtractor({
+          onContent: (text) => appendJobContent(job, text),
+          onFinishReason: (reason) => {
+            job.finishReason = reason;
+          },
+        });
+      }
 
       response.body.on("data", (chunk) => {
+        // Buffer first and unconditionally — the job must complete whether or
+        // not anyone is still listening. Forwarding is the side effect now.
+        if (extractContent) extractContent(chunk);
+
+        if (clientGone || res.writableEnded) return;
+
         // Respect backpressure: if the client socket is full, pause the
         // upstream rather than buffering it all in memory for a slow reader.
         if (res.write(chunk) === false) {
           response.body.pause();
-          res.once("drain", () => response.body.resume());
+          // If the client disappears while paused, 'drain' never fires and a
+          // resumable job would stall forever — so resume on close too, and
+          // detach both listeners whichever one wins (otherwise repeated
+          // backpressure piles up 'close' handlers on res).
+          const resume = () => {
+            res.off("drain", resume);
+            res.off("close", resume);
+            response.body.resume();
+          };
+          res.once("drain", resume);
+          res.once("close", resume);
         }
       });
 
@@ -1680,8 +2031,15 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       // emit an SSE error frame so the client learns the stream was cut short
       // instead of silently treating a truncated reply as complete.
       response.body.on("error", (err) => {
-        if (clientGone) return;
         console.error("Text API stream error:", err.message);
+        // Record on the job even with nobody attached, so a returning client is
+        // told the generation failed rather than waiting on a dead stream.
+        if (job) {
+          finishGenerationJob(job, "error", {
+            error: `Upstream stream failed: ${err.message}`,
+          });
+        }
+        if (clientGone || res.writableEnded) return;
         try {
           res.write(
             `data: ${JSON.stringify({
@@ -1695,7 +2053,14 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       });
 
       response.body.on("end", () => {
-        res.end();
+        if (job) {
+          finishGenerationJob(job, "done", { finishReason: job.finishReason || "stop" });
+          console.log(
+            `[jobs] job ${job.id} complete (${job.content.length} chars, ` +
+            `${clientGone ? "client had detached" : "client attached"})`,
+          );
+        }
+        if (!res.writableEnded) res.end();
       });
     } else {
       const data = await response.json();
@@ -1706,9 +2071,15 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     // server error and the response is already gone.
     if (clientGone || error.name === "AbortError") {
       console.log("Text request aborted (client disconnected)");
+      // A resumable job whose fetch died still needs a terminal state, or a
+      // returning client would tail a stream that will never produce anything.
+      if (job) {
+        finishGenerationJob(job, "error", { error: "Generation was interrupted" });
+      }
       return;
     }
     console.error("Proxy error:", error);
+    if (job) finishGenerationJob(job, "error", { error: error.message });
     res.status(500).json({
       error: {
         code: "500",

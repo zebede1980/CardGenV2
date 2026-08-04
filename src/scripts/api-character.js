@@ -33,6 +33,9 @@ Object.assign(APIHandler.prototype, {
     };
 
     if (onStream) {
+      // Opt into server-side buffering so a phone locking mid-generation does
+      // not lose the character (and does not silently regenerate a new one).
+      data.resumable = true;
       const response = await this.makeRequest("/chat/completions", data, false, true);
       return this.handleStreamResponse(response, onStream);
     } else {
@@ -83,6 +86,9 @@ Object.assign(APIHandler.prototype, {
     };
 
     if (onStream) {
+      // Opt into server-side buffering so a phone locking mid-generation does
+      // not lose the character (and does not silently regenerate a new one).
+      data.resumable = true;
       const response = await this.makeRequest("/chat/completions", data, false, true);
       return this.handleStreamResponse(response, onStream);
     } else {

@@ -295,6 +295,39 @@ proxy container, minted JWT, Playwright at iPhone viewports):
 
 ---
 
+## Implementation notes (Phases 0–4 built 2026-08-04)
+
+Three things differ from the design above, each for a reason found while building:
+
+1. **`clientRef` — a client-generated job reference.** The plan had the browser
+   learn its job id from the first SSE frame. That is too late: if the socket
+   dies during the initial upstream wait (GLM often reasons for several seconds
+   before emitting anything), a job is running and billing that the browser
+   cannot name, and the retry starts a second one — the exact bug Phase 3 exists
+   to kill. The client now generates a reference *before* sending the request
+   and can find its job via `GET /api/text/jobs?clientRef=…`. Lookup is scoped to
+   the authenticated user, so a guessed reference reveals nothing.
+
+2. **Resume is driven from inside `handleStreamResponse`, not only from a
+   detached `visibilitychange` handler.** Keeping the reconnect inside the
+   in-flight call means the caller's original `onStream` callback is still live,
+   so the UI continues filling in exactly where it stopped. The loop waits for
+   visibility, reconnects with backoff, and is bounded at 20 attempts.
+
+3. **`JOB_LIMITS` are environment-overridable** (`JOB_RETENTION_MS`,
+   `JOB_MAX_CONTENT_CHARS`, `JOB_MAX_RUNNING_PER_USER`, `JOB_MAX_RUN_MS`,
+   `JOB_SWEEP_INTERVAL_MS`). The plan already wanted retention tunable; this also
+   makes the memory bounds testable without waiting out minute-long timers.
+
+Phase 4 turned out to be genuinely one line and was included, because Phases 0–3
+are inert until a caller opts in — `data.resumable = true` on the two streaming
+character-generation calls in `api-character.js`.
+
+**Still outstanding:** Phase 5. Non-streaming calls (tags, names, lorebook
+fields, and `batch-generator.js`'s parallel variants) create no job, so a
+dropped connection there still retries into a fresh generation. That is the
+remaining slice of the cost bug.
+
 ## Out of scope
 
 - Migrating CardGen onto the Python backend. Far larger, and unnecessary — the
