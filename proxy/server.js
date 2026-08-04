@@ -1611,6 +1611,7 @@ function createGenerationJob(userId, abortController, clientRef = null) {
     userId,
     status: "running",
     content: "",
+    result: null, // full upstream JSON, for non-streaming jobs
     finishReason: null,
     error: null,
     createdAt: Date.now(),
@@ -1803,6 +1804,48 @@ app.get("/api/text/jobs/:jobId/stream", requireAuth, (req, res) => {
 });
 
 /**
+ * Collect the finished result of a non-streaming job.
+ *
+ * A non-streaming call cannot be resumed partway through — there is no partial
+ * output to replay — but it can still be *collected*. Without this the client's
+ * retry regenerates the whole thing, which is the remaining half of the
+ * double-billing bug that resumable streaming already fixed.
+ *
+ * 202 while still running, so the caller can poll rather than give up.
+ */
+app.get("/api/text/jobs/:jobId/result", requireAuth, (req, res) => {
+  const job = generationJobs.get(req.params.jobId);
+
+  if (!job || jobIsExpired(job)) {
+    return res.status(404).json({
+      error: { code: "404", message: "Job not found or expired" },
+    });
+  }
+  if (job.userId !== req.user.userId) {
+    return res.status(403).json({
+      error: { code: "403", message: "Job belongs to another user" },
+    });
+  }
+
+  if (job.status === "running") {
+    return res.status(202).json({ status: "running", length: job.content.length });
+  }
+  if (job.status === "error") {
+    return res.status(200).json({ status: "error", error: job.error });
+  }
+
+  return res.json({
+    status: "done",
+    finishReason: job.finishReason,
+    // The original provider payload where we have it, so the client's existing
+    // response handling works unchanged; streaming jobs fall back to the text.
+    result:
+      job.result ||
+      { choices: [{ index: 0, message: { content: job.content }, finish_reason: job.finishReason }] },
+  });
+});
+
+/**
  * List the caller's live jobs. The safety net for when Safari discards the tab
  * entirely, or the stored jobId turns out to be stale.
  */
@@ -1900,9 +1943,10 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     const upstreamAbort = new AbortController();
 
     // Opting in creates a server-side buffer the generation can outlive the
-    // socket into. Only meaningful for streaming requests — a non-streaming
-    // call has nothing to resume partway through.
-    if (resumable && stream) {
+    // socket into. Streaming jobs resume partway through; non-streaming ones
+    // cannot be resumed mid-flight, but the finished result is still held so a
+    // returning client collects it instead of paying to generate it again.
+    if (resumable) {
       const running = countRunningJobsForUser(req.user.userId);
       if (running >= JOB_LIMITS.MAX_RUNNING_PER_USER) {
         return res.status(429).json({
@@ -2064,7 +2108,21 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       });
     } else {
       const data = await response.json();
-      res.json(data);
+      if (job) {
+        const message = data.choices?.[0]?.message;
+        job.content = message?.content || message?.reasoning_content || "";
+        job.result = data;
+        finishGenerationJob(job, "done", {
+          finishReason: data.choices?.[0]?.finish_reason || "stop",
+        });
+        if (clientGone) {
+          console.log(
+            `[jobs] job ${job.id} finished after the client had detached ` +
+            `(${job.content.length} chars held for collection)`,
+          );
+        }
+      }
+      if (!res.writableEnded) res.json(data);
     }
   } catch (error) {
     // A client disconnect aborts the upstream fetch on purpose — that is not a

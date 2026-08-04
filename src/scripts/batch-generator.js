@@ -207,34 +207,57 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       if (!apiUrl || !apiKey) throw new Error("API not configured");
 
-      // Make the request directly — bypassing APIHandler's shared state
-      const res = await (window.authFetch || fetch)("/api/text/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": apiKey,
-          "X-API-URL": apiUrl,
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: characterPrompt.systemPrompt },
-            { role: "user", content: characterPrompt.userPrompt },
-          ],
-          temperature: 0.8,
-          max_tokens: 8192,
-          stream: false,
-        }),
-        signal: this._batchAbortController.signal,
-      });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`API ${res.status}: ${errText}`);
+      // Each variant is a full 8192-token generation. Opt into server-side
+      // buffering so a connection dropped mid-batch collects the finished
+      // result instead of silently paying for it a second time.
+      const clientRef = window.ResumableJobs?.newRef() || null;
+      if (clientRef) {
+        window.ResumableJobs.add({ clientRef, label: `Batch variant ${variantIdx + 1}` });
       }
 
-      const json = await res.json();
+      let json;
+      try {
+        // Make the request directly — bypassing APIHandler's shared state
+        const res = await (window.authFetch || fetch)("/api/text/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey,
+            "X-API-URL": apiUrl,
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: characterPrompt.systemPrompt },
+              { role: "user", content: characterPrompt.userPrompt },
+            ],
+            temperature: 0.8,
+            max_tokens: 8192,
+            stream: false,
+            ...(clientRef ? { resumable: true, clientRef } : {}),
+          }),
+          signal: this._batchAbortController.signal,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(`API ${res.status}: ${errText}`);
+        }
+
+        json = await res.json();
+      } catch (err) {
+        // A user-initiated stop must not resurrect the generation.
+        if (err.name === "AbortError" || !clientRef) throw err;
+
+        const collected = await window.apiHandler._tryCollectResult(clientRef);
+        if (!collected) throw err;
+        console.warn(`[batch] variant ${variantIdx + 1} recovered from the server after: ${err.message}`);
+        json = collected;
+      } finally {
+        if (clientRef) window.ResumableJobs.remove(clientRef);
+      }
+
       const rawText = window.apiHandler.processNormalResponse(json);
       if (!rawText) throw new Error("Empty response from API");
 

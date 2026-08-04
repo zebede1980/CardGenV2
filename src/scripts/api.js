@@ -58,7 +58,7 @@ class APIHandler {
     // the request goes out. Without it, a socket that dies during the initial
     // upstream wait leaves a generation running server-side that the browser
     // cannot name — and the retry below would silently start a second one.
-    const resumable = !!data.resumable && stream && !!window.ResumableJobs;
+    const resumable = !!data.resumable && !!window.ResumableJobs;
     let clientRef = null;
     if (resumable) {
       clientRef = window.ResumableJobs.newRef();
@@ -69,8 +69,14 @@ class APIHandler {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const response = await this._doMakeRequest(endpoint, data, isImageRequest, stream);
-        if (resumable && response) {
-          response._clientRef = clientRef;
+        if (resumable) {
+          if (stream && response) {
+            // handleStreamResponse owns the entry from here — it clears it once
+            // the stream terminates, having used it to reconnect if needed.
+            response._clientRef = clientRef;
+          } else {
+            window.ResumableJobs.remove(clientRef);
+          }
         }
         return response;
       } catch (error) {
@@ -92,10 +98,21 @@ class APIHandler {
         // the server. Retrying blind here is what made a dropped connection
         // silently produce a *different* character at double the token cost.
         if (resumable) {
-          const resumed = await this._tryResumeByClientRef(clientRef);
-          if (resumed) {
-            console.warn(`[API] Attempt ${attempt} failed (${error.message}) — resuming existing generation instead of regenerating`);
-            return resumed;
+          if (stream) {
+            const resumed = await this._tryResumeByClientRef(clientRef);
+            if (resumed) {
+              console.warn(`[API] Attempt ${attempt} failed (${error.message}) — resuming existing generation instead of regenerating`);
+              return resumed;
+            }
+          } else {
+            // Nothing to resume mid-flight, but the finished result may be
+            // waiting on the server. Collecting it is free; regenerating is not.
+            const collected = await this._tryCollectResult(clientRef);
+            if (collected) {
+              console.warn(`[API] Attempt ${attempt} failed (${error.message}) — collected the completed result instead of regenerating`);
+              window.ResumableJobs.remove(clientRef);
+              return collected;
+            }
           }
         }
 
@@ -119,26 +136,86 @@ class APIHandler {
   async _tryResumeByClientRef(clientRef) {
     if (!clientRef) return null;
     try {
-      const entry = window.ResumableJobs.get(clientRef);
-      let jobId = entry?.jobId || null;
-
-      if (!jobId) {
-        const listRes = await (window.authFetch || fetch)(
-          `/api/text/jobs?clientRef=${encodeURIComponent(clientRef)}`,
-          { headers: this._authHeaders() },
-        );
-        if (!listRes.ok) return null;
-        const { jobs } = await listRes.json();
-        if (!jobs?.length) return null;
-        jobId = jobs[0].id;
-        window.ResumableJobs.update(clientRef, { jobId });
-      }
-
-      return await this._openResumeStream(jobId, entry?.offset || 0, clientRef);
+      const jobId = await this._findJobId(clientRef);
+      if (!jobId) return null;
+      const offset = window.ResumableJobs.get(clientRef)?.offset || 0;
+      return await this._openResumeStream(jobId, offset, clientRef);
     } catch (err) {
       console.warn("[API] resume lookup failed:", err?.message || err);
       return null;
     }
+  }
+
+  /**
+   * Find this request's job and wait for its result. Used when a non-streaming
+   * call's connection dies: the generation is still running (or finished) on
+   * the server, so paying for a second one would be pure waste.
+   *
+   * Returns the provider response object, or null if there is nothing to collect.
+   */
+  async _tryCollectResult(clientRef, { maxWaitMs = 120000 } = {}) {
+    if (!clientRef) return null;
+    try {
+      const jobId = await this._findJobId(clientRef);
+      if (!jobId) return null;
+
+      const deadline = Date.now() + maxWaitMs;
+      let delay = 750;
+
+      while (Date.now() < deadline) {
+        await this._waitUntilVisible();
+
+        let res;
+        try {
+          res = await (window.authFetch || fetch)(
+            `/api/text/jobs/${encodeURIComponent(jobId)}/result`,
+            { headers: this._authHeaders() },
+          );
+        } catch (err) {
+          // Still offline. Keep waiting rather than abandoning a paid-for job.
+          await new Promise((r) => setTimeout(r, delay));
+          delay = Math.min(delay * 1.5, 5000);
+          continue;
+        }
+
+        if (res.status === 404 || res.status === 403) return null;
+
+        if (res.status === 202) {
+          await new Promise((r) => setTimeout(r, delay));
+          delay = Math.min(delay * 1.5, 5000);
+          continue;
+        }
+
+        if (!res.ok) return null;
+
+        const payload = await res.json();
+        if (payload.status === "error") {
+          throw new Error(payload.error || "Generation failed on the server");
+        }
+        return payload.result || null;
+      }
+      console.warn("[API] gave up waiting for job result after", maxWaitMs, "ms");
+      return null;
+    } catch (err) {
+      console.warn("[API] result collection failed:", err?.message || err);
+      return null;
+    }
+  }
+
+  /** Resolve a client reference to a server job id, via the store or the list endpoint. */
+  async _findJobId(clientRef) {
+    const entry = window.ResumableJobs.get(clientRef);
+    if (entry?.jobId) return entry.jobId;
+
+    const res = await (window.authFetch || fetch)(
+      `/api/text/jobs?clientRef=${encodeURIComponent(clientRef)}`,
+      { headers: this._authHeaders() },
+    );
+    if (!res.ok) return null;
+    const { jobs } = await res.json();
+    if (!jobs?.length) return null;
+    window.ResumableJobs.update(clientRef, { jobId: jobs[0].id });
+    return jobs[0].id;
   }
 
   _authHeaders() {

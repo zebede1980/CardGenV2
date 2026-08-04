@@ -40,6 +40,9 @@ Object.assign(APIHandler.prototype, {
       return this.handleStreamResponse(response, onStream);
     } else {
       try {
+        // Full character generations are expensive; hold the result server-side
+        // so a dropped connection collects it rather than paying twice.
+        data.resumable = true;
         const response = await this.makeRequest("/chat/completions", data, false, false);
         return this.processNormalResponse(response);
       } catch (error) {
@@ -93,6 +96,9 @@ Object.assign(APIHandler.prototype, {
       return this.handleStreamResponse(response, onStream);
     } else {
       try {
+        // Full character generations are expensive; hold the result server-side
+        // so a dropped connection collects it rather than paying twice.
+        data.resumable = true;
         const response = await this.makeRequest("/chat/completions", data, false, false);
         return this.processNormalResponse(response);
       } catch (error) {

@@ -323,10 +323,22 @@ Phase 4 turned out to be genuinely one line and was included, because Phases 0�
 are inert until a caller opts in — `data.resumable = true` on the two streaming
 character-generation calls in `api-character.js`.
 
-**Still outstanding:** Phase 5. Non-streaming calls (tags, names, lorebook
-fields, and `batch-generator.js`'s parallel variants) create no job, so a
-dropped connection there still retries into a fresh generation. That is the
-remaining slice of the cost bug.
+**Phase 5 was then built too.** A non-streaming call cannot be resumed partway
+through — there is no partial output — but the finished result can still be
+*collected*, which removes the rest of the double-billing. `resumable: true`
+with `stream: false` creates a job that holds the provider payload;
+`GET /api/text/jobs/:id/result` returns it (202 while still running, so the
+client polls rather than giving up). On failure `makeRequest` collects instead
+of regenerating.
+
+Opted in: the non-streaming `generateCharacter` path and `batch-generator.js`'s
+parallel variants — the expensive ones, at 8192 max_tokens each. The batch
+generator uses its own fetch rather than `makeRequest`, so it carries its own
+`clientRef` and calls `_tryCollectResult` directly.
+
+**Deliberately left alone:** the short utility calls (tags, names, individual
+lorebook fields). They are cheap and quick, and the plan always rated them least
+valuable. They still retry into a fresh call on failure.
 
 ## Out of scope
 
