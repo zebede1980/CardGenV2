@@ -65,6 +65,8 @@
 html,
 body {
     min-height: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 body {
@@ -157,12 +159,15 @@ body {
 textarea.content-box,
 input[type="file"] {
     width: 100%;
+    max-width: 100%;
     border: 1px solid var(--border);
     background: var(--surface-strong);
     color: var(--text-primary);
     border-radius: var(--radius-sm);
     padding: 0.74rem 0.92rem;
     font: inherit;
+    overflow-wrap: break-word;
+    word-break: break-word;
     transition:
         border-color var(--transition),
         box-shadow var(--transition),
@@ -439,6 +444,8 @@ textarea.content-box {
     border-radius: var(--radius-md);
     background: var(--surface-muted);
     padding: 1rem;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .image-container {
@@ -4486,6 +4493,8 @@ body.chat-scroll-locked {
     border-bottom: 1px solid var(--border-color, #3a3a4a);
     padding-bottom: 1.5rem;
     margin-bottom: 1.5rem;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .sw-segment-card:last-child {
