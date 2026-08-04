@@ -4477,6 +4477,9 @@ body.chat-scroll-locked {
     #adv-options-area {
         grid-template-columns: 1fr !important;
     }
+    #sw-story-list {
+        grid-template-columns: 1fr !important;
+    }
 }/* Story Writer UI Improvements */
 .sw-segment-card {
     position: relative;
