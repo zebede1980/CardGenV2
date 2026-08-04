@@ -65,8 +65,6 @@
 html,
 body {
     min-height: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
 }
 
 body {
@@ -124,7 +122,17 @@ body {
 
 .main {
     display: grid;
+    /* minmax(0, 1fr) stops the auto track being sized to its items' min-content.
+       Without it a single wide descendant (e.g. a <select> sized to a long option)
+       widens the track past the container, taking the whole page with it. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.1rem;
+}
+
+/* Grid/flex items default to min-width:auto and refuse to shrink below their
+   min-content width. Allow the view containers to shrink to the viewport. */
+.main > * {
+    min-width: 0;
 }
 
 .input-section,
@@ -4495,6 +4503,23 @@ body.chat-scroll-locked {
     margin-bottom: 1.5rem;
     overflow-wrap: break-word;
     word-break: break-word;
+}
+
+/* A <select> is sized to its widest <option>, so a long character or voice name
+   made these balloon far past the viewport (measured 463px on a 375px screen).
+   A percentage max-width cannot clamp them because their flex parents are
+   shrink-to-fit — sized by this very select — so use a concrete cap. */
+#sw-add-card-select,
+.sw-character-voice-inline {
+    max-width: 14rem;
+    min-width: 0;
+    text-overflow: ellipsis;
+}
+
+#sw-attached-cards,
+#sw-attached-cards > * {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .sw-segment-card:last-child {
