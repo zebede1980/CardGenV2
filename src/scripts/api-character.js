@@ -716,7 +716,10 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 1.0,
+      // Naming benefits from variety, so this stays generative rather than
+      // being crushed to an extraction temperature; top_p (applied at the
+      // proxy) clips the junk tail that made 1.0 risky.
+      temperature: 0.85,
       max_tokens: 50,
       stream: false,
     };
@@ -907,7 +910,8 @@ Generate exactly 10 names as a JSON array. Make each name as different from the 
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 1.0,
+      // Must emit a clean JSON array; 1.0 risked commentary and format drift.
+      temperature: 0.85,
       max_tokens: 350,
       stream: false,
     };
@@ -1132,7 +1136,8 @@ Output a JSON array of tags only.`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.5,
+      // Classification against a closed vocabulary — creativity is corruption.
+      temperature: 0.2,
       max_tokens: 150,
       stream: false,
     };

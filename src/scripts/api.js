@@ -7,6 +7,7 @@ class APIHandler {
     this.currentReader = null; // Store current stream reader for cancellation
     this.userStopRequested = false;
     this.requestLogs = []; // Rolling log of recent API interactions
+    this.lastFinishReason = null; // Why the last generation stopped ("length" = truncated)
   }
 
   addBackendLog(logData) {
@@ -284,6 +285,7 @@ class APIHandler {
     const decoder = new TextDecoder();
     let buffer = "";
     let fullContent = "";
+    let streamFinishReason = null;
     const logEntry = response._logEntry;
     const startTime = response._startTime || performance.now();
 
@@ -316,7 +318,13 @@ class APIHandler {
                 fullContent += content;
                 onStream(content, fullContent);
               }
-            
+
+            // The terminating chunk carries why generation stopped; remember it
+            // so we can warn about truncation once the stream completes.
+            if (parsed.choices?.[0]?.finish_reason) {
+              streamFinishReason = parsed.choices[0].finish_reason;
+            }
+
             // Capture usage stats occasionally sent at the end of streams
             if (parsed.usage && logEntry) {
               logEntry.usage = parsed.usage;
@@ -336,6 +344,8 @@ class APIHandler {
         logEntry.duration = performance.now() - startTime;
         logEntry.response = fullContent;
       }
+
+      this.noteFinishReason(streamFinishReason);
 
       return fullContent;
     } catch (error) {
@@ -445,6 +455,25 @@ class APIHandler {
     }
   }
 
+  /**
+   * Record why generation stopped and warn the user if the model was cut off
+   * at the token cap. Truncated output was previously accepted silently: a card
+   * would simply end mid-field, and for the JSON-producing calls the cut-off
+   * text surfaced only as a confusing parse error.
+   */
+  noteFinishReason(finishReason, context = "The response") {
+    this.lastFinishReason = finishReason || null;
+    if (finishReason !== "length") return;
+
+    const msg = `${context} hit the token limit and was cut off. Increase Max Tokens in API Settings, or shorten the input.`;
+    console.warn("[api] truncated generation:", context);
+    try {
+      window.app?.showNotification?.(msg, "warning");
+    } catch (_) {
+      /* notification layer not ready — the console warning still stands */
+    }
+  }
+
   processNormalResponse(response) {
     // Handle different response formats
     if (
@@ -452,6 +481,7 @@ class APIHandler {
       response.choices[0] &&
       response.choices[0].message
     ) {
+      this.noteFinishReason(response.choices[0].finish_reason);
       const message = response.choices[0].message;
       // Some models (like GLM) use reasoning_content instead of content
       return message.content || message.reasoning_content || "";

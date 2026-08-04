@@ -1510,8 +1510,42 @@ app.get("/api/tts/google-voices", async (req, res) => {
 });
 
 
+// Sampling / formatting parameters forwarded verbatim to the upstream text API
+// when the caller supplies them. Previously only model/messages/max_tokens/
+// temperature/stream were forwarded, so anything else was silently discarded —
+// notably `response_format: {type:"json_object"}`, which several callers send
+// believing they get API-level JSON enforcement.
+const TEXT_PASSTHROUGH_PARAMS = [
+  "top_p",
+  "top_k",
+  "min_p",
+  "typical_p",
+  "repetition_penalty",
+  "frequency_penalty",
+  "presence_penalty",
+  "seed",
+  "stop",
+  "logit_bias",
+  "response_format",
+  "reasoning_effort",
+];
+
+// Nucleus-sampling default. Without it the provider default of 1.0 applies,
+// leaving the whole vocabulary tail reachable — at higher temperatures a single
+// junk token derails everything generated after it, because the model then
+// writes conditioned on that token. Callers may override by sending their own.
+const DEFAULT_TEXT_TOP_P = 0.95;
+
+// Upper bound on a single upstream text generation. Streaming replies with
+// long reasoning can legitimately run for minutes, so this is deliberately
+// generous — it exists to stop a black-holed connection hanging forever.
+const TEXT_UPSTREAM_TIMEOUT_MS = 10 * 60 * 1000;
+
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
+  // Declared outside the try so the catch below can distinguish a deliberate
+  // client-disconnect abort from a genuine server error.
+  let clientGone = false;
   try {
     const { model, messages, max_tokens, temperature, stream } = req.body;
 
@@ -1558,16 +1592,31 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       }
       : {};
 
+    // Note: `??` not `||` — a caller asking for temperature: 0 (deterministic
+    // decoding) must not be silently coerced to 0.7 because 0 is falsy.
     const requestBody = {
       model,
       messages,
-      max_tokens: max_tokens || 1000,
-      temperature: temperature || 0.7,
-      stream: stream || false,
+      max_tokens: max_tokens ?? 1000,
+      temperature: temperature ?? 0.7,
+      stream: stream ?? false,
     };
 
-    // Try Bearer auth first (most common)
-    let response = await fetch(fullTextUrl, {
+    for (const key of TEXT_PASSTHROUGH_PARAMS) {
+      if (req.body[key] !== undefined) requestBody[key] = req.body[key];
+    }
+    if (requestBody.top_p === undefined) requestBody.top_p = DEFAULT_TEXT_TOP_P;
+
+    // Abort the upstream generation if the browser goes away. Without this the
+    // provider keeps generating — and billing — into a socket nobody is reading.
+    const upstreamAbort = new AbortController();
+    const onClientClose = () => {
+      clientGone = true;
+      upstreamAbort.abort();
+    };
+    res.on("close", onClientClose);
+
+    const fetchOpts = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1575,19 +1624,26 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
         ...additionalHeaders,
       },
       body: JSON.stringify(requestBody),
-    });
+      signal: upstreamAbort.signal,
+      // Bound the wait on a hung provider. Streaming replies can legitimately
+      // take minutes, so this is generous; every other upstream fetch in this
+      // file already sets one.
+      timeout: TEXT_UPSTREAM_TIMEOUT_MS,
+    };
+
+    // Try Bearer auth first (most common)
+    let response = await fetch(fullTextUrl, fetchOpts);
 
     // If Bearer fails with 401, try X-API-Key
     if (response.status === 401) {
       console.log("Bearer auth failed, trying X-API-Key...");
       response = await fetch(fullTextUrl, {
-        method: "POST",
+        ...fetchOpts,
         headers: {
           "Content-Type": "application/json",
           "X-API-Key": apiKey,
           ...additionalHeaders,
         },
-        body: JSON.stringify(requestBody),
       });
     }
 
@@ -1610,7 +1666,32 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       res.setHeader("Connection", "keep-alive");
 
       response.body.on("data", (chunk) => {
-        res.write(chunk);
+        // Respect backpressure: if the client socket is full, pause the
+        // upstream rather than buffering it all in memory for a slow reader.
+        if (res.write(chunk) === false) {
+          response.body.pause();
+          res.once("drain", () => response.body.resume());
+        }
+      });
+
+      // Without this listener an upstream failure mid-stream emits an
+      // unhandled 'error' event, which can take the whole process down. The
+      // headers are already sent by now, so the status code cannot be changed —
+      // emit an SSE error frame so the client learns the stream was cut short
+      // instead of silently treating a truncated reply as complete.
+      response.body.on("error", (err) => {
+        if (clientGone) return;
+        console.error("Text API stream error:", err.message);
+        try {
+          res.write(
+            `data: ${JSON.stringify({
+              error: { message: `Upstream stream failed: ${err.message}` },
+            })}\n\n`,
+          );
+        } catch (_) {
+          /* client already gone */
+        }
+        res.end();
       });
 
       response.body.on("end", () => {
@@ -1621,6 +1702,12 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       res.json(data);
     }
   } catch (error) {
+    // A client disconnect aborts the upstream fetch on purpose — that is not a
+    // server error and the response is already gone.
+    if (clientGone || error.name === "AbortError") {
+      console.log("Text request aborted (client disconnected)");
+      return;
+    }
     console.error("Proxy error:", error);
     res.status(500).json({
       error: {
@@ -1969,6 +2056,44 @@ app.post("/api/image/inpaint", requireAuth, async (req, res) => {
   }
 });
 
+// Reject URLs that resolve to the host itself or to private/internal network
+// ranges. Without this the proxy is an SSRF primitive: any signed-in user could
+// have the server fetch cloud metadata (169.254.169.254) or internal services
+// on localhost and read the response back as an "image".
+const BLOCKED_HOST_PATTERNS = [
+  /^localhost$/i,
+  /^127\./,                                  // loopback
+  /^0\./,                                    // "this" network
+  /^10\./,                                   // RFC1918
+  /^192\.168\./,                             // RFC1918
+  /^172\.(1[6-9]|2[0-9]|3[01])\./,           // RFC1918
+  /^169\.254\./,                             // link-local / cloud metadata
+  /^\[?::1\]?$/,                             // IPv6 loopback
+  /^\[?f[cd][0-9a-f]{2}:/i,                  // IPv6 unique-local
+  /^\[?fe80:/i,                              // IPv6 link-local
+  /\.internal$/i,
+  /\.local$/i,
+];
+
+const MAX_PROXIED_IMAGE_BYTES = 25 * 1024 * 1024; // 25 MB
+
+function assertSafeFetchUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch (_) {
+    throw new Error("Malformed URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`Unsupported protocol: ${parsed.protocol}`);
+  }
+  const host = parsed.hostname;
+  if (BLOCKED_HOST_PATTERNS.some((re) => re.test(host))) {
+    throw new Error("Refusing to fetch from a private or internal address");
+  }
+  return parsed;
+}
+
 // Proxy endpoint for fetching images (CORS bypass)
 app.get("/api/proxy-image", requireAuth, async (req, res) => {
   try {
@@ -1984,13 +2109,25 @@ app.get("/api/proxy-image", requireAuth, async (req, res) => {
       });
     }
 
+    let parsedUrl;
+    try {
+      parsedUrl = assertSafeFetchUrl(imageUrl);
+    } catch (err) {
+      console.warn("Blocked proxy-image request:", imageUrl, "-", err.message);
+      return res.status(400).json({
+        error: { code: "400", message: "Invalid image URL", details: err.message },
+      });
+    }
+
     console.log("Proxying image request for:", imageUrl);
 
     const response = await fetch(imageUrl, {
+      timeout: 30000,
+      size: MAX_PROXIED_IMAGE_BYTES, // node-fetch aborts past this many bytes
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-        "Referer": new URL(imageUrl).origin + "/"
+        "Referer": parsedUrl.origin + "/"
       }
     });
 

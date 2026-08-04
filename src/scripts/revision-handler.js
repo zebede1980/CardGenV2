@@ -87,8 +87,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
           selectedCandidates = selected || [];
         }
       } catch (scanError) {
-        // Scan failure is non-fatal — just skip lorebook elevation and proceed
+        // Scan failure is non-fatal — skip lorebook elevation and proceed with
+        // the bloat pass, but tell the user so a failed scan isn't mistaken for
+        // "this card had no world-building to move".
         console.warn("Lorebook scan failed (continuing with bloat reduction only):", scanError);
+        if (!scanError.message?.includes("Generation stopped by user")) {
+          this.showNotification(
+            `Lorebook scan failed (${scanError.message}) — continuing with bloat reduction only.`,
+            "warning",
+          );
+        }
       }
 
       const approved = await this.executeLoreElevation(selectedCandidates, true);

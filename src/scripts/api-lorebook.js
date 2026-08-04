@@ -369,7 +369,9 @@ Extract or invent the supporting cast members and return the JSON now.`;
         { role: "user", content: userPrompt },
       ],
       temperature: 0.7,
-      max_tokens: 500,
+      // Was 500, which could truncate mid-array when the model returns the
+      // full 8 suggestions — truncation here becomes a hard parse failure.
+      max_tokens: 1200,
       stream: false,
       response_format: { type: "json_object" },
     };
@@ -575,10 +577,16 @@ Return a JSON array of lorebook candidates. Return [] if none found.`;
       const output = this.processNormalResponse(response);
 
       let parsed = this._parseJsonRobust(output);
-      
+
+      // Fail loudly rather than returning []. An empty array is the caller's
+      // signal for "nothing to elevate", so swallowing a parse failure here
+      // reported a broken response as a clean, successful scan.
       if (!parsed) {
         console.error("Failed to parse scanCardForLorebookCandidates output:", output);
-        return [];
+        throw new Error(
+          "Could not read the lorebook scan results — the AI returned malformed output. " +
+          "This often means the response was cut off; try again.",
+        );
       }
 
       if (Array.isArray(parsed)) return parsed;
@@ -589,7 +597,10 @@ Return a JSON array of lorebook candidates. Return [] if none found.`;
         if (key) return parsed[key];
       }
 
-      return [];
+      // A parsed-but-unrecognised shape is also a failure, not "found nothing".
+      throw new Error(
+        "The lorebook scan returned an unexpected format. Please try again.",
+      );
     } catch (error) {
       console.error("=== LOREBOOK CARD SCAN FAILED ===", error);
       throw error;

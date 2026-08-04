@@ -175,7 +175,9 @@ Object.assign(APIHandler.prototype, {
       model: model,
       messages: [{ role: "user", content: metaPrompt }],
       max_tokens: 8192,
-      temperature: 0.7,
+      // Faithful transformation of the card into an image prompt, not an
+      // invention exercise — keep it close to the source description.
+      temperature: 0.4,
       stream: true,
     };
 
