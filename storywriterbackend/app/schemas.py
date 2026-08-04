@@ -85,6 +85,7 @@ class SettingsOut(BaseModel):
     model: str
     max_tokens: int
     temperature: float
+    top_p: float = 0.95
     context_window: int
     summary_threshold: int
     chunk_size: int
@@ -104,6 +105,7 @@ class SettingsUpdate(BaseModel):
     model: Optional[str] = None
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
+    top_p: Optional[float] = None
     context_window: Optional[int] = None
     summary_threshold: Optional[int] = None
     chunk_size: Optional[int] = None
@@ -210,6 +212,7 @@ class SendMessageRequest(BaseModel):
     max_output_tokens: Optional[int] = None
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
+    top_p: Optional[float] = None
     impersonate: Optional[bool] = False
     enable_cot: Optional[bool] = True
 
@@ -270,6 +273,7 @@ class AdventureSendActionRequest(BaseModel):
     max_output_tokens: Optional[int] = None
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
+    top_p: Optional[float] = None
     enable_cot: Optional[bool] = True
 
 class GlobalConfigCreate(BaseModel):

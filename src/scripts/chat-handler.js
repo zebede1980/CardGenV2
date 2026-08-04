@@ -133,6 +133,7 @@ class RoleplayChatHandler {
             globalMaxInput: document.getElementById('chat-global-max-input'),
             globalMaxOutput: document.getElementById('chat-global-max-output'),
             globalTemp: document.getElementById('chat-global-temperature'),
+            globalTopP: document.getElementById('chat-global-top-p'),
             globalRepPen: document.getElementById('chat-global-rep-penalty'),
             globalFilterCJK: document.getElementById('chat-global-filter-cjk'),
             globalEnableCot: document.getElementById('chat-global-enable-cot'),
@@ -508,6 +509,7 @@ class RoleplayChatHandler {
         this.els.globalMaxInput.value = window.config.get("chat.maxInputTokens") ?? 8192;
         this.els.globalMaxOutput.value = window.config.get("chat.maxOutputTokens") ?? 1024;
         this.els.globalTemp.value = window.config.get("chat.temperature") ?? 0.8;
+        this.els.globalTopP.value = window.config.get("chat.topP") ?? 0.95;
         this.els.globalRepPen.value = window.config.get("chat.repetitionPenalty") ?? 1.0;
         this.els.globalFilterCJK.checked = window.config.get("chat.filterCJK") ?? false;
         this.els.globalEnableCot.checked = window.config.get("chat.enableCot") !== false;
@@ -659,6 +661,7 @@ class RoleplayChatHandler {
         window.config.set("chat.maxInputTokens", parseInt(this.els.globalMaxInput.value) || 8192);
         window.config.set("chat.maxOutputTokens", parseInt(this.els.globalMaxOutput.value) || 1024);
         window.config.set("chat.temperature", parseFloat(this.els.globalTemp.value) || 0.8);
+        window.config.set("chat.topP", parseFloat(this.els.globalTopP.value) || 0.95);
         window.config.set("chat.repetitionPenalty", parseFloat(this.els.globalRepPen.value) || 1.0);
         window.config.set("chat.filterCJK", this.els.globalFilterCJK.checked);
         window.config.set("chat.enableCot", this.els.globalEnableCot.checked);
@@ -1594,6 +1597,7 @@ class RoleplayChatHandler {
                 payload.max_input_tokens = window.config.get('chat.maxInputTokens');
                 payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
                 payload.temperature = window.config.get('chat.temperature');
+                payload.top_p = window.config.get('chat.topP');
                 payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
             }
 
@@ -2200,6 +2204,7 @@ class RoleplayChatHandler {
                 payload.max_input_tokens = window.config.get('chat.maxInputTokens');
                 payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
                 payload.temperature = window.config.get('chat.temperature');
+                payload.top_p = window.config.get('chat.topP');
                 payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
                 payload.enable_cot = window.config.get('chat.enableCot') !== false;
             }
@@ -2321,6 +2326,7 @@ class RoleplayChatHandler {
                 payload.max_input_tokens = window.config.get('chat.maxInputTokens');
                 payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
                 payload.temperature = window.config.get('chat.temperature');
+                payload.top_p = window.config.get('chat.topP');
                 payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
                 payload.enable_cot = window.config.get('chat.enableCot') !== false;
             }

@@ -55,6 +55,12 @@ def run_migrations():
                 "ALTER TABLE settings ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''"
             ))
 
+        # settings.top_p (nucleus sampling)
+        if not _column_exists(conn, "settings", "top_p"):
+            conn.execute(text(
+                "ALTER TABLE settings ADD COLUMN top_p FLOAT NOT NULL DEFAULT 0.95"
+            ))
+
         # settings.image_model
         if not _column_exists(conn, "settings", "image_model"):
             conn.execute(text(

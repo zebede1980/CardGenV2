@@ -13,7 +13,7 @@ import logging
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
-from app.services.llm_service import LLMService
+from app.services.llm_service import LLMService, UTILITY_TEMPERATURE
 from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
@@ -426,7 +426,8 @@ async def summarize_chat_task(chat_id: str, user_id: int):
             ]
             
             content_parts = []
-            async for chunk in llm.generate(messages, stream=True):
+            # Utility task: must not inherit the user's creative temperature.
+            async for chunk in llm.generate(messages, stream=True, temperature=UTILITY_TEMPERATURE):
                 content_parts.append(chunk)
             
             chat.summary = "".join(content_parts)
@@ -493,7 +494,8 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
             ]
             
             content_parts = []
-            async for chunk in llm.generate(messages, stream=True):
+            # Utility task: must not inherit the user's creative temperature.
+            async for chunk in llm.generate(messages, stream=True, temperature=UTILITY_TEMPERATURE):
                 content_parts.append(chunk)
             
             full_response = "".join(content_parts).strip()
@@ -743,7 +745,8 @@ async def generate_scene_image(
             {"role": "user", "content": user_prompt}
         ]
         content_parts = []
-        async for chunk in llm.generate(messages, stream=False):
+        # Utility task: must not inherit the user's creative temperature.
+        async for chunk in llm.generate(messages, stream=False, temperature=UTILITY_TEMPERATURE):
             content_parts.append(chunk)
         image_prompt = "".join(content_parts).strip()
     except Exception as e:
@@ -938,7 +941,8 @@ async def send_message(
                 })
                 
                 name_response = []
-                async for chunk in llm.generate(route_msgs, stream=False):
+                # Utility task: routing is a classification, never creative.
+                async for chunk in llm.generate(route_msgs, stream=False, temperature=UTILITY_TEMPERATURE):
                     name_response.append(chunk)
                 
                 chosen = "".join(name_response).strip()
@@ -999,11 +1003,12 @@ async def send_message(
         gen_max_tokens = req.max_output_tokens
         gen_temperature = req.temperature
         gen_repetition_penalty = req.repetition_penalty
+        gen_top_p = req.top_p
 
         async def impersonate_generate_task():
             llm = LLMService(settings)
             try:
-                async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
+                async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
                     await queue.put(chunk)
                 await queue.put(None)
             except Exception as e:
@@ -1090,6 +1095,7 @@ async def send_message(
     gen_max_tokens = req.max_output_tokens
     gen_temperature = req.temperature
     gen_repetition_penalty = req.repetition_penalty
+    gen_top_p = req.top_p
 
     async def generate_task():
         llm = LLMService(settings)
@@ -1107,7 +1113,7 @@ async def send_message(
         )
         
         try:
-            async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
+            async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
                 full_content += chunk
                 await queue.put(chunk)
                 

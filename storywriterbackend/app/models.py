@@ -80,6 +80,7 @@ class Settings(Base):
     model = Column(Text, default="gpt-4o")
     max_tokens = Column(Integer, default=2048)
     temperature = Column(Float, default=0.8)
+    top_p = Column(Float, default=0.95)  # nucleus sampling; clips the junk tail
     context_window = Column(Integer, default=8000)
     summary_threshold = Column(Integer, default=10)  # segments before summarizing
     chunk_size = Column(Integer, default=800)  # target tokens per generation chunk

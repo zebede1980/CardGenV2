@@ -9,7 +9,7 @@ import logging
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
-from app.services.llm_service import LLMService
+from app.services.llm_service import LLMService, UTILITY_TEMPERATURE
 from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
@@ -191,7 +191,8 @@ async def summarize_adventure_task(session_id: str, user_id: int):
             ]
             
             content_parts = []
-            async for chunk in llm.generate(messages, stream=True):
+            # Utility task: must not inherit the user's creative temperature.
+            async for chunk in llm.generate(messages, stream=True, temperature=UTILITY_TEMPERATURE):
                 content_parts.append(chunk)
             
             session_data.summary = "".join(content_parts)
@@ -313,6 +314,7 @@ async def send_action(
     gen_max_tokens = req.max_output_tokens
     gen_temperature = req.temperature
     gen_repetition_penalty = req.repetition_penalty
+    gen_top_p = req.top_p
 
     async def generate_task():
         llm = LLMService(settings)
@@ -322,7 +324,7 @@ async def send_action(
         logger.info(f"[{request_id}] LLM request started for adventure {session_id}, action {assistant_action_id}")
         
         try:
-            async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty):
+            async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
                 full_content += chunk
                 await queue.put(chunk)
                 

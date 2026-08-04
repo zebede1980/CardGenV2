@@ -3,6 +3,14 @@ import json
 from typing import AsyncGenerator, Optional
 from app.models import Settings
 
+# Temperature for non-creative utility calls: summarisation, memory/fact
+# extraction, speaker routing and image-prompt writing. These are structured
+# extraction tasks where creativity is actively harmful — a "creative" summary
+# is simply a wrong summary, and its output is fed back into later prompts.
+# They must NOT inherit the user's creative temperature.
+UTILITY_TEMPERATURE = 0.3
+
+
 class LLMService:
     def __init__(self, settings: Settings):
         self.api_base_url = settings.api_base_url.rstrip("/")
@@ -10,6 +18,7 @@ class LLMService:
         self.model = settings.model
         self.max_tokens = settings.max_tokens
         self.temperature = settings.temperature
+        self.top_p = getattr(settings, "top_p", None)
         self.finish_reason: Optional[str] = None
         self.last_usage: Optional[dict] = None
         self.client = httpx.AsyncClient(
@@ -22,7 +31,7 @@ class LLMService:
         )
 
 
-    async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None) -> AsyncGenerator[str, None]:
+    async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None, top_p: float = None) -> AsyncGenerator[str, None]:
         url = f"{self.api_base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -35,6 +44,14 @@ class LLMService:
             "temperature": temperature if temperature is not None else self.temperature,
             "stream": stream,
         }
+        # Nucleus sampling. Without it the provider default of 1.0 applies, which
+        # leaves the whole vocabulary tail reachable — at a high temperature a
+        # single junk token derails the rest of the generation irrecoverably.
+        # Long outputs (story chunks) are the most exposed: every extra token is
+        # another chance to trip it.
+        effective_top_p = top_p if top_p is not None else self.top_p
+        if effective_top_p is not None and 0 < effective_top_p < 1.0:
+            payload["top_p"] = effective_top_p
         if repetition_penalty is not None and repetition_penalty != 1.0:
             payload["repetition_penalty"] = repetition_penalty
         if stream:
@@ -86,7 +103,7 @@ class LLMService:
             {"role": "user", "content": f"Summarize the following story segment in a few sentences:\n\n{text}"}
         ]
         result = ""
-        async for chunk in self.generate(messages, stream=False):
+        async for chunk in self.generate(messages, stream=False, temperature=UTILITY_TEMPERATURE):
             result += chunk
         return result.strip()
 

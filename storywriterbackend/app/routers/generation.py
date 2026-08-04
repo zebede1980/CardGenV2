@@ -7,7 +7,7 @@ import re
 from app.database import get_db
 from app.models import Story, StorySegment, Settings, SteeringInstruction, User
 from app.schemas import GenerateRequest, StorySegmentOut, ImagePromptRequest
-from app.services.llm_service import LLMService
+from app.services.llm_service import LLMService, UTILITY_TEMPERATURE
 from app.services.context_manager import ContextManager
 from app.routers.auth import get_current_user
 
@@ -110,7 +110,7 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
 
         async def read_llm():
             try:
-                async for chunk in llm.generate(messages, stream=True):
+                async for chunk in llm.generate(messages, stream=True, top_p=settings.top_p):
                     content_parts.append(chunk)
                     queue.put_nowait(chunk)
                 queue.put_nowait(None)  # EOF
@@ -304,7 +304,8 @@ async def generate_image_prompt(
     llm = LLMService(settings)
     try:
         prompt_text = ""
-        async for chunk in llm.generate(messages, stream=False):
+        # Utility task: must not inherit the user's creative temperature.
+        async for chunk in llm.generate(messages, stream=False, temperature=UTILITY_TEMPERATURE):
             prompt_text += chunk
         return {"prompt": prompt_text.strip()}
     finally:

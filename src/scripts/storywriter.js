@@ -596,6 +596,7 @@ class StoryWriterApp {
             const s = await this.apiCall('/settings/');
             document.getElementById('sw-max-tokens').value = s.max_tokens ?? 2048;
             document.getElementById('sw-temperature').value = s.temperature ?? 0.8;
+            document.getElementById('sw-top-p').value = s.top_p ?? 0.95;
             document.getElementById('sw-context-window').value = s.context_window ?? 8000;
             document.getElementById('sw-system-prompt').value = s.system_prompt || '';
 
@@ -686,12 +687,13 @@ class StoryWriterApp {
 
         const maxTokens = parseInt(document.getElementById('sw-max-tokens').value, 10);
         const temperature = parseFloat(document.getElementById('sw-temperature').value);
+        const topP = parseFloat(document.getElementById('sw-top-p').value);
         const contextWindow = parseInt(document.getElementById('sw-context-window').value, 10);
         const systemPrompt = document.getElementById('sw-system-prompt').value.trim();
         const imageModel = (document.getElementById('sw-image-model')?.value || '').trim();
 
-        if (isNaN(maxTokens) || isNaN(temperature) || isNaN(contextWindow)) {
-            status.textContent = 'Max Tokens, Temperature and Context Window must be valid numbers.';
+        if (isNaN(maxTokens) || isNaN(temperature) || isNaN(contextWindow) || isNaN(topP)) {
+            status.textContent = 'Max Tokens, Temperature, Top-P and Context Window must be valid numbers.';
             status.style.color = 'var(--error-color, #e55)';
             return;
         }
@@ -724,6 +726,7 @@ class StoryWriterApp {
         const payload = {
             max_tokens: maxTokens,
             temperature,
+            top_p: topP,
             context_window: contextWindow,
             system_prompt: systemPrompt,
             image_model: imageModel,
