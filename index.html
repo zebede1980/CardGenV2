@@ -1914,6 +1914,7 @@
                             <button id="chat-zoom-reset-btn" class="btn-outline" style="border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-radius: 0; padding: 0.2rem 0.5rem; font-size: 0.85rem;" title="Reset text size">A</button>
                             <button id="chat-zoom-in-btn" class="btn-outline" style="border: none; border-radius: 0; padding: 0.2rem 0.5rem; font-size: 0.85rem;" title="Increase text size">A+</button>
                           </div>
+                          <button id="chat-view-cards-btn" class="btn-outline btn-small" title="View Character Card(s)">🪪</button>
                           <button id="chat-settings-btn" class="btn-outline btn-small">⚙️ Settings</button>
                         </div>
                       </div>
@@ -2091,6 +2092,7 @@
         <script src="src/scripts/gallery-mode.js"></script>
         <script src="src/scripts/chat-handler.js?v=20260804-topp"></script>
         <script src="src/scripts/chat-settings.js"></script>
+        <script src="src/scripts/chat-character-cards.js?v=20260804"></script>
         <script src="src/scripts/home-handler.js?v=20260729-2"></script>
         <!-- API Settings Modal -->
 
@@ -3219,6 +3221,19 @@
                 <span>Scene images will use: <strong id="chat-image-provider-label">Cloud API (NanoGPT)</strong></span>
                 <a href="#" onclick="document.getElementById('chat-settings-modal').classList.remove('show'); document.getElementById('settings-btn')?.click(); return false;" style="margin-left: auto; font-size: 0.75rem; color: var(--accent); text-decoration: none;">Change ↗</a>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHARACTER CARDS VIEWER MODAL -->
+        <div id="chat-cards-modal" class="modal-overlay">
+          <div class="api-settings-modal" style="max-width: 1100px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+              <h2 class="modal-title">🪪 Character Cards</h2>
+              <button id="chat-cards-close-btn" class="modal-close">×</button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow: hidden; display: flex;">
+              <div id="chat-cards-row" class="chat-cards-row"></div>
             </div>
           </div>
         </div>
