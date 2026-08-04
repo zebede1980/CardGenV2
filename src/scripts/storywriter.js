@@ -615,7 +615,7 @@ class StoryWriterApp {
             }
 
             // ── TTS settings ───────────────────────────────────────────────────
-            let savedProvider = window.config.get('api.tts.provider') || localStorage.getItem('sw-tts-provider') || 'local';
+            let savedProvider = window.config.get('api.tts.provider') || localStorage.getItem('sw-tts-provider') || 'kokoro';
             if (savedProvider === 'google') savedProvider = 'google-premium';
             const savedGoogleKey = window.config.get('api.tts.apiKey') || localStorage.getItem('sw-tts-google-key') || '';
             const savedNanogptKey = window.config.get('api.tts.nanogptKey') || localStorage.getItem('sw-tts-nanogpt-key') || '';
@@ -655,6 +655,12 @@ class StoryWriterApp {
                 if (speedLabel) speedLabel.textContent = this.ttsSettings.tts_speed + 'x';
             }
             if (providerSelect) {
+                // A saved value with no matching <option> (older builds stored
+                // 'local', which the server rejects) leaves the select blank and
+                // every later read falls back. Normalise it to the real default.
+                const known = Array.from(providerSelect.options).some(
+                    (o) => o.value === this.ttsSettings.tts_provider);
+                if (!known) this.ttsSettings.tts_provider = 'kokoro';
                 providerSelect.value = this.ttsSettings.tts_provider;
                 document.getElementById('sw-tts-google-key-container').style.display = this.ttsSettings.tts_provider.startsWith('google') ? 'block' : 'none';
                 
@@ -703,7 +709,7 @@ class StoryWriterApp {
         const scriptMode = document.getElementById('sw-script-mode')?.checked || false;
         const ttsVoice   = document.getElementById('sw-tts-voice')?.value || 'p230';
         const ttsSpeed   = parseFloat(document.getElementById('sw-tts-speed')?.value || '1.0');
-        const ttsProvider = document.getElementById('sw-tts-provider')?.value || 'local';
+        const ttsProvider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
         const ttsGoogleKey = document.getElementById('sw-tts-google-key')?.value || '';
         const ttsNanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
         const ttsNanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
@@ -877,7 +883,7 @@ class StoryWriterApp {
         player.voice = voice;
         player.speed = parseFloat(speedSlider?.value || '1.0');
         player.setVolume(parseInt(volumeSlider?.value || '80', 10));
-        player.provider = document.getElementById('sw-tts-provider')?.value || 'local';
+        player.provider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
         player.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
         player.nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
         player.nanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
@@ -1327,7 +1333,7 @@ class StoryWriterApp {
         this.ttsPlayer.voice = ttsVoice;
         this.ttsPlayer.speed = ttsSpeed;
         this.ttsPlayer.setVolume(volume);
-        this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'local';
+        this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
         this.ttsPlayer.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
         this.ttsPlayer.nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
         this.ttsPlayer.nanogptModel = document.getElementById('sw-tts-nanogpt-model')?.value || '';
@@ -1536,7 +1542,7 @@ ${text}`;
             this.ttsPlayer.voice = ttsVoice;
             this.ttsPlayer.speed = ttsSpeed;
             this.ttsPlayer.setVolume(volume);
-            this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'local';
+            this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
             this.ttsPlayer.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
             this._showNarrationControls();
             const pauseBtn = document.getElementById('sw-tts-pause-btn');

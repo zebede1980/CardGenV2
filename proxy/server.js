@@ -35,6 +35,15 @@ const allowedOrigins = [
   ].filter(Boolean)),
 ];
 
+/**
+ * Marks a 401 as being about *this app's* session, not some upstream provider's
+ * credentials. The browser's authFetch clears the token and bounces the user to
+ * the login screen on 401 — so an upstream API rejecting our key would log the
+ * user out of CardGen, which is exactly what happened with TTS. Only responses
+ * carrying this header should be treated as a session failure.
+ */
+const SESSION_EXPIRED_HEADER = "X-Session-Expired";
+
 // Enable CORS for the listed origins only.
 app.use(
   cors({
@@ -47,6 +56,9 @@ app.use(
       }
     },
     credentials: true,
+    // Without this the browser hides the header on cross-origin replies, and a
+    // genuinely expired session would stop redirecting to login.
+    exposedHeaders: [SESSION_EXPIRED_HEADER],
   }),
 );
 
@@ -262,6 +274,20 @@ async function loadCardHistoryImages(imgDir, cardId) {
 
 // ── JWT middleware ────────────────────────────────────────────────────────────
 
+function sessionUnauthorized(res, message) {
+  return res.status(401).set(SESSION_EXPIRED_HEADER, "1").json({ error: message });
+}
+
+/**
+ * Status to report when an upstream provider fails. 401/403 must never be
+ * relayed verbatim: at this layer they mean "your CardGen login is invalid",
+ * which is a different and much more disruptive claim than "the provider
+ * rejected our API key". The real status stays in the message body.
+ */
+function upstreamFailureStatus(status) {
+  return status === 401 || status === 403 ? 502 : status;
+}
+
 function requireAuth(req, res, next) {
   // Accept Bearer header OR ?token= query param (needed for <img src> which can't send headers)
   const authHeader = req.headers["authorization"];
@@ -269,14 +295,14 @@ function requireAuth(req, res, next) {
   const tokenFromQuery = typeof req.query.token === "string" ? req.query.token : null;
   const token = tokenFromHeader || tokenFromQuery;
   if (!token) {
-    return res.status(401).json({ error: "Authentication required" });
+    return sessionUnauthorized(res, "Authentication required");
   }
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload; // { userId, username }
     next();
   } catch (e) {
-    return res.status(401).json({ error: "Invalid or expired token" });
+    return sessionUnauthorized(res, "Invalid or expired token");
   }
 }
 
@@ -1258,7 +1284,9 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
     }
 
     const text = await response.text();
-    res.status(response.status).send(text);
+    // The StoryWriter backend rejecting an internal call is not the browser's
+    // session expiring — relaying its 401 verbatim would log the user out.
+    res.status(upstreamFailureStatus(response.status)).send(text);
   } catch (error) { res.status(500).json({ error: "StoryWriter backend unreachable: " + error.message }); }
 });
 
@@ -1309,7 +1337,8 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
       if (!response.ok) {
         const errData = await response.text();
-        return res.status(response.status).send(`Kokoro TTS Error: ${errData}`);
+        return res.status(upstreamFailureStatus(response.status))
+          .send(`Kokoro TTS Error (${response.status}): ${errData}`);
       }
 
       res.setHeader("Content-Type", "audio/wav");
@@ -1353,7 +1382,8 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
         if (!response.ok) {
           const errData = await response.text();
-          return res.status(response.status).send(`Nano-GPT TTS Error: ${errData}`);
+          return res.status(upstreamFailureStatus(response.status))
+            .send(`Nano-GPT TTS Error (${response.status}): ${errData}`);
         }
 
         res.setHeader("Content-Type", "audio/mpeg");
@@ -1381,7 +1411,8 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
         if (!response.ok) {
           const errData = await response.text();
-          return res.status(response.status).send(`Nano-GPT Custom TTS Error: ${errData}`);
+          return res.status(upstreamFailureStatus(response.status))
+            .send(`Nano-GPT Custom TTS Error (${response.status}): ${errData}`);
         }
 
         const contentType = response.headers.get('content-type') || "";
@@ -1459,7 +1490,8 @@ app.post("/api/tts/synthesize", async (req, res) => {
 
       if (!response.ok) {
         const errData = await response.text();
-        return res.status(response.status).send(`Google TTS Error: ${errData}`);
+        return res.status(upstreamFailureStatus(response.status))
+          .send(`Google TTS Error (${response.status}): ${errData}`);
       }
 
       const data = await response.json();
@@ -1485,7 +1517,8 @@ app.get("/api/tts/google-voices", async (req, res) => {
 
     const response = await fetch(`https://texttospeech.googleapis.com/v1/voices?key=${apiKey}`);
     if (!response.ok) {
-      return res.status(response.status).json({ error: "Failed to fetch Google voices" });
+      return res.status(upstreamFailureStatus(response.status))
+      .json({ error: `Failed to fetch Google voices (upstream ${response.status})` });
     }
 
     const data = await response.json();

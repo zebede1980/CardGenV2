@@ -43,7 +43,18 @@ window.authFetch = async function authFetch(url, options = {}) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   const res = await fetch(url, { ...options, headers });
-  if (res.status === 401 && token && getToken() === token) {
+
+  // A 401 only means "log the user out" when it came from our own auth layer.
+  // Proxied endpoints talk to third-party providers (TTS, LLM, image) that
+  // return 401 when *their* API key is wrong — relaying that as a session
+  // failure used to kick the user to the login screen mid-playback, with a
+  // perfectly valid session. The server marks its own auth failures with
+  // X-Session-Expired; anything else is an upstream problem for the caller
+  // to surface.
+  const isSessionFailure =
+    res.status === 401 && res.headers.get("X-Session-Expired") === "1";
+
+  if (isSessionFailure && token && getToken() === token) {
     // Only clear + redirect if the token we sent is still the current one.
     // This prevents an in-flight request (made with an old/expired token)
     // from wiping a freshly-issued token after a successful re-login.
