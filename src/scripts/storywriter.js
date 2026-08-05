@@ -475,6 +475,17 @@ class StoryWriterApp {
         document.getElementById('sw-stop-btn')?.addEventListener('click', () => this.stopGeneration());
         document.getElementById('sw-save-settings-btn')?.addEventListener('click', () => this.saveSettings());
 
+        // ── Sticky mobile convenience toolbar ──────────────────────────────────
+        document.getElementById('sw-toolbar-generate-btn')?.addEventListener('click', () => {
+            document.getElementById('sw-generate-btn')?.click();
+        });
+        document.getElementById('sw-view-cards-btn')?.addEventListener('click', () => {
+            const characters = (this.story?.cards || []).map(sc => sc.card).filter(Boolean);
+            window.openCharacterCardsViewer?.(characters);
+        });
+        document.getElementById('sw-prev-segment-btn')?.addEventListener('click', () => this._scrollToAdjacentSegment(-1));
+        document.getElementById('sw-next-segment-btn')?.addEventListener('click', () => this._scrollToAdjacentSegment(1));
+
         // ── TTS playback control bindings ──────────────────────────────────────
         document.getElementById('sw-tts-pause-btn')?.addEventListener('click', () => this._togglePause());
         document.getElementById('sw-tts-skip-btn')?.addEventListener('click', () => {
@@ -1105,6 +1116,38 @@ class StoryWriterApp {
         try { await this.apiCall(`/stories/${this.story.id}/cards/${cardId}`, 'DELETE'); await this.refreshWorkspace(); } catch (e) { console.error(e); }
     }
 
+    // Jump the page to the previous/next story section, relative to whichever
+    // segment currently sits at the top of the viewport.
+    _scrollToAdjacentSegment(direction) {
+        const segments = Array.from(document.querySelectorAll('#sw-story-area [data-segment-id]'));
+        if (!segments.length) return;
+
+        const viewportTop = window.scrollY + 80;
+        let currentIndex = segments.findIndex(el => el.offsetTop + el.offsetHeight > viewportTop);
+        if (currentIndex === -1) currentIndex = segments.length - 1;
+
+        const targetIndex = Math.min(Math.max(currentIndex + direction, 0), segments.length - 1);
+        segments[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    _escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Escapes segment text and highlights quoted dialogue, matching Roleplay Chat's styling.
+    _renderSegmentHtml(text) {
+        let escaped = this._escapeHtml(text);
+        escaped = escaped.replace(/&quot;([\s\S]*?)&quot;/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">&quot;$1&quot;</span>');
+        escaped = escaped.replace(/“([\s\S]*?)”/g, '<span style="color: var(--accent, #8b5cf6); font-weight: 500;">&ldquo;$1&rdquo;</span>');
+        return escaped;
+    }
+
     renderSegments() {
         const area = document.getElementById('sw-story-area');
         area.innerHTML = '';
@@ -1119,7 +1162,7 @@ class StoryWriterApp {
             const content = document.createElement('div');
             content.style.lineHeight = '1.7';
             content.style.whiteSpace = 'pre-wrap';
-            content.textContent = seg.content;
+            content.innerHTML = this._renderSegmentHtml(seg.content);
 
             // Inline editor (hidden by default)
             const editor = document.createElement('textarea');
@@ -1178,7 +1221,7 @@ class StoryWriterApp {
                 try {
                     await this.apiCall(`/stories/${this.story.id}/segments/${seg.id}`, 'PUT', { content: newText });
                     seg.content = newText;
-                    content.textContent = newText;
+                    content.innerHTML = this._renderSegmentHtml(newText);
                     editor.style.display = 'none';
                     content.style.display = '';
                     editBtn.textContent = '✏️';

@@ -1850,13 +1850,23 @@
                             <textarea id="sw-synopsis" class="textarea" rows="3" placeholder="Map out your story premise, plot points, worldbuilding notes..." style="background: var(--surface-color); width: 100%; margin-top: 0.5rem;"></textarea>
                         </details>
 
-                        <!-- Narration Playback Controls (hidden until TTS active) -->
-                        <div id="sw-narration-controls" style="display: none; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; position: sticky; top: 0.5rem; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <span style="font-weight: 600; font-size: 0.85rem;">🔊 Narrating</span>
-                            <button id="sw-tts-pause-btn" class="btn-small" title="Pause / Resume narration">⏸ Pause</button>
-                            <button id="sw-tts-skip-btn" class="btn-small" title="Skip current sentence">⏭ Skip</button>
-                            <button id="sw-tts-stop-btn" class="btn-small" style="color: var(--error-color, #e55); border-color: var(--error-color, #e55);" title="Stop narration completely">⏹ Stop</button>
-                            <span id="sw-tts-progress" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;"></span>
+                        <!-- Sticky mobile convenience toolbar + narration controls -->
+                        <div id="sw-sticky-stack" style="position: sticky; top: 0.5rem; z-index: 20; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
+                            <div id="sw-toolbar" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; flex-wrap: wrap; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                                <button id="sw-prev-segment-btn" class="btn-small" title="Jump to previous section">⬆ Prev</button>
+                                <button id="sw-next-segment-btn" class="btn-small" title="Jump to next section">⬇ Next</button>
+                                <button id="sw-view-cards-btn" class="btn-small" title="View attached character cards">🃏 Cards</button>
+                                <button id="sw-toolbar-generate-btn" class="btn-small btn-primary" style="margin-left: auto;" title="Generate the next section">▶ Generate Next</button>
+                            </div>
+
+                            <!-- Narration Playback Controls (hidden until TTS active) -->
+                            <div id="sw-narration-controls" style="display: none; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; flex-wrap: wrap; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                                <span style="font-weight: 600; font-size: 0.85rem;">🔊 Narrating</span>
+                                <button id="sw-tts-pause-btn" class="btn-small" title="Pause / Resume narration">⏸ Pause</button>
+                                <button id="sw-tts-skip-btn" class="btn-small" title="Skip current sentence">⏭ Skip</button>
+                                <button id="sw-tts-stop-btn" class="btn-small" style="color: var(--error-color, #e55); border-color: var(--error-color, #e55);" title="Stop narration completely">⏹ Stop</button>
+                                <span id="sw-tts-progress" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;"></span>
+                            </div>
                         </div>
 
                         <div id="sw-story-area" class="content-box" style="display: block; margin-bottom: 1rem; padding: 1rem; background: var(--surface-color); min-height: 300px;">
@@ -2086,13 +2096,13 @@
         <script src="src/scripts/batch-generator.js?v=20260518"></script>
         <script src="src/scripts/image-gallery.js?v=20260518"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
-        <script src="src/scripts/storywriter.js?v=12"></script>
+        <script src="src/scripts/storywriter.js?v=13"></script>
         <script src="src/scripts/adventure-handler.js?v=1"></script>
         <script src="src/scripts/inspire-me.js?v=20260601"></script>
         <script src="src/scripts/gallery-mode.js"></script>
         <script src="src/scripts/chat-handler.js?v=20260804-topp"></script>
         <script src="src/scripts/chat-settings.js"></script>
-        <script src="src/scripts/chat-character-cards.js?v=20260804"></script>
+        <script src="src/scripts/chat-character-cards.js?v=20260805"></script>
         <script src="src/scripts/home-handler.js?v=20260729-2"></script>
         <!-- API Settings Modal -->
 

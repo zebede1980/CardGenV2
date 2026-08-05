@@ -4,7 +4,7 @@ const initChatCharacterCards = () => {
     const closeBtn = document.getElementById('chat-cards-close-btn');
     const row = document.getElementById('chat-cards-row');
 
-    if (!btn || !modal || !row) return;
+    if (!modal || !row) return;
 
     const escapeHtml = (str) => {
         if (!str) return '';
@@ -64,10 +64,9 @@ const initChatCharacterCards = () => {
         return tile;
     };
 
-    const open = () => {
-        const characters = window.roleplayChatHandler?.activeChatCharacters || [];
-        if (!characters.length) {
-            alert('No characters linked to this chat yet.');
+    const openCharacterCardsViewer = (characters) => {
+        if (!characters || !characters.length) {
+            alert('No characters linked yet.');
             return;
         }
         const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || '';
@@ -76,9 +75,12 @@ const initChatCharacterCards = () => {
         modal.classList.add('show');
     };
 
+    // Exposed so other modes (e.g. Story Writer) can reuse this same modal/viewer.
+    window.openCharacterCardsViewer = openCharacterCardsViewer;
+
     const close = () => modal.classList.remove('show');
 
-    btn.addEventListener('click', open);
+    btn?.addEventListener('click', () => openCharacterCardsViewer(window.roleplayChatHandler?.activeChatCharacters || []));
     closeBtn.addEventListener('click', close);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 };
