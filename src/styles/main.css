@@ -3387,8 +3387,8 @@ h6.rcf-heading { font-size: 0.75rem; }
     padding: 0 0.85rem 0.85rem;
     overflow-y: auto;
     flex: 1;
-    font-size: 0.85rem;
-    line-height: 1.5;
+    font-size: 0.95rem;
+    line-height: 1.55;
     color: var(--text-secondary);
 }
 .chat-card-tile-fields strong {
@@ -3399,6 +3399,21 @@ h6.rcf-heading { font-size: 0.75rem; }
 }
 .chat-card-tile-fields > div:last-child {
     margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    /* On phones, scroll the whole card (image included) instead of boxing
+       the text into its own small scroll region below a locked picture. */
+    .chat-card-tile {
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .chat-card-tile-fields {
+        flex: none;
+        overflow-y: visible;
+        font-size: 1rem;
+    }
 }
 
 /* Card text area */
