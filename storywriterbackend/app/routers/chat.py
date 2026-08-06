@@ -26,6 +26,13 @@ import re as _cot_re
 # Single source of truth used by both get_default_system_prompt() and
 # build_chat_prompt().  Numbered steps are intentional — they create a clear
 # sequential obligation that models honour more reliably than bullet points.
+#
+# [COT-EARLY-STOP-FIX 2026-08-06] Step 4/5 wording and rules 4-5 below were
+# reworded to address a ~8% failure mode: the model closes </think> right
+# after step 4 (whose "rough version" reads too much like a finished answer),
+# then leaks step 5 as visible text and stops instead of continuing to prose.
+# Revert this string to its prior wording (git history) if the reword doesn't
+# help. Independent of the recovery safety net further down this file.
 _COT_PROMPT_TEXT = (
     "CHAIN OF THOUGHT — MANDATORY REASONING FORMAT:\n"
     "Before writing ANY story prose you MUST complete all five numbered steps "
@@ -34,16 +41,18 @@ _COT_PROMPT_TEXT = (
     "1. Ground Truth — What is the exact physical setting, time, and immediate situation right now?\n"
     "2. NPC Knowledge — What does my character know, believe, and NOT know at this precise moment?\n"
     "3. Intent — What is my character's concrete goal or motivation for THIS turn specifically?\n"
-    "4. Draft — What will they say or do? (Write a rough version here first.)\n"
-    "5. Self-Correct — Does this draft fit the established persona? Is it avoiding repetition? "
-    "Adjust if necessary before writing the final prose.\n"
+    "4. Draft — A brief, rough sketch only (a few lines) of what they will say or do — NOT the final prose.\n"
+    "5. Self-Correct — Does the draft fit the established persona? Is it avoiding repetition? "
+    "Adjust if necessary. This is still internal planning, not your answer.\n"
     "</think>\n"
     "[Your final story prose goes here — the user ONLY sees this section]\n\n"
     "CRITICAL RULES:\n"
     "1. Your response MUST open with <think> — no preamble, no greeting, no text before it.\n"
     "2. Use EXACTLY <think> and </think>. No other tag names, no ---, no variations.\n"
     "3. Do NOT write story prose inside <think>. Do NOT write reasoning outside <think>.\n"
-    "4. The </think> tag MUST be closed before the story prose begins."
+    "4. The </think> tag MUST be closed only after ALL FIVE steps, including step 5, are written.\n"
+    "5. Step 5 is NOT the end of your turn. After </think>, you MUST still write the full story "
+    "prose — reaching step 5 is not a stopping point."
 )
 
 # Regex to detect the CoT block that models output WITHOUT wrapping in <think> tags.
@@ -72,6 +81,40 @@ def _inject_think_tags(content: str) -> tuple[str, bool]:
         return f"<think>\n{cot_block}\n</think>", True
     fixed = f"<think>\n{cot_block}\n</think>\n{prose}"
     return fixed, True
+
+# [COT-EARLY-STOP-FIX 2026-08-06] ────────────────────────────────────────────
+# Recovery safety net for the failure mode described above _COT_PROMPT_TEXT:
+# </think> closes one step early (after step 4), step 5 leaks out as visible
+# text, and — because a self-correction note reads like a natural conclusion —
+# generation stops dead right there with no story prose at all. Confirmed
+# against production chat_messages content on 2026-08-06 (~8% of CoT-enabled
+# turns). This is independent of the prompt reword above: it only ever
+# triggers on this exact shape, so it's safe to disable on its own by
+# flipping ENABLE_COT_STOP_RECOVERY to False, without touching the reword.
+ENABLE_COT_STOP_RECOVERY = True
+
+_COT_LEAK_PATTERN = _cot_re.compile(r'^\**\s*5?\.?\s*\**\s*Self-Correct\b', _cot_re.IGNORECASE)
+
+def _detect_cot_leak(content: str) -> Optional[tuple[str, str]]:
+    """Detect a leaked step-5 "Self-Correct" fragment sitting right after a
+    properly closed </think> tag. Returns (folded_think_block, trailing_prose)
+    if the shape matches, else None. `trailing_prose` is "" when generation
+    stopped dead after the leak (the broken case) — the caller should request
+    a continuation. When non-empty, real prose already followed the leak and
+    it's purely cosmetic — just fold the leak back in, no extra call needed."""
+    close_idx = content.find("</think>")
+    if close_idx == -1:
+        return None
+    before = content[:close_idx]
+    after = content[close_idx + len("</think>"):].strip("\n")
+    if not _COT_LEAK_PATTERN.match(after):
+        return None
+    parts = after.split("\n\n", 1)
+    leaked = parts[0].strip()
+    rest = parts[1].strip() if len(parts) > 1 else ""
+    folded_think = f"{before}{leaked}\n</think>"
+    return folded_think, rest
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_default_system_prompt() -> str:
     """Builds the default system prompt modularly."""
@@ -352,17 +395,22 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         # (DeepSeek-R1, QwQ) — don't know to close the </think> tag when
         # started mid-block, causing the entire response to be hidden.
         # The system prompt + frontend preamble-stripping handles edge cases.
+        # [COT-EARLY-STOP-FIX 2026-08-06] Step 4/5 wording + trailing sentence
+        # reworded alongside _COT_PROMPT_TEXT above — same failure mode, same
+        # revert note applies.
         cot_reminder = (
             "YOUR NEXT RESPONSE MUST follow this exact structure — no exceptions:\n"
             "<think>\n"
             "1. Ground Truth: [setting/situation]\n"
             "2. NPC Knowledge: [what the character knows/doesn't know]\n"
             "3. Intent: [character's goal this turn]\n"
-            "4. Draft: [rough version of response]\n"
+            "4. Draft: [brief sketch only, a few lines — not the final prose]\n"
             "5. Self-Correct: [check persona fit and avoid repetition]\n"
             "</think>\n"
             "[Story prose here — this is the ONLY part the user sees]\n\n"
-            "Open with <think>. Close with </think>. No preamble. No other tag names. No --- separators."
+            "Open with <think>. Close with </think> only after step 5. No preamble. No other tag names. "
+            "No --- separators.\n"
+            "Step 5 is not the end of your turn — the story prose must always follow after </think>."
         )
         if speaker_name and len(chat.characters) > 1:
             messages.append({"role": "system", "content": (
@@ -1129,6 +1177,40 @@ async def send_message(
                     logger.info(f"[{request_id}] CoT tags injected post-generation (model omitted tags)")
                     full_content = fixed_content
                     await queue.put({"type": "corrected_content", "content": full_content})
+
+                # [COT-EARLY-STOP-FIX 2026-08-06] ─────────────────────────────
+                # See _detect_cot_leak() above for the failure this catches.
+                if ENABLE_COT_STOP_RECOVERY:
+                    leak = _detect_cot_leak(full_content)
+                    if leak is not None:
+                        folded_think, rest = leak
+                        if rest:
+                            # Cosmetic only — real prose already followed the leak.
+                            full_content = f"{folded_think}\n{rest}"
+                            logger.info(f"[{request_id}] CoT step-5 leak folded back into <think> (prose was already present)")
+                        else:
+                            # Broken — model stopped dead right after the leak. Ask it
+                            # to continue with just the missing prose.
+                            logger.info(f"[{request_id}] CoT step-5 leak with no prose — requesting continuation")
+                            continuation_messages = prompt_messages + [
+                                {"role": "assistant", "content": folded_think},
+                                {"role": "user", "content": (
+                                    "Continue directly from your plan above. Write ONLY the story prose "
+                                    "now — no reasoning, no tags, no restating the plan. Just the next "
+                                    "piece of the scene."
+                                )}
+                            ]
+                            try:
+                                continuation = ""
+                                async for cchunk in llm.generate(continuation_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
+                                    continuation += cchunk
+                                continuation = continuation.strip()
+                                full_content = f"{folded_think}\n{continuation}" if continuation else folded_think
+                            except Exception as cont_err:
+                                logger.error(f"[{request_id}] CoT continuation call failed: {cont_err}")
+                                full_content = folded_think
+                        await queue.put({"type": "corrected_content", "content": full_content})
+                # ───────────────────────────────────────────────────────────────
 
             await queue.put({
                 "type": "api_log",
