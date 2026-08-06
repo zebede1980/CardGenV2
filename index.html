@@ -1492,29 +1492,43 @@
                             </div>
 
                             <!-- Edit Current Image (image-to-image) -->
-                            <div id="image-edit-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                                <label for="image-edit-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
-                                    ✨ Edit Current Image (experimental)
-                                </label>
-                                <textarea
-                                    id="image-edit-instruction"
-                                    class="input"
-                                    rows="3"
-                                    maxlength="1000"
-                                    placeholder="e.g. change her outfit to a red hoodie, keep her face and pose the same | make her stand with arms crossed | convert to a realistic photo, same character"
-                                ></textarea>
-                                <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
-                                    💡 Sends the current image plus your instruction to an image-to-image model, aiming to keep the character consistent while changing what you ask for. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
-                                </p>
-                                <button
-                                    id="edit-image-btn"
-                                    class="btn-small"
-                                    style="margin-top: 0.5rem;"
-                                    title="Edit the current image using an image-to-image AI model, guided by your instruction above."
+                            <details id="image-edit-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                                <summary
+                                    style="
+                                        cursor: pointer;
+                                        font-weight: 500;
+                                        padding: 0.5rem;
+                                        background: rgba(139, 92, 246, 0.1);
+                                        border-radius: 0.375rem;
+                                        user-select: none;
+                                    "
                                 >
-                                    ✨ Edit Image
-                                </button>
-                            </div>
+                                    ✨ Edit Current Image (experimental)
+                                </summary>
+                                <div style="margin-top: 0.5rem; padding: 0.5rem;">
+                                    <label for="image-edit-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
+                                        Describe the change:
+                                    </label>
+                                    <textarea
+                                        id="image-edit-instruction"
+                                        class="input"
+                                        rows="3"
+                                        maxlength="1000"
+                                        placeholder="e.g. change her outfit to a red hoodie, keep her face and pose the same | make her stand with arms crossed | convert to a realistic photo, same character"
+                                    ></textarea>
+                                    <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
+                                        💡 Sends the current image plus your instruction to an image-to-image model, aiming to keep the character consistent while changing what you ask for. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
+                                    </p>
+                                    <button
+                                        id="edit-image-btn"
+                                        class="btn-small"
+                                        style="margin-top: 0.5rem;"
+                                        title="Edit the current image using an image-to-image AI model, guided by your instruction above."
+                                    >
+                                        ✨ Edit Image
+                                    </button>
+                                </div>
+                            </details>
                                 </div>
                             </details>
 
