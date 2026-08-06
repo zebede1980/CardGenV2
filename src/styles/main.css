@@ -4592,6 +4592,13 @@ body.chat-scroll-locked {
         grid-template-columns: 1fr !important;
     }
 }/* Story Writer UI Improvements */
+#sw-sticky-stack {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0.5rem;
+    z-index: 20;
+}
+
 .sw-segment-card {
     position: relative;
     border-bottom: 1px solid var(--border-color, #3a3a4a);
