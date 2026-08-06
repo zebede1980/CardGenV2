@@ -156,6 +156,7 @@ class Config {
     const imageBaseUrl = document.getElementById("image-api-base")?.value?.trim();
     const imageApiKey = document.getElementById("image-api-key")?.value?.trim();
     const imageSize = document.getElementById("image-size")?.value?.trim();
+    const imageEditModel = document.getElementById("image-edit-model")?.value?.trim();
     const imageSteps = document.getElementById("image-steps")?.value?.trim();
     const imageCfgScale = document.getElementById("image-cfg-scale")?.value?.trim();
     const imagePromptLengthPref = document.getElementById("image-prompt-length-pref")?.value;
@@ -173,6 +174,7 @@ class Config {
       this.config.api.image.baseUrl = imageBaseUrl;
     if (imageApiKey !== undefined) this.config.api.image.apiKey = imageApiKey;
     if (imageSize !== undefined) this.config.api.image.size = imageSize;
+    if (imageEditModel !== undefined) this.config.api.image.editModel = imageEditModel;
     
     if (imageModelSettingsSelector) {
         if (!this.config.api.image.modelSettings) this.config.api.image.modelSettings = {};
@@ -280,6 +282,7 @@ class Config {
     const imageBaseUrl = document.getElementById("image-api-base");
     const imageApiKey = document.getElementById("image-api-key");
     const imageSize = document.getElementById("image-size");
+    const imageEditModel = document.getElementById("image-edit-model");
     const imageStyle = document.getElementById("image-style");
     const imageMood = document.getElementById("image-mood");
     const customImageStyle = document.getElementById("custom-image-style-input");
@@ -290,6 +293,7 @@ class Config {
       imageBaseUrl.value = this.config.api.image.baseUrl || "";
     if (imageApiKey) imageApiKey.value = this.config.api.image.apiKey || "";
     if (imageSize) imageSize.value = this.config.api.image.size || "";
+    if (imageEditModel) imageEditModel.value = this.config.api.image.editModel || "";
     if (imageStyle) {
         imageStyle.value = this.config.api.image.style || "";
         if (customStyleContainer) customStyleContainer.style.display = imageStyle.value === "custom" ? "block" : "none";

@@ -584,6 +584,126 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  // Sends the current portrait + a plain-language instruction to an
+  // image-to-image model (e.g. flux-2-pro-image-to-image, flux-kontext),
+  // aiming to keep the character consistent while changing pose/outfit/style.
+  async handleEditImage() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate a character first", "warning");
+      return;
+    }
+    if (!this.currentImageUrl) {
+      this.showNotification("Please generate or upload an image first", "warning");
+      return;
+    }
+
+    const instructionEl = document.getElementById("image-edit-instruction");
+    const instruction = instructionEl?.value?.trim();
+    if (!instruction) {
+      this.showNotification("Describe what you want to change first", "warning");
+      instructionEl?.focus();
+      return;
+    }
+
+    const imageApiBase = this.config.get("api.image.baseUrl");
+    const imageApiKey = this.config.get("api.image.apiKey");
+    if (!imageApiBase || !imageApiKey) {
+      this.showNotification("Please configure image API settings first", "warning");
+      return;
+    }
+
+    const editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
+
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = "✨ Edit Image";
+
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    const loadingText = loading.querySelector("p");
+    if (loadingText) loadingText.textContent = `Editing image with ${editModel}… this may take a minute.`;
+
+    grid.innerHTML = "";
+    loading.style.display = "block";
+
+    try {
+      const sourceBlob = await this.imageGenerator.convertToBlob(this.currentImageUrl);
+      const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read current image"));
+        reader.readAsDataURL(sourceBlob);
+      });
+
+      const resultUrl = await window.apiHandler.editImage({
+        imageBase64,
+        instruction,
+        model: editModel,
+      });
+
+      // Convert remote result to a blob URL via proxy for CORS-safe display
+      let blobUrl = resultUrl;
+      if (!resultUrl.startsWith("blob:") && !resultUrl.startsWith("data:")) {
+        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
+        const response = await (window.authFetch || fetch)(proxyUrl);
+        if (response.ok) blobUrl = URL.createObjectURL(await response.blob());
+      }
+
+      loading.style.display = "none";
+
+      this._insertCurrentImageCard(grid, [blobUrl]);
+      if (this.currentImageUrl) {
+        const mt = document.querySelector("#image-options-modal .modal-title");
+        if (mt) mt.innerHTML = "✨ Compare & Choose — Edited Image";
+      }
+
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText = "cursor:pointer;border:2px solid transparent;border-radius:0.5rem;overflow:hidden;transition:border-color 0.2s;background:var(--surface-color);width:100%;position:relative;";
+      wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
+      wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
+      // Deliberately not using the shared selectImageOption() here: it overwrites
+      // the "custom-image-prompt" textarea (the full character image prompt)
+      // with whatever's passed as the prompt, and switches api.image.model to
+      // match — both wrong for an edit model, which isn't meant to become the
+      // default text-to-image model or replace the card's real image prompt.
+      wrapper.onclick = async () => {
+        this._pendingCandidateUrls = null;
+        this.closeImageOptionsModal();
+        if (this.currentImageUrl && this.currentImageUrl !== blobUrl) {
+          this._archiveCurrentImage();
+        }
+        this.currentImageUrl = blobUrl;
+        const imageContainer = document.getElementById("image-content");
+        if (imageContainer) {
+          imageContainer.innerHTML = window.imageGenerator.formatImageForDisplay(blobUrl);
+        }
+        this.showNotification("Edited image selected and saved to card!", "success");
+        await this.saveCardToLibrary();
+        await this.refreshLibraryViews();
+      };
+
+      wrapper.innerHTML = `
+        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--accent);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">NEW</div>
+        <img src="${blobUrl}" style="width: 100%; height: auto; display: block;" alt="Edited image">
+        <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
+          <button class="btn-primary" style="width: 100%;">Use This Image</button>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">✨ ${editModel}</div>
+        </div>
+      `;
+      grid.appendChild(wrapper);
+
+      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: instruction, model: editModel, label: "Edited" }]);
+
+      this.openImageOptionsModal();
+      this.showNotification("Image edited! Compare and choose.", "success");
+    } catch (error) {
+      console.error("Image edit error:", error);
+      loading.style.display = "none";
+      this.closeImageOptionsModal();
+      this.showNotification(`✨ Edit failed: ${error.message}`, "error", 6000);
+    }
+  },
+
   // Prepends a "Current Image" keep-card into the grid so the user can compare
   // newBlobUrls — URLs of the freshly generated candidate images
   _insertCurrentImageCard(grid, newBlobUrls = []) {

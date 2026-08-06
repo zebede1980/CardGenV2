@@ -155,6 +155,143 @@ Object.assign(APIHandler.prototype, {
     throw new Error("Unexpected image API response format: " + JSON.stringify(result));
   },
 
+  // ── Image-to-Image Editing ────────────────────────────────────────────────
+  // Sends an existing image + a plain-language instruction to an image-to-image
+  // model (e.g. flux-2-pro-image-to-image, flux-kontext) via the same
+  // /api/image/generations proxy route used for text-to-image — these models
+  // are called identically, just with an extra `image` field carrying the
+  // source as a base64 data URI.
+  async editImage({ imageBase64, instruction, model, aspectRatio }) {
+    if (!imageBase64) throw new Error("An image is required to edit.");
+    const trimmedInstruction = (instruction || "").trim();
+    if (!trimmedInstruction) throw new Error("An edit instruction is required.");
+
+    const editModel = model || this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
+
+    const data = {
+      model: editModel,
+      prompt: trimmedInstruction,
+      image: imageBase64,
+      n: 1,
+      response_format: "url",
+      seed: Math.floor(Math.random() * 2147483647),
+    };
+
+    const ratioMap = {
+      "1:1": { width: 1024, height: 1024 },
+      "9:16": { width: 768, height: 1344 },
+      "16:9": { width: 1344, height: 768 },
+      "3:4": { width: 896, height: 1152 },
+      "4:3": { width: 1152, height: 896 },
+    };
+    const ratio = aspectRatio || this.config.get("api.image.aspectRatio");
+    if (ratio && ratioMap[ratio]) {
+      data.aspect_ratio = ratio;
+      data.width = ratioMap[ratio].width;
+      data.height = ratioMap[ratio].height;
+      data.size = `${ratioMap[ratio].width}x${ratioMap[ratio].height}`;
+    }
+
+    console.log("=== SENDING IMAGE EDIT REQUEST ===");
+    console.log("Edit model:", editModel);
+    console.log("Instruction:", trimmedInstruction);
+
+    const response = await this.makeRequest("/api/image/generations", data, true);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Image Edit API error response:", errorText);
+      let errorData;
+      try { errorData = JSON.parse(errorText); } catch (e) {
+        throw new Error(`Image Edit API Error (${response.status}): ${errorText}`);
+      }
+      const errorMessage = errorData.error?.message || errorData.message || errorData.error || "Unknown error";
+      throw new Error(`Image Edit API Error (${response.status}): ${errorMessage}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      console.error("Image Edit API returned error object:", result.error);
+      throw new Error(`Image Edit API Error: ${result.error.message || result.error.details || result.error}`);
+    }
+
+    const resultUrl = (result.data && result.data.length > 0 && result.data[0].url) || result.image || result.url;
+    if (!resultUrl) {
+      console.error("Unexpected image edit API response format. Full response:", result);
+      throw new Error("Unexpected image edit API response format: " + JSON.stringify(result));
+    }
+
+    // Some image-to-image models (observed with flux-kontext) silently return
+    // a solid black image instead of an error when their safety filter rejects
+    // the source image — same HTTP 200, same response shape. Catch that here
+    // so the caller gets a real error instead of a blank picture.
+    const blocked = await this.isLikelySafetyBlockedImage(resultUrl);
+    if (blocked) {
+      throw new Error(
+        "The edit model returned a blank image — this usually means its content-safety filter rejected the source image. " +
+        "Try a different Image Edit Model in Settings (e.g. flux-2-max-image-to-image), or a less explicit source image."
+      );
+    }
+
+    return resultUrl;
+  },
+
+  // Loads `imageUrl` and checks whether it's a suspiciously uniform (near
+  // solid-color) image — the signature of a silent safety-filter block rather
+  // than a real generation. Fetches via the proxy first so the canvas read
+  // below doesn't taint on a cross-origin image.
+  async isLikelySafetyBlockedImage(imageUrl) {
+    try {
+      const proxyUrl = imageUrl.startsWith("data:") || imageUrl.startsWith("blob:")
+        ? imageUrl
+        : `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+      const response = await (window.authFetch || fetch)(proxyUrl);
+      if (!response.ok) return false;
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      try {
+        const variance = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const sampleSize = 32;
+              const canvas = document.createElement("canvas");
+              canvas.width = sampleSize;
+              canvas.height = sampleSize;
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+              const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
+              let sum = 0;
+              let sumSq = 0;
+              const n = sampleSize * sampleSize;
+              for (let i = 0; i < data.length; i += 4) {
+                const luminance = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                sum += luminance;
+                sumSq += luminance * luminance;
+              }
+              const mean = sum / n;
+              resolve(sumSq / n - mean * mean);
+            } catch (e) {
+              reject(e);
+            }
+          };
+          img.onerror = () => reject(new Error("Failed to load image for blank-check"));
+          img.src = objectUrl;
+        });
+        // A real photo/illustration has substantial pixel variance; a
+        // solid-color safety-block image has variance ~0.
+        return variance < 4;
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch (e) {
+      console.warn("Blank-image safety check failed, assuming image is fine:", e);
+      return false;
+    }
+  },
+
   async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "", styleOverride = undefined, moodOverride = undefined) {
     if (!characterDescription || !characterName) {
       throw new Error("Character description and name are required to generate an image prompt");

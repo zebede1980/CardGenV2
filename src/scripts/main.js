@@ -212,6 +212,12 @@ class CharacterGeneratorApp {
       localForgeBtn.addEventListener("click", () => this.handleForgeImage());
     }
 
+    // Edit Image (image-to-image) button
+    const editImageBtn = document.getElementById("edit-image-btn");
+    if (editImageBtn) {
+      editImageBtn.addEventListener("click", () => this.handleEditImage());
+    }
+
     const imgOptModalClose = document.getElementById("image-options-modal-close-btn");
     const imgOptModal = document.getElementById("image-options-modal");
     if (imgOptModalClose) imgOptModalClose.addEventListener("click", () => this.closeImageOptionsModal());
@@ -500,7 +506,7 @@ class CharacterGeneratorApp {
     apiStatus.addEventListener("click", () => this.handleAPIConfig());
     apiStatus.style.cursor = "pointer";
 
-    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref, #image-is-flux")
+    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-edit-model, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref, #image-is-flux")
       .forEach((input) => input.addEventListener("change", () => {
           this.saveAPISettings();
           const status = document.getElementById("model-settings-status");

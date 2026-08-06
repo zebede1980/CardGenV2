@@ -1490,6 +1490,31 @@
                                     style="display: none"
                                 />
                             </div>
+
+                            <!-- Edit Current Image (image-to-image) -->
+                            <div id="image-edit-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                                <label for="image-edit-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    ✨ Edit Current Image (experimental)
+                                </label>
+                                <textarea
+                                    id="image-edit-instruction"
+                                    class="input"
+                                    rows="3"
+                                    maxlength="1000"
+                                    placeholder="e.g. change her outfit to a red hoodie, keep her face and pose the same | make her stand with arms crossed | convert to a realistic photo, same character"
+                                ></textarea>
+                                <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
+                                    💡 Sends the current image plus your instruction to an image-to-image model, aiming to keep the character consistent while changing what you ask for. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
+                                </p>
+                                <button
+                                    id="edit-image-btn"
+                                    class="btn-small"
+                                    style="margin-top: 0.5rem;"
+                                    title="Edit the current image using an image-to-image AI model, guided by your instruction above."
+                                >
+                                    ✨ Edit Image
+                                </button>
+                            </div>
                                 </div>
                             </details>
 
@@ -2268,6 +2293,19 @@
                             placeholder="e.g., 1024x1024, 512x512 (optional)"
                         />
                         <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">Default size if Aspect Ratio is not selected in the main UI.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-edit-model" class="label"
+                            >Image Edit Model (image-to-image, optional)</label
+                        >
+                        <input
+                            type="text"
+                            id="image-edit-model"
+                            class="input"
+                            placeholder="e.g. flux-2-pro-image-to-image, flux-2-max-image-to-image, flux-kontext"
+                        />
+                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">Used by "✨ Edit Image" to modify the current portrait (pose/outfit/style) while keeping the character's likeness. Defaults to flux-2-pro-image-to-image if left blank.</p>
                     </div>
 
                     <div class="form-group" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
