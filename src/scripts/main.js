@@ -1616,7 +1616,10 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
 
           /* Global Mobile Layout Fixes */
-          html, body { max-width: 100vw; overflow-x: hidden; margin: 0; padding: 0; }
+          /* overflow-x: clip (not hidden) — hidden turns html/body into a scroll
+             container, which breaks position: sticky descendants in WebKit/Safari
+             (e.g. the story mode button bar just scrolls away instead of sticking). */
+          html, body { max-width: 100vw; overflow-x: clip; margin: 0; padding: 0; }
           *, *::before, *::after { box-sizing: border-box; }
           .container, .main, #app-root, #view-cardgen { max-width: 100%; }
           
