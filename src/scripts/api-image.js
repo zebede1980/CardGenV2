@@ -835,6 +835,89 @@ BEGIN PROMPT:`;
     return URL.createObjectURL(blob);
   },
 
+  // Local image-to-image editing via WebUI Forge's /sdapi/v1/img2img — same
+  // browser-direct-fetch approach as generateForgeImage, for the same reason
+  // (the Dockerized proxy can't necessarily reach the user's Forge instance).
+  // Unlike inpaintForgeImage there's no mask — this edits the whole image.
+  async editForgeImage({ imageBase64, instruction, denoisingStrength = 0.55 }) {
+    if (!imageBase64) throw new Error("An image is required to edit.");
+    const trimmedInstruction = (instruction || "").trim();
+    if (!trimmedInstruction) throw new Error("An edit instruction is required.");
+
+    const forgeUrl = (this.config.get("api.image.localForge.url") || "http://127.0.0.1:7860").replace(/\/$/, "");
+    const img2imgUrl = `${forgeUrl}/sdapi/v1/img2img`;
+
+    const cleanImg = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64;
+
+    const settingsSteps = parseInt(this.config.get("api.image.settings.steps")) || 20;
+    const settingsCfg = parseFloat(this.config.get("api.image.settings.cfgScale")) || 1;
+
+    const aspectRatio = this.config.get("api.image.aspectRatio") || "3:4";
+    const ratioMap = {
+      "1:1": { width: 1024, height: 1024 },
+      "9:16": { width: 768, height: 1344 },
+      "16:9": { width: 1344, height: 768 },
+      "3:4": { width: 896, height: 1152 },
+      "4:3": { width: 1152, height: 896 },
+    };
+    const dims = ratioMap[aspectRatio] || ratioMap["3:4"];
+
+    const payload = {
+      init_images: [cleanImg],
+      prompt: trimmedInstruction,
+      negative_prompt: "",
+      denoising_strength: denoisingStrength,
+      steps: settingsSteps,
+      cfg_scale: settingsCfg,
+      sampler_name: "Euler",
+      scheduler: "Simple",
+      width: dims.width,
+      height: dims.height,
+    };
+
+    console.log("🔧 Sending image-edit request to Forge:", img2imgUrl, "denoising:", denoisingStrength);
+
+    let response;
+    try {
+      response = await fetch(img2imgUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (connErr) {
+      throw new Error(
+        `Cannot connect to Forge at ${forgeUrl}. ` +
+        `Make sure it is running with the --api flag and reachable from your browser. (${connErr.message})`
+      );
+    }
+
+    if (!response.ok) {
+      let detail = response.statusText;
+      try { const j = await response.json(); detail = j.detail || j.error?.message || detail; } catch (_) {}
+      throw new Error(`Forge img2img returned ${response.status}: ${detail}`);
+    }
+
+    const data = await response.json();
+    const images = data.images;
+    if (!images || images.length === 0) {
+      throw new Error("Forge returned no image in response");
+    }
+
+    const rawImg = images[0];
+    if (typeof rawImg === "string" && rawImg.startsWith("data:")) {
+      const res2 = await fetch(rawImg);
+      const blob2 = await res2.blob();
+      return URL.createObjectURL(blob2);
+    }
+    const cleanB64 = rawImg.replace(/\s/g, "");
+    const byteChars = atob(cleanB64);
+    const byteArray = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+    const mimeType = (byteArray[0] === 0xFF && byteArray[1] === 0xD8) ? "image/jpeg" : "image/png";
+    const blob = new Blob([byteArray], { type: mimeType });
+    return URL.createObjectURL(blob);
+  },
+
   // ── Inpainting / In-fill Methods ──────────────────────────────────────────
 
   // Direct Forge inpainting via /sdapi/v1/img2img

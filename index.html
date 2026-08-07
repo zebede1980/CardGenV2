@@ -1519,6 +1519,28 @@
                                     <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
                                         💡 Sends the current image plus your instruction to an image-to-image model, aiming to keep the character consistent while changing what you ask for. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
                                     </p>
+
+                                    <div class="form-group checkbox-group" style="margin-top: 0.75rem; margin-bottom: 0;">
+                                        <input type="checkbox" id="image-edit-use-forge" class="checkbox">
+                                        <label for="image-edit-use-forge" style="margin: 0; font-size: 0.875rem;">🔧 Use Local Forge (flux-1-dev) instead of cloud</label>
+                                    </div>
+                                    <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
+                                        <label for="image-edit-denoising" class="label" style="font-size: 0.8rem;">Denoising Strength (Local Forge only)</label>
+                                        <input
+                                            type="number"
+                                            id="image-edit-denoising"
+                                            class="input"
+                                            value="0.55"
+                                            min="0.1"
+                                            max="0.95"
+                                            step="0.05"
+                                            style="max-width: 120px;"
+                                        >
+                                        <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.25rem;">
+                                            Lower = closer to the original image but ignores your instruction more. Higher = follows the instruction more but the character's identity drifts. In testing, flux-1-dev img2img struggled to do both at once — worth experimenting yourself.
+                                        </p>
+                                    </div>
+
                                     <button
                                         id="edit-image-btn"
                                         class="btn-small"
