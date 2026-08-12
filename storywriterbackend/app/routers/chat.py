@@ -426,29 +426,81 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         
     return messages
 
-async def summarize_chat_task(chat_id: str, user_id: int):
+# [CHAT-CONTEXT-SCALING 2026-08-12] ──────────────────────────────────────────
+# summarize_chat_task used to trigger on a fixed message COUNT
+# (summary_threshold * 3, default 30) with no regard for the model's actual
+# context window — a 200k-token model got compressed at the exact same point
+# as an 8k one, discarding full-fidelity history far earlier than the window
+# could actually afford. This scales the trigger to the chat's configured
+# max_input_tokens instead: raw history is only folded into the lossy running
+# summary once it actually risks the real budget, so a bigger window genuinely
+# keeps more messages verbatim.
+#
+# RESERVED_SYSTEM_OVERHEAD_TOKENS is a flat estimate for everything else that
+# shares the input budget (character cards, persona, existing summary, memory
+# facts, CoT reminder) — not recomputed exactly from build_chat_prompt to avoid
+# duplicating its card-assembly logic in two places. Tune it up if your cards
+# or lorebook run unusually large.
+#
+# Falls back to the old message-count behaviour if max_input_tokens isn't
+# provided, so this degrades safely rather than dividing by nothing.
+RESERVED_SYSTEM_OVERHEAD_TOKENS = 3000
+MIN_HISTORY_TOKEN_BUDGET = 2000
+KEEP_RAW_FRACTION = 2 / 3  # matches the old keep_recent:trigger ratio of 20:30
+
+async def summarize_chat_task(chat_id: str, user_id: int, max_input_tokens: int = None):
     with SessionLocal() as bg_db:
         chat = bg_db.query(models.RoleplayChat).filter(
             models.RoleplayChat.id == chat_id,
             models.RoleplayChat.user_id == str(user_id)
         ).first()
         if not chat: return
-        
+
         settings = get_or_create_settings(bg_db, user_id)
-        
+
         unsummarized = bg_db.query(models.ChatMessage).filter(
             models.ChatMessage.chat_id == chat_id,
             models.ChatMessage.is_summarized == False
         ).order_by(models.ChatMessage.created_at.asc()).all()
-        
-        trigger_limit = settings.summary_threshold * 3  # default 30
-        keep_recent = settings.summary_threshold * 2    # default 20
-        
-        if len(unsummarized) <= trigger_limit:
+
+        def _msg_tokens(m):
+            return len(m.content or "") // 4
+
+        if max_input_tokens:
+            history_token_budget = max(MIN_HISTORY_TOKEN_BUDGET, max_input_tokens - RESERVED_SYSTEM_OVERHEAD_TOKENS)
+            total_tokens = sum(_msg_tokens(m) for m in unsummarized)
+
+            if total_tokens <= history_token_budget:
+                return
+
+            # Keep the most recent messages up to KEEP_RAW_FRACTION of the budget
+            # verbatim; summarize everything older. Always keeps at least the
+            # single most recent message regardless of its size.
+            keep_budget = history_token_budget * KEEP_RAW_FRACTION
+            kept_tokens = 0
+            keep_count = 0
+            for m in reversed(unsummarized):
+                t = _msg_tokens(m)
+                if kept_tokens + t > keep_budget and keep_count > 0:
+                    break
+                kept_tokens += t
+                keep_count += 1
+
+            to_summarize = unsummarized[:-keep_count] if keep_count else []
+        else:
+            # Fallback: original message-count behavior when no token budget is known.
+            trigger_limit = settings.summary_threshold * 3  # default 30
+            keep_recent = settings.summary_threshold * 2    # default 20
+
+            if len(unsummarized) <= trigger_limit:
+                return
+
+            to_summarize = unsummarized[:-keep_recent]
+
+        if not to_summarize:
             return
-            
-        to_summarize = unsummarized[:-keep_recent]
-        
+        # ──────────────────────────────────────────────────────────────────────
+
         text_parts = []
         for m in to_summarize:
             name = m.character_name or ("User" if m.role == "user" else "Assistant")
@@ -487,6 +539,22 @@ async def summarize_chat_task(chat_id: str, user_id: int):
         finally:
             await llm.close()
 
+# [CHAT-MEMORY-STATE-FIX 2026-08-12] ─────────────────────────────────────────
+# The old prompt's Rule 3 ("Ignore minor conversation details, feelings, or
+# temporary states") was the direct cause of the "jumper reappears" class of
+# continuity bug: a character removing an item of clothing reads to the model
+# as a "temporary state," so it was explicitly told to drop it instead of
+# recording it — a few turns later, with nothing anchoring the current state,
+# the model falls back to the character card's default (fully dressed)
+# description. Reworded below to explicitly track current worn/held/physical
+# state as its own fact category that gets UPDATED (not duplicated) when it
+# changes again, rather than lumping it in with things that really are
+# momentary (a passing feeling, a one-off gesture).
+#
+# Also tightened the trigger interval — every 10 messages left enough room for
+# an item to come off and go back on entirely between extraction passes.
+MEMORY_EXTRACTION_INTERVAL = 6  # messages; lower catches state changes faster, at the cost of more background LLM calls
+
 async def extract_chat_memory_task(chat_id: str, user_id: int):
     with SessionLocal() as bg_db:
         chat = bg_db.query(models.RoleplayChat).filter(
@@ -494,18 +562,16 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
             models.RoleplayChat.user_id == str(user_id)
         ).first()
         if not chat: return
-        
+
         settings = get_or_create_settings(bg_db, user_id)
-        
+
         unextracted = bg_db.query(models.ChatMessage).filter(
             models.ChatMessage.chat_id == chat_id,
             models.ChatMessage.is_extracted == False,
-            models.ChatMessage.content != "" 
+            models.ChatMessage.content != ""
         ).order_by(models.ChatMessage.created_at.asc()).all()
-        
-        trigger_limit = 10  # Extract every 10 messages
-        
-        if len(unextracted) < trigger_limit:
+
+        if len(unextracted) < MEMORY_EXTRACTION_INTERVAL:
             return
             
         text_parts = []
@@ -522,22 +588,32 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
         existing_facts_text = "\n".join([f"- {m.fact}" for m in active_memories]) if active_memories else "None."
         
         prompt = (
-            "You are managing a dynamic 'Memory Book' (encyclopedia) of permanent facts for a roleplay.\n"
+            "You are managing a dynamic 'Memory Book' for a roleplay — a living record of both permanent "
+            "facts and CURRENT STATE that must stay consistent across many turns.\n"
             "Review the 'New Chat History' and update the 'Current Facts' accordingly.\n\n"
             "RULES:\n"
-            "1. Add new permanent facts (e.g., items acquired/lost, physical changes, major relationship shifts, key locations).\n"
-            "2. Update or remove any existing facts that are now obsolete or contradicted.\n"
-            "3. Ignore minor conversation details, feelings, or temporary states.\n"
-            "4. You MUST output the COMPLETE, fully updated list of facts, each on a new line starting with a dash (-). "
+            "1. Track permanent facts: items acquired/lost for good, physical changes, major relationship "
+            "shifts, key locations.\n"
+            "2. Track CURRENT STATE that persists across turns even though it can change later: what each "
+            "character is currently wearing versus what they've removed and not put back on, what they're "
+            "currently holding, and any ongoing physical state (injured, restrained, etc.). Do NOT skip this "
+            "— roleplay consistency breaks when a character's clothing or held items silently reset a few "
+            "messages after they changed. State it as its own fact per character, e.g. \"Vesper is not "
+            "wearing her jumper (removed it in the living room).\"\n"
+            "3. When a tracked state changes again (an item goes back on, a wound heals, etc.), UPDATE the "
+            "existing fact to the new current state — never leave a stale fact contradicting a newer one.\n"
+            "4. Ignore things that are genuinely momentary and don't need to persist: a passing feeling, a "
+            "one-off gesture, incidental scenery.\n"
+            "5. You MUST output the COMPLETE, fully updated list of facts, each on a new line starting with a dash (-). "
             "If no changes are needed, simply output the Current Facts exactly as they are.\n"
             f"\nCurrent Facts:\n{existing_facts_text}\n"
             f"\nNew Chat History:\n{combined_text}"
         )
-            
+
         llm = LLMService(settings)
         try:
             messages = [
-                {"role": "system", "content": "You are an AI data extractor. Maintain a concise list of permanent facts."},
+                {"role": "system", "content": "You are an AI data extractor. Maintain a concise, up-to-date list of permanent facts and current character state."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -1247,7 +1323,10 @@ async def send_message(
     asyncio.create_task(generate_task())
     
     # Launch background summarization for future turns
-    asyncio.create_task(summarize_chat_task(chat_id, current_user.id))
+    # [CHAT-CONTEXT-SCALING 2026-08-12] pass the chat's configured input budget
+    # through so the summarization trigger scales with it — see the constants
+    # and comment above summarize_chat_task().
+    asyncio.create_task(summarize_chat_task(chat_id, current_user.id, getattr(req, 'max_input_tokens', None)))
     
     # Launch background auto-fact extraction
     asyncio.create_task(extract_chat_memory_task(chat_id, current_user.id))
