@@ -1,4 +1,6 @@
 const express = require("express");
+const cookieParser = require("cookie-parser");
+const csurf = require("csurf");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const fetch = require("node-fetch");
@@ -43,6 +45,9 @@ const allowedOrigins = [
  * carrying this header should be treated as a session failure.
  */
 const SESSION_EXPIRED_HEADER = "X-Session-Expired";
+
+app.use(cookieParser());
+app.use(csurf({ cookie: true }));
 
 // Enable CORS for the listed origins only.
 app.use(
