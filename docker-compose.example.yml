@@ -45,6 +45,8 @@ services:
       - STORY_APP_PUBLIC_URL=${STORY_APP_PUBLIC_URL:-}
       # Shared secret for internal proxy→backend calls (must match storywriterbackend)
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
+      # Internal URL for the local Kokoro-82M TTS service (Story Writer narration)
+      - KOKORO_TTS_URL=${KOKORO_TTS_URL:-http://kokoro-tts:8880}
     volumes:
       - ./proxy/data:/app/data
     networks:
