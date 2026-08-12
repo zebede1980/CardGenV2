@@ -1255,6 +1255,7 @@ class RoleplayChatHandler {
             this.activeChatCharacters = chat.characters || [];
             // Cache character data for lobby avatars
             this._saveToCharCache(chatId, this.activeChatCharacters);
+            this._applyChatBackground();
 
             if (this.els.speakerSelect) {
                 if (chat.characters.length > 1) {
@@ -1323,6 +1324,16 @@ class RoleplayChatHandler {
             return `/api/storage/cards/thumbnail?cardId=${id}&token=${token}`;
         }
         return null;
+    }
+
+    // Sets the faded character-portrait backdrop on the chat timeline.
+    // Group chats use the first character — there's no natural way to blend
+    // several without picking one, and this keeps it simple.
+    _applyChatBackground() {
+        if (!this.els.timeline) return;
+        const bgChar = this.activeChatCharacters && this.activeChatCharacters[0];
+        const bgUrl = bgChar ? this.getAvatarUrl(bgChar.name, bgChar.id) : null;
+        this.els.timeline.style.setProperty('--chat-bg-image', bgUrl ? `url("${bgUrl}")` : 'none');
     }
 
     getUserPersonaData() {
