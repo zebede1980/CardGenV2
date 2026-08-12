@@ -5,6 +5,18 @@ from app.services.card_parser import extract_relevant_lorebook_entries
 import json
 
 class ContextManager:
+    # [STORY-CONTEXT-SCALING 2026-08-12] should_summarize/get_segments_to_summarize
+    # used to gate on a fixed segment COUNT (summary_threshold, default 10)
+    # regardless of context_window — the same gap fixed in chat.py's
+    # summarize_chat_task and adventure.py's summarize_adventure_task. Scaled to
+    # context_window instead: a large window now keeps proportionally more
+    # full-fidelity segments before anything gets folded into llm.summarize()
+    # (which itself asks for "a few sentences" — fairly aggressive on its own).
+    # Falls back to the old count-based behavior if context_window is falsy.
+    RESERVED_SYSTEM_OVERHEAD_TOKENS = 3000
+    MIN_HISTORY_TOKEN_BUDGET = 2000
+    KEEP_RAW_FRACTION = 2 / 3
+
     def __init__(self, db: Session, settings: Settings):
         self.db = db
         self.settings = settings
@@ -194,13 +206,33 @@ class ContextManager:
 
         return "\n\n".join(final_parts)
 
+    def _segment_tokens(self, seg: StorySegment) -> int:
+        return len(seg.content or "") // 4
+
     def should_summarize(self, segments: List[StorySegment]) -> bool:
         # Only count segments that are not summaries and haven't been summarized yet
         non_summary = [s for s in segments if not s.is_summary and not getattr(s, 'is_summarized', False)]
+        if self.context_window:
+            budget = max(self.MIN_HISTORY_TOKEN_BUDGET, self.context_window - self.RESERVED_SYSTEM_OVERHEAD_TOKENS)
+            total_tokens = sum(self._segment_tokens(s) for s in non_summary)
+            return total_tokens > budget
+        # Fallback: original count-based behavior when context_window isn't set.
         return len(non_summary) > self.summary_threshold
 
     def get_segments_to_summarize(self, segments: List[StorySegment]) -> List[StorySegment]:
         non_summary = [s for s in segments if not s.is_summary and not getattr(s, 'is_summarized', False)]
-        # Summarize the oldest half of non-summary segments
+        if self.context_window:
+            budget = max(self.MIN_HISTORY_TOKEN_BUDGET, self.context_window - self.RESERVED_SYSTEM_OVERHEAD_TOKENS)
+            keep_budget = budget * self.KEEP_RAW_FRACTION
+            kept_tokens = 0
+            keep_count = 0
+            for s in reversed(non_summary):
+                t = self._segment_tokens(s)
+                if kept_tokens + t > keep_budget and keep_count > 0:
+                    break
+                kept_tokens += t
+                keep_count += 1
+            return non_summary[:-keep_count] if keep_count else non_summary
+        # Fallback: original count-based behavior (summarize the oldest half).
         to_summarize_count = len(non_summary) - self.summary_threshold // 2
         return non_summary[:to_summarize_count]

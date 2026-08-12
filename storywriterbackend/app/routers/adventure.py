@@ -16,7 +16,7 @@ from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])
 
-def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None):
+def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None, enable_cot: bool = True):
     messages = []
     history_messages = []
     
@@ -53,7 +53,13 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning. You must wrap your entire reasoning process within <think> and </think> tags. Inside the <think> block, strictly follow this 5-Phase Logic:\n- Phase 1: Build Ground Truth (Establish the physical setting, time, and current reality)\n- Phase 2: Map NPC Knowledge (Determine exactly what your character(s) know and don't know right now)\n- Phase 3: Identify Intent (Decide the goal or motivation for this specific turn)\n- Phase 4: Draft the Action/Dialogue (Plan what the character will do or say)\n- Phase 5: Self-Correct (Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character)\n\nOnly after closing the </think> tag should you write the actual prose for the user."
     
     sys_prompt = getattr(session_data, "system_prompt", "") or ""
-    if request and request.enable_cot:
+    # [ADVENTURE-CRASH-FIX 2026-08-12] Was `if request and request.enable_cot:`
+    # — `request` was never defined anywhere in this file (not a parameter, not
+    # imported), so this raised NameError unconditionally on every single call,
+    # regardless of enable_cot's value. Introduced in ba13543 (2026-06-28) when
+    # the CoT toggle was added; every Adventure Mode action has 500'd since.
+    # enable_cot is now a real parameter, same pattern as max_input_tokens below.
+    if enable_cot:
         if sys_prompt and "CHAIN OF THOUGHT" not in sys_prompt:
             sys_prompt = sys_prompt + "\n\n" + cot_prompt
         elif not sys_prompt:
@@ -135,12 +141,23 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
         
-    if request.enable_cot and ("CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt):
+    if enable_cot and ("CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt):
         messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the story prose/actions after closing the </think> tag."})
         
     return messages
 
-async def summarize_adventure_task(session_id: str, user_id: int):
+# [ADVENTURE-CONTEXT-SCALING 2026-08-12] ─────────────────────────────────────
+# Same fix as chat.py's summarize_chat_task (this function was a deliberate
+# duplicate of it, per the original comment below) — the old trigger was a
+# fixed message count (summary_threshold * 3) with no regard for the model's
+# actual context window. Scales off max_input_tokens instead, falling back to
+# the old count-based behavior if that isn't provided. See the longer comment
+# above summarize_chat_task() in chat.py for the full rationale.
+ADVENTURE_RESERVED_SYSTEM_OVERHEAD_TOKENS = 3000
+ADVENTURE_MIN_HISTORY_TOKEN_BUDGET = 2000
+ADVENTURE_KEEP_RAW_FRACTION = 2 / 3
+
+async def summarize_adventure_task(session_id: str, user_id: int, max_input_tokens: int = None):
     # Duplicates the logic from chat summarization
     with SessionLocal() as bg_db:
         session_data = bg_db.query(models.AdventureSession).filter(
@@ -148,22 +165,47 @@ async def summarize_adventure_task(session_id: str, user_id: int):
             models.AdventureSession.user_id == str(user_id)
         ).first()
         if not session_data: return
-        
+
         settings = get_or_create_settings(bg_db, user_id)
-        
+
         unsummarized = bg_db.query(models.AdventureAction).filter(
             models.AdventureAction.session_id == session_id,
             models.AdventureAction.is_summarized == False
         ).order_by(models.AdventureAction.order_index.asc()).all()
-        
-        trigger_limit = settings.summary_threshold * 3
-        keep_recent = settings.summary_threshold * 2
-        
-        if len(unsummarized) <= trigger_limit:
+
+        def _action_tokens(a):
+            return len(a.content or "") // 4
+
+        if max_input_tokens:
+            history_token_budget = max(ADVENTURE_MIN_HISTORY_TOKEN_BUDGET, max_input_tokens - ADVENTURE_RESERVED_SYSTEM_OVERHEAD_TOKENS)
+            total_tokens = sum(_action_tokens(a) for a in unsummarized)
+
+            if total_tokens <= history_token_budget:
+                return
+
+            keep_budget = history_token_budget * ADVENTURE_KEEP_RAW_FRACTION
+            kept_tokens = 0
+            keep_count = 0
+            for a in reversed(unsummarized):
+                t = _action_tokens(a)
+                if kept_tokens + t > keep_budget and keep_count > 0:
+                    break
+                kept_tokens += t
+                keep_count += 1
+
+            to_summarize = unsummarized[:-keep_count] if keep_count else []
+        else:
+            trigger_limit = settings.summary_threshold * 3
+            keep_recent = settings.summary_threshold * 2
+
+            if len(unsummarized) <= trigger_limit:
+                return
+
+            to_summarize = unsummarized[:-keep_recent]
+
+        if not to_summarize:
             return
-            
-        to_summarize = unsummarized[:-keep_recent]
-        
+
         text_parts = []
         for a in to_summarize:
             if a.role == "user":
@@ -282,7 +324,7 @@ async def send_action(
         next_order_index += 1
         db.commit()
     
-    prompt_messages = build_adventure_prompt(session_data, db, getattr(req, 'max_input_tokens', None))
+    prompt_messages = build_adventure_prompt(session_data, db, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True))
     
     assistant_action = models.AdventureAction(
         session_id=session_id,
@@ -385,7 +427,9 @@ async def send_action(
             
     async def background_tasks():
         await generate_task()
-        await summarize_adventure_task(session_id, current_user.id)
+        # [ADVENTURE-CONTEXT-SCALING 2026-08-12] pass the configured input
+        # budget through so the summarization trigger scales with it.
+        await summarize_adventure_task(session_id, current_user.id, getattr(req, 'max_input_tokens', None))
         
     asyncio.create_task(background_tasks())
     
