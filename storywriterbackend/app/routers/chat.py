@@ -55,6 +55,24 @@ _COT_PROMPT_TEXT = (
     "prose — reaching step 5 is not a stopping point."
 )
 
+# Shared instruction distinguishing spoken dialogue (perceivable by other
+# characters) from unquoted internal thought/narration (reader-only). Without
+# this, the model has no signal that a character's private admission — written
+# unquoted right next to their spoken lie — isn't something other characters
+# in the scene could have heard. Injected both into the default system prompt
+# (new chats) and as a fresh per-turn reminder in build_chat_prompt() (all
+# chats, old and new — same mechanism as the CoT/writing-style reminders).
+_PERCEPTION_BOUNDARY_TEXT = (
+    "PERCEIVED VS. INTERNAL:\n"
+    "Distinguish between SPOKEN dialogue (in quotation marks) and unspoken internal "
+    "thought or narration (unquoted asides describing a character's true feelings, "
+    "hidden intent, or private reaction). Other characters in the scene can only "
+    "perceive and react to spoken dialogue and visible actions — they have NO "
+    "knowledge of another character's internal thoughts unless it is later spoken "
+    "aloud or revealed through action. Do not let a character react to, reference, "
+    "or imply awareness of content that was only internal thought."
+)
+
 # Regex to detect the CoT block that models output WITHOUT wrapping in <think> tags.
 # Matches one or more lines starting with a bullet (• or -) OR a numbered step (1., 2.)
 # at the very start of the response, followed by blank line(s) then the story prose.
@@ -122,6 +140,7 @@ def get_default_system_prompt() -> str:
         # Core Roleplay Rules
         "You are an expert roleplay AI. Your job is to portray the character(s) described in the provided cards, maintaining their distinct personalities, speech patterns, and backgrounds.",
         "Follow the user's lead and build upon their actions. You must NEVER speak, think, or dictate actions for the user.",
+        _PERCEPTION_BOUNDARY_TEXT,
         # Rich UI Elements
         "RICH UI ELEMENTS:\nYou have the ability to embed rich graphical elements into the chat using specific XML tags. Use them when appropriate to enhance the immersion:",
         "- When a character sends a text message or phone chat, use: <text-message sender=\"Name\">message content</text-message>",
@@ -424,6 +443,15 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if getattr(chat, 'response_length', None) and chat.response_length in RESPONSE_LENGTH_PRESETS:
         length_info = RESPONSE_LENGTH_PRESETS[chat.response_length]
         post_history_parts.append(f"[Response Length Instruction]: {length_info['post_reminder']}")
+
+    # Unconditional (not a per-chat toggle, unlike writing style/length) — this
+    # is a correctness fix, not a preference. Reinforces _PERCEPTION_BOUNDARY_TEXT
+    # right before generation so it applies to every existing chat immediately,
+    # not just ones created after this was added to the default system prompt.
+    post_history_parts.append(
+        "[Perception Reminder]: Characters can only react to spoken dialogue (in quotation marks) "
+        "and visible actions — never to another character's unspoken internal thoughts or narration."
+    )
 
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
