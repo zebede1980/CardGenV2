@@ -113,6 +113,7 @@ class RoleplayChat(Base):
     system_prompt = Column(Text, default="")
     summary = Column(Text, default="")
     writing_style = Column(String, default="")
+    response_length = Column(String, default="")
     user_persona_name = Column(String, default="User")
     user_persona_age = Column(String, default="")
     user_persona_gender = Column(String, default="")

@@ -111,6 +111,8 @@ def run_migrations():
             conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN user_persona_card_id INTEGER"))
         if not _column_exists(conn, "roleplay_chats", "writing_style"):
             conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN writing_style VARCHAR NOT NULL DEFAULT ''"))
+        if not _column_exists(conn, "roleplay_chats", "response_length"):
+            conn.execute(text("ALTER TABLE roleplay_chats ADD COLUMN response_length VARCHAR NOT NULL DEFAULT ''"))
 
         # adventure_sessions system prompt
         if not _column_exists(conn, "adventure_sessions", "system_prompt"):

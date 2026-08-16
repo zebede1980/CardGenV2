@@ -252,6 +252,40 @@ WRITING_STYLE_PRESETS = {
     }
 }
 
+# Response length control — same mechanism as WRITING_STYLE_PRESETS above
+# (guidelines in the system prompt, post_reminder right before generation,
+# which is the highest-adherence spot — see the CoT reminder for why).
+# Blank/unset means no instruction at all, same convention as writing_style.
+RESPONSE_LENGTH_PRESETS = {
+    "short": {
+        "name": "Short & Punchy (1-2 paragraphs)",
+        "guidelines": (
+            "RESPONSE LENGTH — Short & Punchy:\n"
+            "- Keep each reply to about 1-2 paragraphs.\n"
+            "- Get to the point — favor a few vivid, well-chosen details over exhaustive description."
+        ),
+        "post_reminder": "Keep this reply short — about 1-2 paragraphs. Do not pad it out."
+    },
+    "medium": {
+        "name": "Medium (3-5 paragraphs)",
+        "guidelines": (
+            "RESPONSE LENGTH — Medium:\n"
+            "- Keep each reply to about 3-5 paragraphs.\n"
+            "- Enough room to develop the scene and reaction, but stop once the beat is complete — don't stretch it out."
+        ),
+        "post_reminder": "Keep this reply to about 3-5 paragraphs — develop the moment, then stop."
+    },
+    "long": {
+        "name": "Long & Immersive (6-8 paragraphs)",
+        "guidelines": (
+            "RESPONSE LENGTH — Long & Immersive:\n"
+            "- Write expansively, about 6-8 paragraphs per reply.\n"
+            "- Use the extra room for scene detail, introspection, and pacing — not repetition."
+        ),
+        "post_reminder": "Write an expansive reply — about 6-8 paragraphs."
+    }
+}
+
 def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None, enable_cot: bool = True):
     messages = []
     
@@ -265,6 +299,11 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if getattr(chat, 'writing_style', None) and chat.writing_style in WRITING_STYLE_PRESETS:
         style_info = WRITING_STYLE_PRESETS[chat.writing_style]
         system_parts.append(style_info["guidelines"])
+
+    # Response Length Guidelines
+    if getattr(chat, 'response_length', None) and chat.response_length in RESPONSE_LENGTH_PRESETS:
+        length_info = RESPONSE_LENGTH_PRESETS[chat.response_length]
+        system_parts.append(length_info["guidelines"])
 
     # User Persona
     if chat.user_persona_name:
@@ -381,6 +420,10 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if getattr(chat, 'writing_style', None) and chat.writing_style in WRITING_STYLE_PRESETS:
         style_info = WRITING_STYLE_PRESETS[chat.writing_style]
         post_history_parts.append(f"[Writing Style Instruction]: {style_info['post_reminder']}")
+
+    if getattr(chat, 'response_length', None) and chat.response_length in RESPONSE_LENGTH_PRESETS:
+        length_info = RESPONSE_LENGTH_PRESETS[chat.response_length]
+        post_history_parts.append(f"[Response Length Instruction]: {length_info['post_reminder']}")
 
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
@@ -678,6 +721,7 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
         title=chat_in.title,
         system_prompt=chat_in.system_prompt.strip() if chat_in.system_prompt else get_default_system_prompt(),
         writing_style=chat_in.writing_style or "",
+        response_length=chat_in.response_length or "",
         user_persona_name=chat_in.user_persona_name,
         user_persona_age=chat_in.user_persona_age,
         user_persona_gender=chat_in.user_persona_gender,
@@ -752,7 +796,9 @@ def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session =
         chat.system_prompt = chat_in.system_prompt
     if chat_in.writing_style is not None:
         chat.writing_style = chat_in.writing_style
-        
+    if chat_in.response_length is not None:
+        chat.response_length = chat_in.response_length
+
     db.commit()
     db.refresh(chat)
     return chat

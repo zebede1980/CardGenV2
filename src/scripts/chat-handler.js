@@ -164,6 +164,7 @@ class RoleplayChatHandler {
             newAddCharBtn: document.getElementById('chat-new-add-char-btn'),
             newSysPrompt: document.getElementById('chat-new-system-prompt'),
             newWritingStyle: document.getElementById('chat-new-writing-style'),
+            newResponseLength: document.getElementById('chat-new-response-length'),
             createSubmitBtn: document.getElementById('chat-create-submit-btn'),
             newPersonaManual: document.getElementById('chat-new-persona-manual'),
             newPersonaCard: document.getElementById('chat-new-persona-card'),
@@ -681,6 +682,9 @@ class RoleplayChatHandler {
         this.renderNewChatSelectedChars();
         this.els.newTitle.value = '';
         if (this.els.newWritingStyle) this.els.newWritingStyle.value = '';
+        // Defaults to "medium" (3-5 paragraphs) rather than blank like writing
+        // style — unlike style, there's a clear default length preference.
+        if (this.els.newResponseLength) this.els.newResponseLength.value = 'medium';
 
         this.userPersonaSelectedCard = null;
         this.els.newPersonaName.value = '';
@@ -933,6 +937,7 @@ class RoleplayChatHandler {
                 title,
                 system_prompt: sysPrompt,
                 writing_style: this.els.newWritingStyle?.value || "",
+                response_length: this.els.newResponseLength?.value || "",
                 card_ids: cardIds,
                 user_persona_name: userPersonaName,
                 user_persona_age: userPersonaAge,
