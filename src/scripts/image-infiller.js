@@ -725,6 +725,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (typeof this.updatePlaygroundImagePreview === "function") {
           this.updatePlaygroundImagePreview(dataUrl);
         }
+        if (typeof this._addPlaygroundHistoryEntry === "function") {
+          this._addPlaygroundHistoryEntry(dataUrl, "In-filled");
+        }
 
         this.closeInfillModal();
         this.showNotification("💾 Image updated.", "success");

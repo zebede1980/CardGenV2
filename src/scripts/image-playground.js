@@ -104,6 +104,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
 
+      // A fresh upload/paste starts a new working image — any earlier
+      // history belongs to a different image and would be confusing to keep.
+      this.playgroundHistory = [];
+      this._addPlaygroundHistoryEntry(dataUrl, "Original");
+
       const toolsSection = document.getElementById("playground-tools-section");
       if (toolsSection) toolsSection.style.display = "block";
     } catch (error) {
@@ -121,9 +126,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   // Same image-to-image editing as handleEditReferenceImage(), targeting
   // this.playgroundImageUrl instead — no vision re-describe step since
-  // there's no description field here. See handleEditReferenceImage() in
-  // image-handler.js for why this is its own function rather than a
-  // target-branch of handleEditImage().
+  // there's no description field here. Unlike the card/reference edit flows,
+  // this applies the result immediately rather than opening a compare-and-
+  // choose modal: the history strip (_addPlaygroundHistoryEntry) already
+  // keeps every prior version reachable, so the modal's only job — giving a
+  // way back to "current" — is now redundant, and it was in the way of a
+  // clean, quick "make a change, see it, make another" workflow.
   async handleEditPlaygroundImage() {
     if (!this.playgroundImageUrl) {
       this.showNotification("Upload or paste an image first", "warning");
@@ -154,102 +162,130 @@ Object.assign(CharacterGeneratorApp.prototype, {
       editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
     }
 
-    this.openImageOptionsModal();
-    const modalTitle = document.querySelector("#image-options-modal .modal-title");
-    if (modalTitle) modalTitle.innerHTML = "✨ Edit Image";
-
-    const grid = document.getElementById("image-options-grid");
-    const loading = document.getElementById("image-options-loading");
-    const loadingText = loading.querySelector("p");
-    if (loadingText) loadingText.textContent = `Editing image with ${editModel}… this may take a minute.`;
-
-    grid.innerHTML = "";
-    loading.style.display = "block";
+    const editBtn = document.getElementById("edit-playground-image-btn");
+    const statusEl = document.getElementById("playground-edit-status");
+    if (editBtn) editBtn.disabled = true;
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.textContent = `✨ Editing with ${editModel}… this may take a minute.`;
+    }
 
     try {
       const imageBase64 = this.playgroundImageUrl;
-      const originalUrl = this.playgroundImageUrl;
 
       const resultUrl = useLocalForge
         ? await window.apiHandler.editForgeImage({ imageBase64, instruction, denoisingStrength })
         : await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
 
-      let blobUrl = resultUrl;
-      if (!resultUrl.startsWith("blob:") && !resultUrl.startsWith("data:")) {
-        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
-        const response = await (window.authFetch || fetch)(proxyUrl);
-        if (response.ok) blobUrl = URL.createObjectURL(await response.blob());
+      let dataUrl = resultUrl;
+      if (!resultUrl.startsWith("data:")) {
+        const isBlob = resultUrl.startsWith("blob:");
+        const blob = isBlob
+          ? await (await fetch(resultUrl)).blob()
+          : await (await (window.authFetch || fetch)(`/api/proxy-image?url=${encodeURIComponent(resultUrl)}`)).blob();
+        dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = () => reject(new Error("Failed to convert edited image to a data URL"));
+          reader.readAsDataURL(blob);
+        });
+        if (isBlob) URL.revokeObjectURL(resultUrl);
       }
 
-      loading.style.display = "none";
+      this.playgroundImageUrl = dataUrl;
+      this.updatePlaygroundImagePreview(dataUrl);
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+      this._addPlaygroundHistoryEntry(dataUrl, `Edited (${editModel})`);
 
-      const currentWrapper = document.createElement("div");
-      currentWrapper.style.cssText = "cursor:pointer;border:2px solid var(--success);border-radius:0.5rem;overflow:hidden;transition:box-shadow 0.2s;background:var(--surface-color);position:relative;";
-      currentWrapper.onmouseenter = () => { currentWrapper.style.boxShadow = "0 0 0 4px rgba(31,157,102,0.22)"; };
-      currentWrapper.onmouseleave = () => { currentWrapper.style.boxShadow = ""; };
-      currentWrapper.onclick = () => {
-        this.closeImageOptionsModal();
-        this.showNotification("Keeping original image.", "info");
-      };
-      currentWrapper.innerHTML = `
-        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--success);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">CURRENT</div>
-        <img src="${originalUrl}" style="width:100%;height:auto;display:block;" alt="Current image">
-        <div style="padding:0.75rem;text-align:center;background:rgba(31,157,102,0.08);border-top:1px solid var(--border);">
-          <button class="btn-outline" style="width:100%;border-color:var(--success);color:var(--success);">✓ Keep This</button>
-        </div>
-      `;
-      grid.appendChild(currentWrapper);
-
-      const mt = document.querySelector("#image-options-modal .modal-title");
-      if (mt) mt.innerHTML = "✨ Compare & Choose — Edited Image";
-
-      const newWrapper = document.createElement("div");
-      newWrapper.style.cssText = "cursor:pointer;border:2px solid transparent;border-radius:0.5rem;overflow:hidden;transition:border-color 0.2s;background:var(--surface-color);width:100%;position:relative;";
-      newWrapper.onmouseenter = () => (newWrapper.style.border = "2px solid var(--accent)");
-      newWrapper.onmouseleave = () => (newWrapper.style.border = "2px solid transparent");
-      newWrapper.onclick = async () => {
-        this.closeImageOptionsModal();
-
-        let dataUrl = blobUrl;
-        if (!dataUrl.startsWith("data:")) {
-          const resp = await (window.authFetch || fetch)(blobUrl);
-          const blob = await resp.blob();
-          dataUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = () => reject(new Error("Failed to convert edited image to a data URL"));
-            reader.readAsDataURL(blob);
-          });
-        }
-
-        this.playgroundImageUrl = dataUrl;
-        if (typeof this.updatePlaygroundImagePreview === "function") {
-          this.updatePlaygroundImagePreview(dataUrl);
-        }
-        if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-        if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
-        this.showNotification("Image updated!", "success");
-      };
-      newWrapper.innerHTML = `
-        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--accent);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">NEW</div>
-        <img src="${blobUrl}" style="width: 100%; height: auto; display: block;" alt="Edited image">
-        <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
-          <button class="btn-primary" style="width: 100%;">Use This Image</button>
-          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">✨ ${editModel}</div>
-        </div>
-      `;
-      grid.appendChild(newWrapper);
-
-      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: instruction, model: editModel, label: "Edited" }], 'playground');
-
-      this.openImageOptionsModal();
-      this.showNotification("Image edited! Compare and choose.", "success");
+      this.showNotification("Image updated!", "success");
     } catch (error) {
       console.error("Playground image edit error:", error);
-      loading.style.display = "none";
-      this.closeImageOptionsModal();
       this.showNotification(`✨ Edit failed: ${error.message}`, "error", 6000);
+    } finally {
+      if (editBtn) editBtn.disabled = false;
+      if (statusEl) statusEl.style.display = "none";
     }
+  },
+
+  // ── History strip ──────────────────────────────────────────────────────────
+  // Every version of the working image (original, plus after each crop/
+  // in-fill/edit) as a non-destructive, click-to-revisit thumbnail strip —
+  // this is what makes it safe to apply edits immediately above instead of
+  // asking the user to confirm via a compare modal first.
+
+  _addPlaygroundHistoryEntry(url, label) {
+    if (!this.playgroundHistory) this.playgroundHistory = [];
+    const last = this.playgroundHistory[this.playgroundHistory.length - 1];
+    if (last && last.url === url) return; // avoid consecutive dupes (e.g. re-selecting the active entry)
+    this.playgroundHistory.push({ url, label });
+    this._renderPlaygroundHistory();
+  },
+
+  _renderPlaygroundHistory() {
+    const strip = document.getElementById("playground-history-strip");
+    if (!strip) return;
+
+    if (!this.playgroundHistory || this.playgroundHistory.length < 2) {
+      strip.style.display = "none";
+      strip.innerHTML = "";
+      return;
+    }
+
+    strip.style.display = "flex";
+    strip.innerHTML = "";
+
+    this.playgroundHistory.forEach((entry, index) => {
+      const isActive = entry.url === this.playgroundImageUrl;
+
+      const thumb = document.createElement("div");
+      thumb.title = entry.label;
+      thumb.style.cssText = `
+        flex: 0 0 auto; position: relative; width: 64px; height: 64px; cursor: pointer;
+        border-radius: 0.5rem; overflow: hidden;
+        border: 2px solid ${isActive ? "var(--accent)" : "var(--border)"};
+      `;
+      thumb.innerHTML = `
+        <img src="${entry.url}" alt="${entry.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+        <button type="button" data-save-index="${index}" title="Save this version to your device"
+          style="position:absolute; bottom:0; right:0; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; line-height:1; padding:0.2rem 0.3rem; cursor:pointer;"
+        >💾</button>
+      `;
+      thumb.addEventListener("click", (e) => {
+        if (e.target.closest("[data-save-index]")) return;
+        this._selectPlaygroundHistoryEntry(index);
+      });
+      const saveBtn = thumb.querySelector("[data-save-index]");
+      if (saveBtn) {
+        saveBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this._savePlaygroundHistoryEntry(index);
+        });
+      }
+      strip.appendChild(thumb);
+    });
+  },
+
+  _selectPlaygroundHistoryEntry(index) {
+    const entry = this.playgroundHistory?.[index];
+    if (!entry) return;
+    this.playgroundImageUrl = entry.url;
+    this.updatePlaygroundImagePreview(entry.url);
+    if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+    if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+    this._renderPlaygroundHistory();
+  },
+
+  _savePlaygroundHistoryEntry(index) {
+    const entry = this.playgroundHistory?.[index];
+    if (!entry) return;
+    const a = document.createElement("a");
+    a.href = entry.url;
+    a.download = `playground-image-${index + 1}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    this.showNotification("Image saved to your device.", "success");
   },
 
 });

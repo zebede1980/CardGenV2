@@ -27,6 +27,7 @@ class CharacterGeneratorApp {
     this.lorebookData = null;
     this.referenceImageDataUrl = "";
     this.playgroundImageUrl = "";
+    this.playgroundHistory = []; // [{ url, label }] — every version of the Playground working image
     this.isGenerating = false;
     this.isRevising = false;
     this.lastConsistencyReport = null;

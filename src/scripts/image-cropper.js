@@ -514,6 +514,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (typeof this.updatePlaygroundImagePreview === "function") {
           this.updatePlaygroundImagePreview(dataUrl);
         }
+        if (typeof this._addPlaygroundHistoryEntry === "function") {
+          this._addPlaygroundHistoryEntry(dataUrl, "Cropped");
+        }
         this.closeCropModal();
         this.showNotification("Image cropped!", "success");
         this.updateCropButtonVisibility();
