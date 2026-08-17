@@ -852,7 +852,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       `;
       grid.appendChild(newWrapper);
 
-      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: instruction, model: editModel, label: "Edited" }]);
+      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: instruction, model: editModel, label: "Edited" }], 'reference');
 
       this.openImageOptionsModal();
       this.showNotification("Image edited! Compare and choose.", "success");

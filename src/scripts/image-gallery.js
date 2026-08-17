@@ -16,9 +16,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   /* ── Open / Close ──────────────────────────────────────────────────────── */
 
-  openGallery(images, startIdx = 0) {
+  // context: 'card' (default — "Use This" applies to this.currentImageUrl) or
+  // 'reference' (applies to this.referenceImageDataUrl instead). Needed because
+  // the gallery's own "✓ Use This" button (_galleryUse) is a separate accept
+  // path from the compare-and-choose card's own click handler, and was
+  // hardcoded to the card image — see _galleryUse() for the branch.
+  openGallery(images, startIdx = 0, context = 'card') {
     if (!images || images.length === 0) return;
     this._galleryImages = images;
+    this._galleryContext = context;
     this._galleryCurrentIdx = Math.max(0, Math.min(startIdx, images.length - 1));
     this._galleryScale = 1;
     this._galleryPanX = 0;
@@ -29,6 +35,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     overlay.classList.add("show");
     document.body.style.overflow = "hidden";
     overlay.setAttribute("aria-hidden", "false");
+
+    const useBtn = document.getElementById("gallery-use-btn");
+    if (useBtn) {
+      useBtn.title = context === 'reference' ? "Use This as the Reference Image" : "Use This Image for Card";
+    }
 
     this._renderGalleryImage();
     this._bindGalleryEvents();
@@ -147,12 +158,48 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification("Image download started", "info");
   },
 
-  _galleryUse() {
+  async _galleryUse() {
     const img = this._galleryImages[this._galleryCurrentIdx];
     if (!img || !img.url) return;
     // Mimics selectImageOption but keeps gallery images alive
     if (this.closeImageOptionsModal) this.closeImageOptionsModal();
     this.closeGallery();
+
+    if (this._galleryContext === 'reference') {
+      // Reference image path: no card exists yet. Needs a real data: URL
+      // (not blob:/remote) since it gets re-sent to the vision model.
+      let dataUrl = img.url;
+      if (typeof this._urlToDataUrl === "function") {
+        try {
+          dataUrl = await this._urlToDataUrl(img.url);
+        } catch (e) {
+          console.error("Gallery use (reference): failed to convert image to data URL", e);
+        }
+      }
+
+      this.referenceImageDataUrl = dataUrl;
+      if (typeof this.updateReferenceImagePreview === "function") {
+        this.updateReferenceImagePreview(dataUrl);
+      }
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+
+      this.showNotification("Reference image updated. Re-describing…", "success");
+
+      if (typeof this.apiHandler?.describeReferenceImage === "function") {
+        try {
+          const descriptionField = document.getElementById("reference-image-description");
+          const hint = descriptionField?.value?.trim() || "";
+          const imageDescription = await this.apiHandler.describeReferenceImage(dataUrl, hint);
+          if (descriptionField) descriptionField.value = imageDescription;
+          this.showNotification("Reference image description updated", "success");
+        } catch (descErr) {
+          console.error("Re-describe after gallery use failed:", descErr);
+          this.showNotification(`Could not re-describe image: ${descErr.message}`, "warning");
+        }
+      }
+      return;
+    }
 
     if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:") && this.currentImageUrl !== img.url) {
       URL.revokeObjectURL(this.currentImageUrl);
@@ -321,8 +368,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   /* ── Helper: make an image list openable in the gallery ────────────────── */
-  // Call this from image-handler to attach gallery triggers to image cards
-  _makeImageGalleryable(gridContainer, images) {
+  // Call this from image-handler to attach gallery triggers to image cards.
+  // context is forwarded to openGallery() — see its comment for why ('card'
+  // vs 'reference' changes what the gallery's own "Use This" button does).
+  _makeImageGalleryable(gridContainer, images, context = 'card') {
     if (!gridContainer || !images || images.length === 0) return;
 
     const cards = gridContainer.querySelectorAll("[data-gallery-image]");
@@ -356,7 +405,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       zoomBtn.addEventListener("mouseleave", () => { zoomBtn.style.transform = "scale(1)"; zoomBtn.style.background = "rgba(0,0,0,0.55)"; });
       zoomBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.openGallery(images, capturedIndex);
+        this.openGallery(images, capturedIndex, context);
       });
       wrapper.appendChild(zoomBtn);
     });
