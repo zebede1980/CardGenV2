@@ -20,24 +20,58 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   updateInfillButtonVisibility() {
     const btn = document.getElementById("inpaint-image-btn");
-    if (!btn) return;
-    if (this.currentImageUrl) {
-      btn.style.display = "inline-flex";
-      btn.style.alignItems = "center";
-      btn.style.justifyContent = "center";
-    } else {
-      btn.style.display = "none";
+    if (btn) {
+      if (this.currentImageUrl) {
+        btn.style.display = "inline-flex";
+        btn.style.alignItems = "center";
+        btn.style.justifyContent = "center";
+      } else {
+        btn.style.display = "none";
+      }
+    }
+    // Reference-image in-fill button (Character Generation screen, pre-card)
+    const refBtn = document.getElementById("inpaint-reference-image-btn");
+    if (refBtn) {
+      refBtn.style.display = this.referenceImageDataUrl ? "inline-flex" : "none";
     }
   },
 
-  async openInfillModal() {
-    if (!this.currentCharacter) {
-      this.showNotification("Please generate or select a character first", "warning");
-      return;
-    }
-    if (!this.currentImageUrl) {
-      this.showNotification("No image available to in-fill", "warning");
-      return;
+  // Fetches any image URL (blob:, data:, or remote http(s)) and returns it as a
+  // base64 data: URL. Needed for the 'reference' in-fill target because the
+  // in-fill provider hands back a blob:/remote URL, but re-describing the
+  // result via the vision model requires an embeddable data: URI.
+  async _urlToDataUrl(url) {
+    if (url.startsWith("data:")) return url;
+    const resp = await (window.authFetch || fetch)(url);
+    const blob = await resp.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => reject(new Error("Failed to convert in-fill result to a data URL"));
+      reader.readAsDataURL(blob);
+    });
+  },
+
+  // target: 'card' (default — this.currentImageUrl) or 'reference' (the
+  // pre-card reference image, this.referenceImageDataUrl). See applyCrop()'s
+  // equivalent comment in image-cropper.js for why this branches.
+  async openInfillModal(target = 'card') {
+    this._infillTarget = target;
+
+    if (target === 'reference') {
+      if (!this.referenceImageDataUrl) {
+        this.showNotification("No reference image available to in-fill", "warning");
+        return;
+      }
+    } else {
+      if (!this.currentCharacter) {
+        this.showNotification("Please generate or select a character first", "warning");
+        return;
+      }
+      if (!this.currentImageUrl) {
+        this.showNotification("No image available to in-fill", "warning");
+        return;
+      }
     }
 
     const modal = document.getElementById("image-inpaint-modal");
@@ -46,7 +80,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification("Loading image into In-fill editor...", "info");
 
     try {
-      let imageSrc = this.currentImageUrl;
+      let imageSrc = target === 'reference' ? this.referenceImageDataUrl : this.currentImageUrl;
 
       // If URL is external http(s), convert to Blob URL via proxy to prevent CORS canvas taint
       if (imageSrc.startsWith("http://") || imageSrc.startsWith("https://")) {
@@ -638,6 +672,36 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (saveBtn) {
         saveBtn.disabled = true;
         saveBtn.innerHTML = `<span class="loading-spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 0.4rem; border-width: 2px;"></span> Saving...`;
+      }
+
+      if (this._infillTarget === 'reference') {
+        // Reference image path: no card exists yet, so none of the card-save
+        // side effects below apply.
+        const dataUrl = await this._urlToDataUrl(pendingUrl);
+        this.referenceImageDataUrl = dataUrl;
+        this._infillState.pendingResult = null;
+        if (typeof this.updateReferenceImagePreview === "function") {
+          this.updateReferenceImagePreview(dataUrl);
+        }
+
+        this.closeInfillModal();
+        this.showNotification("💾 Reference image updated. Re-describing…", "success");
+        this.updateCropButtonVisibility();
+        this.updateInfillButtonVisibility();
+
+        if (typeof this.apiHandler?.describeReferenceImage === "function") {
+          try {
+            const descriptionField = document.getElementById("reference-image-description");
+            const hint = descriptionField?.value?.trim() || "";
+            const imageDescription = await this.apiHandler.describeReferenceImage(dataUrl, hint);
+            if (descriptionField) descriptionField.value = imageDescription;
+            this.showNotification("Reference image description updated", "success");
+          } catch (descErr) {
+            console.error("Re-describe after in-fill failed:", descErr);
+            this.showNotification(`Could not re-describe image: ${descErr.message}`, "warning");
+          }
+        }
+        return;
       }
 
       // Archive the old image to history so the user can revert

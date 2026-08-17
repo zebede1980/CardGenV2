@@ -302,6 +302,14 @@ class CharacterGeneratorApp {
     if (inpaintBtn) {
       inpaintBtn.addEventListener("click", () => this.openInfillModal());
     }
+    const cropRefBtn = document.getElementById("crop-reference-image-btn");
+    if (cropRefBtn) {
+      cropRefBtn.addEventListener("click", () => this.openCropModal('reference'));
+    }
+    const inpaintRefBtn = document.getElementById("inpaint-reference-image-btn");
+    if (inpaintRefBtn) {
+      inpaintRefBtn.addEventListener("click", () => this.openInfillModal('reference'));
+    }
 
     // Web Image Search Modal Logic
     const webImageBtn = document.getElementById("search-web-image-btn");

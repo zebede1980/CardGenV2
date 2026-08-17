@@ -16,24 +16,44 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   updateCropButtonVisibility() {
     const btn = document.getElementById("crop-image-btn");
-    if (!btn) return;
-    if (this.currentImageUrl) {
-      btn.style.display = "inline-flex";
-      btn.style.alignItems = "center";
-      btn.style.justifyContent = "center";
-    } else {
-      btn.style.display = "none";
+    if (btn) {
+      if (this.currentImageUrl) {
+        btn.style.display = "inline-flex";
+        btn.style.alignItems = "center";
+        btn.style.justifyContent = "center";
+      } else {
+        btn.style.display = "none";
+      }
+    }
+    // Reference-image crop button (Character Generation screen, pre-card)
+    const refBtn = document.getElementById("crop-reference-image-btn");
+    if (refBtn) {
+      refBtn.style.display = this.referenceImageDataUrl ? "inline-flex" : "none";
     }
   },
 
-  async openCropModal() {
-    if (!this.currentCharacter) {
-      this.showNotification("Please generate or select a character first", "warning");
-      return;
-    }
-    if (!this.currentImageUrl) {
-      this.showNotification("No image available to crop", "warning");
-      return;
+  // target: 'card' (default — the current character's portrait, this.currentImageUrl)
+  // or 'reference' (the not-yet-a-card reference image, this.referenceImageDataUrl,
+  // used before generating a character). Same modal/cropping UI either way — only
+  // where the source comes from and where the result gets saved differs (see the
+  // branch in applyCrop()).
+  async openCropModal(target = 'card') {
+    this._cropTarget = target;
+
+    if (target === 'reference') {
+      if (!this.referenceImageDataUrl) {
+        this.showNotification("No reference image available to crop", "warning");
+        return;
+      }
+    } else {
+      if (!this.currentCharacter) {
+        this.showNotification("Please generate or select a character first", "warning");
+        return;
+      }
+      if (!this.currentImageUrl) {
+        this.showNotification("No image available to crop", "warning");
+        return;
+      }
     }
 
     const modal = document.getElementById("image-crop-modal");
@@ -42,9 +62,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification("Loading image into cropper...", "info");
 
     try {
-      let imageSrc = this.currentImageUrl;
+      let imageSrc = target === 'reference' ? this.referenceImageDataUrl : this.currentImageUrl;
 
       // If URL is external http(s), convert to Blob URL via proxy to prevent CORS canvas taint
+      // (reference images are always local data: URLs, so this only ever applies to 'card')
       if (imageSrc.startsWith("http://") || imageSrc.startsWith("https://")) {
         try {
           const resp = await (window.authFetch || fetch)(`/api/proxy-image?url=${encodeURIComponent(imageSrc)}`);
@@ -437,6 +458,40 @@ Object.assign(CharacterGeneratorApp.prototype, {
         cropX, cropY, cropW, cropH,
         0, 0, cropW, cropH
       );
+
+      if (this._cropTarget === 'reference') {
+        // Reference image path: no card exists yet, so none of the card-save
+        // side effects below apply. Needs a real data: URL (not a blob: URL)
+        // since it gets re-sent to the vision model for re-description.
+        const dataUrl = cropCanvas.toDataURL("image/png");
+        this.referenceImageDataUrl = dataUrl;
+        if (typeof this.updateReferenceImagePreview === "function") {
+          this.updateReferenceImagePreview(dataUrl);
+        }
+
+        this.closeCropModal();
+        this.showNotification("Reference image cropped. Re-describing…", "success");
+        this.updateCropButtonVisibility();
+        if (typeof this.updateInfillButtonVisibility === "function") {
+          this.updateInfillButtonVisibility();
+        }
+
+        // Re-run the vision description so it matches the edited image —
+        // same call used when a reference image is first uploaded/pasted.
+        if (typeof this.apiHandler?.describeReferenceImage === "function") {
+          try {
+            const descriptionField = document.getElementById("reference-image-description");
+            const hint = descriptionField?.value?.trim() || "";
+            const imageDescription = await this.apiHandler.describeReferenceImage(dataUrl, hint);
+            if (descriptionField) descriptionField.value = imageDescription;
+            this.showNotification("Reference image description updated", "success");
+          } catch (descErr) {
+            console.error("Re-describe after crop failed:", descErr);
+            this.showNotification(`Could not re-describe image: ${descErr.message}`, "warning");
+          }
+        }
+        return;
+      }
 
       // Convert cropped canvas to PNG Blob
       const blob = await new Promise((resolve) => cropCanvas.toBlob(resolve, "image/png"));

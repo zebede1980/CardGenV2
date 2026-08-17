@@ -979,6 +979,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       this.referenceImageDataUrl = dataUrl;
       this.updateReferenceImagePreview(dataUrl);
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
 
       const descriptionField = document.getElementById(
         "reference-image-description",
