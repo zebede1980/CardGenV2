@@ -47,6 +47,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (fileInput) {
       fileInput.addEventListener("change", (e) => this.handlePlaygroundImageUpload(e));
     }
+    // The drop zone doubles as click-to-upload (opens the hidden file input)
+    // and as the paste target. It has to stay contenteditable rather than a
+    // plain <button> because iOS only shows its native "Paste" action on a
+    // focusable, editable element.
+    const dropZone = document.getElementById("playground-drop-zone");
+    if (dropZone && fileInput) {
+      dropZone.addEventListener("click", () => fileInput.click());
+    }
     // Attached to document (not just the view) because a paste event fires
     // wherever focus currently is — if nothing inside this view has been
     // clicked yet, that's document/body, which isn't a descendant of
@@ -66,12 +74,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (inpaintBtn) inpaintBtn.addEventListener("click", () => this.openInfillModal('playground'));
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
-
-    // Model Guide
-    const guideSelect = document.getElementById("playground-guide-task");
-    if (guideSelect) {
-      guideSelect.addEventListener("change", () => this._renderPlaygroundGuideResult());
-    }
   },
 
   async handlePlaygroundImageUpload(event) {
@@ -102,8 +104,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
 
-      const editSection = document.getElementById("playground-edit-section");
-      if (editSection) editSection.style.display = "block";
+      const toolsSection = document.getElementById("playground-tools-section");
+      if (toolsSection) toolsSection.style.display = "block";
     } catch (error) {
       console.error("Playground image handling failed:", error);
       this.showNotification(`Image upload failed: ${error.message}`, "warning");
@@ -247,58 +249,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
       loading.style.display = "none";
       this.closeImageOptionsModal();
       this.showNotification(`✨ Edit failed: ${error.message}`, "error", 6000);
-    }
-  },
-
-  // ── Model Guide ────────────────────────────────────────────────────────────
-  // Static, curated recommendations from what's actually been tested this
-  // project (see cardgenv2-image-edit-feature memory) — deliberately NOT a
-  // dynamic/AI-driven predictor. Model behavior (especially safety-filter
-  // behavior) is empirical and drifts as providers update their models, so
-  // this is meant to be hand-edited as more gets learned, not computed.
-  _PLAYGROUND_MODEL_GUIDE: {
-    outfit_pose: {
-      recommend: "flux-2-pro-image-to-image",
-      text: "For outfit or pose changes, flux-2-pro-image-to-image (or flux-2-max-image-to-image) gave the strongest identity preservation in testing — same face, hair, and background carried through cleanly.",
-    },
-    style_transfer: {
-      recommend: "flux-2-pro-image-to-image",
-      text: "For style transfer (e.g. anime → photorealistic), flux-2-pro-image-to-image handled the conversion well while keeping the character recognizable. flux-kontext works too but is pickier about source content (see below).",
-    },
-    general_edit: {
-      recommend: "flux-2-pro-image-to-image",
-      text: "For general small edits, flux-2-pro-image-to-image is a solid default. flux-kontext is a good alternative if the source image is fully clothed.",
-    },
-    mature_content: {
-      recommend: "flux-2-pro-image-to-image",
-      text: "If the source image shows skin/nudity: flux-kontext silently hard-blocks (returns a solid-black image, no error) — avoid it here. flux-2-pro-image-to-image and flux-2-max-image-to-image handle these sources without blocking, but tend to auto-cover exposed skin in the result rather than editing it faithfully — expect the output to look more modest than the input.",
-    },
-  },
-
-  _renderPlaygroundGuideResult() {
-    const select = document.getElementById("playground-guide-task");
-    const resultEl = document.getElementById("playground-guide-result");
-    if (!select || !resultEl) return;
-
-    const entry = this._PLAYGROUND_MODEL_GUIDE[select.value];
-    if (!entry) {
-      resultEl.innerHTML = "";
-      return;
-    }
-
-    resultEl.innerHTML = `
-      <p style="margin: 0 0 0.5rem;">${entry.text}</p>
-      <button type="button" id="playground-guide-use-model-btn" class="btn-small" data-model="${entry.recommend}">
-        Use "${entry.recommend}" as my Image Edit Model
-      </button>
-    `;
-
-    const useBtn = document.getElementById("playground-guide-use-model-btn");
-    if (useBtn) {
-      useBtn.addEventListener("click", () => {
-        this.config.set("api.image.editModel", entry.recommend);
-        this.showNotification(`Image Edit Model set to "${entry.recommend}"`, "success");
-      });
     }
   },
 

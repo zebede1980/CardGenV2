@@ -1137,7 +1137,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   // Safety net for the contenteditable "paste zone" elements (see
-  // #reference-paste-zone / #playground-paste-zone in index.html) — on some
+  // #reference-paste-zone / #playground-drop-zone in index.html) — on some
   // WebKit versions a pasted image can still leave stray text/content behind
   // inside a contenteditable even with event.preventDefault() called, since
   // that only reliably suppresses the *file* insertion, not always every
