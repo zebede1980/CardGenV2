@@ -82,9 +82,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   async handlePlaygroundImagePaste(event) {
-    if (!event.clipboardData || !event.clipboardData.files.length) return;
-    const file = event.clipboardData.files[0];
-    if (!file.type.startsWith("image/")) return;
+    setTimeout(() => this._resetPasteZones(), 0);
+    const file = this._extractPastedImageFile(event);
+    if (!file) return;
     event.preventDefault();
     await this.processPlaygroundImageFile(file);
   },

@@ -1116,11 +1116,44 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (event.target) event.target.value = "";
   },
 
+  // Pulls an image File out of a paste event, trying clipboardData.files
+  // first and falling back to .items (some browsers/paste sources only
+  // populate one or the other).
+  _extractPastedImageFile(event) {
+    if (!event.clipboardData) return null;
+    if (event.clipboardData.files && event.clipboardData.files.length) {
+      const f = event.clipboardData.files[0];
+      if (f.type && f.type.startsWith("image/")) return f;
+    }
+    if (event.clipboardData.items && event.clipboardData.items.length) {
+      for (const item of event.clipboardData.items) {
+        if (item.kind === "file" && item.type && item.type.startsWith("image/")) {
+          const f = item.getAsFile();
+          if (f) return f;
+        }
+      }
+    }
+    return null;
+  },
+
+  // Safety net for the contenteditable "paste zone" elements (see
+  // #reference-paste-zone / #playground-paste-zone in index.html) — on some
+  // WebKit versions a pasted image can still leave stray text/content behind
+  // inside a contenteditable even with event.preventDefault() called, since
+  // that only reliably suppresses the *file* insertion, not always every
+  // side effect. Snaps each zone back to its placeholder shortly after any
+  // paste, regardless of whether that paste actually contained an image.
+  _resetPasteZones() {
+    document.querySelectorAll("[data-paste-zone-placeholder]").forEach(zone => {
+      const placeholder = zone.dataset.pasteZonePlaceholder;
+      if (zone.textContent !== placeholder) zone.textContent = placeholder;
+    });
+  },
+
   async handleReferenceImagePaste(event) {
-    if (!event.clipboardData || !event.clipboardData.files.length) return;
-    
-    const file = event.clipboardData.files[0];
-    if (!file.type.startsWith("image/")) return;
+    setTimeout(() => this._resetPasteZones(), 0);
+    const file = this._extractPastedImageFile(event);
+    if (!file) return;
 
     event.preventDefault();
     await this.processReferenceImageFile(file);
