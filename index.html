@@ -395,6 +395,64 @@
                                     🎨 In-fill / Erase
                                 </button>
                             </div>
+
+                            <details id="reference-image-edit-section" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); display: none;">
+                                <summary
+                                    style="
+                                        cursor: pointer;
+                                        font-weight: 500;
+                                        padding: 0.5rem;
+                                        background: rgba(139, 92, 246, 0.1);
+                                        border-radius: 0.375rem;
+                                        user-select: none;
+                                    "
+                                >
+                                    ✨ Edit Reference Image (experimental)
+                                </summary>
+                                <div style="margin-top: 0.5rem; padding: 0.5rem;">
+                                    <label for="reference-image-edit-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
+                                        Describe the change:
+                                    </label>
+                                    <textarea
+                                        id="reference-image-edit-instruction"
+                                        class="input"
+                                        rows="3"
+                                        maxlength="1000"
+                                        placeholder="e.g. change the outfit to a red hoodie, keep the face and pose the same | convert to a realistic photo, same character"
+                                    ></textarea>
+                                    <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
+                                        💡 Sends the reference image plus your instruction to an image-to-image model, aiming to keep the likeness while changing what you ask for — a whole-image makeover before you even generate a card. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
+                                    </p>
+
+                                    <div class="form-group checkbox-group" style="margin-top: 0.75rem; margin-bottom: 0;">
+                                        <input type="checkbox" id="reference-image-edit-use-forge" class="checkbox">
+                                        <label for="reference-image-edit-use-forge" style="margin: 0; font-size: 0.875rem;">🔧 Use Local Forge (flux-1-dev) instead of cloud</label>
+                                    </div>
+                                    <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
+                                        <label for="reference-image-edit-denoising" class="label" style="font-size: 0.8rem;">Denoising Strength (Local Forge only)</label>
+                                        <input
+                                            type="number"
+                                            id="reference-image-edit-denoising"
+                                            class="input"
+                                            value="0.55"
+                                            min="0.1"
+                                            max="0.95"
+                                            step="0.05"
+                                            style="max-width: 120px;"
+                                        >
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        id="edit-reference-image-btn"
+                                        class="btn-small"
+                                        style="margin-top: 0.5rem;"
+                                        title="Edit the reference image using an image-to-image AI model, guided by your instruction above."
+                                    >
+                                        ✨ Edit Image
+                                    </button>
+                                </div>
+                            </details>
                         </div>
 
                         <div class="form-group">

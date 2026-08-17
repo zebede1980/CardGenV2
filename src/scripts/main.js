@@ -217,6 +217,10 @@ class CharacterGeneratorApp {
     if (editImageBtn) {
       editImageBtn.addEventListener("click", () => this.handleEditImage());
     }
+    const editReferenceImageBtn = document.getElementById("edit-reference-image-btn");
+    if (editReferenceImageBtn) {
+      editReferenceImageBtn.addEventListener("click", () => this.handleEditReferenceImage());
+    }
 
     const imgOptModalClose = document.getElementById("image-options-modal-close-btn");
     const imgOptModal = document.getElementById("image-options-modal");

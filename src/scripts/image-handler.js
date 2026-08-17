@@ -709,6 +709,161 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  // Same image-to-image editing as handleEditImage(), but for the pre-card
+  // reference image (this.referenceImageDataUrl) instead of a card's portrait.
+  // Kept as its own function rather than a target-branch of handleEditImage()
+  // because the "current vs edited" compare step there leans on card-coupled
+  // helpers (_insertCurrentImageCard's history archiving, saveCardToLibrary)
+  // that don't apply — there's no card yet. Builds its own lightweight
+  // current/new comparison instead, and re-describes the image on accept
+  // (same as the crop/in-fill reference paths).
+  async handleEditReferenceImage() {
+    if (!this.referenceImageDataUrl) {
+      this.showNotification("Upload or paste a reference image first", "warning");
+      return;
+    }
+
+    const instructionEl = document.getElementById("reference-image-edit-instruction");
+    const instruction = instructionEl?.value?.trim();
+    if (!instruction) {
+      this.showNotification("Describe what you want to change first", "warning");
+      instructionEl?.focus();
+      return;
+    }
+
+    const useLocalForge = document.getElementById("reference-image-edit-use-forge")?.checked;
+    const denoisingStrength = parseFloat(document.getElementById("reference-image-edit-denoising")?.value) || 0.55;
+
+    let editModel;
+    if (useLocalForge) {
+      editModel = `local-forge (denoise ${denoisingStrength})`;
+    } else {
+      const imageApiBase = this.config.get("api.image.baseUrl");
+      const imageApiKey = this.config.get("api.image.apiKey");
+      if (!imageApiBase || !imageApiKey) {
+        this.showNotification("Please configure image API settings first", "warning");
+        return;
+      }
+      editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
+    }
+
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = "✨ Edit Reference Image";
+
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    const loadingText = loading.querySelector("p");
+    if (loadingText) loadingText.textContent = `Editing image with ${editModel}… this may take a minute.`;
+
+    grid.innerHTML = "";
+    loading.style.display = "block";
+
+    try {
+      // Reference image is already a data: URL — no blob conversion needed.
+      const imageBase64 = this.referenceImageDataUrl;
+      const originalUrl = this.referenceImageDataUrl;
+
+      const resultUrl = useLocalForge
+        ? await window.apiHandler.editForgeImage({ imageBase64, instruction, denoisingStrength })
+        : await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
+
+      let blobUrl = resultUrl;
+      if (!resultUrl.startsWith("blob:") && !resultUrl.startsWith("data:")) {
+        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
+        const response = await (window.authFetch || fetch)(proxyUrl);
+        if (response.ok) blobUrl = URL.createObjectURL(await response.blob());
+      }
+
+      loading.style.display = "none";
+
+      // "Current" card — keep the original reference image as-is.
+      const currentWrapper = document.createElement("div");
+      currentWrapper.style.cssText = "cursor:pointer;border:2px solid var(--success);border-radius:0.5rem;overflow:hidden;transition:box-shadow 0.2s;background:var(--surface-color);position:relative;";
+      currentWrapper.onmouseenter = () => { currentWrapper.style.boxShadow = "0 0 0 4px rgba(31,157,102,0.22)"; };
+      currentWrapper.onmouseleave = () => { currentWrapper.style.boxShadow = ""; };
+      currentWrapper.onclick = () => {
+        this.closeImageOptionsModal();
+        this.showNotification("Keeping original reference image.", "info");
+      };
+      currentWrapper.innerHTML = `
+        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--success);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">CURRENT</div>
+        <img src="${originalUrl}" style="width:100%;height:auto;display:block;" alt="Current reference image">
+        <div style="padding:0.75rem;text-align:center;background:rgba(31,157,102,0.08);border-top:1px solid var(--border);">
+          <button class="btn-outline" style="width:100%;border-color:var(--success);color:var(--success);">✓ Keep This</button>
+        </div>
+      `;
+      grid.appendChild(currentWrapper);
+
+      const mt = document.querySelector("#image-options-modal .modal-title");
+      if (mt) mt.innerHTML = "✨ Compare & Choose — Edited Reference Image";
+
+      // "New" card — the edited result.
+      const newWrapper = document.createElement("div");
+      newWrapper.style.cssText = "cursor:pointer;border:2px solid transparent;border-radius:0.5rem;overflow:hidden;transition:border-color 0.2s;background:var(--surface-color);width:100%;position:relative;";
+      newWrapper.onmouseenter = () => (newWrapper.style.border = "2px solid var(--accent)");
+      newWrapper.onmouseleave = () => (newWrapper.style.border = "2px solid transparent");
+      newWrapper.onclick = async () => {
+        this.closeImageOptionsModal();
+
+        // Result needs to be a real data: URL (not blob:/remote) so it can be
+        // re-sent to the vision model for re-description.
+        let dataUrl = blobUrl;
+        if (!dataUrl.startsWith("data:")) {
+          const resp = await (window.authFetch || fetch)(blobUrl);
+          const blob = await resp.blob();
+          dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => reject(new Error("Failed to convert edited image to a data URL"));
+            reader.readAsDataURL(blob);
+          });
+        }
+
+        this.referenceImageDataUrl = dataUrl;
+        if (typeof this.updateReferenceImagePreview === "function") {
+          this.updateReferenceImagePreview(dataUrl);
+        }
+        if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+        if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+
+        this.showNotification("Reference image updated. Re-describing…", "success");
+
+        if (typeof this.apiHandler?.describeReferenceImage === "function") {
+          try {
+            const descriptionField = document.getElementById("reference-image-description");
+            const hint = descriptionField?.value?.trim() || "";
+            const imageDescription = await this.apiHandler.describeReferenceImage(dataUrl, hint);
+            if (descriptionField) descriptionField.value = imageDescription;
+            this.showNotification("Reference image description updated", "success");
+          } catch (descErr) {
+            console.error("Re-describe after edit failed:", descErr);
+            this.showNotification(`Could not re-describe image: ${descErr.message}`, "warning");
+          }
+        }
+      };
+      newWrapper.innerHTML = `
+        <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--accent);color:#fff;font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;letter-spacing:0.04em;">NEW</div>
+        <img src="${blobUrl}" style="width: 100%; height: auto; display: block;" alt="Edited reference image">
+        <div style="padding: 1rem; text-align: center; background: rgba(0,0,0,0.1); border-top: 1px solid var(--border);">
+          <button class="btn-primary" style="width: 100%;">Use This Image</button>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">✨ ${editModel}</div>
+        </div>
+      `;
+      grid.appendChild(newWrapper);
+
+      this._makeImageGalleryable(grid, [{ url: blobUrl, prompt: instruction, model: editModel, label: "Edited" }]);
+
+      this.openImageOptionsModal();
+      this.showNotification("Image edited! Compare and choose.", "success");
+    } catch (error) {
+      console.error("Reference image edit error:", error);
+      loading.style.display = "none";
+      this.closeImageOptionsModal();
+      this.showNotification(`✨ Edit failed: ${error.message}`, "error", 6000);
+    }
+  },
+
   // Prepends a "Current Image" keep-card into the grid so the user can compare
   // newBlobUrls — URLs of the freshly generated candidate images
   _insertCurrentImageCard(grid, newBlobUrls = []) {
@@ -981,6 +1136,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.updateReferenceImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+      const editSection = document.getElementById("reference-image-edit-section");
+      if (editSection) editSection.style.display = "block";
 
       const descriptionField = document.getElementById(
         "reference-image-description",
