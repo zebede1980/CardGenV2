@@ -88,6 +88,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  // Heuristic only — providers like nano-gpt list a plain text-to-image model
+  // (e.g. z-image-turbo) right alongside its image-to-image variant
+  // (z-image-turbo-image-to-image) with no other signal to tell them apart.
+  // The plain one silently ignores the source image and free-generates from
+  // the prompt instead — no error, just zero resemblance to the original.
+  // This just flags models that don't look edit-capable by name so that
+  // mistake is visible before spending a credit on it, not a guarantee.
+  _looksEditCapable(modelId) {
+    const id = (modelId || "").toLowerCase();
+    return ["image-to-image", "img2img", "-edit", "edit-", "kontext", "inpaint", "instruct"]
+      .some(marker => id.includes(marker));
+  },
+
   // Populated from api.image.models — the same list "Fetch Models" in
   // Settings → Image API fills in (or the user adds to manually via its
   // "Add" button), since that endpoint returns every model the account has
@@ -99,13 +112,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const models = this.config.get("api.image.models") || [];
     const currentModel = this.config.get("api.image.editModel") || "";
 
+    const label = (model) => this._looksEditCapable(model) ? model : `${model} ⚠️ may ignore your image`;
+
     if (models.length === 0) {
-      select.innerHTML = `<option value="${escapeHtml(currentModel || "flux-2-pro-image-to-image")}">${escapeHtml(currentModel || "flux-2-pro-image-to-image")}</option>`;
+      const fallback = currentModel || "flux-2-pro-image-to-image";
+      select.innerHTML = `<option value="${escapeHtml(fallback)}">${escapeHtml(label(fallback))}</option>`;
       return;
     }
 
     select.innerHTML = models
-      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(model)}</option>`)
+      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(label(model))}</option>`)
       .join("");
 
     if (!models.includes(currentModel)) {
