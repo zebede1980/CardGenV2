@@ -26,6 +26,7 @@ class CharacterGeneratorApp {
     this.altGreetings = [];
     this.lorebookData = null;
     this.referenceImageDataUrl = "";
+    this.playgroundImageUrl = "";
     this.isGenerating = false;
     this.isRevising = false;
     this.lastConsistencyReport = null;
@@ -221,6 +222,9 @@ class CharacterGeneratorApp {
     if (editReferenceImageBtn) {
       editReferenceImageBtn.addEventListener("click", () => this.handleEditReferenceImage());
     }
+
+    // Image Playground tab (own self-contained setup — see image-playground.js)
+    if (typeof this.initPlaygroundTab === "function") this.initPlaygroundTab();
 
     const imgOptModalClose = document.getElementById("image-options-modal-close-btn");
     const imgOptModal = document.getElementById("image-options-modal");

@@ -30,19 +30,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (refBtn) {
       refBtn.style.display = this.referenceImageDataUrl ? "inline-flex" : "none";
     }
+    // Playground crop button (Image Playground tab)
+    const pgBtn = document.getElementById("crop-playground-image-btn");
+    if (pgBtn) {
+      pgBtn.style.display = this.playgroundImageUrl ? "inline-flex" : "none";
+    }
   },
 
-  // target: 'card' (default — the current character's portrait, this.currentImageUrl)
-  // or 'reference' (the not-yet-a-card reference image, this.referenceImageDataUrl,
-  // used before generating a character). Same modal/cropping UI either way — only
-  // where the source comes from and where the result gets saved differs (see the
-  // branch in applyCrop()).
+  // target: 'card' (default — the current character's portrait, this.currentImageUrl),
+  // 'reference' (the not-yet-a-card reference image, this.referenceImageDataUrl,
+  // used before generating a character), or 'playground' (the Image Playground
+  // tab's working image, this.playgroundImageUrl — no card/character involved
+  // at all). Same modal/cropping UI either way — only where the source comes
+  // from and where the result gets saved differs (see the branch in applyCrop()).
   async openCropModal(target = 'card') {
     this._cropTarget = target;
 
     if (target === 'reference') {
       if (!this.referenceImageDataUrl) {
         this.showNotification("No reference image available to crop", "warning");
+        return;
+      }
+    } else if (target === 'playground') {
+      if (!this.playgroundImageUrl) {
+        this.showNotification("Upload or paste an image first", "warning");
         return;
       }
     } else {
@@ -62,7 +73,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification("Loading image into cropper...", "info");
 
     try {
-      let imageSrc = target === 'reference' ? this.referenceImageDataUrl : this.currentImageUrl;
+      let imageSrc = target === 'reference' ? this.referenceImageDataUrl
+        : target === 'playground' ? this.playgroundImageUrl
+        : this.currentImageUrl;
 
       // If URL is external http(s), convert to Blob URL via proxy to prevent CORS canvas taint
       // (reference images are always local data: URLs, so this only ever applies to 'card')
@@ -489,6 +502,23 @@ Object.assign(CharacterGeneratorApp.prototype, {
             console.error("Re-describe after crop failed:", descErr);
             this.showNotification(`Could not re-describe image: ${descErr.message}`, "warning");
           }
+        }
+        return;
+      }
+
+      if (this._cropTarget === 'playground') {
+        // Playground path: no card, no vision description to keep in sync — just
+        // update the working image and its preview.
+        const dataUrl = cropCanvas.toDataURL("image/png");
+        this.playgroundImageUrl = dataUrl;
+        if (typeof this.updatePlaygroundImagePreview === "function") {
+          this.updatePlaygroundImagePreview(dataUrl);
+        }
+        this.closeCropModal();
+        this.showNotification("Image cropped!", "success");
+        this.updateCropButtonVisibility();
+        if (typeof this.updateInfillButtonVisibility === "function") {
+          this.updateInfillButtonVisibility();
         }
         return;
       }

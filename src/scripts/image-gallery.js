@@ -38,7 +38,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const useBtn = document.getElementById("gallery-use-btn");
     if (useBtn) {
-      useBtn.title = context === 'reference' ? "Use This as the Reference Image" : "Use This Image for Card";
+      useBtn.title = context === 'reference' ? "Use This as the Reference Image"
+        : context === 'playground' ? "Use This Image"
+        : "Use This Image for Card";
     }
 
     this._renderGalleryImage();
@@ -198,6 +200,26 @@ Object.assign(CharacterGeneratorApp.prototype, {
           this.showNotification(`Could not re-describe image: ${descErr.message}`, "warning");
         }
       }
+      return;
+    }
+
+    if (this._galleryContext === 'playground') {
+      // Playground path: no card, no vision description to keep in sync.
+      let dataUrl = img.url;
+      if (typeof this._urlToDataUrl === "function") {
+        try {
+          dataUrl = await this._urlToDataUrl(img.url);
+        } catch (e) {
+          console.error("Gallery use (playground): failed to convert image to data URL", e);
+        }
+      }
+      this.playgroundImageUrl = dataUrl;
+      if (typeof this.updatePlaygroundImagePreview === "function") {
+        this.updatePlaygroundImagePreview(dataUrl);
+      }
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+      this.showNotification("Image updated.", "success");
       return;
     }
 

@@ -34,6 +34,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (refBtn) {
       refBtn.style.display = this.referenceImageDataUrl ? "inline-flex" : "none";
     }
+    // Playground in-fill button (Image Playground tab)
+    const pgBtn = document.getElementById("inpaint-playground-image-btn");
+    if (pgBtn) {
+      pgBtn.style.display = this.playgroundImageUrl ? "inline-flex" : "none";
+    }
   },
 
   // Fetches any image URL (blob:, data:, or remote http(s)) and returns it as a
@@ -52,15 +57,21 @@ Object.assign(CharacterGeneratorApp.prototype, {
     });
   },
 
-  // target: 'card' (default — this.currentImageUrl) or 'reference' (the
-  // pre-card reference image, this.referenceImageDataUrl). See applyCrop()'s
-  // equivalent comment in image-cropper.js for why this branches.
+  // target: 'card' (default — this.currentImageUrl), 'reference' (the
+  // pre-card reference image, this.referenceImageDataUrl), or 'playground'
+  // (the Image Playground tab's working image, this.playgroundImageUrl). See
+  // applyCrop()'s equivalent comment in image-cropper.js for why this branches.
   async openInfillModal(target = 'card') {
     this._infillTarget = target;
 
     if (target === 'reference') {
       if (!this.referenceImageDataUrl) {
         this.showNotification("No reference image available to in-fill", "warning");
+        return;
+      }
+    } else if (target === 'playground') {
+      if (!this.playgroundImageUrl) {
+        this.showNotification("Upload or paste an image first", "warning");
         return;
       }
     } else {
@@ -80,7 +91,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification("Loading image into In-fill editor...", "info");
 
     try {
-      let imageSrc = target === 'reference' ? this.referenceImageDataUrl : this.currentImageUrl;
+      let imageSrc = target === 'reference' ? this.referenceImageDataUrl
+        : target === 'playground' ? this.playgroundImageUrl
+        : this.currentImageUrl;
 
       // If URL is external http(s), convert to Blob URL via proxy to prevent CORS canvas taint
       if (imageSrc.startsWith("http://") || imageSrc.startsWith("https://")) {
@@ -701,6 +714,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
             this.showNotification(`Could not re-describe image: ${descErr.message}`, "warning");
           }
         }
+        return;
+      }
+
+      if (this._infillTarget === 'playground') {
+        // Playground path: no card, no vision description to keep in sync.
+        const dataUrl = await this._urlToDataUrl(pendingUrl);
+        this.playgroundImageUrl = dataUrl;
+        this._infillState.pendingResult = null;
+        if (typeof this.updatePlaygroundImagePreview === "function") {
+          this.updatePlaygroundImagePreview(dataUrl);
+        }
+
+        this.closeInfillModal();
+        this.showNotification("💾 Image updated.", "success");
+        this.updateCropButtonVisibility();
+        this.updateInfillButtonVisibility();
         return;
       }
 

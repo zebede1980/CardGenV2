@@ -209,6 +209,7 @@
                     <button id="tab-storywriter" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">✍️ Story Writer</button>
                     <button id="tab-roleplaychat" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">💬 Roleplay Chat</button>
                     <button id="tab-adventure" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎲 Adventure</button>
+                    <button id="tab-playground" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🖼️ Playground</button>
                 </div>
 
                 <!-- Character Generator View -->
@@ -2142,6 +2143,146 @@
                     </section>
                 </div>
 
+                <!-- Image Playground View -->
+                <div id="view-playground" class="tab-content" style="display: none;">
+                    <section style="max-width: 900px; margin: 0 auto;">
+                        <h2 style="margin-bottom: 0.25rem;">🖼️ Image Playground</h2>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                            Upload or paste any image, then crop, erase, or prompt-edit it — no character card needed.
+                        </p>
+
+                        <div class="form-group">
+                            <label for="playground-image-file" class="label">Image (Upload or Paste)</label>
+                            <input type="file" id="playground-image-file" class="input" accept="image/*" />
+                            <div
+                                id="playground-image-preview"
+                                style="
+                                    margin-top: 0.75rem;
+                                    display: none;
+                                    max-width: 320px;
+                                    border-radius: 0.5rem;
+                                    overflow: hidden;
+                                    border: 1px solid var(--border);
+                                "
+                            ></div>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                <button
+                                    type="button"
+                                    id="crop-playground-image-btn"
+                                    class="btn-small"
+                                    style="display: none;"
+                                    title="Crop, rotate, or resize the image."
+                                >
+                                    ✂️ Crop
+                                </button>
+                                <button
+                                    type="button"
+                                    id="inpaint-playground-image-btn"
+                                    class="btn-small"
+                                    style="display: none;"
+                                    title="Highlight an area to erase and blend seamlessly."
+                                >
+                                    🎨 In-fill / Erase
+                                </button>
+                            </div>
+                        </div>
+
+                        <details id="playground-edit-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: none;">
+                            <summary
+                                style="
+                                    cursor: pointer;
+                                    font-weight: 500;
+                                    padding: 0.5rem;
+                                    background: rgba(139, 92, 246, 0.1);
+                                    border-radius: 0.375rem;
+                                    user-select: none;
+                                "
+                            >
+                                ✨ Edit Image
+                            </summary>
+                            <div style="margin-top: 0.5rem; padding: 0.5rem;">
+                                <label for="playground-edit-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    Describe the change:
+                                </label>
+                                <textarea
+                                    id="playground-edit-instruction"
+                                    class="input"
+                                    rows="3"
+                                    maxlength="1000"
+                                    placeholder="e.g. change the outfit to a red hoodie, keep the face and pose the same | convert to a realistic photo, same character | remove the background"
+                                ></textarea>
+                                <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
+                                    💡 Sends the image plus your instruction to an image-to-image model. Uses the "Image Edit Model" set in ⚙️ Settings → Image API — see the Model Guide below for recommendations. Costs API credits per attempt and may take a moment.
+                                </p>
+
+                                <div class="form-group checkbox-group" style="margin-top: 0.75rem; margin-bottom: 0;">
+                                    <input type="checkbox" id="playground-edit-use-forge" class="checkbox">
+                                    <label for="playground-edit-use-forge" style="margin: 0; font-size: 0.875rem;">🔧 Use Local Forge (flux-1-dev) instead of cloud</label>
+                                </div>
+                                <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
+                                    <label for="playground-edit-denoising" class="label" style="font-size: 0.8rem;">Denoising Strength (Local Forge only)</label>
+                                    <input
+                                        type="number"
+                                        id="playground-edit-denoising"
+                                        class="input"
+                                        value="0.55"
+                                        min="0.1"
+                                        max="0.95"
+                                        step="0.05"
+                                        style="max-width: 120px;"
+                                    >
+                                </div>
+
+                                <button
+                                    type="button"
+                                    id="edit-playground-image-btn"
+                                    class="btn-small"
+                                    style="margin-top: 0.5rem;"
+                                    title="Edit the image using an image-to-image AI model, guided by your instruction above."
+                                >
+                                    ✨ Edit Image
+                                </button>
+                            </div>
+                        </details>
+
+                        <!-- Model Guide -->
+                        <details id="playground-model-guide" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                            <summary
+                                style="
+                                    cursor: pointer;
+                                    font-weight: 500;
+                                    padding: 0.5rem;
+                                    background: rgba(139, 92, 246, 0.1);
+                                    border-radius: 0.375rem;
+                                    user-select: none;
+                                "
+                            >
+                                🧭 Model Guide — which model for what?
+                            </summary>
+                            <div style="margin-top: 0.75rem; padding: 0.5rem;">
+                                <label for="playground-guide-task" class="label">What are you trying to do?</label>
+                                <select id="playground-guide-task" class="input" style="margin-bottom: 0.75rem;">
+                                    <option value="">Choose a task…</option>
+                                    <option value="outfit_pose">Change outfit / pose</option>
+                                    <option value="style_transfer">Style transfer (e.g. anime ↔ photorealistic)</option>
+                                    <option value="general_edit">General edit / small change</option>
+                                    <option value="mature_content">Working with mature/NSFW source images</option>
+                                </select>
+                                <div id="playground-guide-result" style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;"></div>
+                            </div>
+
+                            <div style="margin: 1rem 0.5rem 0.5rem; padding: 0.75rem; background: var(--surface-muted); border-radius: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
+                                <strong style="color: var(--text-primary);">What we've actually tested (2026-08):</strong>
+                                <ul style="margin: 0.5rem 0 0 1.1rem; padding: 0;">
+                                    <li style="margin-bottom: 0.4rem;"><code>flux-2-pro-image-to-image</code> / <code>flux-2-max-image-to-image</code> — strongest identity preservation across pose/outfit/style edits. If the source shows skin/nudity, these tend to auto-cover it rather than editing faithfully — expect the output to look more modest than the input.</li>
+                                    <li style="margin-bottom: 0.4rem;"><code>flux-kontext</code> — good editor, but hard-blocks (silently returns a solid-black image) when the source shows enough skin, regardless of the instruction. Best reserved for fully-clothed sources.</li>
+                                    <li><strong>Local Forge (flux-1-dev)</strong> — free, but a base checkpoint, not an edit model. In testing it barely followed outfit/pose instructions and lost facial likeness at higher denoising strengths. Good for experimenting, not a substitute for the above.</li>
+                                </ul>
+                            </div>
+                        </details>
+                    </section>
+                </div>
+
                 <!-- New Adventure Modal -->
                 <div id="adv-new-modal" class="modal-overlay" style="display: none;">
                     <div class="api-settings-modal" style="max-width: 560px; width: 94%; max-height: 90vh; overflow-y: auto;">
@@ -2224,6 +2365,7 @@
         <script src="src/scripts/image-handler.js?v=20260724-v4"></script>
         <script src="src/scripts/image-cropper.js?v=20260722"></script>
         <script src="src/scripts/image-infiller.js?v=20260802"></script>
+        <script src="src/scripts/image-playground.js?v=20260817"></script>
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/library-handler.js?v=20260514"></script>
