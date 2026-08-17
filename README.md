@@ -48,6 +48,7 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Streaming generation with **Stop** support at any point.
 - Generated cards use short prose for backstory/scenario and direct bullet points for traits and behaviours — not padded narrative.
 - Tag field: add comma-separated tags that are preserved in the exported card and shown in the SillyTavern library.
+- **🎭 Chat with this Character** — jumps straight into Roleplay Chat with the current character: resumes your most recent chat with them if one exists (with the option to start fresh instead), or opens a new chat pre-attached to them.
 
 ### 🔍 Web Search for Real / Fictional Characters
 - Switch to **🔍 Web Search Mode** via the radio buttons at the top of the inputs section.
@@ -125,14 +126,6 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - **Image History** — browse and restore previously generated images for the current card.
 - **Image Gallery / Lightbox** — click any generated image to view full-screen with zoom and previous/next navigation.
 - CORS-bypass proxy routes all image requests through the backend to avoid browser restrictions.
-
-### Chat Tester
-- Test your character in a live chat simulation before exporting.
-- Adjustable temperature and top_p sliders to control creativity.
-- Save and load chat transcripts.
-- Persona selector to test how the character responds to different user personalities.
-- Lorebook trigger highlighting shows which entries fired during the conversation.
-- (For a fuller, persistent roleplay experience with memory and multi-character support, see **Roleplay Chat** below — Chat Tester is a lightweight, throwaway sanity check while you're still building a card.)
 
 ### Story Writer & TTS Narration
 - A dedicated workspace to write continuous stories with your generated characters.
@@ -653,8 +646,7 @@ src/
     chat-handler.js              — Roleplay Chat frontend controller and state manager
     chat-character-cards.js      — Character card quick-reference viewer (shared with Story Writer)
     chat-settings.js             — Roleplay Chat configuration settings dialog helpers
-    chat-tester.js               — Chat tester utility for single-character simulation with custom settings
-    chat-ui.js                   — Chat timeline rendering, message actions, and XML rich components
+    chat-ui.js                   — Bridge from the Character Generator screen into Roleplay Chat ("Chat with this Character")
     rich-element-parser.js       — Parser for embedding graphical XML components like phone chats, task cards, and stat-bars
     adventure-handler.js         — Adventure Mode frontend controller (sessions, choices, resume)
     resumable-jobs.js            — Client-side tracker for in-flight generations (mobile resilience)
