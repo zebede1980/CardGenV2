@@ -2224,6 +2224,11 @@
                                 </button>
                             </div>
 
+                            <label for="playground-edit-model" class="label" style="display:block; margin-bottom:0.35rem;">
+                                Model:
+                            </label>
+                            <select id="playground-edit-model" class="input" style="margin-bottom: 0.75rem;"></select>
+
                             <label for="playground-edit-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
                                 ✨ Describe the change:
                             </label>
@@ -2235,7 +2240,7 @@
                                 placeholder="e.g. change the outfit to a red hoodie, keep the face and pose the same | convert to a realistic photo, same character | remove the background"
                             ></textarea>
                             <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
-                                💡 Sends the image plus your instruction to an image-to-image model. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
+                                💡 Sends the image plus your instruction to the model selected above. Costs API credits per attempt and may take a moment. Add more models via ⚙️ Settings → Image API → Fetch Models.
                             </p>
 
                             <button

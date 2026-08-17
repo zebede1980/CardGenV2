@@ -33,6 +33,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       viewPlayground.style.display = "block";
       tabPlayground.className = "btn-primary";
       document.body.classList.remove("chat-active", "chat-in-chat");
+      // Refreshed on every tab-open (not just once at init) so a model added
+      // in Settings → Image API while on another tab shows up immediately.
+      this._updatePlaygroundEditModelDropdown();
     });
 
     otherTabs.forEach(btn => {
@@ -74,6 +77,40 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (inpaintBtn) inpaintBtn.addEventListener("click", () => this.openInfillModal('playground'));
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
+
+    // Edit model dropdown — shares api.image.editModel with the Settings text
+    // field (see config.js), so picking a model here also updates what
+    // Settings shows, and vice versa.
+    this._updatePlaygroundEditModelDropdown();
+    const modelSelect = document.getElementById("playground-edit-model");
+    if (modelSelect) {
+      modelSelect.addEventListener("change", (e) => this.config.set("api.image.editModel", e.target.value));
+    }
+  },
+
+  // Populated from api.image.models — the same list "Fetch Models" in
+  // Settings → Image API fills in (or the user adds to manually via its
+  // "Add" button), since that endpoint returns every model the account has
+  // access to, edit-capable or not.
+  _updatePlaygroundEditModelDropdown() {
+    const select = document.getElementById("playground-edit-model");
+    if (!select) return;
+
+    const models = this.config.get("api.image.models") || [];
+    const currentModel = this.config.get("api.image.editModel") || "";
+
+    if (models.length === 0) {
+      select.innerHTML = `<option value="${escapeHtml(currentModel || "flux-2-pro-image-to-image")}">${escapeHtml(currentModel || "flux-2-pro-image-to-image")}</option>`;
+      return;
+    }
+
+    select.innerHTML = models
+      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(model)}</option>`)
+      .join("");
+
+    if (!models.includes(currentModel)) {
+      select.value = models[0];
+    }
   },
 
   async handlePlaygroundImageUpload(event) {
@@ -159,7 +196,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.showNotification("Please configure image API settings first", "warning");
         return;
       }
-      editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
+      editModel = document.getElementById("playground-edit-model")?.value
+        || this.config.get("api.image.editModel")
+        || "flux-2-pro-image-to-image";
     }
 
     const editBtn = document.getElementById("edit-playground-image-btn");
