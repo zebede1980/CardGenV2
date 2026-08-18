@@ -2249,6 +2249,7 @@
                                 <button type="button" id="pg-tab-edit" class="btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
                                 <button type="button" id="pg-tab-consistency" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🧬 Consistency</button>
                                 <button type="button" id="pg-tab-outpaint" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🖼️ Expand</button>
+                                <button type="button" id="pg-tab-combine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🔀 Combine</button>
                             </div>
 
                             <div id="pg-panel-crop" style="display: none;">
@@ -2433,6 +2434,76 @@
                                     🖼️ Expand &amp; Fill
                                 </button>
                                 <p id="outpaint-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
+                            </div>
+
+                            <!-- Two-image combining — the image above is "Image 1"; upload/paste
+                                 a second image here as "Image 2". Needs a model that actually
+                                 accepts multiple reference images in one call (see
+                                 apiHandler.combineImages in api-image.js) — untested against a
+                                 real model as of 2026-08-18, see the note below. -->
+                            <div id="pg-panel-combine" style="display: none;">
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
+                                    Combines the image above ("Image 1") with a second image you add here, guided by your instruction — e.g. put the outfit from Image 2 onto the character in Image 1.
+                                </p>
+                                <p style="font-size: 0.75rem; color: var(--text-soft); background: var(--surface-muted); border-radius: 0.4rem; padding: 0.5rem 0.65rem; margin: 0 0 0.75rem;">
+                                    ⚠️ New as of 2026-08-18 — this needs a model that genuinely accepts multiple reference images in one call (e.g. <code>qwen-image-3-pro</code>, <code>reve/2.1/remix</code>), not just any "edit" model. Not yet confirmed working against a real model — pick one below via ⚙️ Settings → Image API → Fetch Models / Add, then try it.
+                                </p>
+
+                                <label for="combine-image2-file" class="label" style="display:block; margin-bottom:0.35rem;">Image 2:</label>
+                                <input type="file" id="combine-image2-file" accept="image/*" style="display: none;" />
+                                <input
+                                    type="text"
+                                    id="combine-image2-paste-zone"
+                                    inputmode="none"
+                                    autocomplete="off"
+                                    autocorrect="off"
+                                    autocapitalize="off"
+                                    spellcheck="false"
+                                    data-paste-zone-placeholder="📋 Click to upload, or paste Image 2 here"
+                                    value="📋 Click to upload, or paste Image 2 here"
+                                    title="Click to upload, or tap and paste a copied image"
+                                    style="
+                                        width: 100%;
+                                        box-sizing: border-box;
+                                        padding: 1rem;
+                                        border: 2px dashed var(--border);
+                                        border-radius: 0.5rem;
+                                        text-align: center;
+                                        color: var(--text-soft);
+                                        font-size: 0.85rem;
+                                        cursor: pointer;
+                                        outline: none;
+                                        background: transparent;
+                                    "
+                                />
+                                <div id="combine-image2-preview" style="margin-top: 0.5rem; display: none; max-width: 200px; border-radius: 0.5rem; overflow: hidden; border: 1px solid var(--border);"></div>
+
+                                <label for="playground-combine-model" class="label" style="display:block; margin: 0.75rem 0 0.35rem;">
+                                    Model:
+                                </label>
+                                <select id="playground-combine-model" class="input" style="margin-bottom: 0.75rem;"></select>
+
+                                <label for="playground-combine-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    🔀 Describe how to combine them:
+                                </label>
+                                <textarea
+                                    id="playground-combine-instruction"
+                                    class="input"
+                                    rows="3"
+                                    maxlength="1000"
+                                    placeholder="e.g. put the outfit from Image 2 onto the character in Image 1 | blend both scenes into one continuous background | combine both characters into a single group shot"
+                                ></textarea>
+
+                                <button
+                                    type="button"
+                                    id="combine-images-btn"
+                                    class="btn-primary"
+                                    style="margin-top: 0.75rem;"
+                                    title="Combine Image 1 (above) and Image 2 (this tab) using the instruction above."
+                                >
+                                    🔀 Combine
+                                </button>
+                                <p id="playground-combine-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
                             </div>
                         </div>
                     </section>

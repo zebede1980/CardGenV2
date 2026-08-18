@@ -1131,4 +1131,71 @@ BEGIN PROMPT:`;
     }
   },
 
+  // ── Multi-image combining (Playground's Combine tab) ────────────────────────
+  // Sends 2+ reference images + an instruction to a model that supports
+  // multiple image inputs in one generation (e.g. qwen-image-3-pro,
+  // reve/2.1/remix, xai/grok-imagine-image/v2.0/edit — see nano-gpt's model
+  // catalog). This is NOT the same request shape as editImage()/inpaintImage():
+  // per nano-gpt's docs, multi-reference calls use a distinct endpoint
+  // (POST {base}/images) with an `input_references` array field, not the
+  // OpenAI-compatible /images/generations or /images/edits shapes — hence its
+  // own proxy route (/api/image/combine) rather than reusing editImage's.
+  async combineImages({ images, instruction, model }) {
+    if (!images || images.length < 2) throw new Error("At least two images are required to combine.");
+    const trimmedInstruction = (instruction || "").trim();
+    if (!trimmedInstruction) throw new Error("A combining instruction is required.");
+
+    const combineModel = model || this.config.get("api.image.combineModel") || "";
+    if (!combineModel) throw new Error("Choose a model that supports combining multiple images first.");
+
+    const apiKey = this.config.get("api.image.apiKey");
+    const apiUrl = this.config.get("api.image.baseUrl");
+    if (!apiKey || !apiUrl) throw new Error("Please configure your Image API settings first.");
+
+    const payload = {
+      model: combineModel,
+      prompt: trimmedInstruction,
+      input_references: images,
+      n: 1,
+    };
+
+    console.log("=== SENDING IMAGE COMBINE REQUEST ===");
+    console.log("Combine model:", combineModel);
+    console.log("Reference image count:", images.length);
+
+    const response = await (window.authFetch || fetch)("/api/image/combine", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+        "X-API-URL": apiUrl,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Image Combine API error response:", errorText);
+      let errorMessage = errorText;
+      try {
+        const errData = JSON.parse(errorText);
+        errorMessage = errData.error?.message || errData.error?.details || errData.message || errorText;
+      } catch (e) {}
+      throw new Error(`Image Combine API Error (${response.status}): ${errorMessage}`);
+    }
+
+    const data = await response.json();
+    if (data.error) {
+      console.error("Image Combine API returned error object:", data.error);
+      throw new Error(`Image Combine API Error: ${data.error.message || data.error.details || data.error}`);
+    }
+
+    const resultUrl = (data.data && data.data.length > 0 && data.data[0].url) || data.image || data.url;
+    if (!resultUrl) {
+      console.error("Unexpected image combine API response format. Full response:", data);
+      throw new Error("Unexpected response format from Image Combine API: " + JSON.stringify(data).slice(0, 300));
+    }
+    return resultUrl;
+  },
+
 });

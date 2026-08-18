@@ -2416,6 +2416,76 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
   }
 });
 
+// Proxy endpoint for combining multiple reference images into one generation
+// (Playground's Combine tab). Distinct from /api/image/generations: nano-gpt's
+// docs describe this as a separate "normalized" endpoint — POST {base}/images
+// with an `input_references` array — not part of the OpenAI-compatible
+// /images/generations shape that endpoint already forwards, so this can't
+// just reuse it.
+app.post("/api/image/combine", requireAuth, async (req, res) => {
+  try {
+    const { model, prompt, input_references } = req.body;
+
+    const apiKey = req.headers["x-api-key"];
+    const apiUrl = req.headers["x-api-url"];
+
+    if (!apiKey) {
+      return res.status(401).json({
+        error: { code: "401", message: "Image API key required", details: "Please configure your Image API key in the settings" },
+      });
+    }
+    if (!apiUrl) {
+      return res.status(400).json({
+        error: { code: "400", message: "Image API URL required", details: "Please configure your Image API Base URL in the settings" },
+      });
+    }
+    if (!Array.isArray(input_references) || input_references.length < 2) {
+      return res.status(400).json({
+        error: { code: "400", message: "At least two input_references images are required" },
+      });
+    }
+
+    const targetUrl = apiUrl.endsWith("/images") ? apiUrl : `${apiUrl.replace(/\/$/, "")}/images`;
+
+    console.log("Proxying image combine request to:", targetUrl);
+    console.log("Model:", model);
+    console.log("Reference image count:", input_references.length);
+
+    const requestBody = { model, prompt, input_references, n: 1, ...req.body };
+
+    let response = await fetch(targetUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (response.status === 401) {
+      console.log("Bearer auth failed for image combine API, trying X-API-Key...");
+      response = await fetch(targetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+        body: JSON.stringify(requestBody),
+      });
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Image combine API error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: { code: response.status.toString(), message: `Image Combine API Error: ${response.statusText}`, details: errorText },
+      });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("Image combine proxy error:", error);
+    res.status(500).json({
+      error: { code: "500", message: "Internal server error in image combine proxy", details: error.message },
+    });
+  }
+});
+
 // Proxy endpoint for Inpainting / In-fill API
 app.post("/api/image/inpaint", requireAuth, async (req, res) => {
   try {

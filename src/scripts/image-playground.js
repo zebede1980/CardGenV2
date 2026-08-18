@@ -38,6 +38,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // immediately.
       this._updatePlaygroundEditModelDropdown("playground-edit-model");
       this._updatePlaygroundEditModelDropdown("playground-consistency-model");
+      this._updatePlaygroundCombineModelDropdown();
       const outpaintProviderSelect = document.getElementById("outpaint-provider");
       if (outpaintProviderSelect) {
         outpaintProviderSelect.value = this.config.get("api.image.infill.provider") || "localForge";
@@ -70,18 +71,33 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // viewPlayground, so a listener scoped to the view alone would miss it.
     // Guarded on the view actually being visible so this doesn't also fire
     // (alongside handleReferenceImagePaste, similarly unguarded) while on a
-    // different tab.
+    // different tab. Routed by which paste zone currently has focus, since
+    // the Combine tab has a second, independent image slot.
     document.addEventListener("paste", (e) => {
       if (viewPlayground.style.display === "none") return;
-      this.handlePlaygroundImagePaste(e);
+      if (document.activeElement?.id === "combine-image2-paste-zone") {
+        this.handleCombineImage2Paste(e);
+      } else {
+        this.handlePlaygroundImagePaste(e);
+      }
     });
+
+    // Image 2 upload / paste (Combine tab)
+    const combineImage2Input = document.getElementById("combine-image2-file");
+    if (combineImage2Input) {
+      combineImage2Input.addEventListener("change", (e) => this.handleCombineImage2Upload(e));
+    }
+    const combineImage2Zone = document.getElementById("combine-image2-paste-zone");
+    if (combineImage2Zone && combineImage2Input) {
+      combineImage2Zone.addEventListener("click", () => combineImage2Input.click());
+    }
 
     // Tool tabs (Crop / In-fill / Edit / Consistency / Expand) — only one
     // panel on screen at a time. Crop and In-fill embed the same shared
     // crop/in-fill modal tools used elsewhere in the app (see
     // _relocateCropModal/_relocateInfillModal), opened the moment their tab
     // is selected.
-    ["crop", "infill", "edit", "consistency", "outpaint"].forEach(tab => {
+    ["crop", "infill", "edit", "consistency", "outpaint", "combine"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
@@ -96,6 +112,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // _initOutpaintListenersOnce().
     const outpaintBtn = document.getElementById("outpaint-apply-btn");
     if (outpaintBtn) outpaintBtn.addEventListener("click", () => this.handleOutpaint());
+
+    // Combine model dropdown — its own api.image.combineModel setting, not
+    // synced with Edit/Consistency's api.image.editModel, since a model
+    // that accepts multiple reference images is a different category from
+    // one that just edits a single image.
+    this._updatePlaygroundCombineModelDropdown();
+    const combineModelSelect = document.getElementById("playground-combine-model");
+    if (combineModelSelect) {
+      combineModelSelect.addEventListener("change", (e) => this.config.set("api.image.combineModel", e.target.value));
+    }
+    const combineBtn = document.getElementById("combine-images-btn");
+    if (combineBtn) combineBtn.addEventListener("click", () => this.handleCombineImages());
 
     // Edit and Consistency model dropdowns — both read/write the one
     // api.image.editModel setting (shared with the Settings text field too,
@@ -122,8 +150,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { crop: "pg-tab-crop", infill: "pg-tab-infill", edit: "pg-tab-edit", consistency: "pg-tab-consistency", outpaint: "pg-tab-outpaint" };
-    const panels = { crop: "pg-panel-crop", infill: "pg-panel-infill", edit: "pg-panel-edit", consistency: "pg-panel-consistency", outpaint: "pg-panel-outpaint" };
+    const tabs = { crop: "pg-tab-crop", infill: "pg-tab-infill", edit: "pg-tab-edit", consistency: "pg-tab-consistency", outpaint: "pg-tab-outpaint", combine: "pg-tab-combine" };
+    const panels = { crop: "pg-panel-crop", infill: "pg-panel-infill", edit: "pg-panel-edit", consistency: "pg-panel-consistency", outpaint: "pg-panel-outpaint", combine: "pg-panel-combine" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -772,6 +800,124 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } catch (error) {
       console.error("Outpaint error:", error);
       this.showNotification(`Expand failed: ${error.message}`, "error", 6000);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (statusEl) statusEl.style.display = "none";
+    }
+  },
+
+  // ── Two-image combining ──────────────────────────────────────────────────────
+  // Unlike Edit/Consistency/Outpaint, this can't reuse editImage() or
+  // inpaintImage() — it needs a model that accepts multiple reference images
+  // in one call (apiHandler.combineImages, its own proxy route), which is a
+  // genuinely different, less-common capability. Plain population, no
+  // "looks edit-capable" heuristic (_looksEditCapable) — there's no reliable
+  // naming convention for "accepts multiple images" the way "-image-to-image"
+  // signals single-image editing.
+  _updatePlaygroundCombineModelDropdown() {
+    const select = document.getElementById("playground-combine-model");
+    if (!select) return;
+
+    const models = this.config.get("api.image.models") || [];
+    const currentModel = this.config.get("api.image.combineModel") || "";
+
+    if (models.length === 0) {
+      select.innerHTML = `<option value="">No models configured — add one via Settings</option>`;
+      return;
+    }
+
+    select.innerHTML = models
+      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(model)}</option>`)
+      .join("");
+
+    if (!models.includes(currentModel)) {
+      select.value = models[0];
+    }
+  },
+
+  async handleCombineImage2Upload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await this._processCombineImage2File(file);
+    if (event.target) event.target.value = "";
+  },
+
+  async handleCombineImage2Paste(event) {
+    setTimeout(() => this._resetPasteZones(), 0);
+    const file = this._extractPastedImageFile(event);
+    if (!file) return;
+    event.preventDefault();
+    await this._processCombineImage2File(file);
+  },
+
+  async _processCombineImage2File(file) {
+    try {
+      this.imageGenerator.validateImageFile(file);
+      const dataUrl = await this.prepareReferenceImageForVision(file);
+      this.combineImage2Url = dataUrl;
+
+      const preview = document.getElementById("combine-image2-preview");
+      if (preview) {
+        preview.style.display = "block";
+        preview.innerHTML = `<img src="${dataUrl}" alt="Image 2" style="width: 100%; display: block;" />`;
+      }
+    } catch (error) {
+      console.error("Combine Image 2 handling failed:", error);
+      this.showNotification(`Image upload failed: ${error.message}`, "warning");
+    }
+  },
+
+  async handleCombineImages() {
+    if (!this.playgroundImageUrl) {
+      this.showNotification("Upload or paste Image 1 (the main working image) first", "warning");
+      return;
+    }
+    if (!this.combineImage2Url) {
+      this.showNotification("Add Image 2 first", "warning");
+      return;
+    }
+
+    const instructionEl = document.getElementById("playground-combine-instruction");
+    const instruction = instructionEl?.value?.trim();
+    if (!instruction) {
+      this.showNotification("Describe how to combine the two images first", "warning");
+      instructionEl?.focus();
+      return;
+    }
+
+    const combineModel = document.getElementById("playground-combine-model")?.value
+      || this.config.get("api.image.combineModel");
+    if (!combineModel) {
+      this.showNotification("Choose a model that supports combining multiple images first", "warning");
+      return;
+    }
+
+    const btn = document.getElementById("combine-images-btn");
+    const statusEl = document.getElementById("playground-combine-status");
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.textContent = `🔀 Combining with ${combineModel}… this may take a minute.`;
+    }
+
+    try {
+      const resultUrl = await this.apiHandler.combineImages({
+        images: [this.playgroundImageUrl, this.combineImage2Url],
+        instruction,
+        model: combineModel,
+      });
+
+      const dataUrl = await this._urlToDataUrl(resultUrl);
+      this.playgroundImageUrl = dataUrl;
+      this.updatePlaygroundImagePreview(dataUrl);
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+      this._addPlaygroundHistoryEntry(dataUrl, `Combined (${combineModel})`);
+
+      this.showNotification("Images combined!", "success");
+    } catch (error) {
+      console.error("Combine images error:", error);
+      this.showNotification(`Combine failed: ${error.message}`, "error", 6000);
     } finally {
       if (btn) btn.disabled = false;
       if (statusEl) statusEl.style.display = "none";

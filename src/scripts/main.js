@@ -28,6 +28,7 @@ class CharacterGeneratorApp {
     this.referenceImageDataUrl = "";
     this.playgroundImageUrl = "";
     this.playgroundHistory = []; // [{ url, label }] — every version of the Playground working image
+    this.combineImage2Url = ""; // Playground's Combine tab — the second reference image
     this.isGenerating = false;
     this.isRevising = false;
     this.lastConsistencyReport = null;
