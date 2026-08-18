@@ -2356,32 +2356,51 @@
                                 <p id="playground-consistency-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
                             </div>
 
-                            <!-- Picture Expander (outpainting) — the opposite of Crop: extends
-                                 the canvas and fills the newly-exposed area. Reuses the same
-                                 In-fill engine (apiHandler.inpaintImage) as the In-fill tab —
-                                 see handleOutpaint() in image-playground.js — the only
-                                 difference is the mask is generated automatically (everything
-                                 outside the original image) instead of hand-painted. -->
+                            <!-- Picture Expander (outpainting) — the opposite of Crop: drag
+                                 the dashed frame outward (reusing the same .crop-handle
+                                 elements/CSS as the Crop tool) to extend the canvas, then fill
+                                 the newly-exposed area. Reuses the same In-fill engine
+                                 (apiHandler.inpaintImage) as the In-fill tab — see
+                                 handleOutpaint() / _openOutpaintTool() in image-playground.js —
+                                 the mask is generated automatically from the frame's position
+                                 instead of hand-painted. -->
                             <div id="pg-panel-outpaint" style="display: none;">
                                 <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
-                                    Extends the canvas in the directions you pick, then fills the newly exposed area — the opposite of Crop.
+                                    Drag the frame outward on any side (or corner, for two at once) to extend the canvas, then fill the newly exposed area — the opposite of Crop.
                                 </p>
 
-                                <label class="label" style="display:block; margin-bottom:0.35rem;">Expand:</label>
-                                <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.75rem;">
-                                    <button type="button" id="outpaint-side-top" class="btn-small pg-toggle-btn active">⬆️ Top</button>
-                                    <button type="button" id="outpaint-side-bottom" class="btn-small pg-toggle-btn active">⬇️ Bottom</button>
-                                    <button type="button" id="outpaint-side-left" class="btn-small pg-toggle-btn active">⬅️ Left</button>
-                                    <button type="button" id="outpaint-side-right" class="btn-small pg-toggle-btn active">➡️ Right</button>
+                                <div id="outpaint-workspace" style="position: relative; width: 100%; min-height: 320px; max-height: 55vh; overflow: hidden; background: #0b0b10; border-radius: 0.5rem; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; user-select: none;">
+                                    <div id="outpaint-stage" style="position: relative;">
+                                        <img id="outpaint-stage-image" style="position: absolute; display: block; pointer-events: none;" alt="Playground image" />
+                                        <div
+                                            id="outpaint-frame"
+                                            style="
+                                                position: absolute;
+                                                border: 2px dashed #a855f7;
+                                                box-sizing: border-box;
+                                                background-image: repeating-conic-gradient(rgba(255,255,255,0.08) 0% 25%, transparent 0% 50%);
+                                                background-size: 16px 16px;
+                                                touch-action: none;
+                                            "
+                                        >
+                                            <div class="crop-handle handle-nw" data-handle="nw"></div>
+                                            <div class="crop-handle handle-n" data-handle="n"></div>
+                                            <div class="crop-handle handle-ne" data-handle="ne"></div>
+                                            <div class="crop-handle handle-e" data-handle="e"></div>
+                                            <div class="crop-handle handle-se" data-handle="se"></div>
+                                            <div class="crop-handle handle-s" data-handle="s"></div>
+                                            <div class="crop-handle handle-sw" data-handle="sw"></div>
+                                            <div class="crop-handle handle-w" data-handle="w"></div>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <label for="outpaint-percent" class="label" style="display:block; margin-bottom:0.35rem;">
-                                    Expand by: <span id="outpaint-percent-val">25%</span> per side
-                                </label>
-                                <input type="range" id="outpaint-percent" min="10" max="100" step="5" value="25" style="width:100%; margin-bottom:0.5rem;">
-                                <p id="outpaint-summary" style="font-size: 0.75rem; color: var(--text-soft); margin: 0 0 0.75rem;"></p>
+                                <div style="display:flex; align-items:center; gap:0.75rem; margin-top:0.5rem; flex-wrap: wrap;">
+                                    <button type="button" id="outpaint-reset-btn" class="btn-small btn-secondary">↺ Reset</button>
+                                    <span id="outpaint-summary" style="font-size: 0.75rem; color: var(--text-soft);"></span>
+                                </div>
 
-                                <label for="outpaint-prompt" class="label" style="display:block; margin-bottom:0.35rem;">
+                                <label for="outpaint-prompt" class="label" style="display:block; margin: 0.75rem 0 0.35rem;">
                                     Describe the new area (optional):
                                 </label>
                                 <textarea
@@ -2406,7 +2425,7 @@
                                     id="outpaint-apply-btn"
                                     class="btn-primary"
                                     style="margin-top: 0.75rem;"
-                                    title="Expand the canvas and fill the new area using the settings above."
+                                    title="Fill the newly exposed area based on the frame above."
                                 >
                                     🖼️ Expand &amp; Fill
                                 </button>

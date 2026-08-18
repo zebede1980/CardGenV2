@@ -525,15 +525,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
       ? fullCanvas.toDataURL("image/jpeg", 0.92) 
       : fullCanvas.toDataURL("image/png");
 
-    // 2. Generate black & white mask matching target dimensions
+    // 2. Generate the mask matching target dimensions. Convention differs
+    //    by provider:
+    //      - Local Forge (Stable Diffusion): opaque grayscale, white =
+    //        inpaint, black = keep.
+    //      - Cloud (OpenAI images/edits convention, which nano-gpt's
+    //        inpaint-capable models also follow): the mask's ALPHA channel
+    //        is what matters — transparent (alpha 0) = edit, opaque = keep.
+    //        An all-opaque mask (e.g. a plain black/white PNG with no
+    //        transparency, which is what this used to send unconditionally)
+    //        tells that endpoint "nothing to edit," so it just hands the
+    //        source image back — no error, just a silent no-op that's easy
+    //        to mistake for "it ran but did nothing."
     const fullMaskCanvas = document.createElement("canvas");
     fullMaskCanvas.width = targetW;
     fullMaskCanvas.height = targetH;
     const maskCtx = fullMaskCanvas.getContext("2d");
-
-    // Fill with pure black #000000 (unmasked areas)
-    maskCtx.fillStyle = "#000000";
-    maskCtx.fillRect(0, 0, targetW, targetH);
 
     // Create a temporary canvas with pure white strokes
     const tempCanvas = document.createElement("canvas");
@@ -564,8 +571,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     tempCtx.putImageData(destData, 0, 0);
 
-    // Draw scaled white mask onto target black canvas
-    maskCtx.drawImage(tempCanvas, 0, 0, targetW, targetH);
+    if (isCloudProvider) {
+      // Start fully opaque white (= "keep everywhere"), then erase (→
+      // transparent) wherever the user painted — the inverse of
+      // tempCanvas's own opaque-where-painted encoding.
+      maskCtx.fillStyle = "#ffffff";
+      maskCtx.fillRect(0, 0, targetW, targetH);
+      maskCtx.globalCompositeOperation = "destination-out";
+      maskCtx.drawImage(tempCanvas, 0, 0, targetW, targetH);
+      maskCtx.globalCompositeOperation = "source-over";
+    } else {
+      maskCtx.fillStyle = "#000000";
+      maskCtx.fillRect(0, 0, targetW, targetH);
+      maskCtx.drawImage(tempCanvas, 0, 0, targetW, targetH);
+    }
 
     const maskDataUrl = fullMaskCanvas.toDataURL("image/png");
 

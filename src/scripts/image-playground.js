@@ -91,27 +91,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const consistencyBtn = document.getElementById("generate-consistency-image-btn");
     if (consistencyBtn) consistencyBtn.addEventListener("click", () => this.handleGenerateConsistentImage());
 
-    // Outpaint controls
-    ["top", "bottom", "left", "right"].forEach(side => {
-      const btn = document.getElementById(`outpaint-side-${side}`);
-      if (btn) {
-        btn.addEventListener("click", () => {
-          btn.classList.toggle("active");
-          this._updateOutpaintSummary();
-        });
-      }
-    });
-    const outpaintPercent = document.getElementById("outpaint-percent");
-    if (outpaintPercent) {
-      outpaintPercent.addEventListener("input", (e) => {
-        const label = document.getElementById("outpaint-percent-val");
-        if (label) label.textContent = `${e.target.value}%`;
-        this._updateOutpaintSummary();
-      });
-    }
+    // Outpaint's drag-frame tool (_openOutpaintTool) wires its own pointer
+    // listeners lazily, the first time it's opened — see
+    // _initOutpaintListenersOnce().
     const outpaintBtn = document.getElementById("outpaint-apply-btn");
     if (outpaintBtn) outpaintBtn.addEventListener("click", () => this.handleOutpaint());
-    this._updateOutpaintSummary();
 
     // Edit and Consistency model dropdowns — both read/write the one
     // api.image.editModel setting (shared with the Settings text field too,
@@ -153,6 +137,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!this.playgroundImageUrl) return;
     if (tab === "crop") this.openCropModal('playground');
     else if (tab === "infill") this.openInfillModal('playground');
+    else if (tab === "outpaint") this._openOutpaintTool();
   },
 
   // Heuristic only — providers like nano-gpt list a plain text-to-image model
@@ -438,10 +423,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
     this._renderPlaygroundHistory();
 
-    // If Crop or In-fill is the open tab, reload its canvas with the
-    // now-current image rather than leaving it showing a stale version.
+    // If Crop, In-fill, or Expand is the open tab, reload its canvas with
+    // the now-current image rather than leaving it showing a stale version.
     if (this._pgActiveTab === "crop") this.openCropModal('playground');
     else if (this._pgActiveTab === "infill") this.openInfillModal('playground');
+    else if (this._pgActiveTab === "outpaint") this._openOutpaintTool();
   },
 
   _savePlaygroundHistoryEntry(index) {
@@ -457,33 +443,206 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   // ── Picture Expander (outpainting) ──────────────────────────────────────────
+  // The inverse of Crop: instead of dragging a box inward to select what to
+  // keep, drag a frame outward past the image's own edges to say how far to
+  // extend the canvas. Reuses the same .crop-handle elements/CSS as the Crop
+  // tool (see index.html #outpaint-frame), and the same drag-a-handle
+  // mechanics as _initCropListenersOnce in image-cropper.js, just with the
+  // clamp direction inverted — each edge is free to move between the
+  // image's own edge (zero expansion) and the outer stage bound (max
+  // expansion), rather than between 0 and the image's edge.
+  //
   // Reuses apiHandler.inpaintImage() — the same call the In-fill tab uses —
-  // rather than any new provider integration. The only difference from a
-  // hand-painted in-fill is that the mask here is generated programmatically:
-  // paste the original image onto a larger blank canvas, then mask
-  // everything outside its original bounds as "fill" (white) and the
-  // original bounds as "keep" (black) — see _getInfillPayloadData in
-  // image-infiller.js for the same black/white convention.
+  // for the actual fill, rather than any new provider integration. The mask
+  // is generated from the frame's position instead of hand-painted.
+  _outpaintState: {
+    img: null,
+    naturalW: 0, naturalH: 0,
+    scale: 1, // natural px → stage px
+    imgLeft: 0, imgTop: 0, imgW: 0, imgH: 0, // image's fixed position/size within the stage (stage px)
+    stageW: 0, stageH: 0, // full interactive stage size — image plus max expansion room (stage px)
+    frame: { left: 0, top: 0, right: 0, bottom: 0 }, // draggable frame's absolute edges (stage px)
+    isDragging: false,
+    dragHandle: null,
+    dragStart: { x: 0, y: 0 },
+    frameStart: { left: 0, top: 0, right: 0, bottom: 0 },
+    listenersInitialized: false,
+  },
+
+  // How far either side can be dragged outward, as a multiple of the
+  // image's own width/height — bounds the interactive stage size (and
+  // worst-case payload) rather than allowing unlimited expansion. 1.0 means
+  // a side can add up to 100% of that dimension.
+  _OUTPAINT_MAX_EXPAND_FACTOR: 1.0,
+
+  async _openOutpaintTool() {
+    if (!this.playgroundImageUrl) return;
+
+    const workspace = document.getElementById("outpaint-workspace");
+    const stage = document.getElementById("outpaint-stage");
+    const stageImg = document.getElementById("outpaint-stage-image");
+    if (!workspace || !stage || !stageImg) return;
+
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error("Failed to load the current image"));
+        img.src = this.playgroundImageUrl;
+      });
+
+      const naturalW = img.naturalWidth;
+      const naturalH = img.naturalHeight;
+      const maxFactor = this._OUTPAINT_MAX_EXPAND_FACTOR;
+
+      // Full interactive stage = image + max possible expansion on every
+      // side, scaled to fit the visible workspace (same scale-to-fit
+      // approach as _renderCropStage in image-cropper.js).
+      const fullW = naturalW * (1 + 2 * maxFactor);
+      const fullH = naturalH * (1 + 2 * maxFactor);
+      const maxW = Math.max(50, (workspace.clientWidth || 600) - 8);
+      const maxH = Math.max(50, (workspace.clientHeight || 400) - 8);
+      const scale = Math.min(maxW / fullW, maxH / fullH, 1);
+
+      const stageW = Math.round(fullW * scale);
+      const stageH = Math.round(fullH * scale);
+      const imgW = Math.round(naturalW * scale);
+      const imgH = Math.round(naturalH * scale);
+      const imgLeft = Math.round((stageW - imgW) / 2);
+      const imgTop = Math.round((stageH - imgH) / 2);
+
+      this._outpaintState.img = img;
+      this._outpaintState.naturalW = naturalW;
+      this._outpaintState.naturalH = naturalH;
+      this._outpaintState.scale = scale;
+      this._outpaintState.imgLeft = imgLeft;
+      this._outpaintState.imgTop = imgTop;
+      this._outpaintState.imgW = imgW;
+      this._outpaintState.imgH = imgH;
+      this._outpaintState.stageW = stageW;
+      this._outpaintState.stageH = stageH;
+      // Frame starts matching the image exactly — zero expansion until dragged.
+      this._outpaintState.frame = { left: imgLeft, top: imgTop, right: imgLeft + imgW, bottom: imgTop + imgH };
+
+      stage.style.width = `${stageW}px`;
+      stage.style.height = `${stageH}px`;
+      stageImg.src = this.playgroundImageUrl;
+      stageImg.style.left = `${imgLeft}px`;
+      stageImg.style.top = `${imgTop}px`;
+      stageImg.style.width = `${imgW}px`;
+      stageImg.style.height = `${imgH}px`;
+
+      this._renderOutpaintFrame();
+      this._initOutpaintListenersOnce();
+      this._updateOutpaintSummary();
+    } catch (error) {
+      console.error("Outpaint tool load error:", error);
+      this.showNotification(`Could not load the Expand tool: ${error.message}`, "error");
+    }
+  },
+
+  _renderOutpaintFrame() {
+    const frameEl = document.getElementById("outpaint-frame");
+    if (!frameEl) return;
+    const { left, top, right, bottom } = this._outpaintState.frame;
+    frameEl.style.left = `${left}px`;
+    frameEl.style.top = `${top}px`;
+    frameEl.style.width = `${Math.max(0, right - left)}px`;
+    frameEl.style.height = `${Math.max(0, bottom - top)}px`;
+  },
+
+  _initOutpaintListenersOnce() {
+    if (this._outpaintState.listenersInitialized) return;
+    this._outpaintState.listenersInitialized = true;
+
+    const frameEl = document.getElementById("outpaint-frame");
+    if (!frameEl) return;
+
+    const onPointerDown = (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      const handleEl = e.target.closest(".crop-handle");
+      if (!handleEl) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      this._outpaintState.isDragging = true;
+      this._outpaintState.dragHandle = handleEl.dataset.handle;
+      this._outpaintState.dragStart = { x: e.clientX, y: e.clientY };
+      this._outpaintState.frameStart = { ...this._outpaintState.frame };
+
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    };
+
+    const onPointerMove = (e) => {
+      if (!this._outpaintState.isDragging) return;
+
+      const dx = e.clientX - this._outpaintState.dragStart.x;
+      const dy = e.clientY - this._outpaintState.dragStart.y;
+      const { dragHandle, frameStart, imgLeft, imgTop, imgW, imgH, stageW, stageH } = this._outpaintState;
+      const imgRight = imgLeft + imgW;
+      const imgBottom = imgTop + imgH;
+
+      let { left, top, right, bottom } = frameStart;
+
+      // Each edge is free between the image's own edge (0 expansion) and
+      // the stage's outer bound (max expansion) — the exact inverse of
+      // Crop's clamp, which keeps a box between 0 and the image's edge.
+      if (dragHandle.includes("w")) left = Math.max(0, Math.min(imgLeft, frameStart.left + dx));
+      if (dragHandle.includes("e")) right = Math.min(stageW, Math.max(imgRight, frameStart.right + dx));
+      if (dragHandle.includes("n")) top = Math.max(0, Math.min(imgTop, frameStart.top + dy));
+      if (dragHandle.includes("s")) bottom = Math.min(stageH, Math.max(imgBottom, frameStart.bottom + dy));
+
+      this._outpaintState.frame = { left, top, right, bottom };
+      this._renderOutpaintFrame();
+      this._updateOutpaintSummary();
+    };
+
+    const onPointerUp = () => {
+      this._outpaintState.isDragging = false;
+      this._outpaintState.dragHandle = null;
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    frameEl.addEventListener("pointerdown", onPointerDown);
+
+    const resetBtn = document.getElementById("outpaint-reset-btn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        const { imgLeft, imgTop, imgW, imgH } = this._outpaintState;
+        this._outpaintState.frame = { left: imgLeft, top: imgTop, right: imgLeft + imgW, bottom: imgTop + imgH };
+        this._renderOutpaintFrame();
+        this._updateOutpaintSummary();
+      });
+    }
+
+    window.addEventListener("resize", () => {
+      if (this._pgActiveTab === "outpaint" && this.playgroundImageUrl) {
+        this._openOutpaintTool();
+      }
+    });
+  },
 
   _updateOutpaintSummary() {
     const summaryEl = document.getElementById("outpaint-summary");
-    if (!summaryEl) return;
+    const state = this._outpaintState;
+    if (!summaryEl || !state.scale) return;
 
-    const percent = Number(document.getElementById("outpaint-percent")?.value) || 25;
-    const sides = ["top", "bottom", "left", "right"]
-      .filter(side => document.getElementById(`outpaint-side-${side}`)?.classList.contains("active"));
+    const padLeft = Math.round((state.imgLeft - state.frame.left) / state.scale);
+    const padRight = Math.round((state.frame.right - (state.imgLeft + state.imgW)) / state.scale);
+    const padTop = Math.round((state.imgTop - state.frame.top) / state.scale);
+    const padBottom = Math.round((state.frame.bottom - (state.imgTop + state.imgH)) / state.scale);
 
-    if (sides.length === 0) {
-      summaryEl.textContent = "Pick at least one side to expand.";
+    if (!padLeft && !padRight && !padTop && !padBottom) {
+      summaryEl.textContent = "Drag a handle outward to expand the canvas.";
       return;
     }
 
-    const widthPct = (sides.includes("left") ? percent : 0) + (sides.includes("right") ? percent : 0);
-    const heightPct = (sides.includes("top") ? percent : 0) + (sides.includes("bottom") ? percent : 0);
-    const parts = [];
-    if (widthPct) parts.push(`+${widthPct}% width`);
-    if (heightPct) parts.push(`+${heightPct}% height`);
-    summaryEl.textContent = `New canvas: ${parts.join(", ")}`;
+    const newW = state.naturalW + padLeft + padRight;
+    const newH = state.naturalH + padTop + padBottom;
+    summaryEl.textContent = `New size: ${newW} × ${newH}px (was ${state.naturalW} × ${state.naturalH}px)`;
   },
 
   async handleOutpaint() {
@@ -492,14 +651,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const sides = ["top", "bottom", "left", "right"]
-      .filter(side => document.getElementById(`outpaint-side-${side}`)?.classList.contains("active"));
-    if (sides.length === 0) {
-      this.showNotification("Pick at least one side to expand", "warning");
+    const state = this._outpaintState;
+    if (!state.img || !state.scale) {
+      this.showNotification("Open the Expand tab first so the frame loads", "warning");
       return;
     }
 
-    const expandPercent = Number(document.getElementById("outpaint-percent")?.value) || 25;
+    const padLeft = Math.max(0, Math.round((state.imgLeft - state.frame.left) / state.scale));
+    const padRight = Math.max(0, Math.round((state.frame.right - (state.imgLeft + state.imgW)) / state.scale));
+    const padTop = Math.max(0, Math.round((state.imgTop - state.frame.top) / state.scale));
+    const padBottom = Math.max(0, Math.round((state.frame.bottom - (state.imgTop + state.imgH)) / state.scale));
+
+    if (!padLeft && !padRight && !padTop && !padBottom) {
+      this.showNotification("Drag the frame outward on at least one side first", "warning");
+      return;
+    }
+
     const chosenProvider = document.getElementById("outpaint-provider")?.value
       || this.config.get("api.image.infill.provider")
       || "localForge";
@@ -515,38 +682,29 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     try {
-      const img = new Image();
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error("Failed to load the current image"));
-        img.src = this.playgroundImageUrl;
-      });
-
-      let padTop = sides.includes("top") ? Math.round(img.naturalHeight * expandPercent / 100) : 0;
-      let padBottom = sides.includes("bottom") ? Math.round(img.naturalHeight * expandPercent / 100) : 0;
-      let padLeft = sides.includes("left") ? Math.round(img.naturalWidth * expandPercent / 100) : 0;
-      let padRight = sides.includes("right") ? Math.round(img.naturalWidth * expandPercent / 100) : 0;
+      const img = state.img;
       let drawW = img.naturalWidth;
       let drawH = img.naturalHeight;
+      let padL = padLeft, padR = padRight, padT = padTop, padB = padBottom;
 
       // Cloud providers reject oversized payloads (413) — scale the whole
       // expanded canvas down uniformly, same cap _getInfillPayloadData uses.
       if (isCloudProvider) {
-        const rawTargetW = drawW + padLeft + padRight;
-        const rawTargetH = drawH + padTop + padBottom;
+        const rawTargetW = drawW + padL + padR;
+        const rawTargetH = drawH + padT + padB;
         if (Math.max(rawTargetW, rawTargetH) > 1024) {
-          const scale = 1024 / Math.max(rawTargetW, rawTargetH);
-          drawW = Math.round(drawW * scale);
-          drawH = Math.round(drawH * scale);
-          padTop = Math.round(padTop * scale);
-          padBottom = Math.round(padBottom * scale);
-          padLeft = Math.round(padLeft * scale);
-          padRight = Math.round(padRight * scale);
+          const scaleDown = 1024 / Math.max(rawTargetW, rawTargetH);
+          drawW = Math.round(drawW * scaleDown);
+          drawH = Math.round(drawH * scaleDown);
+          padL = Math.round(padL * scaleDown);
+          padR = Math.round(padR * scaleDown);
+          padT = Math.round(padT * scaleDown);
+          padB = Math.round(padB * scaleDown);
         }
       }
 
-      const targetW = drawW + padLeft + padRight;
-      const targetH = drawH + padTop + padBottom;
+      const targetW = drawW + padL + padR;
+      const targetH = drawH + padT + padB;
 
       const canvas = document.createElement("canvas");
       canvas.width = targetW;
@@ -554,18 +712,38 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const ctx = canvas.getContext("2d");
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, targetW, targetH);
-      ctx.drawImage(img, padLeft, padTop, drawW, drawH);
+      ctx.drawImage(img, padL, padT, drawW, drawH);
       const imageDataUrl = isCloudProvider ? canvas.toDataURL("image/jpeg", 0.92) : canvas.toDataURL("image/png");
 
+      // Mask convention differs by provider — this is also the fix for why
+      // outpainting previously just left the new area plain white instead
+      // of filling it in via the cloud provider:
+      //   - Local Forge (Stable Diffusion): opaque grayscale, white=inpaint,
+      //     black=keep (see _getInfillPayloadData in image-infiller.js).
+      //   - Cloud (OpenAI images/edits convention, which nano-gpt's
+      //     inpaint-capable models also follow): the mask's ALPHA channel
+      //     is what matters — transparent (alpha 0) = edit, opaque = keep.
+      //     An all-opaque mask (which is what a solid black/white PNG with
+      //     no transparency is) tells that endpoint "nothing to edit," so
+      //     it just handed the source image back — no error, just a no-op,
+      //     which looked exactly like "it just added white."
       const maskCanvas = document.createElement("canvas");
       maskCanvas.width = targetW;
       maskCanvas.height = targetH;
       const maskCtx = maskCanvas.getContext("2d");
-      maskCtx.fillStyle = "#ffffff"; // fill everywhere...
-      maskCtx.fillRect(0, 0, targetW, targetH);
-      maskCtx.fillStyle = "#000000"; // ...except the original image's bounds
-      maskCtx.fillRect(padLeft, padTop, drawW, drawH);
-      const maskDataUrl = maskCanvas.toDataURL("image/png");
+      let maskDataUrl;
+      if (isCloudProvider) {
+        maskCtx.clearRect(0, 0, targetW, targetH); // transparent everywhere = "edit everywhere"...
+        maskCtx.fillStyle = "#ffffff";
+        maskCtx.fillRect(padL, padT, drawW, drawH); // ...except the original image's bounds, kept opaque
+        maskDataUrl = maskCanvas.toDataURL("image/png");
+      } else {
+        maskCtx.fillStyle = "#ffffff";
+        maskCtx.fillRect(0, 0, targetW, targetH);
+        maskCtx.fillStyle = "#000000";
+        maskCtx.fillRect(padL, padT, drawW, drawH);
+        maskDataUrl = maskCanvas.toDataURL("image/png");
+      }
 
       const resultUrl = await this.apiHandler.inpaintImage({
         imageBase64: imageDataUrl,
@@ -585,9 +763,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.updatePlaygroundImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
-      this._addPlaygroundHistoryEntry(dataUrl, `Expanded (+${expandPercent}% ${sides.join("/")})`);
+      this._addPlaygroundHistoryEntry(dataUrl, `Expanded (+${padLeft}/${padTop}/${padRight}/${padBottom}px L/T/R/B)`);
 
       this.showNotification("Canvas expanded!", "success");
+      // Reload the tool against the new image so another expansion pass can
+      // start from here, matching Crop/In-fill's "stay open" behavior.
+      this._openOutpaintTool();
     } catch (error) {
       console.error("Outpaint error:", error);
       this.showNotification(`Expand failed: ${error.message}`, "error", 6000);

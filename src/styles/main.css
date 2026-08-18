@@ -715,13 +715,6 @@ textarea.content-box {
     border-color: var(--accent, #6366f1) !important;
 }
 
-/* Playground outpaint side-toggle buttons */
-.pg-toggle-btn.active {
-    background: var(--accent, #6366f1) !important;
-    color: #ffffff !important;
-    border-color: var(--accent, #6366f1) !important;
-}
-
 @media (max-width: 768px) {
     .infill-modal-content {
         width: 98vw;
