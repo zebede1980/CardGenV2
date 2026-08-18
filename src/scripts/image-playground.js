@@ -33,10 +33,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
       viewPlayground.style.display = "block";
       tabPlayground.className = "btn-primary";
       document.body.classList.remove("chat-active", "chat-in-chat");
-      // Refreshed on every tab-open (not just once at init) so a model added
-      // in Settings → Image API while on another tab shows up immediately.
+      // Refreshed on every tab-open (not just once at init) so a model/
+      // provider changed in Settings while on another tab shows up
+      // immediately.
       this._updatePlaygroundEditModelDropdown("playground-edit-model");
       this._updatePlaygroundEditModelDropdown("playground-consistency-model");
+      const outpaintProviderSelect = document.getElementById("outpaint-provider");
+      if (outpaintProviderSelect) {
+        outpaintProviderSelect.value = this.config.get("api.image.infill.provider") || "localForge";
+      }
     });
 
     otherTabs.forEach(btn => {
@@ -71,12 +76,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.handlePlaygroundImagePaste(e);
     });
 
-    // Tool tabs (Crop / In-fill / Edit / Consistency) — only one panel on
-    // screen at a time. Crop and In-fill embed the same shared crop/in-fill
-    // modal tools used elsewhere in the app (see
+    // Tool tabs (Crop / In-fill / Edit / Consistency / Expand) — only one
+    // panel on screen at a time. Crop and In-fill embed the same shared
+    // crop/in-fill modal tools used elsewhere in the app (see
     // _relocateCropModal/_relocateInfillModal), opened the moment their tab
     // is selected.
-    ["crop", "infill", "edit", "consistency"].forEach(tab => {
+    ["crop", "infill", "edit", "consistency", "outpaint"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
@@ -85,6 +90,28 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
     const consistencyBtn = document.getElementById("generate-consistency-image-btn");
     if (consistencyBtn) consistencyBtn.addEventListener("click", () => this.handleGenerateConsistentImage());
+
+    // Outpaint controls
+    ["top", "bottom", "left", "right"].forEach(side => {
+      const btn = document.getElementById(`outpaint-side-${side}`);
+      if (btn) {
+        btn.addEventListener("click", () => {
+          btn.classList.toggle("active");
+          this._updateOutpaintSummary();
+        });
+      }
+    });
+    const outpaintPercent = document.getElementById("outpaint-percent");
+    if (outpaintPercent) {
+      outpaintPercent.addEventListener("input", (e) => {
+        const label = document.getElementById("outpaint-percent-val");
+        if (label) label.textContent = `${e.target.value}%`;
+        this._updateOutpaintSummary();
+      });
+    }
+    const outpaintBtn = document.getElementById("outpaint-apply-btn");
+    if (outpaintBtn) outpaintBtn.addEventListener("click", () => this.handleOutpaint());
+    this._updateOutpaintSummary();
 
     // Edit and Consistency model dropdowns — both read/write the one
     // api.image.editModel setting (shared with the Settings text field too,
@@ -111,8 +138,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { crop: "pg-tab-crop", infill: "pg-tab-infill", edit: "pg-tab-edit", consistency: "pg-tab-consistency" };
-    const panels = { crop: "pg-panel-crop", infill: "pg-panel-infill", edit: "pg-panel-edit", consistency: "pg-panel-consistency" };
+    const tabs = { crop: "pg-tab-crop", infill: "pg-tab-infill", edit: "pg-tab-edit", consistency: "pg-tab-consistency", outpaint: "pg-tab-outpaint" };
+    const panels = { crop: "pg-panel-crop", infill: "pg-panel-infill", edit: "pg-panel-edit", consistency: "pg-panel-consistency", outpaint: "pg-panel-outpaint" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -427,6 +454,147 @@ Object.assign(CharacterGeneratorApp.prototype, {
     a.click();
     a.remove();
     this.showNotification("Image saved to your device.", "success");
+  },
+
+  // ── Picture Expander (outpainting) ──────────────────────────────────────────
+  // Reuses apiHandler.inpaintImage() — the same call the In-fill tab uses —
+  // rather than any new provider integration. The only difference from a
+  // hand-painted in-fill is that the mask here is generated programmatically:
+  // paste the original image onto a larger blank canvas, then mask
+  // everything outside its original bounds as "fill" (white) and the
+  // original bounds as "keep" (black) — see _getInfillPayloadData in
+  // image-infiller.js for the same black/white convention.
+
+  _updateOutpaintSummary() {
+    const summaryEl = document.getElementById("outpaint-summary");
+    if (!summaryEl) return;
+
+    const percent = Number(document.getElementById("outpaint-percent")?.value) || 25;
+    const sides = ["top", "bottom", "left", "right"]
+      .filter(side => document.getElementById(`outpaint-side-${side}`)?.classList.contains("active"));
+
+    if (sides.length === 0) {
+      summaryEl.textContent = "Pick at least one side to expand.";
+      return;
+    }
+
+    const widthPct = (sides.includes("left") ? percent : 0) + (sides.includes("right") ? percent : 0);
+    const heightPct = (sides.includes("top") ? percent : 0) + (sides.includes("bottom") ? percent : 0);
+    const parts = [];
+    if (widthPct) parts.push(`+${widthPct}% width`);
+    if (heightPct) parts.push(`+${heightPct}% height`);
+    summaryEl.textContent = `New canvas: ${parts.join(", ")}`;
+  },
+
+  async handleOutpaint() {
+    if (!this.playgroundImageUrl) {
+      this.showNotification("Upload or paste an image first", "warning");
+      return;
+    }
+
+    const sides = ["top", "bottom", "left", "right"]
+      .filter(side => document.getElementById(`outpaint-side-${side}`)?.classList.contains("active"));
+    if (sides.length === 0) {
+      this.showNotification("Pick at least one side to expand", "warning");
+      return;
+    }
+
+    const expandPercent = Number(document.getElementById("outpaint-percent")?.value) || 25;
+    const chosenProvider = document.getElementById("outpaint-provider")?.value
+      || this.config.get("api.image.infill.provider")
+      || "localForge";
+    const isCloudProvider = chosenProvider !== "localForge";
+    const userPrompt = document.getElementById("outpaint-prompt")?.value?.trim() || "";
+
+    const btn = document.getElementById("outpaint-apply-btn");
+    const statusEl = document.getElementById("outpaint-status");
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.textContent = `🖼️ Expanding with ${chosenProvider === "localForge" ? "Local Forge" : "the In-fill API"}… this may take a minute.`;
+    }
+
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error("Failed to load the current image"));
+        img.src = this.playgroundImageUrl;
+      });
+
+      let padTop = sides.includes("top") ? Math.round(img.naturalHeight * expandPercent / 100) : 0;
+      let padBottom = sides.includes("bottom") ? Math.round(img.naturalHeight * expandPercent / 100) : 0;
+      let padLeft = sides.includes("left") ? Math.round(img.naturalWidth * expandPercent / 100) : 0;
+      let padRight = sides.includes("right") ? Math.round(img.naturalWidth * expandPercent / 100) : 0;
+      let drawW = img.naturalWidth;
+      let drawH = img.naturalHeight;
+
+      // Cloud providers reject oversized payloads (413) — scale the whole
+      // expanded canvas down uniformly, same cap _getInfillPayloadData uses.
+      if (isCloudProvider) {
+        const rawTargetW = drawW + padLeft + padRight;
+        const rawTargetH = drawH + padTop + padBottom;
+        if (Math.max(rawTargetW, rawTargetH) > 1024) {
+          const scale = 1024 / Math.max(rawTargetW, rawTargetH);
+          drawW = Math.round(drawW * scale);
+          drawH = Math.round(drawH * scale);
+          padTop = Math.round(padTop * scale);
+          padBottom = Math.round(padBottom * scale);
+          padLeft = Math.round(padLeft * scale);
+          padRight = Math.round(padRight * scale);
+        }
+      }
+
+      const targetW = drawW + padLeft + padRight;
+      const targetH = drawH + padTop + padBottom;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, targetW, targetH);
+      ctx.drawImage(img, padLeft, padTop, drawW, drawH);
+      const imageDataUrl = isCloudProvider ? canvas.toDataURL("image/jpeg", 0.92) : canvas.toDataURL("image/png");
+
+      const maskCanvas = document.createElement("canvas");
+      maskCanvas.width = targetW;
+      maskCanvas.height = targetH;
+      const maskCtx = maskCanvas.getContext("2d");
+      maskCtx.fillStyle = "#ffffff"; // fill everywhere...
+      maskCtx.fillRect(0, 0, targetW, targetH);
+      maskCtx.fillStyle = "#000000"; // ...except the original image's bounds
+      maskCtx.fillRect(padLeft, padTop, drawW, drawH);
+      const maskDataUrl = maskCanvas.toDataURL("image/png");
+
+      const resultUrl = await this.apiHandler.inpaintImage({
+        imageBase64: imageDataUrl,
+        maskBase64: maskDataUrl,
+        prompt: userPrompt || "seamlessly continue the surrounding scene, matching style and lighting",
+        providerOverride: chosenProvider,
+        width: targetW,
+        height: targetH,
+      });
+
+      if (!resultUrl) {
+        throw new Error("No image was returned from the in-fill provider");
+      }
+
+      const dataUrl = await this._urlToDataUrl(resultUrl);
+      this.playgroundImageUrl = dataUrl;
+      this.updatePlaygroundImagePreview(dataUrl);
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
+      this._addPlaygroundHistoryEntry(dataUrl, `Expanded (+${expandPercent}% ${sides.join("/")})`);
+
+      this.showNotification("Canvas expanded!", "success");
+    } catch (error) {
+      console.error("Outpaint error:", error);
+      this.showNotification(`Expand failed: ${error.message}`, "error", 6000);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (statusEl) statusEl.style.display = "none";
+    }
   },
 
 });

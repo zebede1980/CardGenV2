@@ -2248,6 +2248,7 @@
                                 <button type="button" id="pg-tab-infill" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🎨 In-fill / Erase</button>
                                 <button type="button" id="pg-tab-edit" class="btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
                                 <button type="button" id="pg-tab-consistency" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🧬 Consistency</button>
+                                <button type="button" id="pg-tab-outpaint" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🖼️ Expand</button>
                             </div>
 
                             <div id="pg-panel-crop" style="display: none;">
@@ -2353,6 +2354,63 @@
                                     🧬 Generate
                                 </button>
                                 <p id="playground-consistency-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
+                            </div>
+
+                            <!-- Picture Expander (outpainting) — the opposite of Crop: extends
+                                 the canvas and fills the newly-exposed area. Reuses the same
+                                 In-fill engine (apiHandler.inpaintImage) as the In-fill tab —
+                                 see handleOutpaint() in image-playground.js — the only
+                                 difference is the mask is generated automatically (everything
+                                 outside the original image) instead of hand-painted. -->
+                            <div id="pg-panel-outpaint" style="display: none;">
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
+                                    Extends the canvas in the directions you pick, then fills the newly exposed area — the opposite of Crop.
+                                </p>
+
+                                <label class="label" style="display:block; margin-bottom:0.35rem;">Expand:</label>
+                                <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+                                    <button type="button" id="outpaint-side-top" class="btn-small pg-toggle-btn active">⬆️ Top</button>
+                                    <button type="button" id="outpaint-side-bottom" class="btn-small pg-toggle-btn active">⬇️ Bottom</button>
+                                    <button type="button" id="outpaint-side-left" class="btn-small pg-toggle-btn active">⬅️ Left</button>
+                                    <button type="button" id="outpaint-side-right" class="btn-small pg-toggle-btn active">➡️ Right</button>
+                                </div>
+
+                                <label for="outpaint-percent" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    Expand by: <span id="outpaint-percent-val">25%</span> per side
+                                </label>
+                                <input type="range" id="outpaint-percent" min="10" max="100" step="5" value="25" style="width:100%; margin-bottom:0.5rem;">
+                                <p id="outpaint-summary" style="font-size: 0.75rem; color: var(--text-soft); margin: 0 0 0.75rem;"></p>
+
+                                <label for="outpaint-prompt" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    Describe the new area (optional):
+                                </label>
+                                <textarea
+                                    id="outpaint-prompt"
+                                    class="input"
+                                    rows="2"
+                                    maxlength="500"
+                                    placeholder="Leave blank to seamlessly continue the scene, or describe what should appear — e.g. more of the same forest, misty background"
+                                ></textarea>
+
+                                <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.75rem;">
+                                    <label for="outpaint-provider" class="label" style="margin:0; font-size:0.8rem;">Provider:</label>
+                                    <select id="outpaint-provider" class="input" style="max-width: 220px; padding: 0.35rem 0.5rem; height: auto;">
+                                        <option value="localForge">🔧 Local Forge</option>
+                                        <option value="cloudApi">☁️ Cloud / OpenAI API</option>
+                                        <option value="customEndpoint">🌐 Custom Infill Server</option>
+                                    </select>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    id="outpaint-apply-btn"
+                                    class="btn-primary"
+                                    style="margin-top: 0.75rem;"
+                                    title="Expand the canvas and fill the new area using the settings above."
+                                >
+                                    🖼️ Expand &amp; Fill
+                                </button>
+                                <p id="outpaint-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
                             </div>
                         </div>
                     </section>
