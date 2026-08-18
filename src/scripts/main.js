@@ -491,6 +491,8 @@ class CharacterGeneratorApp {
     // Add paste listener for reference image
     document.addEventListener("paste", (e) => this.handleReferenceImagePaste(e));
 
+    if (typeof this._initPasteZoneAutoSelect === "function") this._initPasteZoneAutoSelect();
+
     // Creator's Notes edit tracking
     const creatorNotesTextarea = document.getElementById("creator-notes");
     if (creatorNotesTextarea) creatorNotesTextarea.addEventListener("input", () => {

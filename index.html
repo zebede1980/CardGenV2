@@ -365,14 +365,25 @@
                                 class="input"
                                 accept="image/*"
                             />
-                            <div
+                            <!-- Real text input rather than a contenteditable div — see the
+                                 equivalent comment on #playground-drop-zone in index.html for
+                                 why: _initPasteZoneAutoSelect (image-handler.js) selects its
+                                 placeholder text on focus so iOS shows the Paste bubble
+                                 immediately, instead of requiring manual text selection. -->
+                            <input
+                                type="text"
                                 id="reference-paste-zone"
-                                contenteditable="true"
                                 inputmode="none"
+                                autocomplete="off"
+                                autocorrect="off"
+                                autocapitalize="off"
                                 spellcheck="false"
-                                translate="no"
-                                data-paste-zone-placeholder="📋 Tap here, then long-press → Paste to add a copied image (for iPad/touch — no keyboard shortcut needed)"
+                                data-paste-zone-placeholder="📋 Paste images here"
+                                value="📋 Paste images here"
+                                title="Tap and paste a copied image"
                                 style="
+                                    width: 100%;
+                                    box-sizing: border-box;
                                     margin-top: 0.5rem;
                                     padding: 0.6rem 0.75rem;
                                     border: 1px dashed var(--border);
@@ -382,8 +393,9 @@
                                     font-size: 0.8rem;
                                     cursor: text;
                                     outline: none;
+                                    background: transparent;
                                 "
-                            >📋 Tap here, then long-press → Paste to add a copied image (for iPad/touch — no keyboard shortcut needed)</div>
+                            />
                             <div
                                 id="reference-image-preview"
                                 style="
@@ -2172,19 +2184,28 @@
 
                         <input type="file" id="playground-image-file" accept="image/*" style="display: none;" />
 
-                        <!-- Drop zone — click to upload, or paste directly. Doubles as the
-                             touch-friendly paste target (see _extractPastedImageFile /
-                             _resetPasteZones in image-handler.js): iOS only shows its native
-                             "Paste" action on a focusable, editable element, so this has to be
-                             contenteditable even though it also opens the file picker on click. -->
-                        <div
+                        <!-- Drop zone — click to upload, or paste directly. A real text
+                             input rather than a contenteditable div: it's focusable/editable
+                             (so iOS still offers its native Paste action, same as before),
+                             but being a real input means _initPasteZoneAutoSelect (see
+                             image-handler.js) can call .select() on focus to select all of
+                             the placeholder text immediately — iOS then shows the Paste
+                             bubble right away, instead of the user having to manually
+                             long-press and drag selection handles across a sentence. -->
+                        <input
+                            type="text"
                             id="playground-drop-zone"
-                            contenteditable="true"
                             inputmode="none"
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
                             spellcheck="false"
-                            translate="no"
-                            data-paste-zone-placeholder="📁 Click to upload, or 📋 paste an image (tap then long-press → Paste on iPad)"
+                            data-paste-zone-placeholder="📋 Paste images here"
+                            value="📋 Paste images here"
+                            title="Click to upload, or tap and paste a copied image"
                             style="
+                                width: 100%;
+                                box-sizing: border-box;
                                 padding: 1.5rem 1rem;
                                 border: 2px dashed var(--border);
                                 border-radius: 0.75rem;
@@ -2193,8 +2214,9 @@
                                 font-size: 0.9rem;
                                 cursor: pointer;
                                 outline: none;
+                                background: transparent;
                             "
-                        >📁 Click to upload, or 📋 paste an image (tap then long-press → Paste on iPad)</div>
+                        />
 
                         <div
                             id="playground-image-preview"

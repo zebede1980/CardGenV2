@@ -1136,17 +1136,35 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return null;
   },
 
-  // Safety net for the contenteditable "paste zone" elements (see
-  // #reference-paste-zone / #playground-drop-zone in index.html) — on some
-  // WebKit versions a pasted image can still leave stray text/content behind
-  // inside a contenteditable even with event.preventDefault() called, since
-  // that only reliably suppresses the *file* insertion, not always every
-  // side effect. Snaps each zone back to its placeholder shortly after any
-  // paste, regardless of whether that paste actually contained an image.
+  // Safety net for the "paste zone" input fields (see #reference-paste-zone /
+  // #playground-drop-zone in index.html) — on some WebKit versions a pasted
+  // image can still leave stray text/content behind even with
+  // event.preventDefault() called, since that only reliably suppresses the
+  // *file* insertion, not always every side effect. Snaps each zone back to
+  // its placeholder shortly after any paste, regardless of whether that
+  // paste actually contained an image.
   _resetPasteZones() {
     document.querySelectorAll("[data-paste-zone-placeholder]").forEach(zone => {
       const placeholder = zone.dataset.pasteZonePlaceholder;
-      if (zone.textContent !== placeholder) zone.textContent = placeholder;
+      if ("value" in zone) {
+        if (zone.value !== placeholder) zone.value = placeholder;
+      } else if (zone.textContent !== placeholder) {
+        zone.textContent = placeholder;
+      }
+    });
+  },
+
+  // These are real <input> fields (not contenteditable divs) specifically so
+  // this works: selecting all of a zone's placeholder text the moment it
+  // gains focus makes iOS/Safari show its native Paste bubble immediately,
+  // instead of the user having to manually long-press and drag selection
+  // handles across a full sentence — that's what made pasting on iPad
+  // genuinely awkward before.
+  _initPasteZoneAutoSelect() {
+    document.querySelectorAll("[data-paste-zone-placeholder]").forEach(zone => {
+      if (typeof zone.select === "function") {
+        zone.addEventListener("focus", () => zone.select());
+      }
     });
   },
 
