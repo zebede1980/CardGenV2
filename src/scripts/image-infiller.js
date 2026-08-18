@@ -34,11 +34,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (refBtn) {
       refBtn.style.display = this.referenceImageDataUrl ? "inline-flex" : "none";
     }
-    // Playground in-fill button (Image Playground tab)
-    const pgBtn = document.getElementById("inpaint-playground-image-btn");
-    if (pgBtn) {
-      pgBtn.style.display = this.playgroundImageUrl ? "inline-flex" : "none";
-    }
+    // Playground's In-fill tool is a permanent tab, not a conditionally-shown
+    // button (see #pg-tab-infill) — nothing to toggle here for it.
   },
 
   // Fetches any image URL (blob:, data:, or remote http(s)) and returns it as a
@@ -55,6 +52,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
       reader.onerror = () => reject(new Error("Failed to convert in-fill result to a data URL"));
       reader.readAsDataURL(blob);
     });
+  },
+
+  // Playground embeds this same in-fill modal inline in its own tab
+  // (index.html #playground-infill-slot) instead of a full-screen overlay —
+  // card/reference still use it as a modal. See _relocateCropModal's
+  // equivalent comment in image-cropper.js for why this reparents the one
+  // shared DOM node rather than duplicating the canvas/brush logic.
+  _relocateInfillModal(target) {
+    const modal = document.getElementById("image-inpaint-modal");
+    const slot = document.getElementById("playground-infill-slot");
+    if (!modal) return;
+
+    if (target === 'playground' && slot) {
+      if (!this._infillModalHome) {
+        this._infillModalHome = { parent: modal.parentNode, next: modal.nextSibling };
+      }
+      if (modal.parentNode !== slot) slot.appendChild(modal);
+      modal.classList.add("embedded-tool");
+    } else {
+      if (this._infillModalHome && modal.parentNode !== this._infillModalHome.parent) {
+        this._infillModalHome.parent.insertBefore(modal, this._infillModalHome.next);
+      }
+      modal.classList.remove("embedded-tool");
+    }
   },
 
   // target: 'card' (default — this.currentImageUrl), 'reference' (the
@@ -87,6 +108,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const modal = document.getElementById("image-inpaint-modal");
     if (!modal) return;
+
+    this._relocateInfillModal(target);
 
     this.showNotification("Loading image into In-fill editor...", "info");
 
@@ -124,7 +147,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._infillState.toolMode = "brush";
       this._infillState.brushSize = parseInt(document.getElementById("infill-brush-size")?.value) || 30;
 
-      modal.style.display = "flex";
+      modal.style.display = target === 'playground' ? "block" : "flex";
 
       // Sync provider dropdown with current config
       const modalProviderSelect = document.getElementById("infill-modal-provider");
@@ -400,7 +423,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Window resize observer
     window.addEventListener("resize", () => {
       const modal = document.getElementById("image-inpaint-modal");
-      if (modal && modal.style.display === "flex") {
+      if (modal && modal.style.display !== "none") {
         this._renderInfillStage();
       }
     });
@@ -632,6 +655,39 @@ Object.assign(CharacterGeneratorApp.prototype, {
         throw new Error("No image was returned from In-fill provider");
       }
 
+      // Playground: single-button flow, no Save step. Its history strip
+      // already gives a non-destructive way back to any earlier version, so
+      // the "review before committing" purpose of the Save-to-Card step
+      // (below, for card/reference) doesn't apply here — commit immediately,
+      // same as the Edit tab does.
+      if (this._infillTarget === 'playground') {
+        const dataUrl = await this._urlToDataUrl(resultImageUrl);
+        this.playgroundImageUrl = dataUrl;
+        if (typeof this.updatePlaygroundImagePreview === "function") {
+          this.updatePlaygroundImagePreview(dataUrl);
+        }
+        if (typeof this._addPlaygroundHistoryEntry === "function") {
+          this._addPlaygroundHistoryEntry(dataUrl, "In-filled");
+        }
+
+        const resultImg = new Image();
+        await new Promise((resolve, reject) => {
+          resultImg.onload = resolve;
+          resultImg.onerror = () => reject(new Error("Failed to load in-filled result image"));
+          resultImg.src = dataUrl;
+        });
+        this._infillState.img = resultImg;
+        this._infillState.naturalWidth = resultImg.naturalWidth || targetW;
+        this._infillState.naturalHeight = resultImg.naturalHeight || targetH;
+        this._renderInfillStage();
+
+        if (statusEl) {
+          statusEl.innerHTML = `<span style="color: #22c55e;">✅ Applied — paint another area to keep going, or switch tabs.</span>`;
+        }
+        this.showNotification("Image updated!", "success");
+        return;
+      }
+
       // Store the pending result — not committed to the card until user clicks Save
       this._infillState.pendingResult = resultImageUrl;
 
@@ -717,24 +773,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         return;
       }
 
-      if (this._infillTarget === 'playground') {
-        // Playground path: no card, no vision description to keep in sync.
-        const dataUrl = await this._urlToDataUrl(pendingUrl);
-        this.playgroundImageUrl = dataUrl;
-        this._infillState.pendingResult = null;
-        if (typeof this.updatePlaygroundImagePreview === "function") {
-          this.updatePlaygroundImagePreview(dataUrl);
-        }
-        if (typeof this._addPlaygroundHistoryEntry === "function") {
-          this._addPlaygroundHistoryEntry(dataUrl, "In-filled");
-        }
-
-        this.closeInfillModal();
-        this.showNotification("💾 Image updated.", "success");
-        this.updateCropButtonVisibility();
-        this.updateInfillButtonVisibility();
-        return;
-      }
+      // Playground commits immediately in handleApplyInfill() above and never
+      // shows this Save button, so nothing reaches this point for it.
 
       // Archive the old image to history so the user can revert
       if (typeof this._archiveCurrentImage === "function") {

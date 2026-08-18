@@ -30,10 +30,32 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (refBtn) {
       refBtn.style.display = this.referenceImageDataUrl ? "inline-flex" : "none";
     }
-    // Playground crop button (Image Playground tab)
-    const pgBtn = document.getElementById("crop-playground-image-btn");
-    if (pgBtn) {
-      pgBtn.style.display = this.playgroundImageUrl ? "inline-flex" : "none";
+    // Playground's Crop tool is a permanent tab, not a conditionally-shown
+    // button (see #pg-tab-crop) — nothing to toggle here for it.
+  },
+
+  // Playground embeds this same crop modal inline in its own tab (index.html
+  // #playground-crop-slot) instead of a full-screen overlay — card/reference
+  // still use it as a modal. Moving the one shared DOM node between the two
+  // homes (rather than duplicating the canvas/drag logic in image-cropper.js)
+  // keeps both in sync automatically. _cropModalHome remembers where it
+  // started so a card/reference open can always put it back.
+  _relocateCropModal(target) {
+    const modal = document.getElementById("image-crop-modal");
+    const slot = document.getElementById("playground-crop-slot");
+    if (!modal) return;
+
+    if (target === 'playground' && slot) {
+      if (!this._cropModalHome) {
+        this._cropModalHome = { parent: modal.parentNode, next: modal.nextSibling };
+      }
+      if (modal.parentNode !== slot) slot.appendChild(modal);
+      modal.classList.add("embedded-tool");
+    } else {
+      if (this._cropModalHome && modal.parentNode !== this._cropModalHome.parent) {
+        this._cropModalHome.parent.insertBefore(modal, this._cropModalHome.next);
+      }
+      modal.classList.remove("embedded-tool");
     }
   },
 
@@ -70,6 +92,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const modal = document.getElementById("image-crop-modal");
     if (!modal) return;
 
+    this._relocateCropModal(target);
+
     this.showNotification("Loading image into cropper...", "info");
 
     try {
@@ -105,7 +129,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._cropState.flipH = false;
       this._cropState.aspectRatio = null; // Default to free aspect ratio
 
-      modal.style.display = "flex";
+      modal.style.display = target === 'playground' ? "block" : "flex";
 
       // Reset aspect ratio selector active states
       document.querySelectorAll(".crop-aspect-btn").forEach(btn => {
@@ -517,7 +541,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (typeof this._addPlaygroundHistoryEntry === "function") {
           this._addPlaygroundHistoryEntry(dataUrl, "Cropped");
         }
-        this.closeCropModal();
+        // Reload the tool with the now-committed result instead of closing —
+        // it's embedded inline in its own tab here, not a one-shot modal, so
+        // staying open ready for another crop pass matches how the In-fill
+        // tab already behaves after an apply.
+        this.openCropModal('playground');
         this.showNotification("Image cropped!", "success");
         this.updateCropButtonVisibility();
         if (typeof this.updateInfillButtonVisibility === "function") {

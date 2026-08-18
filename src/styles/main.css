@@ -746,6 +746,32 @@ textarea.content-box {
     }
 }
 
+/* Playground: crop/infill tools embedded inline in their own tab instead of
+   as a full-screen modal (see _relocateCropModal/_relocateInfillModal in
+   image-cropper.js/image-infiller.js). Same DOM node either way, just
+   restyled to sit in the page flow instead of overlaying it. */
+.modal-overlay.embedded-tool {
+    position: static;
+    inset: auto;
+    background: none;
+    padding: 0;
+    z-index: auto;
+}
+
+.embedded-tool .crop-modal-content,
+.embedded-tool .infill-modal-content {
+    width: 100%;
+    height: auto;
+    max-height: 60vh;
+    box-shadow: none;
+}
+
+.embedded-tool .modal-header,
+.embedded-tool #crop-cancel-btn,
+.embedded-tool #infill-cancel-btn {
+    display: none;
+}
+
 /* Free image dropdown */
 .free-image-dropdown-wrapper {
     position: relative;

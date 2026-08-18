@@ -70,11 +70,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.handlePlaygroundImagePaste(e);
     });
 
-    // Crop / In-fill / Edit buttons
-    const cropBtn = document.getElementById("crop-playground-image-btn");
-    if (cropBtn) cropBtn.addEventListener("click", () => this.openCropModal('playground'));
-    const inpaintBtn = document.getElementById("inpaint-playground-image-btn");
-    if (inpaintBtn) inpaintBtn.addEventListener("click", () => this.openInfillModal('playground'));
+    // Tool tabs (Crop / In-fill / Edit) — only one panel on screen at a time.
+    // Crop and In-fill embed the same shared crop/in-fill modal tools used
+    // elsewhere in the app (see _relocateCropModal/_relocateInfillModal),
+    // opened the moment their tab is selected.
+    ["crop", "infill", "edit"].forEach(tab => {
+      const btn = document.getElementById(`pg-tab-${tab}`);
+      if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
+    });
+
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
 
@@ -86,6 +90,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (modelSelect) {
       modelSelect.addEventListener("change", (e) => this.config.set("api.image.editModel", e.target.value));
     }
+  },
+
+  // Switches which of the Crop / In-fill / Edit panels is visible. Crop and
+  // In-fill are the shared modal tools (see image-cropper.js/image-infiller.js)
+  // embedded inline here — opening them is what actually loads the current
+  // image into their canvas, so selecting those tabs triggers the same
+  // openCropModal('playground')/openInfillModal('playground') a button click
+  // used to.
+  _setPlaygroundToolTab(tab) {
+    this._pgActiveTab = tab;
+    const tabs = { crop: "pg-tab-crop", infill: "pg-tab-infill", edit: "pg-tab-edit" };
+    const panels = { crop: "pg-panel-crop", infill: "pg-panel-infill", edit: "pg-panel-edit" };
+
+    Object.entries(tabs).forEach(([key, id]) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.className = key === tab ? "btn-primary" : "btn-outline";
+    });
+    Object.entries(panels).forEach(([key, id]) => {
+      const panel = document.getElementById(id);
+      if (panel) panel.style.display = key === tab ? "block" : "none";
+    });
+
+    if (!this.playgroundImageUrl) return;
+    if (tab === "crop") this.openCropModal('playground');
+    else if (tab === "infill") this.openInfillModal('playground');
   },
 
   // Heuristic only — providers like nano-gpt list a plain text-to-image model
@@ -164,6 +193,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       const toolsSection = document.getElementById("playground-tools-section");
       if (toolsSection) toolsSection.style.display = "block";
+      this._setPlaygroundToolTab("edit");
     } catch (error) {
       console.error("Playground image handling failed:", error);
       this.showNotification(`Image upload failed: ${error.message}`, "warning");
@@ -329,6 +359,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
     if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
     this._renderPlaygroundHistory();
+
+    // If Crop or In-fill is the open tab, reload its canvas with the
+    // now-current image rather than leaving it showing a stale version.
+    if (this._pgActiveTab === "crop") this.openCropModal('playground');
+    else if (this._pgActiveTab === "infill") this.openInfillModal('playground');
   },
 
   _savePlaygroundHistoryEntry(index) {
