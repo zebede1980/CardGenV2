@@ -35,7 +35,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       document.body.classList.remove("chat-active", "chat-in-chat");
       // Refreshed on every tab-open (not just once at init) so a model added
       // in Settings → Image API while on another tab shows up immediately.
-      this._updatePlaygroundEditModelDropdown();
+      this._updatePlaygroundEditModelDropdown("playground-edit-model");
+      this._updatePlaygroundEditModelDropdown("playground-consistency-model");
     });
 
     otherTabs.forEach(btn => {
@@ -70,26 +71,36 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.handlePlaygroundImagePaste(e);
     });
 
-    // Tool tabs (Crop / In-fill / Edit) — only one panel on screen at a time.
-    // Crop and In-fill embed the same shared crop/in-fill modal tools used
-    // elsewhere in the app (see _relocateCropModal/_relocateInfillModal),
-    // opened the moment their tab is selected.
-    ["crop", "infill", "edit"].forEach(tab => {
+    // Tool tabs (Crop / In-fill / Edit / Consistency) — only one panel on
+    // screen at a time. Crop and In-fill embed the same shared crop/in-fill
+    // modal tools used elsewhere in the app (see
+    // _relocateCropModal/_relocateInfillModal), opened the moment their tab
+    // is selected.
+    ["crop", "infill", "edit", "consistency"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
 
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
+    const consistencyBtn = document.getElementById("generate-consistency-image-btn");
+    if (consistencyBtn) consistencyBtn.addEventListener("click", () => this.handleGenerateConsistentImage());
 
-    // Edit model dropdown — shares api.image.editModel with the Settings text
-    // field (see config.js), so picking a model here also updates what
-    // Settings shows, and vice versa.
-    this._updatePlaygroundEditModelDropdown();
-    const modelSelect = document.getElementById("playground-edit-model");
-    if (modelSelect) {
-      modelSelect.addEventListener("change", (e) => this.config.set("api.image.editModel", e.target.value));
-    }
+    // Edit and Consistency model dropdowns — both read/write the one
+    // api.image.editModel setting (shared with the Settings text field too,
+    // see config.js), so picking a model in either place updates all three.
+    const modelSelectIds = ["playground-edit-model", "playground-consistency-model"];
+    modelSelectIds.forEach(id => this._updatePlaygroundEditModelDropdown(id));
+    modelSelectIds.forEach(id => {
+      const select = document.getElementById(id);
+      if (!select) return;
+      select.addEventListener("change", (e) => {
+        this.config.set("api.image.editModel", e.target.value);
+        modelSelectIds
+          .filter(otherId => otherId !== id)
+          .forEach(otherId => this._updatePlaygroundEditModelDropdown(otherId));
+      });
+    });
   },
 
   // Switches which of the Crop / In-fill / Edit panels is visible. Crop and
@@ -100,8 +111,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { crop: "pg-tab-crop", infill: "pg-tab-infill", edit: "pg-tab-edit" };
-    const panels = { crop: "pg-panel-crop", infill: "pg-panel-infill", edit: "pg-panel-edit" };
+    const tabs = { crop: "pg-tab-crop", infill: "pg-tab-infill", edit: "pg-tab-edit", consistency: "pg-tab-consistency" };
+    const panels = { crop: "pg-panel-crop", infill: "pg-panel-infill", edit: "pg-panel-edit", consistency: "pg-panel-consistency" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -133,9 +144,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // Populated from api.image.models — the same list "Fetch Models" in
   // Settings → Image API fills in (or the user adds to manually via its
   // "Add" button), since that endpoint returns every model the account has
-  // access to, edit-capable or not.
-  _updatePlaygroundEditModelDropdown() {
-    const select = document.getElementById("playground-edit-model");
+  // access to, edit-capable or not. Edit and Character Consistency each have
+  // their own dropdown (selectId) but both read/write the one
+  // api.image.editModel setting, so picking a model in either place updates
+  // both — see the shared change listener in initPlaygroundTab().
+  _updatePlaygroundEditModelDropdown(selectId = "playground-edit-model") {
+    const select = document.getElementById(selectId);
     if (!select) return;
 
     const models = this.config.get("api.image.models") || [];
@@ -207,29 +221,35 @@ Object.assign(CharacterGeneratorApp.prototype, {
     preview.innerHTML = `<img src="${dataUrl}" alt="Playground image" style="width: 100%; display: block;" />`;
   },
 
-  // Same image-to-image editing as handleEditReferenceImage(), targeting
-  // this.playgroundImageUrl instead — no vision re-describe step since
-  // there's no description field here. Unlike the card/reference edit flows,
-  // this applies the result immediately rather than opening a compare-and-
-  // choose modal: the history strip (_addPlaygroundHistoryEntry) already
-  // keeps every prior version reachable, so the modal's only job — giving a
-  // way back to "current" — is now redundant, and it was in the way of a
-  // clean, quick "make a change, see it, make another" workflow.
-  async handleEditPlaygroundImage() {
+  // Shared by the Edit and Character Consistency tabs — both are the exact
+  // same image-to-image call (image + instruction → apiHandler.editImage()),
+  // just aimed differently: Edit expects small, targeted changes; Consistency
+  // expects a whole new scene/pose/style while using the image as an
+  // identity anchor. There's no separate "consistency" API or model — same
+  // mechanism either way, so this is one runner parameterized by which DOM
+  // ids to read from and what to call the history entry.
+  //
+  // Applies the result immediately rather than opening a compare-and-choose
+  // modal like the card/reference edit flows do: the history strip
+  // (_addPlaygroundHistoryEntry) already keeps every prior version
+  // reachable, so the modal's only job — giving a way back to "current" — is
+  // redundant here, and it was in the way of a quick "try it, see it, try
+  // again" workflow.
+  async _runPlaygroundImageToImage({ instructionElId, modelSelectId, statusElId, buttonElId, allowLocalForge, historyLabel, missingInstructionMessage, successMessage }) {
     if (!this.playgroundImageUrl) {
       this.showNotification("Upload or paste an image first", "warning");
       return;
     }
 
-    const instructionEl = document.getElementById("playground-edit-instruction");
+    const instructionEl = document.getElementById(instructionElId);
     const instruction = instructionEl?.value?.trim();
     if (!instruction) {
-      this.showNotification("Describe what you want to change first", "warning");
+      this.showNotification(missingInstructionMessage, "warning");
       instructionEl?.focus();
       return;
     }
 
-    const useLocalForge = document.getElementById("playground-edit-use-forge")?.checked;
+    const useLocalForge = allowLocalForge && document.getElementById("playground-edit-use-forge")?.checked;
     const denoisingStrength = parseFloat(document.getElementById("playground-edit-denoising")?.value) || 0.55;
 
     let editModel;
@@ -242,17 +262,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.showNotification("Please configure image API settings first", "warning");
         return;
       }
-      editModel = document.getElementById("playground-edit-model")?.value
+      editModel = document.getElementById(modelSelectId)?.value
         || this.config.get("api.image.editModel")
         || "flux-2-pro-image-to-image";
     }
 
-    const editBtn = document.getElementById("edit-playground-image-btn");
-    const statusEl = document.getElementById("playground-edit-status");
-    if (editBtn) editBtn.disabled = true;
+    const actionBtn = document.getElementById(buttonElId);
+    const statusEl = document.getElementById(statusElId);
+    if (actionBtn) actionBtn.disabled = true;
     if (statusEl) {
       statusEl.style.display = "block";
-      statusEl.textContent = `✨ Editing with ${editModel}… this may take a minute.`;
+      statusEl.textContent = `✨ Working with ${editModel}… this may take a minute.`;
     }
 
     try {
@@ -271,7 +291,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         dataUrl = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target.result);
-          reader.onerror = () => reject(new Error("Failed to convert edited image to a data URL"));
+          reader.onerror = () => reject(new Error("Failed to convert the result image to a data URL"));
           reader.readAsDataURL(blob);
         });
         if (isBlob) URL.revokeObjectURL(resultUrl);
@@ -281,16 +301,47 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.updatePlaygroundImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
-      this._addPlaygroundHistoryEntry(dataUrl, `Edited (${editModel})`);
+      this._addPlaygroundHistoryEntry(dataUrl, historyLabel(editModel));
 
-      this.showNotification("Image updated!", "success");
+      this.showNotification(successMessage, "success");
     } catch (error) {
-      console.error("Playground image edit error:", error);
-      this.showNotification(`✨ Edit failed: ${error.message}`, "error", 6000);
+      console.error("Playground image-to-image error:", error);
+      this.showNotification(`Failed: ${error.message}`, "error", 6000);
     } finally {
-      if (editBtn) editBtn.disabled = false;
+      if (actionBtn) actionBtn.disabled = false;
       if (statusEl) statusEl.style.display = "none";
     }
+  },
+
+  handleEditPlaygroundImage() {
+    return this._runPlaygroundImageToImage({
+      instructionElId: "playground-edit-instruction",
+      modelSelectId: "playground-edit-model",
+      statusElId: "playground-edit-status",
+      buttonElId: "edit-playground-image-btn",
+      allowLocalForge: true,
+      historyLabel: (model) => `Edited (${model})`,
+      missingInstructionMessage: "Describe what you want to change first",
+      successMessage: "Image updated!",
+    });
+  },
+
+  // Character Consistency: no Local Forge option here — flux-1-dev is a base
+  // checkpoint, not an identity-preserving edit model, and per prior testing
+  // (see cardgenv2-image-edit-feature memory) it loses facial likeness even
+  // on small edits, so it'd be actively misleading to offer for a feature
+  // whose entire point is keeping the face consistent through a big change.
+  handleGenerateConsistentImage() {
+    return this._runPlaygroundImageToImage({
+      instructionElId: "playground-consistency-instruction",
+      modelSelectId: "playground-consistency-model",
+      statusElId: "playground-consistency-status",
+      buttonElId: "generate-consistency-image-btn",
+      allowLocalForge: false,
+      historyLabel: (model) => `New scene (${model})`,
+      missingInstructionMessage: "Describe the new scene first",
+      successMessage: "New scene generated!",
+    });
   },
 
   // ── History strip ──────────────────────────────────────────────────────────

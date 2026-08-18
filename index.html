@@ -2247,6 +2247,7 @@
                                 <button type="button" id="pg-tab-crop" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✂️ Crop</button>
                                 <button type="button" id="pg-tab-infill" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🎨 In-fill / Erase</button>
                                 <button type="button" id="pg-tab-edit" class="btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
+                                <button type="button" id="pg-tab-consistency" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🧬 Consistency</button>
                             </div>
 
                             <div id="pg-panel-crop" style="display: none;">
@@ -2312,6 +2313,46 @@
                                         </div>
                                     </div>
                                 </details>
+                            </div>
+
+                            <!-- Character Consistency: same image-to-image call as Edit above
+                                 (both share _runPlaygroundImageToImage in image-playground.js),
+                                 just aimed at a bigger ask — a whole new scene/pose/style
+                                 rather than a small tweak, using the image as an identity
+                                 anchor rather than something to lightly retouch. No Local
+                                 Forge option here — see the JS comment on
+                                 handleGenerateConsistentImage for why. -->
+                            <div id="pg-panel-consistency" style="display: none;">
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
+                                    Uses the image above as an identity anchor and generates a genuinely new image around it — new pose, setting, outfit, or art style — rather than a small edit. Same underlying model as ✨ Edit, just aimed at bigger changes; how well the face/likeness carries through still varies by model and how large a change you ask for.
+                                </p>
+
+                                <label for="playground-consistency-model" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    Model:
+                                </label>
+                                <select id="playground-consistency-model" class="input" style="margin-bottom: 0.75rem;"></select>
+
+                                <label for="playground-consistency-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    🧬 Describe the new scene:
+                                </label>
+                                <textarea
+                                    id="playground-consistency-instruction"
+                                    class="input"
+                                    rows="3"
+                                    maxlength="1000"
+                                    placeholder="e.g. the same character running through a rain-soaked cyberpunk street at night | now in full plate armor, wielding a sword, dramatic lighting | change art style to a watercolor painting, sitting in a garden"
+                                ></textarea>
+
+                                <button
+                                    type="button"
+                                    id="generate-consistency-image-btn"
+                                    class="btn-primary"
+                                    style="margin-top: 0.75rem;"
+                                    title="Generate a new scene using the image above as an identity anchor."
+                                >
+                                    🧬 Generate
+                                </button>
+                                <p id="playground-consistency-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
                             </div>
                         </div>
                     </section>
