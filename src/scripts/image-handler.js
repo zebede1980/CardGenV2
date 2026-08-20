@@ -545,6 +545,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       loading.style.display = "none";
 
+      // Archive to history immediately — don't rely on the modal being
+      // closed later to sweep it up via _pendingCandidateUrls. If the user
+      // closed this modal while Forge was generating (or never revisits
+      // it), the image must still land in history rather than being lost.
+      // (Removed again in selectImageOption if the user picks it as current.)
+      this._addToHistory(blobUrl);
+
       // Track pending candidate
       this._pendingCandidateUrls = [blobUrl];
 
@@ -937,6 +944,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this._pendingCandidateUrls = null;
     this.closeImageOptionsModal();
 
+    // The chosen image may already be in history (e.g. Local Forge archives
+    // its candidate eagerly so it's never lost) — it's about to become the
+    // current image, so it shouldn't also show up as a history entry.
+    if (this.imageHistoryUrls) {
+      const idx = this.imageHistoryUrls.indexOf(selectedUrl);
+      if (idx !== -1) {
+        this.imageHistoryUrls.splice(idx, 1);
+        this.updateImageHistoryButton();
+      }
+    }
+
     // Archive the image being replaced
     if (this.currentImageUrl && this.currentImageUrl !== selectedUrl) {
       this._archiveCurrentImage();
@@ -1033,10 +1051,21 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async handleImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
+    try {
+      await this.applyImageFileToCharacter(file);
+    } finally {
+      event.target.value = "";
+    }
+  },
+
+  // Shared by the file-input Upload flow (handleImageUpload) and the
+  // "📋 Paste" modal (initPasteImageModal) — applies a File as the
+  // character's current image, archiving whatever was there before.
+  async applyImageFileToCharacter(file) {
+    if (!file) return;
 
     if (!this.currentCharacter) {
       this.showNotification("Please generate a character first", "warning");
-      event.target.value = "";
       return;
     }
 
@@ -1064,8 +1093,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } catch (error) {
       console.error("Image upload error:", error);
       this.showNotification(`Image upload failed: ${error.message}`, "error");
-    } finally {
-      event.target.value = "";
     }
   },
 
@@ -1551,7 +1578,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (!pendingFile) return;
         const file = pendingFile;
         closeModal();
-        await this.processUploadedImageFile(file);
+        await this.applyImageFileToCharacter(file);
       });
     }
 
