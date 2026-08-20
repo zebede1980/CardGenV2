@@ -2923,12 +2923,9 @@
                             <label for="infill-provider" class="label">Default In-fill Provider</label>
                             <select id="infill-provider" class="input">
                                 <option value="localForge">Local WebUI Forge (Diffusion Inpainting)</option>
-                                <option value="cloudApi">Cloud / OpenAI-compatible /v1/images/edits — mask adherence unreliable, see note below</option>
+                                <option value="cloudApi">Cloud / OpenAI-compatible /v1/images/edits</option>
                                 <option value="customEndpoint">Dedicated / Custom Infill Server (LaMa / IOPaint / Custom API)</option>
                             </select>
-                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
-                                ⚠️ Tested 2026-08-18 against nano-gpt's <code>flux-lora/inpainting</code>: the mask was inconsistently respected across identical test calls — one run over-edited far past the masked region, another applied no edit at all. Local Forge's mask handling is confirmed correct; Cloud is left available in case a more reliable model becomes configured later.
-                            </p>
                         </div>
 
                         <div id="infill-custom-container" style="display: none;">
@@ -3956,9 +3953,9 @@
                         <!-- In-fill Provider Selector -->
                         <div style="display: flex; align-items: center; gap: 0.4rem;">
                             <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary, #a6adc8);">Provider:</span>
-                            <select id="infill-modal-provider" class="input" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; height: auto;" title="Cloud's mask adherence tested unreliable on 2026-08-18 — Local Forge is confirmed correct.">
+                            <select id="infill-modal-provider" class="input" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; height: auto;">
                                 <option value="localForge">🔧 Local Forge</option>
-                                <option value="cloudApi">☁️ Cloud / OpenAI API — mask unreliable</option>
+                                <option value="cloudApi">☁️ Cloud / OpenAI API</option>
                                 <option value="customEndpoint">🌐 Custom Infill Server</option>
                             </select>
                         </div>
