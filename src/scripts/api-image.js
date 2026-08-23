@@ -479,7 +479,9 @@ Object.assign(APIHandler.prototype, {
     if (style === "custom") {
       const customStyleText = this.config.get("api.image.customStyleText");
       if (customStyleText && customStyleText.trim()) {
-        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords.`;
+        styleBlock = isFlux
+          ? `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style — weave the style and medium into the opening descriptive sentence as prose (e.g. "a cinematic photograph of..."), NOT as a leading list of comma-separated keywords.`
+          : `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords.`;
       }
     } else if (style && style.trim()) {
       let styleName = style.replace(/-/g, " ");
@@ -510,7 +512,9 @@ Object.assign(APIHandler.prototype, {
         mediumExamples = `"digital illustration", "concept art", "digital painting"`;
       }
 
-      styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. ${mediumExamples}).`;
+      styleBlock = isFlux
+        ? `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style — weave medium-specific cues (e.g. ${mediumExamples}) into the opening descriptive sentence as prose (e.g. "a cinematic photograph of..."), NOT as a leading list of comma-separated keywords.`
+        : `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. ${mediumExamples}).`;
     }
     
     let moodBlock = "";
@@ -525,7 +529,7 @@ Object.assign(APIHandler.prototype, {
 
     let fluxBlock = "";
     if (isFlux) {
-      fluxBlock = `\n- FLUX MODEL COMPATIBILITY (CRITICAL): Write a natural language prompt compatible with Flux. Use full, highly descriptive sentences focusing on spatial relationships, composition, and accurate anatomy. DO NOT use comma-separated Danbooru tags. DO NOT use negative prompts in the text.`;
+      fluxBlock = `\n- FLUX MODEL COMPATIBILITY (CRITICAL): Write a natural language prompt compatible with Flux. Use full, highly descriptive sentences focusing on spatial relationships, composition, and accurate anatomy. DO NOT use comma-separated Danbooru tags. DO NOT use negative prompts in the text. The prompt MUST open with a complete sentence describing the subject — NEVER begin with a comma-separated list of style/medium/camera keywords (e.g. "DSLR photograph, cinematic photography, 50mm lens").`;
     }
 
     let qualityBlock = isFlux
