@@ -7,7 +7,7 @@ import shutil
 import uuid
 
 from app.database import get_db
-from app.models import CharacterCard, User
+from app.models import CharacterCard, CharacterCardGalleryImage, User
 from app.schemas import CharacterCardOut, CharacterCardCreate
 from app.services.card_parser import parse_card
 from app.routers.auth import get_current_user
@@ -110,6 +110,10 @@ def delete_card(card_id: int, db: Session = Depends(get_db), current_user: User 
 
     # Remove any story_cards join rows that reference this card
     db.query(StoryCard).filter(StoryCard.card_id == card_id).delete(synchronize_session=False)
+
+    # Remove any gallery image rows that reference this card (the proxy is
+    # responsible for deleting the on-disk files themselves before this runs)
+    db.query(CharacterCardGalleryImage).filter(CharacterCardGalleryImage.card_id == card_id).delete(synchronize_session=False)
 
     db.flush()
 

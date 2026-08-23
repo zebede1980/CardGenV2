@@ -272,6 +272,17 @@ async function loadCardHistoryImages(imgDir, cardId) {
   return history;
 }
 
+// Delete all on-disk gallery image files for a card (${cardId}_gallery_{galleryId}.img/.mime)
+async function deleteCardGalleryImages(imgDir, cardId, galleryId = null) {
+  if (!fs.existsSync(imgDir)) return;
+  const prefix = galleryId != null ? `${cardId}_gallery_${galleryId}.` : `${cardId}_gallery_`;
+  for (const file of fs.readdirSync(imgDir)) {
+    if (file.startsWith(prefix)) {
+      fsPromises.unlink(path.join(imgDir, file)).catch(() => { });
+    }
+  }
+}
+
 // ── JWT middleware ────────────────────────────────────────────────────────────
 
 function sessionUnauthorized(res, message) {
@@ -958,6 +969,7 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
     });
     if (!response.ok) throw new Error("Failed to delete card from database");
     deleteCardHistoryImages(imgDir, cardId);
+    deleteCardGalleryImages(imgDir, cardId);
     for (const ext of [".img", ".mime"]) {
       const f = path.join(imgDir, `${cardId}${ext}`);
       if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
@@ -974,6 +986,129 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
 
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Character gallery (extra linked images, separate from the single portrait) ──
+
+function galleryInternalHeaders(req) {
+  return {
+    "Content-Type": "application/json",
+    "X-User-Id": String(req.user.userId),
+    "X-User-Name": String(req.user.username),
+    "X-Internal-Secret": INTERNAL_API_SECRET,
+  };
+}
+
+app.get("/api/storage/cards/:id/gallery", requireAuth, async (req, res) => {
+  const cardId = req.params.id;
+  try {
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    const response = await fetch(`${internalUrl}/api/cards/${cardId}/gallery`, { headers: galleryInternalHeaders(req) });
+    if (!response.ok) throw new Error(`Database returned ${response.status}`);
+    const rows = await response.json();
+    const images = rows.map((row) => ({
+      id: row.id,
+      order: row.order_index,
+      url: `/api/storage/cards/${cardId}/gallery/${row.id}/image`,
+    }));
+    res.json(images);
+  } catch (e) {
+    console.error("[Gallery] GET Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/storage/cards/:id/gallery", requireAuth, async (req, res) => {
+  const cardId = req.params.id;
+  const imageBase64 = req.body?.imageBase64 || "";
+  const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) {
+    return res.status(400).json({ error: "imageBase64 must be a data: URL" });
+  }
+  try {
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    const response = await fetch(`${internalUrl}/api/cards/${cardId}/gallery`, {
+      method: "POST",
+      headers: galleryInternalHeaders(req),
+    });
+    if (!response.ok) throw new Error(`Database returned ${response.status}`);
+    const row = await response.json();
+
+    const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+    if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_gallery_${row.id}.img`), Buffer.from(match[2], "base64")),
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_gallery_${row.id}.mime`), match[1]),
+    ]);
+
+    res.json({ id: row.id, order: row.order_index, url: `/api/storage/cards/${cardId}/gallery/${row.id}/image` });
+  } catch (e) {
+    console.error("[Gallery] POST Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/storage/cards/:id/gallery/reorder", requireAuth, async (req, res) => {
+  const cardId = req.params.id;
+  try {
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    const response = await fetch(`${internalUrl}/api/cards/${cardId}/gallery/reorder`, {
+      method: "PUT",
+      headers: galleryInternalHeaders(req),
+      body: JSON.stringify({ ordered_ids: req.body?.orderedIds || [] }),
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: errText });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[Gallery] Reorder Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/storage/cards/:id/gallery/:galleryId", requireAuth, async (req, res) => {
+  const { id: cardId, galleryId } = req.params;
+  try {
+    const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+    const response = await fetch(`${internalUrl}/api/cards/${cardId}/gallery/${galleryId}`, {
+      method: "DELETE",
+      headers: galleryInternalHeaders(req),
+    });
+    if (!response.ok) throw new Error(`Database returned ${response.status}`);
+
+    const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+    await deleteCardGalleryImages(imgDir, cardId, galleryId);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[Gallery] DELETE Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/storage/cards/:id/gallery/:galleryId/image", requireAuth, async (req, res) => {
+  const { id: cardId, galleryId } = req.params;
+  const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
+  const imgFile = path.join(imgDir, `${cardId}_gallery_${galleryId}.img`);
+  const mimeFile = path.join(imgDir, `${cardId}_gallery_${galleryId}.mime`);
+
+  if (!fs.existsSync(imgFile) || !fs.existsSync(mimeFile)) {
+    return res.status(404).end();
+  }
+  try {
+    const [imgBuf, mime] = await Promise.all([
+      fsPromises.readFile(imgFile),
+      fsPromises.readFile(mimeFile, "utf8"),
+    ]);
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(imgBuf);
+  } catch (error) {
+    console.error("[Gallery] Image serve error:", error);
+    res.status(500).end();
+  }
 });
 
 // ── Migrate JSON configuration files to PostgreSQL (Config, Prompts, History, etc.) ─

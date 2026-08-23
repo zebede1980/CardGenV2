@@ -692,6 +692,9 @@
                             <button id="review-queue-toolbar-btn" class="btn-outline review-queue-toolbar-btn" style="display: none;" title="Open your temporary review queue">
                                 👁 Review Queue <span id="review-queue-toolbar-count" class="review-queue-toolbar-count">0</span>
                             </button>
+                            <button id="clear-new-btn" class="btn-outline" title="Clear the screen and start a brand new character">
+                                🆕 Clear / New
+                            </button>
                         </div>
 
                         <details id="stream-section-details" style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem;">
@@ -1669,6 +1672,32 @@
                                     <div class="loading-spinner"></div>
                                 </div>
                             </div>
+
+                            <div id="character-gallery-section" class="form-group" style="margin-top: 1rem;">
+                                <label class="label">🖼️ Character Gallery
+                                    <span style="font-weight: 400; color: var(--text-secondary); font-size: 0.85em;">— extra images to scroll through while roleplaying</span>
+                                </label>
+                                <div id="character-gallery-strip" class="character-gallery-strip"></div>
+                                <div id="character-gallery-hint" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                    Save this character to the library first to start a gallery.
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                                    <button id="gallery-generate-btn" class="btn-outline btn-small" disabled title="Generate a new image with AI and add it to this character's gallery">
+                                        ✨ Generate
+                                    </button>
+                                    <button id="gallery-upload-btn" class="btn-outline btn-small" disabled title="Upload an image from your device and add it to this character's gallery">
+                                        📤 Upload
+                                    </button>
+                                    <input type="file" id="gallery-upload-input" accept="image/*" style="display: none;" />
+                                </div>
+                                <div id="gallery-generate-preview" style="display: none; margin-top: 0.75rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-muted);">
+                                    <img id="gallery-generate-preview-img" src="" alt="Generated preview" style="max-width: 200px; max-height: 200px; display: block; border-radius: 0.3rem; object-fit: cover;" />
+                                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                        <button id="gallery-generate-accept-btn" class="btn-primary btn-small">✔️ Add to Gallery</button>
+                                        <button id="gallery-generate-discard-btn" class="btn-outline btn-small">✖️ Discard</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -2601,6 +2630,7 @@
         <script src="src/scripts/st-handler.js?v=20260514"></script>
         <script src="src/scripts/batch-generator.js?v=20260518"></script>
         <script src="src/scripts/image-gallery.js?v=20260518"></script>
+        <script src="src/scripts/character-gallery-panel.js?v=20260823"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=13"></script>
         <script src="src/scripts/adventure-handler.js?v=1"></script>

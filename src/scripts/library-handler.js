@@ -195,7 +195,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
         cardData.createdAt = new Date().toISOString();
       }
 
-      await this.storage.saveCard(cardData);
+      const savedCard = await this.storage.saveCard(cardData);
+      if (isPermanent && savedCard && savedCard.id) {
+        this.currentCardId = savedCard.id;
+        if (typeof this._renderCharacterGalleryPanel === "function") this._renderCharacterGalleryPanel();
+      }
 
       if (!isPermanent) {
         const allCards = await this.storage.listCards();
@@ -646,6 +650,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           }
         }
         if (typeof this.updateImageHistoryButton === "function") this.updateImageHistoryButton();
+        if (typeof this._renderCharacterGalleryPanel === "function") this._renderCharacterGalleryPanel();
 
         this.showNotification("Card loaded", "success");
       } else if (action === "delete-card") {

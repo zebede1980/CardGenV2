@@ -40,6 +40,13 @@ class CharacterCard(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class CharacterCardGalleryImage(Base):
+    __tablename__ = "character_card_gallery_images"
+    id = Column(Integer, primary_key=True, index=True)
+    card_id = Column(Integer, ForeignKey("character_cards.id", ondelete="CASCADE"), nullable=False)
+    order_index = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Story(Base):
     __tablename__ = "stories"
     id = Column(Integer, primary_key=True, index=True)

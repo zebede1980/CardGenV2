@@ -27,6 +27,17 @@ class CharacterCardOut(CharacterCardCreate):
     class Config:
         from_attributes = True
 
+class CharacterCardGalleryImageOut(BaseModel):
+    id: int
+    card_id: int
+    order_index: int
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class GalleryReorderRequest(BaseModel):
+    ordered_ids: List[int]
+
 class StoryCreate(BaseModel):
     title: str
     synopsis: str = ""

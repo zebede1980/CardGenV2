@@ -1318,12 +1318,20 @@ class RoleplayChatHandler {
         }
     }
 
-    getAvatarUrl(characterName, cardId = null) {
+    // Resolves an explicit card id, falling back to a name match against the
+    // active chat's cast — shared by getAvatarUrl and the gallery click
+    // handlers, which need the resolved id to fetch that card's gallery.
+    _resolveCardId(characterName, cardId = null) {
         let id = cardId;
         if (!id && this.activeChatCharacters) {
             const char = this.activeChatCharacters.find(c => c.name === characterName);
             if (char) id = char.id;
         }
+        return id || null;
+    }
+
+    getAvatarUrl(characterName, cardId = null) {
+        const id = this._resolveCardId(characterName, cardId);
         if (id) {
             const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || "";
             return `/api/storage/cards/thumbnail?cardId=${id}&token=${token}`;
@@ -1440,10 +1448,11 @@ class RoleplayChatHandler {
                     avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-user-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
                     const imgEl = avatarEl.querySelector('img');
                     if (imgEl) {
+                        const resolvedCardId = this._resolveCardId(userName, userPersona.id);
                         imgEl.addEventListener('click', (e) => {
                             e.stopPropagation();
-                            if (window.app && window.app.openGallery) {
-                                window.app.openGallery([{ url: avatarUrl, label: userName }]);
+                            if (window.app && window.app.openCardImageGallery) {
+                                window.app.openCardImageGallery(resolvedCardId, avatarUrl, userName);
                             }
                         });
                     }
@@ -1461,10 +1470,11 @@ class RoleplayChatHandler {
                 avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
                 const imgEl = avatarEl.querySelector('img');
                 if (imgEl) {
+                    const resolvedCardId = this._resolveCardId(charName, msg.character_card_id);
                     imgEl.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        if (window.app && window.app.openGallery) {
-                            window.app.openGallery([{ url: avatarUrl, label: charName }]);
+                        if (window.app && window.app.openCardImageGallery) {
+                            window.app.openCardImageGallery(resolvedCardId, avatarUrl, charName);
                         }
                     });
                 }
@@ -1657,6 +1667,15 @@ class RoleplayChatHandler {
                                     const avatarDiv = aiBubbleWrapper.querySelector('.chat-avatar-container');
                                     if (avatarDiv) {
                                         avatarDiv.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
+                                        const newImgEl = avatarDiv.querySelector('img');
+                                        if (newImgEl) {
+                                            newImgEl.addEventListener('click', (e) => {
+                                                e.stopPropagation();
+                                                if (window.app && window.app.openCardImageGallery) {
+                                                    window.app.openCardImageGallery(data.character_card_id, avatarUrl, data.character_name || 'Character');
+                                                }
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -2396,6 +2415,12 @@ class RoleplayChatHandler {
                                         const imgEl = aiBubbleWrapper.querySelector('.chat-avatar-char-img');
                                         if (imgEl) {
                                             imgEl.src = avatarUrl;
+                                            imgEl.onclick = (e) => {
+                                                e.stopPropagation();
+                                                if (window.app && window.app.openCardImageGallery) {
+                                                    window.app.openCardImageGallery(data.character_card_id, avatarUrl, data.character_name || 'Character');
+                                                }
+                                            };
                                         } else {
                                             const avatarDiv = aiBubbleWrapper.querySelector('.chat-avatar-container');
                                             if (avatarDiv) {
@@ -2404,8 +2429,8 @@ class RoleplayChatHandler {
                                                 if (newImgEl) {
                                                     newImgEl.addEventListener('click', (e) => {
                                                         e.stopPropagation();
-                                                        if (window.app && window.app.openGallery) {
-                                                            window.app.openGallery([{ url: avatarUrl, label: data.character_name || 'Character' }]);
+                                                        if (window.app && window.app.openCardImageGallery) {
+                                                            window.app.openCardImageGallery(data.character_card_id, avatarUrl, data.character_name || 'Character');
                                                         }
                                                     });
                                                 }

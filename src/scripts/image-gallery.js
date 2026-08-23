@@ -368,6 +368,42 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (this._onGalleryOverlayClick) document.getElementById("gallery-lightbox")?.removeEventListener("click", this._onGalleryOverlayClick);
   },
 
+  /* ── Character image gallery (persisted, linked to a saved card) ─────────── */
+
+  // Fetches a card's saved gallery images and appends the auth token each is
+  // served with (these end up as <img src>/lightbox urls, which can't carry
+  // an Authorization header — same reason getAvatarUrl does this for the
+  // portrait thumbnail).
+  async _loadCharacterGallery(cardId) {
+    if (!cardId || !window.characterStorage) return [];
+    try {
+      const rows = await window.characterStorage.listGalleryImages(cardId);
+      const token = window.cardgenAuth?.getToken() || localStorage.getItem("cardgen_auth_token") || "";
+      return rows.map((row) => ({
+        id: row.id,
+        url: `${row.url}?token=${encodeURIComponent(token)}`,
+      }));
+    } catch (e) {
+      console.error("Failed to load character gallery:", e);
+      return [];
+    }
+  },
+
+  // Opens the lightbox on a character's portrait plus its saved gallery
+  // images, in order. avatarUrl is whatever the caller already resolved
+  // (e.g. via getAvatarUrl) — if cardId can't be resolved or the gallery
+  // fetch comes back empty, this just shows the portrait, matching the
+  // previous single-image behavior.
+  async openCardImageGallery(cardId, avatarUrl, label) {
+    if (!avatarUrl) return;
+    const images = [{ url: avatarUrl, label: label || "Portrait" }];
+    if (cardId) {
+      const galleryImages = await this._loadCharacterGallery(cardId);
+      galleryImages.forEach((g) => images.push({ url: g.url, label: label || "Gallery" }));
+    }
+    this.openGallery(images, 0);
+  },
+
   /* ── Helper: make an image list openable in the gallery ────────────────── */
   // Call this from image-handler to attach gallery triggers to image cards.
   // context is forwarded to openGallery() — see its comment for why ('card'

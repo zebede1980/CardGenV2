@@ -117,6 +117,41 @@ class CharacterStorage {
   async deleteCard(id) {
     await authFetch(`${this.baseUrl}/api/storage/cards/${id}`, { method: "DELETE" });
   }
+
+  async listGalleryImages(cardId) {
+    try {
+      const res = await authFetch(`${this.baseUrl}/api/storage/cards/${cardId}/gallery`);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch (e) {
+      console.error("Failed to list gallery images:", e);
+      return [];
+    }
+  }
+
+  async addGalleryImage(cardId, imageBase64) {
+    const res = await authFetch(`${this.baseUrl}/api/storage/cards/${cardId}/gallery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageBase64 }),
+    });
+    if (!res.ok) throw new Error("Failed to add gallery image");
+    return await res.json();
+  }
+
+  async deleteGalleryImage(cardId, galleryId) {
+    const res = await authFetch(`${this.baseUrl}/api/storage/cards/${cardId}/gallery/${galleryId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete gallery image");
+  }
+
+  async reorderGalleryImages(cardId, orderedIds) {
+    const res = await authFetch(`${this.baseUrl}/api/storage/cards/${cardId}/gallery/reorder`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!res.ok) throw new Error("Failed to reorder gallery images");
+  }
 }
 
 window.characterStorage = new CharacterStorage();

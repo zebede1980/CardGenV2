@@ -697,6 +697,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.currentImageUrl = null;
         this.imageHistoryUrls = [];
       }
+      if (typeof this._clearCharacterGallery === "function") {
+        this._clearCharacterGallery();
+      }
 
       this.currentCharacter = characterData;
       this.originalCharacter = JSON.parse(JSON.stringify(characterData));
@@ -766,6 +769,67 @@ Object.assign(CharacterGeneratorApp.prototype, {
       console.error("Card import failed:", error);
       this.showNotification(`Card import failed: ${error.message}`, "error");
     }
+  },
+
+  handleClearNew() {
+    if (!confirm("Discard the current character and start a new one? Any unsaved changes will be lost.")) {
+      return;
+    }
+
+    this.currentCharacter = null;
+    this.originalCharacter = null;
+    this.stSourceAvatar = null;
+    this.lastConsistencyReport = null;
+    this._updatePushButton();
+
+    this.lorebookData = null;
+    this.lorebookEntries = [];
+    this.updateLorebookEntryCount();
+
+    this.altGreetings = [];
+    this.updateAltGreetingsCount();
+
+    this.referenceImageDataUrl = "";
+    if (typeof this.updateReferenceImagePreview === "function") {
+      this.updateReferenceImagePreview("");
+    }
+    const referencePreview = document.getElementById("reference-image-preview");
+    if (referencePreview) referencePreview.style.display = "none";
+
+    if (typeof this._resetCharacterMediaState === "function") {
+      this._resetCharacterMediaState();
+    } else {
+      this.currentImageUrl = null;
+      this.imageHistoryUrls = [];
+    }
+
+    if (typeof this._clearCharacterGallery === "function") {
+      this._clearCharacterGallery();
+    }
+
+    ["character-concept", "search-query", "search-scenario", "character-generated-name",
+      "character-description", "character-personality", "character-scenario",
+      "character-first-message", "example-messages-output", "character-post-history",
+      "creator-notes", "custom-image-prompt", "reference-image-description"]
+      .forEach((id) => { const el = document.getElementById(id); if (el) el.value = ""; });
+
+    this._renderTags([]);
+
+    const cardTypeSelect = document.getElementById("card-type-select");
+    if (cardTypeSelect) cardTypeSelect.value = "single";
+    const povSelect = document.getElementById("pov-select");
+    if (povSelect) povSelect.value = povSelect.options[0]?.value || "";
+
+    const imageContainer = document.getElementById("image-content");
+    if (imageContainer) {
+      imageContainer.innerHTML = `<div class="image-placeholder"><div class="loading-spinner" style="display:none;"></div><p style="color:var(--text-secondary);font-size:0.875rem;">No image</p></div>`;
+    }
+
+    if (typeof this.clearStream === "function") this.clearStream();
+
+    this.hideResultSection();
+
+    this.showNotification("Cleared — ready for a new character", "info");
   },
 
   showDropImportModal(file) {

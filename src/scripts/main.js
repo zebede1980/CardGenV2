@@ -172,6 +172,22 @@ class CharacterGeneratorApp {
     const urlImportBtn = document.getElementById("url-import-btn");
     if (urlImportBtn) urlImportBtn.addEventListener("click", () => this.openUrlImportModal());
 
+    // Clear / New button
+    const clearNewBtn = document.getElementById("clear-new-btn");
+    if (clearNewBtn) clearNewBtn.addEventListener("click", () => this.handleClearNew());
+
+    // Character gallery panel
+    const galleryGenerateBtn = document.getElementById("gallery-generate-btn");
+    if (galleryGenerateBtn) galleryGenerateBtn.addEventListener("click", () => this.handleGalleryGenerate());
+    const galleryUploadBtn = document.getElementById("gallery-upload-btn");
+    const galleryUploadInput = document.getElementById("gallery-upload-input");
+    if (galleryUploadBtn && galleryUploadInput) galleryUploadBtn.addEventListener("click", () => galleryUploadInput.click());
+    if (galleryUploadInput) galleryUploadInput.addEventListener("change", (e) => this.handleGalleryUpload(e));
+    const galleryGenerateAcceptBtn = document.getElementById("gallery-generate-accept-btn");
+    if (galleryGenerateAcceptBtn) galleryGenerateAcceptBtn.addEventListener("click", () => this.handleGalleryGenerateAccept());
+    const galleryGenerateDiscardBtn = document.getElementById("gallery-generate-discard-btn");
+    if (galleryGenerateDiscardBtn) galleryGenerateDiscardBtn.addEventListener("click", () => this.handleGalleryGenerateDiscard());
+
     // URL Import modal events
     const urlImportModal = document.getElementById("url-import-modal");
     const urlImportModalCloseBtn = document.getElementById("url-import-modal-close-btn");
@@ -1141,6 +1157,9 @@ class CharacterGeneratorApp {
     } else {
       this.currentImageUrl = null;
       this.imageHistoryUrls = [];
+    }
+    if (typeof this._clearCharacterGallery === "function") {
+      this._clearCharacterGallery();
     }
 
     this.lorebookEntries = [];

@@ -41,6 +41,15 @@ const initChatCharacterCards = () => {
         img.alt = char.name || '';
         img.src = `/api/storage/cards/thumbnail?cardId=${char.id}&token=${encodeURIComponent(token)}`;
         img.onerror = () => { img.style.display = 'none'; };
+        if (char.id) {
+            img.style.cursor = 'pointer';
+            img.title = 'View gallery';
+            img.addEventListener('click', () => {
+                if (window.app && window.app.openCardImageGallery) {
+                    window.app.openCardImageGallery(char.id, img.src, char.name);
+                }
+            });
+        }
         imgWrap.appendChild(img);
         tile.appendChild(imgWrap);
 

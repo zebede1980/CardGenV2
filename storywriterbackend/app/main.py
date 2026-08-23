@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from app.database import init_db
-from app.routers import cards, stories, generation, settings, auth, chat, adventure, proxy_data, personas
+from app.routers import cards, stories, generation, settings, auth, chat, adventure, proxy_data, personas, gallery
 
 app = FastAPI(title="AI Story Writer", version="1.0.0")
 
@@ -24,6 +24,7 @@ os.makedirs("uploads/stories", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.include_router(cards.router, prefix="/api")
+app.include_router(gallery.router, prefix="/api")
 app.include_router(stories.router, prefix="/api")
 app.include_router(generation.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
