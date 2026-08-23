@@ -807,7 +807,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._clearCharacterGallery();
     }
 
-    ["character-concept", "search-query", "search-scenario", "character-generated-name",
+    ["character-concept", "character-name", "search-query", "search-scenario", "character-generated-name",
       "character-description", "character-personality", "character-scenario",
       "character-first-message", "example-messages-output", "character-post-history",
       "creator-notes", "custom-image-prompt", "reference-image-description"]
@@ -828,6 +828,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (typeof this.clearStream === "function") this.clearStream();
 
     this.hideResultSection();
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
 
     this.showNotification("Cleared — ready for a new character", "info");
   },

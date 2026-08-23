@@ -217,7 +217,12 @@
                 <section class="input-section" style="margin-bottom: 2rem;">
                     <details id="input-section-details" open>
                         <summary class="section-title" style="cursor: pointer; padding: 0.5rem 0; margin-bottom: 1rem; user-select: none;">
-                            Character Generation Inputs
+                            <div style="display: inline-flex; align-items: center; justify-content: space-between; gap: 1rem; width: calc(100% - 1.25rem); vertical-align: middle;">
+                                <span>Character Generation Inputs</span>
+                                <button id="clear-new-btn" class="btn-outline" style="flex-shrink: 0;" title="Clear the screen and start a brand new character">
+                                    🆕 Clear / New
+                                </button>
+                            </div>
                         </summary>
                         <!-- Mode Selector -->
                         <div class="form-group" style="margin-bottom: 1rem;">
@@ -691,9 +696,6 @@
                             </button>
                             <button id="review-queue-toolbar-btn" class="btn-outline review-queue-toolbar-btn" style="display: none;" title="Open your temporary review queue">
                                 👁 Review Queue <span id="review-queue-toolbar-count" class="review-queue-toolbar-count">0</span>
-                            </button>
-                            <button id="clear-new-btn" class="btn-outline" title="Clear the screen and start a brand new character">
-                                🆕 Clear / New
                             </button>
                         </div>
 

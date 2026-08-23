@@ -172,9 +172,15 @@ class CharacterGeneratorApp {
     const urlImportBtn = document.getElementById("url-import-btn");
     if (urlImportBtn) urlImportBtn.addEventListener("click", () => this.openUrlImportModal());
 
-    // Clear / New button
+    // Clear / New button — lives inside the collapsible section's <summary> so
+    // it stays visible when collapsed; must stop the click from also toggling
+    // the <details> open/closed.
     const clearNewBtn = document.getElementById("clear-new-btn");
-    if (clearNewBtn) clearNewBtn.addEventListener("click", () => this.handleClearNew());
+    if (clearNewBtn) clearNewBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.handleClearNew();
+    });
 
     // Character gallery panel
     const galleryGenerateBtn = document.getElementById("gallery-generate-btn");
