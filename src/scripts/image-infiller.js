@@ -42,9 +42,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // base64 data: URL. Needed for the 'reference' in-fill target because the
   // in-fill provider hands back a blob:/remote URL, but re-describing the
   // result via the vision model requires an embeddable data: URI.
+  // Remote http(s) URLs are routed through /api/proxy-image (same as every
+  // other remote-result fetch in the app, e.g. _runPlaygroundImageToImage) —
+  // fetching them directly fails with a CORS error on hosts that don't send
+  // Access-Control-Allow-Origin, like nano-gpt's Cloudflare R2 result URLs.
   async _urlToDataUrl(url) {
     if (url.startsWith("data:")) return url;
-    const resp = await (window.authFetch || fetch)(url);
+    const fetchUrl = url.startsWith("blob:") ? url : `/api/proxy-image?url=${encodeURIComponent(url)}`;
+    const resp = await (window.authFetch || fetch)(fetchUrl);
     const blob = await resp.blob();
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
