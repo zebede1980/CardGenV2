@@ -2391,11 +2391,12 @@
                             <!-- Picture Expander (outpainting) — the opposite of Crop: drag
                                  the dashed frame outward (reusing the same .crop-handle
                                  elements/CSS as the Crop tool) to extend the canvas, then fill
-                                 the newly-exposed area. Reuses the same In-fill engine
-                                 (apiHandler.inpaintImage) as the In-fill tab — see
-                                 handleOutpaint() / _openOutpaintTool() in image-playground.js —
-                                 the mask is generated automatically from the frame's position
-                                 instead of hand-painted. -->
+                                 the newly-exposed area. Unlike the In-fill tab, this doesn't
+                                 send a mask — cloud mask conventions proved inconsistently
+                                 respected — it composites the photo onto a larger white canvas
+                                 and fills it via the same plain edit-instruction call
+                                 (apiHandler.editImage) Edit/Consistency use. See
+                                 handleOutpaint() / _openOutpaintTool() in image-playground.js. -->
                             <div id="pg-panel-outpaint" style="display: none;">
                                 <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
                                     Drag the frame outward on any side (or corner, for two at once) to extend the canvas, then fill the newly exposed area — the opposite of Crop.
@@ -2443,17 +2444,10 @@
                                     placeholder="Leave blank to seamlessly continue the scene, or describe what should appear — e.g. more of the same forest, misty background"
                                 ></textarea>
 
-                                <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.75rem; flex-wrap: wrap;">
-                                    <label for="outpaint-provider" class="label" style="margin:0; font-size:0.8rem;">Provider:</label>
-                                    <select id="outpaint-provider" class="input" style="max-width: 220px; padding: 0.35rem 0.5rem; height: auto;">
-                                        <option value="localForge">🔧 Local Forge</option>
-                                        <option value="cloudApi">☁️ Cloud / OpenAI API — mask unreliable</option>
-                                        <option value="customEndpoint">🌐 Custom Infill Server</option>
-                                    </select>
-                                </div>
-                                <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
-                                    ⚠️ Tested 2026-08-18 against nano-gpt's configured model — the mask was inconsistently respected, so Cloud may over-edit or leave the new area unfilled. Local Forge is confirmed correct and is the default.
-                                </p>
+                                <label for="playground-outpaint-model" class="label" style="display:block; margin-top:0.75rem; margin-bottom:0.35rem;">
+                                    Model:
+                                </label>
+                                <select id="playground-outpaint-model" class="input" style="margin-bottom: 0.75rem;"></select>
 
                                 <button
                                     type="button"

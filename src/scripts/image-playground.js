@@ -38,11 +38,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // immediately.
       this._updatePlaygroundEditModelDropdown("playground-edit-model");
       this._updatePlaygroundEditModelDropdown("playground-consistency-model");
+      this._updatePlaygroundEditModelDropdown("playground-outpaint-model");
       this._updatePlaygroundCombineModelDropdown();
-      const outpaintProviderSelect = document.getElementById("outpaint-provider");
-      if (outpaintProviderSelect) {
-        outpaintProviderSelect.value = this.config.get("api.image.infill.provider") || "localForge";
-      }
     });
 
     otherTabs.forEach(btn => {
@@ -128,7 +125,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Edit and Consistency model dropdowns — both read/write the one
     // api.image.editModel setting (shared with the Settings text field too,
     // see config.js), so picking a model in either place updates all three.
-    const modelSelectIds = ["playground-edit-model", "playground-consistency-model"];
+    const modelSelectIds = ["playground-edit-model", "playground-consistency-model", "playground-outpaint-model"];
     modelSelectIds.forEach(id => this._updatePlaygroundEditModelDropdown(id));
     modelSelectIds.forEach(id => {
       const select = document.getElementById(id);
@@ -480,9 +477,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // image's own edge (zero expansion) and the outer stage bound (max
   // expansion), rather than between 0 and the image's edge.
   //
-  // Reuses apiHandler.inpaintImage() — the same call the In-fill tab uses —
-  // for the actual fill, rather than any new provider integration. The mask
-  // is generated from the frame's position instead of hand-painted.
+  // Reuses apiHandler.editImage() — the same plain edit-instruction call
+  // Edit/Consistency use — rather than the In-fill tab's mask-based
+  // apiHandler.inpaintImage(). No mask is generated; the newly exposed area
+  // is instead composited as blank white canvas and described in the
+  // prompt, since cloud mask conventions proved inconsistently respected.
   _outpaintState: {
     img: null,
     naturalW: 0, naturalH: 0,
@@ -695,18 +694,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const chosenProvider = document.getElementById("outpaint-provider")?.value
-      || this.config.get("api.image.infill.provider")
-      || "localForge";
-    const isCloudProvider = chosenProvider !== "localForge";
     const userPrompt = document.getElementById("outpaint-prompt")?.value?.trim() || "";
+    const editModel = document.getElementById("playground-outpaint-model")?.value
+      || this.config.get("api.image.editModel")
+      || "flux-2-pro-image-to-image";
 
     const btn = document.getElementById("outpaint-apply-btn");
     const statusEl = document.getElementById("outpaint-status");
     if (btn) btn.disabled = true;
     if (statusEl) {
       statusEl.style.display = "block";
-      statusEl.textContent = `🖼️ Expanding with ${chosenProvider === "localForge" ? "Local Forge" : "the In-fill API"}… this may take a minute.`;
+      statusEl.textContent = `🖼️ Expanding with ${editModel}… this may take a minute.`;
     }
 
     try {
@@ -715,25 +713,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
       let drawH = img.naturalHeight;
       let padL = padLeft, padR = padRight, padT = padTop, padB = padBottom;
 
-      // Cloud providers reject oversized payloads (413) — scale the whole
+      // Cloud APIs reject oversized payloads (413) — scale the whole
       // expanded canvas down uniformly, same cap _getInfillPayloadData uses.
-      if (isCloudProvider) {
-        const rawTargetW = drawW + padL + padR;
-        const rawTargetH = drawH + padT + padB;
-        if (Math.max(rawTargetW, rawTargetH) > 1024) {
-          const scaleDown = 1024 / Math.max(rawTargetW, rawTargetH);
-          drawW = Math.round(drawW * scaleDown);
-          drawH = Math.round(drawH * scaleDown);
-          padL = Math.round(padL * scaleDown);
-          padR = Math.round(padR * scaleDown);
-          padT = Math.round(padT * scaleDown);
-          padB = Math.round(padB * scaleDown);
-        }
+      const rawTargetW = drawW + padL + padR;
+      const rawTargetH = drawH + padT + padB;
+      if (Math.max(rawTargetW, rawTargetH) > 1024) {
+        const scaleDown = 1024 / Math.max(rawTargetW, rawTargetH);
+        drawW = Math.round(drawW * scaleDown);
+        drawH = Math.round(drawH * scaleDown);
+        padL = Math.round(padL * scaleDown);
+        padR = Math.round(padR * scaleDown);
+        padT = Math.round(padT * scaleDown);
+        padB = Math.round(padB * scaleDown);
       }
 
       const targetW = drawW + padL + padR;
       const targetH = drawH + padT + padB;
 
+      // No mask: cloud/aggregator mask conventions (alpha channel vs
+      // grayscale, etc.) turned out inconsistently respected across models —
+      // see the removed provider-select UI. Instead this composites the
+      // source photo onto a larger white canvas and hands it to the plain
+      // edit-instruction endpoint (apiHandler.editImage, same one Edit/
+      // Consistency use), telling the model in the prompt what to do with
+      // the blank border. Less surgical than a real mask, but it's the one
+      // mechanism that's actually proven reliable here.
       const canvas = document.createElement("canvas");
       canvas.width = targetW;
       canvas.height = targetH;
@@ -741,49 +745,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, targetW, targetH);
       ctx.drawImage(img, padL, padT, drawW, drawH);
-      const imageDataUrl = isCloudProvider ? canvas.toDataURL("image/jpeg", 0.92) : canvas.toDataURL("image/png");
+      const imageDataUrl = canvas.toDataURL("image/jpeg", 0.92);
 
-      // Mask convention differs by provider — this is also the fix for why
-      // outpainting previously just left the new area plain white instead
-      // of filling it in via the cloud provider:
-      //   - Local Forge (Stable Diffusion): opaque grayscale, white=inpaint,
-      //     black=keep (see _getInfillPayloadData in image-infiller.js).
-      //   - Cloud (OpenAI images/edits convention, which nano-gpt's
-      //     inpaint-capable models also follow): the mask's ALPHA channel
-      //     is what matters — transparent (alpha 0) = edit, opaque = keep.
-      //     An all-opaque mask (which is what a solid black/white PNG with
-      //     no transparency is) tells that endpoint "nothing to edit," so
-      //     it just handed the source image back — no error, just a no-op,
-      //     which looked exactly like "it just added white."
-      const maskCanvas = document.createElement("canvas");
-      maskCanvas.width = targetW;
-      maskCanvas.height = targetH;
-      const maskCtx = maskCanvas.getContext("2d");
-      let maskDataUrl;
-      if (isCloudProvider) {
-        maskCtx.clearRect(0, 0, targetW, targetH); // transparent everywhere = "edit everywhere"...
-        maskCtx.fillStyle = "#ffffff";
-        maskCtx.fillRect(padL, padT, drawW, drawH); // ...except the original image's bounds, kept opaque
-        maskDataUrl = maskCanvas.toDataURL("image/png");
-      } else {
-        maskCtx.fillStyle = "#ffffff";
-        maskCtx.fillRect(0, 0, targetW, targetH);
-        maskCtx.fillStyle = "#000000";
-        maskCtx.fillRect(padL, padT, drawW, drawH);
-        maskDataUrl = maskCanvas.toDataURL("image/png");
-      }
+      const fillInstruction = userPrompt
+        ? `Fill in the blank white bordered area around this photo with: ${userPrompt}. Seamlessly blend it with the existing photo's style, lighting, and perspective. Do not alter, crop, or redraw the existing photographed content — only add new content in the blank white area.`
+        : "Fill in the blank white bordered area around this photo by seamlessly continuing the scene — matching style, lighting, and perspective. Do not alter, crop, or redraw the existing photographed content — only add new content in the blank white area.";
 
-      const resultUrl = await this.apiHandler.inpaintImage({
+      const resultUrl = await this.apiHandler.editImage({
         imageBase64: imageDataUrl,
-        maskBase64: maskDataUrl,
-        prompt: userPrompt || "seamlessly continue the surrounding scene, matching style and lighting",
-        providerOverride: chosenProvider,
-        width: targetW,
-        height: targetH,
+        instruction: fillInstruction,
+        model: editModel,
       });
 
       if (!resultUrl) {
-        throw new Error("No image was returned from the in-fill provider");
+        throw new Error("No image was returned from the edit API");
       }
 
       const dataUrl = await this._urlToDataUrl(resultUrl);
@@ -791,7 +766,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.updatePlaygroundImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
-      this._addPlaygroundHistoryEntry(dataUrl, `Expanded (+${padLeft}/${padTop}/${padRight}/${padBottom}px L/T/R/B)`);
+      this._addPlaygroundHistoryEntry(dataUrl, `Expanded (+${padLeft}/${padTop}/${padRight}/${padBottom}px L/T/R/B, ${editModel})`);
 
       this.showNotification("Canvas expanded!", "success");
       // Reload the tool against the new image so another expansion pass can
@@ -807,10 +782,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   // ── Two-image combining ──────────────────────────────────────────────────────
-  // Unlike Edit/Consistency/Outpaint, this can't reuse editImage() or
-  // inpaintImage() — it needs a model that accepts multiple reference images
-  // in one call (apiHandler.combineImages, its own proxy route), which is a
-  // genuinely different, less-common capability. Plain population, no
+  // Unlike Edit/Consistency/Outpaint (all single-image editImage() calls),
+  // this needs a model that accepts multiple reference images in one call
+  // (apiHandler.combineImages, its own proxy route), which is a genuinely
+  // different, less-common capability. Plain population, no
   // "looks edit-capable" heuristic (_looksEditCapable) — there's no reliable
   // naming convention for "accepts multiple images" the way "-image-to-image"
   // signals single-image editing.
