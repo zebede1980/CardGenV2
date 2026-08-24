@@ -1,4 +1,32 @@
 // Image generation and prompt building methods — extends APIHandler via prototype
+
+// Default width/height pairs used by Flux-family and most other cloud models.
+const DEFAULT_RATIO_MAP = {
+  "1:1": { width: 1024, height: 1024 },
+  "9:16": { width: 768, height: 1344 },
+  "16:9": { width: 1344, height: 768 },
+  "3:4": { width: 896, height: 1152 },
+  "4:3": { width: 1152, height: 896 },
+};
+
+// Seedream (ByteDance, via NanoGPT) enforces its own fixed enum of resolution
+// strings plus a ~3.7MP minimum — DEFAULT_RATIO_MAP's dims are below that
+// minimum, so sending them silently falls back to a square output instead
+// of erroring. Values below are pulled from NanoGPT's seedream-v5.0-lite
+// supported_parameters.resolutions list.
+const SEEDREAM_RATIO_MAP = {
+  "1:1": { width: 2048, height: 2048 },
+  "9:16": { width: 1440, height: 2560 },
+  "16:9": { width: 2560, height: 1440 },
+  "3:4": { width: 2048, height: 3072 },
+  "4:3": { width: 3072, height: 2048 },
+};
+
+function getRatioDims(model, ratio) {
+  const map = /seedream/i.test(model || "") ? SEEDREAM_RATIO_MAP : DEFAULT_RATIO_MAP;
+  return map[ratio];
+}
+
 Object.assign(APIHandler.prototype, {
 
   async generateImage(
@@ -101,16 +129,9 @@ Object.assign(APIHandler.prototype, {
     if (imageAspectRatio && imageAspectRatio.trim() !== "") {
       const ratio = imageAspectRatio.trim();
       data.aspect_ratio = ratio;
-      
+
       // Provide explicit width, height, and size for compatibility with NanoGPT / OpenRouter Flux models
-      const ratioMap = {
-        "1:1": { width: 1024, height: 1024 },
-        "9:16": { width: 768, height: 1344 },
-        "16:9": { width: 1344, height: 768 },
-        "3:4": { width: 896, height: 1152 },
-        "4:3": { width: 1152, height: 896 }
-      };
-      const dims = ratioMap[ratio];
+      const dims = getRatioDims(model, ratio);
       if (dims) {
         data.width = dims.width;
         data.height = dims.height;
@@ -177,19 +198,13 @@ Object.assign(APIHandler.prototype, {
       seed: Math.floor(Math.random() * 2147483647),
     };
 
-    const ratioMap = {
-      "1:1": { width: 1024, height: 1024 },
-      "9:16": { width: 768, height: 1344 },
-      "16:9": { width: 1344, height: 768 },
-      "3:4": { width: 896, height: 1152 },
-      "4:3": { width: 1152, height: 896 },
-    };
     const ratio = aspectRatio || this.config.get("api.image.aspectRatio");
-    if (ratio && ratioMap[ratio]) {
+    const dims = ratio && getRatioDims(editModel, ratio);
+    if (dims) {
       data.aspect_ratio = ratio;
-      data.width = ratioMap[ratio].width;
-      data.height = ratioMap[ratio].height;
-      data.size = `${ratioMap[ratio].width}x${ratioMap[ratio].height}`;
+      data.width = dims.width;
+      data.height = dims.height;
+      data.size = `${dims.width}x${dims.height}`;
     }
 
     console.log("=== SENDING IMAGE EDIT REQUEST ===");
