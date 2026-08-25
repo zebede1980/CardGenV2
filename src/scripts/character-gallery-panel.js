@@ -141,14 +141,51 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this._renderGalleryGeneratePreview();
   },
 
+  // Rebuilds the #gallery-generate-instructions box list to match Count
+  // (1/2/4, see #gallery-generate-count) — each generated image gets its own
+  // independent instruction rather than one prompt shared across the whole
+  // batch, so a Count-of-4 run can be 4 different poses/scenes in one go.
+  // Preserves already-typed text across a count change (e.g. 2 -> 4 keeps
+  // the first two boxes as they were) instead of wiping everything.
+  _renderGalleryInstructionInputs() {
+    const container = document.getElementById("gallery-generate-instructions");
+    if (!container) return;
+    const count = parseInt(document.getElementById("gallery-generate-count")?.value, 10) || 1;
+
+    const existingValues = Array.from(container.querySelectorAll(".gallery-instruction-input")).map((el) => el.value);
+
+    container.innerHTML = "";
+    for (let i = 0; i < count; i++) {
+      const row = document.createElement("div");
+      row.style.cssText = "display: flex; gap: 0.5rem; align-items: flex-start;";
+
+      if (count > 1) {
+        const label = document.createElement("span");
+        label.textContent = `${i + 1}.`;
+        label.style.cssText = "font-size: 0.75rem; color: var(--text-secondary); padding-top: 0.55rem; min-width: 1.1rem;";
+        row.appendChild(label);
+      }
+
+      const textarea = document.createElement("textarea");
+      textarea.className = "input gallery-instruction-input";
+      textarea.rows = 2;
+      textarea.maxLength = 1000;
+      textarea.placeholder = count > 1
+        ? `Image ${i + 1} — e.g. sitting by a campfire at night, same character`
+        : "Describe the new pose/scene/outfit — e.g. sitting by a campfire at night, same character | wearing a blue dress, waving";
+      textarea.value = existingValues[i] || "";
+      row.appendChild(textarea);
+
+      container.appendChild(row);
+    }
+  },
+
   // Image-to-image from the card's current portrait (not a fresh
   // text-to-image roll from the character description, which is what this
-  // used to do) — GALLERY_CONSISTENCY_INSTRUCTION is always prepended so the
-  // result stays recognizably this character regardless of what's typed.
-  // `count` (1/2/4, see #gallery-generate-count) fires that many independent
-  // edit calls in parallel — each already gets its own random seed inside
-  // apiHandler.editImage(), so this naturally yields different variations
-  // rather than N copies of the same result.
+  // used to do) — GALLERY_CONSISTENCY_INSTRUCTION is always prepended to
+  // every instruction so results stay recognizably this character regardless
+  // of what's typed. One independent edit call per instruction box, run in
+  // parallel.
   async handleGalleryGenerate() {
     if (!this.currentCharacter || !this.currentCardId) return;
     if (!this.currentImageUrl) {
@@ -156,11 +193,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const instructionEl = document.getElementById("gallery-generate-instruction");
-    const instruction = instructionEl?.value?.trim();
-    if (!instruction) {
-      this.showNotification("Describe the new pose/scene/outfit first", "warning");
-      instructionEl?.focus();
+    const instructionEls = Array.from(document.querySelectorAll("#gallery-generate-instructions .gallery-instruction-input"));
+    const instructions = instructionEls.map((el) => el.value.trim());
+    const emptyIndex = instructions.findIndex((text) => !text);
+    if (emptyIndex !== -1) {
+      this.showNotification(
+        instructions.length > 1 ? `Describe image #${emptyIndex + 1} first` : "Describe the new pose/scene/outfit first",
+        "warning"
+      );
+      instructionEls[emptyIndex]?.focus();
       return;
     }
 
@@ -172,7 +213,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     const editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
-    const count = parseInt(document.getElementById("gallery-generate-count")?.value, 10) || 1;
+    const count = instructions.length;
 
     const btn = document.getElementById("gallery-generate-btn");
     if (btn) { btn.disabled = true; btn.textContent = count > 1 ? `Generating ${count}…` : "Generating..."; }
@@ -186,11 +227,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
         reader.readAsDataURL(sourceBlob);
       });
 
-      const fullInstruction = `${GALLERY_CONSISTENCY_INSTRUCTION} ${instruction}`;
-
       const results = await Promise.allSettled(
-        Array.from({ length: count }, () =>
-          window.apiHandler.editImage({ imageBase64, instruction: fullInstruction, model: editModel })
+        instructions.map((instruction) =>
+          window.apiHandler.editImage({
+            imageBase64,
+            instruction: `${GALLERY_CONSISTENCY_INSTRUCTION} ${instruction}`,
+            model: editModel,
+          })
         )
       );
 

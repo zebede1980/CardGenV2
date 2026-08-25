@@ -192,6 +192,11 @@ class CharacterGeneratorApp {
     // Character gallery panel
     const galleryGenerateBtn = document.getElementById("gallery-generate-btn");
     if (galleryGenerateBtn) galleryGenerateBtn.addEventListener("click", () => this.handleGalleryGenerate());
+    const galleryGenerateCount = document.getElementById("gallery-generate-count");
+    if (galleryGenerateCount) galleryGenerateCount.addEventListener("change", () => this._renderGalleryInstructionInputs());
+    // Renders the initial single instruction box — the container starts
+    // empty in index.html since the box count depends on Count above.
+    if (typeof this._renderGalleryInstructionInputs === "function") this._renderGalleryInstructionInputs();
     const galleryUploadBtn = document.getElementById("gallery-upload-btn");
     const galleryUploadInput = document.getElementById("gallery-upload-input");
     if (galleryUploadBtn && galleryUploadInput) galleryUploadBtn.addEventListener("click", () => galleryUploadInput.click());
