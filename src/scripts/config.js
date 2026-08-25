@@ -36,13 +36,6 @@ class Config {
             enabled: false,
             url: "http://127.0.0.1:7860",
           },
-          infill: {
-            provider: "localForge",
-            model: "",
-            customEndpoint: "",
-            customApiKey: "",
-            denoisingStrength: 0.85,
-          },
         },
         tts: {
           provider: "local",
@@ -203,20 +196,6 @@ class Config {
     if (!this.config.api.image.localForge) this.config.api.image.localForge = {};
     if (forgeUrl !== undefined) this.config.api.image.localForge.url = forgeUrl || "http://127.0.0.1:7860";
     if (forgeEnabled !== undefined) this.config.api.image.localForge.enabled = forgeEnabled;
-
-    // Load Infill / Inpainting settings
-    const infillProvider = document.getElementById("infill-provider")?.value;
-    const infillModel = document.getElementById("infill-model")?.value?.trim();
-    const infillEndpoint = document.getElementById("infill-endpoint")?.value?.trim();
-    const infillApiKey = document.getElementById("infill-api-key")?.value?.trim();
-    const infillDenoising = parseFloat(document.getElementById("infill-denoising")?.value);
-
-    if (!this.config.api.image.infill) this.config.api.image.infill = {};
-    if (infillProvider !== undefined) this.config.api.image.infill.provider = infillProvider || "localForge";
-    if (infillModel !== undefined) this.config.api.image.infill.model = infillModel || "";
-    if (infillEndpoint !== undefined) this.config.api.image.infill.customEndpoint = infillEndpoint || "";
-    if (infillApiKey !== undefined) this.config.api.image.infill.customApiKey = infillApiKey || "";
-    if (!isNaN(infillDenoising)) this.config.api.image.infill.denoisingStrength = infillDenoising;
 
     // Load creator setting
     const creator = document.getElementById("creator-name")?.value?.trim();
@@ -396,18 +375,6 @@ class Config {
     // Sync the visual toggle state
     const forgeToggleContainer = document.getElementById("local-forge-url-container");
     if (forgeToggleContainer) forgeToggleContainer.style.display = forgeEnabledEl?.checked ? "block" : "none";
-
-    // Populate Infill / Inpainting settings
-    const infillProviderEl = document.getElementById("infill-provider");
-    if (infillProviderEl) infillProviderEl.value = this.config.api.image.infill?.provider || "localForge";
-    const infillModelEl = document.getElementById("infill-model");
-    if (infillModelEl) infillModelEl.value = this.config.api.image.infill?.model || "";
-    const infillEndpointEl = document.getElementById("infill-endpoint");
-    if (infillEndpointEl) infillEndpointEl.value = this.config.api.image.infill?.customEndpoint || "";
-    const infillApiKeyEl = document.getElementById("infill-api-key");
-    if (infillApiKeyEl) infillApiKeyEl.value = this.config.api.image.infill?.customApiKey || "";
-    const infillDenoisingEl = document.getElementById("infill-denoising");
-    if (infillDenoisingEl) infillDenoisingEl.value = this.config.api.image.infill?.denoisingStrength ?? 0.85;
   }
 
   deepMerge(target, source) {

@@ -183,7 +183,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.updateReferenceImagePreview(dataUrl);
       }
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
 
       this.showNotification("Reference image updated. Re-describing…", "success");
 

@@ -509,9 +509,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.closeCropModal();
         this.showNotification("Reference image cropped. Re-describing…", "success");
         this.updateCropButtonVisibility();
-        if (typeof this.updateInfillButtonVisibility === "function") {
-          this.updateInfillButtonVisibility();
-        }
 
         // Re-run the vision description so it matches the edited image —
         // same call used when a reference image is first uploaded/pasted.
@@ -543,14 +540,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
         // Reload the tool with the now-committed result instead of closing —
         // it's embedded inline in its own tab here, not a one-shot modal, so
-        // staying open ready for another crop pass matches how the In-fill
-        // tab already behaves after an apply.
+        // staying open makes another crop pass a single click.
         this.openCropModal('playground');
         this.showNotification("Image cropped!", "success");
         this.updateCropButtonVisibility();
-        if (typeof this.updateInfillButtonVisibility === "function") {
-          this.updateInfillButtonVisibility();
-        }
         return;
       }
 
@@ -591,9 +584,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.updateImageHistoryButton();
       }
       this.updateCropButtonVisibility();
-      if (typeof this.updateInfillButtonVisibility === "function") {
-        this.updateInfillButtonVisibility();
-      }
 
     } catch (error) {
       console.error("Apply crop error:", error);

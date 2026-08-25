@@ -6,6 +6,25 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return document.getElementById("prompt-guidance")?.value?.trim() || "";
   },
 
+  // Fetches any image URL (blob:, data:, or remote http(s)) and returns it as
+  // a base64 data: URL. Remote http(s) URLs are routed through
+  // /api/proxy-image (same as every other remote-result fetch in the app,
+  // e.g. Playground's Edit/Combine tabs) — fetching them directly fails with
+  // a CORS error on hosts that don't send Access-Control-Allow-Origin, like
+  // nano-gpt's Cloudflare R2 result URLs.
+  async _urlToDataUrl(url) {
+    if (url.startsWith("data:")) return url;
+    const fetchUrl = url.startsWith("blob:") ? url : `/api/proxy-image?url=${encodeURIComponent(url)}`;
+    const resp = await (window.authFetch || fetch)(fetchUrl);
+    const blob = await resp.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => reject(new Error("Failed to convert the result image to a data URL"));
+      reader.readAsDataURL(blob);
+    });
+  },
+
   async generateImage(skipSave = false) {
     const imageContainer = document.getElementById("image-content");
 
@@ -832,7 +851,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
           this.updateReferenceImagePreview(dataUrl);
         }
         if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-        if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
 
         this.showNotification("Reference image updated. Re-describing…", "success");
 
@@ -1213,7 +1231,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.referenceImageDataUrl = dataUrl;
       this.updateReferenceImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-      if (typeof this.updateInfillButtonVisibility === "function") this.updateInfillButtonVisibility();
       const editSection = document.getElementById("reference-image-edit-section");
       if (editSection) editSection.style.display = "block";
 
@@ -1418,9 +1435,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     if (typeof this.updateCropButtonVisibility === "function") {
       this.updateCropButtonVisibility();
-    }
-    if (typeof this.updateInfillButtonVisibility === "function") {
-      this.updateInfillButtonVisibility();
     }
   },
 

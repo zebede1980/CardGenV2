@@ -337,17 +337,9 @@ class CharacterGeneratorApp {
     if (cropBtn) {
       cropBtn.addEventListener("click", () => this.openCropModal());
     }
-    const inpaintBtn = document.getElementById("inpaint-image-btn");
-    if (inpaintBtn) {
-      inpaintBtn.addEventListener("click", () => this.openInfillModal());
-    }
     const cropRefBtn = document.getElementById("crop-reference-image-btn");
     if (cropRefBtn) {
       cropRefBtn.addEventListener("click", () => this.openCropModal('reference'));
-    }
-    const inpaintRefBtn = document.getElementById("inpaint-reference-image-btn");
-    if (inpaintRefBtn) {
-      inpaintRefBtn.addEventListener("click", () => this.openInfillModal('reference'));
     }
 
     // Web Image Search Modal Logic
@@ -622,22 +614,6 @@ class CharacterGeneratorApp {
     if (localForgeUrlInput) {
       localForgeUrlInput.addEventListener("input", () => this.saveAPISettings());
     }
-
-    // Infill / Inpainting settings listeners
-    const infillProviderSelect = document.getElementById("infill-provider");
-    if (infillProviderSelect) {
-      infillProviderSelect.addEventListener("change", () => {
-        const customContainer = document.getElementById("infill-custom-container");
-        if (customContainer) {
-          customContainer.style.display = infillProviderSelect.value === "localForge" ? "none" : "block";
-        }
-        this.saveAPISettings();
-      });
-    }
-    ["infill-model", "infill-endpoint", "infill-api-key", "infill-denoising"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener("input", () => this.saveAPISettings());
-    });
 
     // API Settings Modal
     const apiSettingsBtn = document.getElementById("api-settings-btn");

@@ -121,7 +121,6 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
   - **Use Local Forge (flux-1-dev) instead of cloud** checkbox routes the same edit through your local Forge install with an adjustable **Denoising Strength**, for free local experimentation. Note: a base checkpoint like Flux-1-dev isn't a dedicated edit model — in testing it barely followed clothing/pose instructions and lost facial likeness at higher denoising, so treat it as a sandbox, not a substitute for a real edit model.
   - Some cloud edit models silently return a solid-black image instead of an error when their safety filter rejects the source — the app detects this and surfaces a real error message instead of showing you a blank picture.
 - **✂️ Crop** — crop, rotate, and flip, with aspect-ratio presets (Free, 1:1, 3:4, 9:16, 4:3).
-- **🎨 In-fill / Erase (Inpainting)** — brush over a logo, watermark, or unwanted text and regenerate just that region. Adjustable brush size and denoising strength. Three backends: Local WebUI Forge, a generic cloud `/v1/images/edits`-compatible API, or a dedicated/custom endpoint (LaMa, IOPaint, or similar).
 - **📁 Upload** your own image, **📋 Paste** one from the clipboard, or **🌐 Search Web** for one to use as the portrait.
 - **Image History** — browse and restore previously generated images for the current card.
 - **Image Gallery / Lightbox** — click any generated image to view full-screen with zoom and previous/next navigation.
@@ -389,7 +388,6 @@ All settings are saved server-side to `proxy/data/config.json` via `POST /api/co
 | Image Style / Mood | Optional preset hints forwarded to the image prompt (see [Image Handling](#image-handling)) |
 | Enable Image Generation | Toggle to show/hide all image controls |
 | Local WebUI Forge — Enable / URL | Toggle + host URL (e.g. `http://127.0.0.1:7860`) for local text-to-image and image-editing generation. The browser connects to this directly, not the proxy — so a private/LAN Forge instance works even though the Docker proxy container couldn't reach it itself |
-| In-fill Provider / Model / Endpoint / API Key / Denoising Strength | Configures the inpainting backend — Local Forge, a generic cloud `/v1/images/edits` API, or a dedicated custom endpoint (LaMa/IOPaint/etc.) |
 
 #### TTS Narration (Story Writer)
 
@@ -641,7 +639,6 @@ src/
     image-generator.js           — Image prompt generation logic
     image-gallery.js             — Full-screen lightbox for generated images
     image-cropper.js             — Crop/rotate/flip modal for card portraits
-    image-infiller.js            — Brush-based inpainting/erase modal (local Forge or cloud)
     st-handler.js                — SillyTavern bridge (browse, load, push characters)
     chat-handler.js              — Roleplay Chat frontend controller and state manager
     chat-character-cards.js      — Character card quick-reference viewer (shared with Story Writer)
