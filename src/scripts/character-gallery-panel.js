@@ -67,6 +67,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     });
     thumb.appendChild(delBtn);
 
+    const setMainBtn = document.createElement("button");
+    setMainBtn.className = "gallery-thumb-set-main";
+    setMainBtn.innerHTML = "⭐";
+    setMainBtn.title = "Set as main portrait (moves the current portrait into the gallery)";
+    setMainBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._setGalleryImageAsMain(img.id);
+    });
+    thumb.appendChild(setMainBtn);
+
     thumb.addEventListener("dragstart", (e) => {
       thumb.classList.add("dragging");
       e.dataTransfer.setData("text/plain", String(img.id));
@@ -112,6 +122,51 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } catch (e) {
       console.error("Failed to remove gallery image:", e);
       this.showNotification(`Failed to remove image: ${e.message}`, "error");
+    }
+  },
+
+  // Swaps a gallery image into the main portrait slot and sends the
+  // previous portrait to the gallery in its place — a genuine swap, not a
+  // discard, so nothing is lost. Uses storage.addGalleryImage/
+  // deleteGalleryImage directly rather than _addCharacterGalleryImage/
+  // _deleteCharacterGalleryImage since those show their own toast and
+  // confirm() dialog respectively — this operation wants one clean
+  // confirmation at the end, not two.
+  async _setGalleryImageAsMain(galleryId) {
+    const cardId = this.currentCardId;
+    if (!cardId) return;
+    const entry = this._characterGalleryImages?.find((g) => g.id === galleryId);
+    if (!entry) return;
+
+    try {
+      const resp = await (window.authFetch || fetch)(entry.url);
+      if (!resp.ok) throw new Error(`Failed to fetch gallery image (${resp.status})`);
+      const newMainDataUrl = await this.storage.blobToBase64(await resp.blob());
+
+      if (this.currentImageUrl) {
+        const oldMainBlob = await this.imageGenerator.convertToBlob(this.currentImageUrl);
+        const oldMainDataUrl = await this.storage.blobToBase64(oldMainBlob);
+        await this.storage.addGalleryImage(cardId, oldMainDataUrl);
+      }
+      await this.storage.deleteGalleryImage(cardId, galleryId);
+
+      this.currentImageUrl = newMainDataUrl;
+      const imageContainer = document.getElementById("image-content");
+      if (imageContainer) {
+        imageContainer.innerHTML = window.imageGenerator?.formatImageForDisplay
+          ? window.imageGenerator.formatImageForDisplay(newMainDataUrl)
+          : `<div class="image-container"><img src="${newMainDataUrl}" alt="Character portrait" class="generated-image"></div>`;
+      }
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+
+      await this._renderCharacterGalleryPanel();
+      this.showNotification("Set as main image — previous portrait moved to the gallery.", "success");
+
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+    } catch (e) {
+      console.error("Failed to set gallery image as main:", e);
+      this.showNotification(`Failed to set as main image: ${e.message}`, "error");
     }
   },
 

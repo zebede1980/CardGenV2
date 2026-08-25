@@ -1454,6 +1454,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const validResults = this.imageHistoryUrls.map((url, i) => ({ url, label: `Archived Image ${i + 1}` }));
 
+    // The Character Gallery is a saved-card feature (see isRealCard in
+    // character-gallery-panel.js) — "h_" is the placeholder id used before a
+    // card is actually saved, so Move to Gallery has nothing to add to yet.
+    const canMoveToGallery = !!this.currentCardId && !String(this.currentCardId).startsWith("h_");
+
     this._insertCurrentImageCard(grid, []);
 
     validResults.forEach((res, index) => {
@@ -1468,18 +1473,63 @@ Object.assign(CharacterGeneratorApp.prototype, {
       wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
       wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
       wrapper.onclick = () => this.restoreImageFromHistory(res.url, index);
-      
+
       wrapper.innerHTML = `
         <div style="position:absolute;top:0.5rem;left:0.5rem;background:var(--bg-color);color:var(--text-primary);font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;border-radius:999px;z-index:1;border:1px solid var(--border);">ARCHIVE</div>
         <img src="${res.url}" style="width:100%;height:auto;display:block;" alt="${res.label}">
-        <div style="padding:1rem;text-align:center;background:rgba(0,0,0,0.1);border-top:1px solid var(--border);">
+        <div style="padding:1rem;text-align:center;background:rgba(0,0,0,0.1);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:0.5rem;">
           <button class="btn-primary" style="width:100%;">Restore Image</button>
+          ${canMoveToGallery ? `<button type="button" class="btn-outline history-to-gallery-btn" style="width:100%;">🖼️ Move to Gallery</button>` : ""}
         </div>
       `;
+      if (canMoveToGallery) {
+        const galleryBtn = wrapper.querySelector(".history-to-gallery-btn");
+        if (galleryBtn) {
+          galleryBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.moveHistoryImageToGallery(res.url);
+          });
+        }
+      }
       grid.appendChild(wrapper);
     });
 
     this._makeImageGalleryable(grid, validResults.map(r => ({ url: r.url, label: r.label })));
+  },
+
+  // Moves an archived image out of History and into the Character Gallery
+  // (character-gallery-panel.js) instead of just discarding it once
+  // something better gets restored over it. Looks the URL up by value
+  // rather than trusting a captured array index, since the grid can be
+  // re-rendered (e.g. by another Move to Gallery click) while this modal is
+  // still open.
+  async moveHistoryImageToGallery(url) {
+    if (!this.currentCardId || !this.imageHistoryUrls) return;
+    try {
+      const dataUrl = await this._urlToDataUrl(url);
+      await this.storage.addGalleryImage(this.currentCardId, dataUrl);
+
+      const idx = this.imageHistoryUrls.indexOf(url);
+      if (idx !== -1) this.imageHistoryUrls.splice(idx, 1);
+      if (url.startsWith("blob:")) {
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      }
+      this.updateImageHistoryButton();
+      if (typeof this._renderCharacterGalleryPanel === "function") await this._renderCharacterGalleryPanel();
+
+      this.showNotification("Moved to gallery", "success");
+
+      // Rebuild the open History modal to drop the now-moved card, or close
+      // it outright once nothing is left to show.
+      if (this.imageHistoryUrls.length > 0) {
+        this.showImageHistory();
+      } else {
+        this.closeImageOptionsModal();
+      }
+    } catch (e) {
+      console.error("Failed to move history image to gallery:", e);
+      this.showNotification(`Failed to move image to gallery: ${e.message}`, "error");
+    }
   },
 
   async restoreImageFromHistory(selectedUrl, historyIndex) {
