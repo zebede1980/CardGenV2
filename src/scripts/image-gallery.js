@@ -373,19 +373,29 @@ Object.assign(CharacterGeneratorApp.prototype, {
     };
     document.getElementById("gallery-lightbox")?.addEventListener("click", this._onGalleryOverlayClick);
 
-    // Button bindings
-    const btnBind = (id, handler) => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener("click", handler);
-    };
-    btnBind("gallery-close-btn", () => this.closeGallery());
-    btnBind("gallery-prev-btn", () => this._galleryPrev());
-    btnBind("gallery-next-btn", () => this._galleryNext());
-    btnBind("gallery-zoom-in-btn", () => this._galleryZoomIn());
-    btnBind("gallery-zoom-out-btn", () => this._galleryZoomOut());
-    btnBind("gallery-download-btn", () => this._galleryDownload());
-    btnBind("gallery-use-btn", () => this._galleryUse());
-    btnBind("gallery-lightbox-discard-btn", () => this._galleryDiscardPending());
+    // Button bindings — bound once ever, not per-open. These handlers read
+    // current state (this._galleryImages/_galleryCurrentIdx) at click-time
+    // rather than capturing anything from this particular open(), so they
+    // never needed rebinding on reopen. They used to be re-added on every
+    // openGallery() call with no matching removal in _unbindGalleryEvents(),
+    // so after opening the lightbox N times in a session, Prev/Next (and
+    // every other button here) fired N times per click — silently skipping
+    // over images and making some of them unreachable.
+    if (!this._galleryStaticButtonsBound) {
+      this._galleryStaticButtonsBound = true;
+      const btnBind = (id, handler) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("click", handler);
+      };
+      btnBind("gallery-close-btn", () => this.closeGallery());
+      btnBind("gallery-prev-btn", () => this._galleryPrev());
+      btnBind("gallery-next-btn", () => this._galleryNext());
+      btnBind("gallery-zoom-in-btn", () => this._galleryZoomIn());
+      btnBind("gallery-zoom-out-btn", () => this._galleryZoomOut());
+      btnBind("gallery-download-btn", () => this._galleryDownload());
+      btnBind("gallery-use-btn", () => this._galleryUse());
+      btnBind("gallery-lightbox-discard-btn", () => this._galleryDiscardPending());
+    }
   },
 
   _unbindGalleryEvents() {
