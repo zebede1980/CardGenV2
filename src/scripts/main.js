@@ -106,12 +106,19 @@ class CharacterGeneratorApp {
         if (classicBlock) classicBlock.style.display = mode === "classic" ? "" : "none";
         if (searchBlock) searchBlock.style.display = mode === "search" ? "" : "none";
         if (inspireBlock) inspireBlock.style.display = mode === "inspire" ? "" : "none";
+        // "Generate 4" only reads the Classic concept/reference-image fields — in
+        // Inspire mode "Generate 1" already runs an idea-spark-then-pick flow off
+        // the Inspire filters, and in Search mode there's no concept text for it
+        // to brainstorm from. Hide it outside Classic to avoid a second, unrelated
+        // "generate ideas" button.
+        const batchBtn = document.getElementById("batch-generate-btn");
+        if (batchBtn) batchBtn.style.display = mode === "classic" ? "" : "none";
       };
       modeRadios.forEach((r) => r.addEventListener("change", onModeChange));
       onModeChange();
     }
 
-    // Batch generation — always generate 4 variants
+    // Batch generation — Classic-mode-only "4 ideas, pick one" flow
     const batchGenerateBtn = document.getElementById("batch-generate-btn");
     if (batchGenerateBtn) batchGenerateBtn.addEventListener("click", () => this.handleBatchGenerate());
 
