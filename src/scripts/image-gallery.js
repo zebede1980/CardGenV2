@@ -16,11 +16,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   /* ── Open / Close ──────────────────────────────────────────────────────── */
 
-  // context: 'card' (default — "Use This" applies to this.currentImageUrl) or
-  // 'reference' (applies to this.referenceImageDataUrl instead). Needed because
-  // the gallery's own "✓ Use This" button (_galleryUse) is a separate accept
-  // path from the compare-and-choose card's own click handler, and was
-  // hardcoded to the card image — see _galleryUse() for the branch.
+  // context: 'card' (default — "Use This" applies to this.currentImageUrl),
+  // 'reference' (applies to this.referenceImageDataUrl instead), or
+  // 'galleryPending' (an unsaved Gallery Generate candidate — see
+  // _renderGalleryGeneratePreview in character-gallery-panel.js). Needed
+  // because the gallery's own "✓ Use This" button (_galleryUse) is a
+  // separate accept path from the compare-and-choose card's own click
+  // handler, and was hardcoded to the card image — see _galleryUse() for
+  // the branch. 'galleryPending' also reveals a Discard button so a
+  // candidate can be accepted/rejected at full size, not just from its
+  // small thumbnail.
   openGallery(images, startIdx = 0, context = 'card') {
     if (!images || images.length === 0) return;
     this._galleryImages = images;
@@ -39,8 +44,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const useBtn = document.getElementById("gallery-use-btn");
     if (useBtn) {
       useBtn.title = context === 'reference' ? "Use This as the Reference Image"
+        : context === 'galleryPending' ? "Add This Image to the Gallery"
         : "Use This Image for Card";
+      useBtn.textContent = context === 'galleryPending' ? "✔️ Add to Gallery" : "✓ Use This";
     }
+    const discardBtn = document.getElementById("gallery-lightbox-discard-btn");
+    if (discardBtn) discardBtn.style.display = context === 'galleryPending' ? "" : "none";
 
     this._renderGalleryImage();
     this._bindGalleryEvents();
@@ -162,6 +171,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async _galleryUse() {
     const img = this._galleryImages[this._galleryCurrentIdx];
     if (!img || !img.url) return;
+
+    if (this._galleryContext === 'galleryPending') {
+      // Index into this._pendingGalleryImages, not a saved card/reference
+      // image — accept this one candidate and let the panel re-render.
+      const idx = this._galleryCurrentIdx;
+      this.closeGallery();
+      if (typeof this.handleGalleryGenerateAcceptOne === "function") {
+        await this.handleGalleryGenerateAcceptOne(idx);
+      }
+      return;
+    }
+
     // Mimics selectImageOption but keeps gallery images alive
     if (this.closeImageOptionsModal) this.closeImageOptionsModal();
     this.closeGallery();
@@ -229,6 +250,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification("Image applied to card!", "success");
     this.saveCardToLibrary().catch(() => {});
     this.refreshLibraryViews().catch(() => {});
+  },
+
+  // Only reachable when context is 'galleryPending' — the button itself is
+  // hidden otherwise (see openGallery()).
+  _galleryDiscardPending() {
+    if (this._galleryContext !== 'galleryPending') return;
+    const idx = this._galleryCurrentIdx;
+    this.closeGallery();
+    if (typeof this.handleGalleryGenerateDiscardOne === "function") {
+      this.handleGalleryGenerateDiscardOne(idx);
+    }
   },
 
   /* ── Events ────────────────────────────────────────────────────────────── */
@@ -353,6 +385,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     btnBind("gallery-zoom-out-btn", () => this._galleryZoomOut());
     btnBind("gallery-download-btn", () => this._galleryDownload());
     btnBind("gallery-use-btn", () => this._galleryUse());
+    btnBind("gallery-lightbox-discard-btn", () => this._galleryDiscardPending());
   },
 
   _unbindGalleryEvents() {

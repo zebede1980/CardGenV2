@@ -237,26 +237,27 @@ Object.assign(CharacterGeneratorApp.prototype, {
         )
       );
 
-      const dataUrls = [];
+      const pending = [];
       let failures = 0;
-      for (const result of results) {
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
         if (result.status !== "fulfilled") {
           failures++;
           console.error("Gallery generate error:", result.reason);
           continue;
         }
-        dataUrls.push(await this._urlToDataUrl(result.value));
+        pending.push({ url: await this._urlToDataUrl(result.value), instruction: instructions[i], model: editModel });
       }
 
-      if (dataUrls.length === 0) {
+      if (pending.length === 0) {
         throw results.find((r) => r.status === "rejected")?.reason || new Error("Image generation failed");
       }
 
-      this._pendingGalleryImages = dataUrls;
+      this._pendingGalleryImages = pending;
       this._renderGalleryGeneratePreview();
 
       if (failures > 0) {
-        this.showNotification(`Generated ${dataUrls.length} of ${count} (${failures} failed)`, "warning");
+        this.showNotification(`Generated ${pending.length} of ${count} (${failures} failed)`, "warning");
       }
     } catch (error) {
       console.error("Gallery image generation failed:", error);
@@ -283,11 +284,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     preview.style.display = "block";
     list.innerHTML = "";
-    images.forEach((dataUrl, index) => {
+    images.forEach((entry, index) => {
       const item = document.createElement("div");
       item.style.cssText = "width: 140px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface-muted);";
       item.innerHTML = `
-        <img src="${dataUrl}" alt="Generated preview ${index + 1}" style="width: 100%; height: 140px; object-fit: cover; display: block;" />
+        <img src="${entry.url}" alt="Generated preview ${index + 1}" title="Click to view full size" style="width: 100%; height: 140px; object-fit: cover; display: block; cursor: pointer;" data-gallery-view-index="${index}" />
         <div style="display: flex; gap: 0.3rem; padding: 0.4rem;">
           <button type="button" class="btn-primary btn-small" style="flex: 1; font-size: 0.7rem; padding: 0.3rem;" data-gallery-accept-index="${index}">✔️ Add</button>
           <button type="button" class="btn-outline btn-small" style="flex: 1; font-size: 0.7rem; padding: 0.3rem;" data-gallery-discard-index="${index}">✖️</button>
@@ -297,10 +298,27 @@ Object.assign(CharacterGeneratorApp.prototype, {
     });
   },
 
+  // Opens the full-screen lightbox (image-gallery.js) on a pending, not-yet-
+  // saved candidate — context 'galleryPending' swaps its Use button for an
+  // Add-to-Gallery action and reveals a Discard button (see openGallery()/
+  // _galleryUse()/_galleryDiscardPending() in image-gallery.js), so accept-
+  // or-dismiss can happen from the enlarged view instead of only the
+  // 140px thumbnail.
+  _openGalleryPendingPreview(index) {
+    const images = (this._pendingGalleryImages || []).map((entry, i) => ({
+      url: entry.url,
+      prompt: entry.instruction,
+      model: entry.model,
+      label: `Preview ${i + 1}`,
+    }));
+    if (images.length === 0) return;
+    this.openGallery(images, index, 'galleryPending');
+  },
+
   async handleGalleryGenerateAcceptOne(index) {
-    const dataUrl = this._pendingGalleryImages?.[index];
-    if (!dataUrl) return;
-    await this._addCharacterGalleryImage(dataUrl);
+    const entry = this._pendingGalleryImages?.[index];
+    if (!entry) return;
+    await this._addCharacterGalleryImage(entry.url);
     this._pendingGalleryImages.splice(index, 1);
     this._renderGalleryGeneratePreview();
   },
@@ -313,8 +331,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   async handleGalleryGenerateAcceptAll() {
     const images = this._pendingGalleryImages || [];
-    for (const dataUrl of images) {
-      await this._addCharacterGalleryImage(dataUrl);
+    for (const entry of images) {
+      await this._addCharacterGalleryImage(entry.url);
     }
     this._pendingGalleryImages = [];
     this._renderGalleryGeneratePreview();

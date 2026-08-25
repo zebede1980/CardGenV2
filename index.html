@@ -2501,7 +2501,7 @@
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260215-fix1"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
-        <script src="src/scripts/main.js?v=20260825-multiprompt"></script>
+        <script src="src/scripts/main.js?v=20260825-lightbox"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-display.js?v=20260514"></script>
         <script src="src/scripts/image-handler.js?v=20260825-cleanup"></script>
@@ -2515,8 +2515,8 @@
         <script src="src/scripts/rich-element-parser.js"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
         <script src="src/scripts/batch-generator.js?v=20260518"></script>
-        <script src="src/scripts/image-gallery.js?v=20260825-cleanup"></script>
-        <script src="src/scripts/character-gallery-panel.js?v=20260825-multiprompt"></script>
+        <script src="src/scripts/image-gallery.js?v=20260825-lightbox"></script>
+        <script src="src/scripts/character-gallery-panel.js?v=20260825-lightbox"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=13"></script>
         <script src="src/scripts/adventure-handler.js?v=1"></script>
@@ -3339,6 +3339,12 @@
                 <button id="gallery-zoom-out-btn" class="gallery-btn" title="Zoom Out (−)">－</button>
                 <button id="gallery-download-btn" class="gallery-btn" title="Download Image">⬇</button>
                 <button id="gallery-use-btn" class="gallery-btn gallery-use-btn" title="Use This Image for Card">✓ Use This</button>
+                <!-- Only shown when the lightbox is opened from an unsaved Gallery
+                     Generate preview (context 'galleryPending', see
+                     _renderGalleryGeneratePreview in character-gallery-panel.js) —
+                     lets the user accept/reject a candidate at full size instead of
+                     only from the small thumbnail. -->
+                <button id="gallery-lightbox-discard-btn" class="gallery-btn" title="Discard this image" style="display: none;">✖️ Discard</button>
                 <span id="gallery-counter" class="gallery-counter">1/1</span>
             </div>
             <button id="gallery-prev-btn" class="gallery-nav gallery-nav-prev" title="Previous (←)">❮</button>

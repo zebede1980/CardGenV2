@@ -205,9 +205,10 @@ class CharacterGeneratorApp {
     if (galleryGenerateAcceptAllBtn) galleryGenerateAcceptAllBtn.addEventListener("click", () => this.handleGalleryGenerateAcceptAll());
     const galleryGenerateDiscardBtn = document.getElementById("gallery-generate-discard-btn");
     if (galleryGenerateDiscardBtn) galleryGenerateDiscardBtn.addEventListener("click", () => this.handleGalleryGenerateDiscard());
-    // Per-item Add/Discard buttons are rendered dynamically (one per pending
-    // image, see _renderGalleryGeneratePreview), so this delegates from the
-    // static list container instead of binding listeners that don't exist yet.
+    // Per-item Add/Discard buttons (and the preview thumbnail itself) are
+    // rendered dynamically (one per pending image, see
+    // _renderGalleryGeneratePreview), so this delegates from the static list
+    // container instead of binding listeners that don't exist yet.
     const galleryGeneratePreviewList = document.getElementById("gallery-generate-preview-list");
     if (galleryGeneratePreviewList) {
       galleryGeneratePreviewList.addEventListener("click", (e) => {
@@ -219,6 +220,11 @@ class CharacterGeneratorApp {
         const discardBtn = e.target.closest("[data-gallery-discard-index]");
         if (discardBtn) {
           this.handleGalleryGenerateDiscardOne(parseInt(discardBtn.dataset.galleryDiscardIndex, 10));
+          return;
+        }
+        const viewImg = e.target.closest("[data-gallery-view-index]");
+        if (viewImg) {
+          this._openGalleryPendingPreview(parseInt(viewImg.dataset.galleryViewIndex, 10));
         }
       });
     }
