@@ -229,9 +229,38 @@ Object.assign(CharacterGeneratorApp.prototype, {
         ? `Image ${i + 1} — e.g. sitting by a campfire at night, same character`
         : "Describe the new pose/scene/outfit — e.g. sitting by a campfire at night, same character | wearing a blue dress, waving";
       textarea.value = existingValues[i] || "";
+      // Pasting an image here (as opposed to text) adds it straight to the
+      // gallery instead of being silently swallowed by the textarea — bound
+      // directly on this field, not document, so it can't be hijacked by or
+      // steal from any other paste zone on the page (see
+      // handleReferenceImagePaste in main.js / handlePlaygroundImagePaste in
+      // image-playground.js for the same per-field scoping).
+      textarea.addEventListener("paste", (e) => this.handleGalleryInstructionPaste(e));
       row.appendChild(textarea);
 
       container.appendChild(row);
+    }
+  },
+
+  // A pasted image is unrelated to the typed instruction text, so this only
+  // intercepts the event (preventDefault/stopPropagation) when the clipboard
+  // actually carries an image — a plain text paste passes through untouched.
+  async handleGalleryInstructionPaste(event) {
+    const file = this._extractPastedImageFile(event);
+    if (!file) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!this.currentCardId) {
+      this.showNotification("Save this character to the library first", "warning");
+      return;
+    }
+    try {
+      const dataUrl = await this.storage.blobToBase64(file);
+      await this._addCharacterGalleryImage(dataUrl);
+    } catch (e) {
+      console.error("Failed to add pasted image to gallery:", e);
+      this.showNotification(`Failed to add pasted image: ${e.message}`, "error");
     }
   },
 

@@ -1219,6 +1219,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!file) return;
 
     event.preventDefault();
+    event.stopPropagation();
     await this.processReferenceImageFile(file);
   },
 
@@ -1646,9 +1647,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       });
     }
 
-    // Scoped paste listener — capture phase so it fires before the global
-    // reference-image paste handler; stopImmediatePropagation prevents that
-    // handler from also receiving the event when this modal is open.
+    // Capture phase (unlike every other paste zone on the page, which is
+    // now scoped to its own field via a plain bubble-phase listener) because
+    // this modal has no dedicated input to focus — its dropzone is a plain
+    // div, so the paste can land on document/body. Capture + preventDefault
+    // + stopImmediatePropagation guarantees this fires first and nothing
+    // else (e.g. handleReferenceImagePaste) also receives it while open.
     document.addEventListener("paste", (e) => {
       if (modal.style.display !== "flex") return;
       if (!e.clipboardData?.files?.length) return;

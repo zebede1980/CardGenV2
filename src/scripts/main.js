@@ -538,8 +538,12 @@ class CharacterGeneratorApp {
     const referenceImageInput = document.getElementById("reference-image-file");
     if (referenceImageInput) referenceImageInput.addEventListener("change", (e) => this.handleReferenceImageUpload(e));
     
-    // Add paste listener for reference image
-    document.addEventListener("paste", (e) => this.handleReferenceImagePaste(e));
+    // Bound directly on the reference paste zone (not document) so a paste
+    // only lands here when this exact field is focused — each paste zone on
+    // the page now owns its own scoped listener, see the equivalent
+    // comment in image-playground.js's initPlaygroundTab().
+    const referencePasteZone = document.getElementById("reference-paste-zone");
+    if (referencePasteZone) referencePasteZone.addEventListener("paste", (e) => this.handleReferenceImagePaste(e));
 
     if (typeof this._initPasteZoneAutoSelect === "function") this._initPasteZoneAutoSelect();
 

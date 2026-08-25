@@ -60,22 +60,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (dropZone && fileInput) {
       dropZone.addEventListener("click", () => fileInput.click());
     }
-    // Attached to document (not just the view) because a paste event fires
-    // wherever focus currently is — if nothing inside this view has been
-    // clicked yet, that's document/body, which isn't a descendant of
-    // viewPlayground, so a listener scoped to the view alone would miss it.
-    // Guarded on the view actually being visible so this doesn't also fire
-    // (alongside handleReferenceImagePaste, similarly unguarded) while on a
-    // different tab. Routed by which paste zone currently has focus, since
-    // the Combine tab has a second, independent image slot.
-    document.addEventListener("paste", (e) => {
-      if (viewPlayground.style.display === "none") return;
-      if (document.activeElement?.id === "combine-image2-paste-zone") {
-        this.handleCombineImage2Paste(e);
-      } else {
-        this.handlePlaygroundImagePaste(e);
-      }
-    });
+    // Bound directly on the zone itself (not document) so a paste only ever
+    // lands here when this exact field is focused — each paste zone on the
+    // page owns its own listener now, see handleReferenceImagePaste in
+    // main.js and the Gallery instruction boxes in character-gallery-panel.js
+    // for the equivalent scoping there. Requires clicking/tapping the zone
+    // first, same as it already took to get iOS's native Paste bubble to
+    // show via _initPasteZoneAutoSelect.
+    if (dropZone) dropZone.addEventListener("paste", (e) => this.handlePlaygroundImagePaste(e));
 
     // Image 2 upload / paste (Combine tab)
     const combineImage2Input = document.getElementById("combine-image2-file");
@@ -85,6 +77,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const combineImage2Zone = document.getElementById("combine-image2-paste-zone");
     if (combineImage2Zone && combineImage2Input) {
       combineImage2Zone.addEventListener("click", () => combineImage2Input.click());
+      combineImage2Zone.addEventListener("paste", (e) => this.handleCombineImage2Paste(e));
     }
 
     // Tool tabs (Crop / Edit / Combine) — only one panel on screen at a
@@ -197,6 +190,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const file = this._extractPastedImageFile(event);
     if (!file) return;
     event.preventDefault();
+    event.stopPropagation();
     await this.processPlaygroundImageFile(file);
   },
 
@@ -427,6 +421,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const file = this._extractPastedImageFile(event);
     if (!file) return;
     event.preventDefault();
+    event.stopPropagation();
     await this._processCombineImage2File(file);
   },
 
