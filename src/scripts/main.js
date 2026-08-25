@@ -196,10 +196,27 @@ class CharacterGeneratorApp {
     const galleryUploadInput = document.getElementById("gallery-upload-input");
     if (galleryUploadBtn && galleryUploadInput) galleryUploadBtn.addEventListener("click", () => galleryUploadInput.click());
     if (galleryUploadInput) galleryUploadInput.addEventListener("change", (e) => this.handleGalleryUpload(e));
-    const galleryGenerateAcceptBtn = document.getElementById("gallery-generate-accept-btn");
-    if (galleryGenerateAcceptBtn) galleryGenerateAcceptBtn.addEventListener("click", () => this.handleGalleryGenerateAccept());
+    const galleryGenerateAcceptAllBtn = document.getElementById("gallery-generate-accept-all-btn");
+    if (galleryGenerateAcceptAllBtn) galleryGenerateAcceptAllBtn.addEventListener("click", () => this.handleGalleryGenerateAcceptAll());
     const galleryGenerateDiscardBtn = document.getElementById("gallery-generate-discard-btn");
     if (galleryGenerateDiscardBtn) galleryGenerateDiscardBtn.addEventListener("click", () => this.handleGalleryGenerateDiscard());
+    // Per-item Add/Discard buttons are rendered dynamically (one per pending
+    // image, see _renderGalleryGeneratePreview), so this delegates from the
+    // static list container instead of binding listeners that don't exist yet.
+    const galleryGeneratePreviewList = document.getElementById("gallery-generate-preview-list");
+    if (galleryGeneratePreviewList) {
+      galleryGeneratePreviewList.addEventListener("click", (e) => {
+        const acceptBtn = e.target.closest("[data-gallery-accept-index]");
+        if (acceptBtn) {
+          this.handleGalleryGenerateAcceptOne(parseInt(acceptBtn.dataset.galleryAcceptIndex, 10));
+          return;
+        }
+        const discardBtn = e.target.closest("[data-gallery-discard-index]");
+        if (discardBtn) {
+          this.handleGalleryGenerateDiscardOne(parseInt(discardBtn.dataset.galleryDiscardIndex, 10));
+        }
+      });
+    }
 
     // URL Import modal events
     const urlImportModal = document.getElementById("url-import-modal");

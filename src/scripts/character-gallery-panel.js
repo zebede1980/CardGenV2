@@ -2,6 +2,14 @@
 // a saved card's extra linked images (separate from the single portrait).
 // The images themselves are fetched/rendered here; scrolling through them
 // full-screen is handled by openGallery() in image-gallery.js.
+
+// Always prepended to the user's typed instruction in handleGalleryGenerate()
+// so gallery additions can never drift into a different-looking character no
+// matter what's typed — the source portrait is an identity anchor, not just
+// a style reference.
+const GALLERY_CONSISTENCY_INSTRUCTION =
+  "Keep this exact character's face, identity, hairstyle, and defining features fully consistent with the source image. Only change what is described next:";
+
 Object.assign(CharacterGeneratorApp.prototype, {
 
   async _renderCharacterGalleryPanel() {
@@ -129,13 +137,32 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (generateBtn) generateBtn.disabled = true;
     if (uploadBtn) uploadBtn.disabled = true;
     this._characterGalleryImages = [];
-    this._pendingGalleryImageBase64 = null;
-    const preview = document.getElementById("gallery-generate-preview");
-    if (preview) preview.style.display = "none";
+    this._pendingGalleryImages = [];
+    this._renderGalleryGeneratePreview();
   },
 
+  // Image-to-image from the card's current portrait (not a fresh
+  // text-to-image roll from the character description, which is what this
+  // used to do) — GALLERY_CONSISTENCY_INSTRUCTION is always prepended so the
+  // result stays recognizably this character regardless of what's typed.
+  // `count` (1/2/4, see #gallery-generate-count) fires that many independent
+  // edit calls in parallel — each already gets its own random seed inside
+  // apiHandler.editImage(), so this naturally yields different variations
+  // rather than N copies of the same result.
   async handleGalleryGenerate() {
     if (!this.currentCharacter || !this.currentCardId) return;
+    if (!this.currentImageUrl) {
+      this.showNotification("This character needs a portrait image first", "warning");
+      return;
+    }
+
+    const instructionEl = document.getElementById("gallery-generate-instruction");
+    const instruction = instructionEl?.value?.trim();
+    if (!instruction) {
+      this.showNotification("Describe the new pose/scene/outfit first", "warning");
+      instructionEl?.focus();
+      return;
+    }
 
     const imageApiBase = this.config.get("api.image.baseUrl");
     const imageApiKey = this.config.get("api.image.apiKey");
@@ -144,45 +171,50 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
+    const editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
+    const count = parseInt(document.getElementById("gallery-generate-count")?.value, 10) || 1;
+
     const btn = document.getElementById("gallery-generate-btn");
-    if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
+    if (btn) { btn.disabled = true; btn.textContent = count > 1 ? `Generating ${count}…` : "Generating..."; }
 
     try {
-      const cardType = this.currentCharacter?.cardType || document.getElementById("card-type-select")?.value || "single";
-      const customPrompt = document.getElementById("custom-image-prompt")?.value?.trim() || null;
-      const model = this.config.get("api.image.model") || "";
+      const sourceBlob = await this.imageGenerator.convertToBlob(this.currentImageUrl);
+      const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read current image"));
+        reader.readAsDataURL(sourceBlob);
+      });
 
-      const imageUrl = await window.apiHandler.generateImage(
-        this.currentCharacter.description,
-        this.currentCharacter.name,
-        customPrompt,
-        model,
-        cardType,
-        undefined,
-        typeof this._getGuidance === "function" ? this._getGuidance() : "",
+      const fullInstruction = `${GALLERY_CONSISTENCY_INSTRUCTION} ${instruction}`;
+
+      const results = await Promise.allSettled(
+        Array.from({ length: count }, () =>
+          window.apiHandler.editImage({ imageBase64, instruction: fullInstruction, model: editModel })
+        )
       );
 
-      let displayUrl = imageUrl;
-      if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
-        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-        const response = await (window.authFetch || fetch)(proxyUrl);
-        if (response.ok) {
-          const blob = await response.blob();
-          displayUrl = URL.createObjectURL(blob);
+      const dataUrls = [];
+      let failures = 0;
+      for (const result of results) {
+        if (result.status !== "fulfilled") {
+          failures++;
+          console.error("Gallery generate error:", result.reason);
+          continue;
         }
+        dataUrls.push(await this._urlToDataUrl(result.value));
       }
 
-      let dataUrl = displayUrl;
-      if (displayUrl && displayUrl.startsWith("blob:")) {
-        const blob = await (await fetch(displayUrl)).blob();
-        dataUrl = await this.storage.blobToBase64(blob);
+      if (dataUrls.length === 0) {
+        throw results.find((r) => r.status === "rejected")?.reason || new Error("Image generation failed");
       }
 
-      this._pendingGalleryImageBase64 = dataUrl;
-      const preview = document.getElementById("gallery-generate-preview");
-      const previewImg = document.getElementById("gallery-generate-preview-img");
-      if (previewImg) previewImg.src = dataUrl;
-      if (preview) preview.style.display = "block";
+      this._pendingGalleryImages = dataUrls;
+      this._renderGalleryGeneratePreview();
+
+      if (failures > 0) {
+        this.showNotification(`Generated ${dataUrls.length} of ${count} (${failures} failed)`, "warning");
+      }
     } catch (error) {
       console.error("Gallery image generation failed:", error);
       this.showNotification(`Image generation failed: ${error.message}`, "error");
@@ -191,19 +223,63 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
-  async handleGalleryGenerateAccept() {
+  // Renders one card per pending generated image, each with its own
+  // Add/Discard — needed once Count above can produce more than one result
+  // at a time.
+  _renderGalleryGeneratePreview() {
     const preview = document.getElementById("gallery-generate-preview");
-    if (this._pendingGalleryImageBase64) {
-      await this._addCharacterGalleryImage(this._pendingGalleryImageBase64);
+    const list = document.getElementById("gallery-generate-preview-list");
+    if (!preview || !list) return;
+
+    const images = this._pendingGalleryImages || [];
+    if (images.length === 0) {
+      preview.style.display = "none";
+      list.innerHTML = "";
+      return;
     }
-    this._pendingGalleryImageBase64 = null;
-    if (preview) preview.style.display = "none";
+
+    preview.style.display = "block";
+    list.innerHTML = "";
+    images.forEach((dataUrl, index) => {
+      const item = document.createElement("div");
+      item.style.cssText = "width: 140px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface-muted);";
+      item.innerHTML = `
+        <img src="${dataUrl}" alt="Generated preview ${index + 1}" style="width: 100%; height: 140px; object-fit: cover; display: block;" />
+        <div style="display: flex; gap: 0.3rem; padding: 0.4rem;">
+          <button type="button" class="btn-primary btn-small" style="flex: 1; font-size: 0.7rem; padding: 0.3rem;" data-gallery-accept-index="${index}">✔️ Add</button>
+          <button type="button" class="btn-outline btn-small" style="flex: 1; font-size: 0.7rem; padding: 0.3rem;" data-gallery-discard-index="${index}">✖️</button>
+        </div>
+      `;
+      list.appendChild(item);
+    });
+  },
+
+  async handleGalleryGenerateAcceptOne(index) {
+    const dataUrl = this._pendingGalleryImages?.[index];
+    if (!dataUrl) return;
+    await this._addCharacterGalleryImage(dataUrl);
+    this._pendingGalleryImages.splice(index, 1);
+    this._renderGalleryGeneratePreview();
+  },
+
+  handleGalleryGenerateDiscardOne(index) {
+    if (!this._pendingGalleryImages) return;
+    this._pendingGalleryImages.splice(index, 1);
+    this._renderGalleryGeneratePreview();
+  },
+
+  async handleGalleryGenerateAcceptAll() {
+    const images = this._pendingGalleryImages || [];
+    for (const dataUrl of images) {
+      await this._addCharacterGalleryImage(dataUrl);
+    }
+    this._pendingGalleryImages = [];
+    this._renderGalleryGeneratePreview();
   },
 
   handleGalleryGenerateDiscard() {
-    this._pendingGalleryImageBase64 = null;
-    const preview = document.getElementById("gallery-generate-preview");
-    if (preview) preview.style.display = "none";
+    this._pendingGalleryImages = [];
+    this._renderGalleryGeneratePreview();
   },
 
   async handleGalleryUpload(event) {
