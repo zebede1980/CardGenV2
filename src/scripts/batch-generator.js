@@ -1,15 +1,17 @@
 // Batch Generation Module — extends CharacterGeneratorApp prototype
-// Generates N character variants from the same concept in parallel,
-// then presents a comparison grid to pick the favourite.
+// 2-stage generation: (1) 4 quick-paragraph ideas from one concept, (2) full
+// character generated only for the idea the user picks. Keeps the 4 ideas
+// genuinely distinct (one AI call, told to diverge) instead of 4 separate
+// full generations from the same concept, which tended to converge on very
+// similar characters.
 Object.assign(CharacterGeneratorApp.prototype, {
 
   /* ── State ──────────────────────────────────────────────────────────────── */
-  _batchVariants: [],       // Array of parsed character objects
+  _batchIdeas: [],
   _batchSelectedIdx: -1,
-  _batchAbortController: null,
   _batchIsGenerating: false,
 
-  /* ── Entry Point ────────────────────────────────────────────────────────── */
+  /* ── Stage 1: Generate 4 Ideas ──────────────────────────────────────────── */
 
   async handleBatchGenerate() {
     if (this._batchIsGenerating || this.isGenerating) {
@@ -25,9 +27,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     const concept = document.getElementById("character-concept").value.trim();
-    const characterName = document.getElementById("character-name").value.trim();
-    const pov = document.getElementById("pov-select").value;
-    const cardType = document.getElementById("card-type-select")?.value || "single";
     const referenceImageDescription = document.getElementById("reference-image-description")?.value?.trim();
 
     if (!concept && !referenceImageDescription) {
@@ -35,135 +34,78 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const VARIANT_COUNT = 4;
+    const cardType = document.getElementById("card-type-select")?.value || "single";
 
-    // Set both generate button loading states
     this._setBatchButtonStates(true);
+    this._openBatchModal();
 
-    // Open the batch modal
-    this._openBatchModal(VARIANT_COUNT);
-
-    this._batchAbortController = new AbortController();
     this._batchIsGenerating = true;
-    this._batchVariants = [];
+    this._batchIdeas = [];
     this._batchSelectedIdx = -1;
 
     const batchGrid = document.getElementById("batch-grid");
     const batchLoading = document.getElementById("batch-loading");
     const batchProgress = document.getElementById("batch-progress");
     const batchDetail = document.getElementById("batch-detail");
-    if (batchDetail) batchDetail.style.display = "none";
+    if (batchDetail) { batchDetail.style.display = "none"; batchDetail.innerHTML = ""; }
     if (batchGrid) batchGrid.innerHTML = "";
     if (batchLoading) batchLoading.style.display = "block";
-
-    // Copy lorebook
-    const lorebookData = this.lorebookData;
-
-    // Build effective concept
-    let effectiveConcept = concept;
-    if (concept && referenceImageDescription) {
-      effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
-    } else if (!concept && referenceImageDescription) {
-      effectiveConcept = `Create a complete, original character based on and inspired by this visual reference description:\n${referenceImageDescription}`;
-    }
-
-    // Hold the screen awake across the whole batch. The parallel variants use a
-    // standalone fetch rather than APIHandler, so they would not otherwise get
-    // one — and a batch is the longest-running thing CardGen does.
-    window.wakeLockManager?.acquire();
+    if (batchProgress) { batchProgress.textContent = "Brainstorming 4 ideas…"; batchProgress.style.color = ""; }
 
     try {
-      // Generate first variant with streaming (shown in the stream box)
-      if (batchProgress) batchProgress.textContent = `Generating variant 1 of ${VARIANT_COUNT}…`;
+      const rawIdeas = await window.apiHandler.generateBatchIdeas(concept, referenceImageDescription, cardType);
+      this._batchIdeas = this._parseBatchIdeas(rawIdeas);
 
-      this.clearStream();
-      this.showStreamMessage("🚀 Starting batch generation...\n\n");
-
-      const firstVariant = await this.characterGenerator.generateCharacter(
-        effectiveConcept, characterName,
-        (token, fullContent) => this._onBatchStream(1, VARIANT_COUNT, token, fullContent),
-        pov, lorebookData, cardType,
-      );
-
-      // Stamp cardType
-      firstVariant.cardType = cardType;
-      if (cardType === "group" || cardType === "scenario") {
-        if (!Array.isArray(firstVariant.tags)) firstVariant.tags = [];
-        if (!firstVariant.tags.includes(cardType)) firstVariant.tags.push(cardType);
-      }
-
-      this._batchVariants.push(firstVariant);
-      this._renderBatchCard(firstVariant, 0, batchGrid);
-
-      if (batchProgress) batchProgress.textContent = `Generated 1 of ${VARIANT_COUNT}…`;
-
-      // Check for abort
-      if (this._batchAbortController.signal.aborted) {
-        this.showStreamMessage("\n🛑 Batch generation stopped.\n");
-        this._finishBatchGeneration(batchLoading);
-        return;
-      }
-
-      // Generate remaining variants silently in parallel
-      const remainingCount = VARIANT_COUNT - 1;
-      if (remainingCount > 0) {
-        this.showStreamMessage(`\n⚡ Generating ${remainingCount} more variant(s) in parallel...\n`);
-
-        const promises = [];
-        for (let i = 0; i < remainingCount; i++) {
-          const variantIdx = i + 1;
-          promises.push(
-            this._generateSingleVariant(effectiveConcept, characterName, pov, lorebookData, cardType, variantIdx)
-          );
-        }
-
-        // Process as they complete
-        let failedCount = 0;
-        const results = await Promise.allSettled(promises);
-        for (const result of results) {
-          if (result.status === "fulfilled" && result.value) {
-            this._batchVariants.push(result.value);
-            this._renderBatchCard(result.value, this._batchVariants.length - 1, batchGrid);
-            if (batchProgress) batchProgress.textContent = `Generated ${this._batchVariants.length} of ${VARIANT_COUNT}…`;
-          } else {
-            failedCount++;
-            const reason = result.status === "rejected" ? (result.reason?.message || String(result.reason)) : "returned empty";
-            console.warn(`Batch variant failed (${reason})`);
-            this.showStreamMessage(`⚠️ Variant failed (${reason.slice(0, 80)})\n`);
-          }
-        }
-        if (failedCount > 0 && batchProgress) {
-          batchProgress.textContent = `⚠️ ${this._batchVariants.length} of ${VARIANT_COUNT} succeeded (${failedCount} failed — possible rate limit)`;
-          batchProgress.style.color = "var(--warning)";
-        }
-      }
-
-      this._finishBatchGeneration(batchLoading);
-
-      if (this._batchVariants.length === 0) {
-        throw new Error("All variants failed to generate.");
-      }
-
-      if (batchProgress) {
-        batchProgress.textContent = `✅ ${this._batchVariants.length} variant(s) ready. Click one to preview, then pick your favourite.`;
-        batchProgress.style.color = "var(--success)";
-      }
-
-      this.showStreamMessage(`\n✅ Batch generation complete! ${this._batchVariants.length} variant(s) ready.\n`);
+      this._renderBatchIdeas(batchGrid);
+      if (batchLoading) batchLoading.style.display = "none";
+      if (batchProgress) batchProgress.textContent = "Pick an idea to generate the full character card.";
     } catch (error) {
-      console.error("Batch generation error:", error);
-      this.showStreamMessage(`❌ Batch generation error: ${error.message}\n`);
-      this._finishBatchGeneration(batchLoading);
+      console.error("Batch idea generation failed:", error);
+      if (batchLoading) batchLoading.style.display = "none";
       if (batchProgress) {
         batchProgress.textContent = `❌ ${error.message}`;
         batchProgress.style.color = "var(--error)";
       }
+      this.showNotification(`Failed to generate ideas: ${error.message}`, "error");
     } finally {
       this._batchIsGenerating = false;
-      this._batchAbortController = null;
       this._setBatchButtonStates(false);
-      window.wakeLockManager?.release();
     }
+  },
+
+  /**
+   * Parse raw AI text into an array of 4 idea objects.
+   * Expected format: "1. **Name** — Description..."
+   */
+  _parseBatchIdeas(rawText) {
+    const ideas = [];
+    const lines = rawText.split("\n");
+    let currentIdea = null;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const match = trimmed.match(/^(\d+)[\.\)]\s*\*\*(.+?)\*\*\s*(?:—|–|-)\s*(.+)/);
+      if (match) {
+        if (currentIdea) ideas.push(currentIdea);
+        currentIdea = {
+          name: match[2].trim(),
+          description: match[3].trim(),
+        };
+      } else if (currentIdea && trimmed) {
+        // Continuation line for the current idea
+        currentIdea.description += " " + trimmed;
+      }
+    }
+    if (currentIdea) ideas.push(currentIdea);
+
+    // Pad to exactly 4 if the AI returned fewer
+    while (ideas.length < 4) {
+      ideas.push({
+        name: `Idea ${ideas.length + 1}`,
+        description: "A unique take on your concept that could go in many directions.",
+      });
+    }
+    return ideas.slice(0, 4);
   },
 
   _setBatchButtonStates(isGenerating) {
@@ -190,109 +132,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
-  async _generateSingleVariant(concept, characterName, pov, lorebookData, cardType, variantIdx) {
-    // Use a standalone fetch so parallel calls don't race on APIHandler's shared state
-    // (currentAbortController, currentReader etc.)
-    if (this._batchAbortController.signal.aborted) return null;
-
-    try {
-      // Build the prompt identically to APIHandler.generateCharacterSilent
-      const characterPrompt = window.apiHandler.buildCharacterPrompt(
-        concept, characterName, pov, lorebookData, cardType,
-      );
-      const model = this.config.get("api.text.model");
-      const apiKey = this.config.get("api.text.apiKey");
-      const apiUrl = this.config.get("api.text.baseUrl");
-      const authToken = window.cardgenAuth?.getToken() || "";
-
-      if (!apiUrl || !apiKey) throw new Error("API not configured");
-
-      // Each variant is a full 8192-token generation. Opt into server-side
-      // buffering so a connection dropped mid-batch collects the finished
-      // result instead of silently paying for it a second time.
-      const clientRef = window.ResumableJobs?.newRef() || null;
-      if (clientRef) {
-        window.ResumableJobs.add({ clientRef, label: `Batch variant ${variantIdx + 1}` });
-      }
-
-      let json;
-      try {
-        // Make the request directly — bypassing APIHandler's shared state
-        const res = await (window.authFetch || fetch)("/api/text/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": apiKey,
-            "X-API-URL": apiUrl,
-            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: "system", content: characterPrompt.systemPrompt },
-              { role: "user", content: characterPrompt.userPrompt },
-            ],
-            temperature: 0.8,
-            max_tokens: 8192,
-            stream: false,
-            ...(clientRef ? { resumable: true, clientRef } : {}),
-          }),
-          signal: this._batchAbortController.signal,
-        });
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => "");
-          throw new Error(`API ${res.status}: ${errText}`);
-        }
-
-        json = await res.json();
-      } catch (err) {
-        // A user-initiated stop must not resurrect the generation.
-        if (err.name === "AbortError" || !clientRef) throw err;
-
-        const collected = await window.apiHandler._tryCollectResult(clientRef);
-        if (!collected) throw err;
-        console.warn(`[batch] variant ${variantIdx + 1} recovered from the server after: ${err.message}`);
-        json = collected;
-      } finally {
-        if (clientRef) window.ResumableJobs.remove(clientRef);
-      }
-
-      const rawText = window.apiHandler.processNormalResponse(json);
-      if (!rawText) throw new Error("Empty response from API");
-
-      const parsed = this.characterGenerator.parseCharacterData(rawText);
-      if (!parsed) return null;
-
-      parsed.cardType = cardType;
-      if (cardType === "group" || cardType === "scenario") {
-        if (!Array.isArray(parsed.tags)) parsed.tags = [];
-        if (!parsed.tags.includes(cardType)) parsed.tags.push(cardType);
-      }
-      return parsed;
-    } catch (err) {
-      if (err.name === "AbortError") return null;
-      console.error(`Variant ${variantIdx + 1} failed:`, err);
-      return null;
-    }
-  },
-
-  _onBatchStream(variantNum, total, chunk, fullContent) {
-    // Stream the first variant only
-    if (variantNum !== 1) return;
-    this.showStreamChunk(chunk);
-  },
-
   /* ── Modal ──────────────────────────────────────────────────────────────── */
 
-  _openBatchModal(count) {
+  _openBatchModal() {
     const modal = document.getElementById("batch-modal");
     if (!modal) return;
     modal.classList.add("show");
     modal.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
     const title = modal.querySelector(".modal-title");
-    if (title) title.textContent = `🎭 Batch Generate — ${count} Variants`;
+    if (title) title.textContent = "🎲 4 Ideas — Pick One";
   },
 
   closeBatchModal() {
@@ -306,152 +155,262 @@ Object.assign(CharacterGeneratorApp.prototype, {
     document.body.style.overflow = "";
   },
 
-  _finishBatchGeneration(loadingEl) {
-    if (loadingEl) loadingEl.style.display = "none";
-  },
-
   /* ── Render ─────────────────────────────────────────────────────────────── */
 
-  _renderBatchCard(variant, idx, grid) {
+  _renderBatchIdeas(grid) {
     if (!grid) return;
-    const name = variant.name || `Variant ${idx + 1}`;
-    const descSnippet = (variant.description || "").replace(/\n+/g, " ").slice(0, 150);
-    const persSnippet = (variant.personality || "").replace(/\n+/g, " ").slice(0, 150);
-    const scenarioSnippet = (variant.scenario || "").replace(/\n+/g, " ").slice(0, 100);
-    const firstMsgSnippet = (variant.firstMessage || "").replace(/\n+/g, " ").slice(0, 100);
+    grid.innerHTML = "";
 
-    const card = document.createElement("div");
-    card.className = "batch-card";
-    card.dataset.batchIdx = idx;
-    card.innerHTML = `
-      <div class="batch-card-header">
-        <span class="batch-card-num">#${idx + 1}</span>
-        <span class="batch-card-name">${escapeHtml(name)}</span>
-      </div>
-      <div class="batch-card-section">
-        <div class="batch-card-label">Description</div>
-        <div class="batch-card-text">${escapeHtml(descSnippet || "(empty)")}${descSnippet.length >= 150 ? "…" : ""}</div>
-      </div>
-      <div class="batch-card-section">
-        <div class="batch-card-label">Personality</div>
-        <div class="batch-card-text">${escapeHtml(persSnippet || "(empty)")}${persSnippet.length >= 150 ? "…" : ""}</div>
-      </div>
-      <div class="batch-card-section">
-        <div class="batch-card-label">Scenario</div>
-        <div class="batch-card-text">${escapeHtml(scenarioSnippet || "(empty)")}${scenarioSnippet.length >= 100 ? "…" : ""}</div>
-      </div>
-      <div class="batch-card-section">
-        <div class="batch-card-label">First Message</div>
-        <div class="batch-card-text">${escapeHtml(firstMsgSnippet || "(empty)")}${firstMsgSnippet.length >= 100 ? "…" : ""}</div>
-      </div>
-      <button class="btn-primary batch-pick-btn" data-action="pick-batch" data-idx="${idx}">⭐ Pick This</button>
-    `;
-
-    card.addEventListener("click", (e) => {
-      if (e.target.closest("[data-action='pick-batch']")) return; // handled below
-      this._showBatchDetail(idx);
+    this._batchIdeas.forEach((idea, idx) => {
+      const card = document.createElement("div");
+      card.className = "batch-card";
+      card.dataset.batchIdx = idx;
+      card.innerHTML = `
+        <div class="batch-card-header">
+          <span class="batch-card-num">#${idx + 1}</span>
+          <span class="batch-card-name">${escapeHtml(idea.name)}</span>
+        </div>
+        <div class="batch-card-section">
+          <div class="batch-card-text">${escapeHtml(idea.description)}</div>
+        </div>
+        <button class="btn-primary batch-pick-btn" data-action="pick-batch" data-idx="${idx}">✨ Generate This Character</button>
+      `;
+      grid.appendChild(card);
     });
-
-    grid.appendChild(card);
   },
 
-  _showBatchDetail(idx) {
-    const variant = this._batchVariants[idx];
-    if (!variant) return;
-
-    const detail = document.getElementById("batch-detail");
-    if (!detail) return;
-
-    // Highlight selected card
-    document.querySelectorAll(".batch-card").forEach((c) => c.classList.remove("batch-card-selected"));
-    const card = document.querySelector(`.batch-card[data-batch-idx="${idx}"]`);
-    if (card) card.classList.add("batch-card-selected");
-
-    detail.style.display = "block";
-    detail.innerHTML = `
-      <h3 style="margin:0 0 0.75rem;">📋 Full Preview: ${escapeHtml(variant.name || `Variant ${idx + 1}`)}</h3>
-      ${this._buildBatchFieldHtml("Description", variant.description)}
-      ${this._buildBatchFieldHtml("Personality", variant.personality)}
-      ${this._buildBatchFieldHtml("Scenario", variant.scenario)}
-      ${this._buildBatchFieldHtml("First Message", variant.firstMessage)}
-      <button class="btn-primary batch-detail-pick-btn" style="margin-top:0.75rem;" data-action="pick-batch" data-idx="${idx}">⭐ Pick This Variant</button>
-    `;
-
-    // Scroll to detail
-    detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  },
-
-  _buildBatchFieldHtml(label, content) {
-    if (!content) return "";
-    return `
-      <div style="margin-bottom:0.75rem;">
-        <strong style="color:var(--text-primary);display:block;margin-bottom:0.25rem;">${escapeHtml(label)}</strong>
-        <div style="font-size:0.875rem;color:var(--text-secondary);white-space:pre-wrap;max-height:200px;overflow-y:auto;padding:0.5rem;background:var(--surface);border:1px solid var(--border);border-radius:0.375rem;">${escapeHtml(content)}</div>
-      </div>
-    `;
-  },
-
-  /* ── Pick / Select ──────────────────────────────────────────────────────── */
+  /* ── Stage 2: Full Character from Chosen Idea ────────────────────────────── */
 
   async handleBatchPick(idx) {
-    const variant = this._batchVariants[idx];
-    if (!variant) return;
+    if (this.isGenerating) {
+      this.showNotification("Generation already in progress.", "warning");
+      return;
+    }
+    const idea = this._batchIdeas[idx];
+    if (!idea) return;
 
     this._batchSelectedIdx = idx;
+    this.closeBatchModal();
 
-    // Reset media state before setting variant character
+    const concept = document.getElementById("character-concept").value.trim();
+    const characterName = document.getElementById("character-name").value.trim();
+    const referenceImageDescription = document.getElementById("reference-image-description")?.value?.trim();
+    const pov = document.getElementById("pov-select").value;
+    const cardType = document.getElementById("card-type-select")?.value || "single";
+
+    let effectiveConcept = concept
+      ? `${concept}\n\nSpecific direction to take: ${idea.name} — ${idea.description}`
+      : `${idea.name}: ${idea.description}`;
+    if (referenceImageDescription) {
+      effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+    }
+
+    this.isGenerating = true;
+    this.setGeneratingState(true);
+
+    this.stSourceAvatar = null;
+    this._updatePushButton();
+
+    this.hideResultSection();
+    this.currentImageUrl = null;
+    if (window.apiHandler) window.apiHandler.lastGeneratedImagePrompt = null;
+
+    const customPromptTextarea = document.getElementById("custom-image-prompt");
+    if (customPromptTextarea) { customPromptTextarea.value = ""; if (window.updatePromptCharCount) window.updatePromptCharCount(); }
+
+    ["description-prompt", "personality-prompt", "scenario-prompt", "first-message-prompt", "example-messages-prompt"]
+      .forEach((id) => { const el = document.getElementById(id); if (el) el.value = ""; });
+
+    const imageContent = document.getElementById("image-content");
+    if (imageContent) {
+      imageContent.innerHTML = `<div class="image-placeholder"><div class="loading-spinner"></div></div>`;
+    }
+
     if (typeof this._resetCharacterMediaState === "function") {
       this._resetCharacterMediaState();
     } else {
       this.currentImageUrl = null;
       this.imageHistoryUrls = [];
     }
-
-    // Set as current character
-    this.currentCharacter = variant;
-    this.originalCharacter = JSON.parse(JSON.stringify(variant));
-
-    const imageContent = document.getElementById("image-content");
-    if (imageContent) {
-      imageContent.innerHTML = `
-        <div style="text-align:center;padding:2rem;color:var(--text-secondary);">
-          <div style="font-size:2rem;margin-bottom:1rem;">🎭</div>
-          <p style="font-weight:500;margin-bottom:0.5rem;">Variant Selected</p>
-          <p style="font-size:0.875rem;">Generate or upload an image for the card</p>
-        </div>`;
+    if (typeof this._clearCharacterGallery === "function") {
+      this._clearCharacterGallery();
     }
 
-    // Display character
-    this.displayCharacter();
-    this.hideResultSection();
-    this.showResultSection();
+    this.lorebookEntries = [];
+    this.updateLorebookEntryCount();
+    this.altGreetings = [];
+    this.updateAltGreetingsCount();
+    this.clearStream();
 
-    // Close batch modal
-    this.closeBatchModal();
+    try {
+      const promptSaved = await this.savePromptToLibrary({
+        concept: concept || `${idea.name}: ${idea.description}`,
+        characterName, pov, cardType,
+        lorebookData: this.lorebookData,
+        referenceImageDescription: referenceImageDescription || "",
+        referenceImageDataUrl: this.referenceImageDataUrl || "",
+      });
+      await this.refreshLibraryViews();
+      if (!promptSaved) this.showStreamMessage("⚠️ Prompt could not be saved to local library.\n");
 
-    // Show image controls
-    const imageControls = document.getElementById("image-controls");
-    if (imageControls) imageControls.style.display = "block";
-    const buttonsRow = document.getElementById("image-buttons-row");
-    if (buttonsRow) buttonsRow.style.display = "";
+      this.showStreamMessage(`🚀 Generating full character from "${idea.name}"...\n\n`);
+      this.currentCharacter = await this.characterGenerator.generateCharacter(
+        effectiveConcept, characterName,
+        (token, fullContent) => this.handleCharacterStream(token, fullContent),
+        pov, this.lorebookData, cardType,
+      );
 
-    // Save to library
-    await this.saveCardToLibrary();
-    await this.refreshLibraryViews();
+      // Stamp cardType
+      this.currentCharacter.cardType = cardType;
+      if (cardType === "group" || cardType === "scenario") {
+        if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
+        if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
+      }
 
-    this.showNotification(`Selected "${variant.name || `Variant ${idx + 1}`}" as your character!`, "success");
+      this.showStreamMessage("\n\n💬 Generating example messages...\n");
+      await this.handleGenerateExampleMessages(true);
+
+      this.showStreamMessage("✍️ Generating creator's notes...\n");
+      try {
+        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter);
+        if (notes) { this.currentCharacter.creatorNotes = notes; }
+      } catch (notesError) {
+        console.warn("Creator notes generation failed (non-fatal):", notesError);
+      }
+
+      this.showStreamMessage("📜 Generating post-history instructions...\n");
+      try {
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        if (postHistory) { this.currentCharacter.postHistoryInstructions = postHistory; }
+      } catch (phError) {
+        console.warn("Post-History Instructions generation failed (non-fatal):", phError);
+      }
+
+      this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
+
+      this.showStreamMessage("\n✅ Character generation complete!\n");
+      this.displayCharacter();
+
+      // Auto-generate image if configured (same as handleGenerate)
+      const imageApiBase = this.config.get("api.image.baseUrl");
+      const imageApiKey = this.config.get("api.image.apiKey");
+      const enableImageGeneration = this.config.get("app.enableImageGeneration");
+      const hasReferenceImage = !!this.referenceImageDataUrl;
+
+      if (hasReferenceImage) {
+        this.currentImageUrl = this.referenceImageDataUrl;
+        document.getElementById("image-content").innerHTML = `
+          <div class="image-container">
+            <img src="${this.currentImageUrl}" alt="${this.currentCharacter.name || "Reference image"}" class="generated-image">
+          </div>`;
+        this.showStreamMessage("🖼️ Using uploaded reference image as final card image (skipped image API generation)\n");
+      } else if (imageApiBase && imageApiKey && enableImageGeneration) {
+        try {
+          this.showStreamMessage("🎨 Generating character image...\n");
+
+          if (this.config.get("api.image.models") && this.config.get("api.image.models").length > 0) {
+            this.config.set("api.image.model", this.config.get("api.image.models")[0]);
+            const activeImageModelSelect = document.getElementById("active-image-model");
+            if (activeImageModelSelect) activeImageModelSelect.value = this.config.get("api.image.models")[0];
+          }
+          this.config.set("api.image.style", "realistic");
+          const styleSelect = document.getElementById("image-style");
+          if (styleSelect) styleSelect.value = "realistic";
+
+          await this.generateImage(true);
+          this.showStreamMessage("✅ Image generation complete!\n");
+        } catch (imageError) {
+          console.error("Image generation error:", imageError);
+          this.showStreamMessage(`⚠️ Image generation failed: ${imageError.message}\n`);
+          this.showStreamMessage("📝 Continuing with character data only...\n");
+          document.getElementById("image-content").innerHTML = `
+            <div style="text-align:center;padding:2rem;color:var(--text-secondary);">
+              <p>Image generation failed</p>
+              <p style="font-size:0.875rem;margin-top:0.5rem;color:var(--error);">${imageError.message}</p>
+              <p style="font-size:0.875rem;margin-top:0.5rem;">You can upload your own image</p>
+            </div>`;
+        }
+      } else {
+        this.showStreamMessage("⏭️ Skipping image generation (image generation disabled or no API configured)\n");
+        document.getElementById("image-content").innerHTML = `
+          <div style="text-align:center;padding:2rem;color:var(--text-secondary);">
+            <div style="font-size:2rem;margin-bottom:1rem;">🖼️</div>
+            <p style="font-weight:500;margin-bottom:0.5rem;">Image Generation Disabled</p>
+            <p style="font-size:0.875rem;margin-bottom:1rem;">Enable image generation in settings or upload your own image</p>
+            <button onclick="document.getElementById('upload-image-btn').click()" style="padding:0.5rem 1rem;background:var(--accent);color:white;border:none;border-radius:0.375rem;cursor:pointer;">
+              📁 Upload Image
+            </button>
+          </div>`;
+      }
+
+      this.showResultSection();
+      document.getElementById("image-controls").style.display = "block";
+      document.getElementById("image-buttons-row").style.display = "";
+
+      if (imageApiBase && imageApiKey) {
+        const promptEditor = document.getElementById("image-prompt-editor");
+        const customPromptTextarea = document.getElementById("custom-image-prompt");
+        const referenceDescription = document.getElementById("reference-image-description")?.value?.trim();
+
+        if (promptEditor) {
+          promptEditor.style.display = "block";
+
+          if (customPromptTextarea && referenceDescription && !customPromptTextarea.value.trim()) {
+            customPromptTextarea.value = `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`;
+            this.currentCharacter.imagePrompt = customPromptTextarea.value;
+            window.updatePromptCharCount();
+          }
+
+          if (customPromptTextarea && window.apiHandler.lastGeneratedImagePrompt) {
+            customPromptTextarea.value = window.apiHandler.lastGeneratedImagePrompt;
+            this.currentCharacter.imagePrompt = window.apiHandler.lastGeneratedImagePrompt;
+            window.updatePromptCharCount();
+          } else if (!hasReferenceImage && customPromptTextarea && !customPromptTextarea.value.trim()) {
+            try {
+              customPromptTextarea.value = await window.apiHandler.generateImagePrompt(
+                this.currentCharacter.description,
+                this.currentCharacter.name,
+              );
+            } catch (error) {
+              console.error("Failed to generate image prompt:", error);
+              customPromptTextarea.value = window.apiHandler.buildDirectImagePrompt(
+                this.currentCharacter.description, this.currentCharacter.name,
+              );
+            }
+            this.currentCharacter.imagePrompt = customPromptTextarea.value;
+            window.updatePromptCharCount();
+          }
+        }
+      }
+
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+
+      this.showNotification("Character generated successfully!", "success");
+    } catch (error) {
+      console.error("Batch full generation failed:", error);
+      if (error.message.includes("Generation stopped by user")) {
+        this.showStreamMessage(`\n🛑 Generation stopped.\n`);
+      } else {
+        this.showStreamMessage(`\n❌ Generation failed: ${error.message}\n`);
+        this.showNotification(`Generation failed: ${error.message}`, "error");
+      }
+      this.hideResultSection();
+    } finally {
+      this.isGenerating = false;
+      this.setGeneratingState(false);
+      const inputSectionDetails = document.getElementById("input-section-details");
+      if (inputSectionDetails) inputSectionDetails.open = false;
+    }
   },
 
   /* ── Stop ───────────────────────────────────────────────────────────────── */
 
   handleBatchStop() {
-    if (this._batchAbortController) {
-      this._batchAbortController.abort();
-    }
     if (window.apiHandler) window.apiHandler.stopGeneration();
     this._batchIsGenerating = false;
     this._setBatchButtonStates(false);
-    this.showNotification("Batch generation stopped.", "warning");
+    this.showNotification("Batch idea generation stopped.", "warning");
   },
 
   /* ── Grid click delegation ──────────────────────────────────────────────── */

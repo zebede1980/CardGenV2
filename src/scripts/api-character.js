@@ -1352,4 +1352,60 @@ Write the instructions now. Plain text only, no formatting.`;
     return { systemPrompt, userPrompt };
   },
 
+  /* ── Batch Generate — Idea Spark ───────────────────────────────────────── */
+
+  /**
+   * Generate 4 quick-paragraph character ideas from the user's freeform concept.
+   * Used by "Generate 4" Stage 1 on the main character generator screen.
+   */
+  async generateBatchIdeas(concept, referenceImageDescription, cardType) {
+    const prompt = this.buildBatchIdeasPrompt(concept, referenceImageDescription, cardType);
+    const model = this.config.get("api.text.model") || "glm-4-6";
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: prompt.systemPrompt },
+        { role: "user", content: prompt.userPrompt },
+      ],
+      temperature: 0.9,
+      max_tokens: 2048,
+      stream: false,
+    };
+
+    const response = await this.makeRequest("/chat/completions", data, false, false);
+    return this.processNormalResponse(response);
+  },
+
+  /**
+   * Build the system + user prompts for brainstorming 4 takes on one concept.
+   */
+  buildBatchIdeasPrompt(concept, referenceImageDescription, cardType) {
+    const cardTypeLabel = cardType === "group" ? "character group" : cardType === "scenario" ? "scenario" : "character";
+
+    const systemPrompt = [
+      `You are a creative character-concept brainstormer for a roleplaying-card generator. Your job is to take the user's ${cardTypeLabel} concept and generate 4 genuinely distinct takes on it.`,
+      "",
+      "Each idea must be a STRICTLY FORMATTED single line like this:",
+      "N. **Character Name/Title** — Two to three sentences describing the character's core concept, their defining trait or internal conflict, and the kind of story or scenario they belong in.",
+      "",
+      "RULES:",
+      "- Generate exactly 4 ideas, numbered 1 through 4.",
+      "- Every idea must stay true to the user's concept below, but take it in a meaningfully different direction — vary the personality, backstory angle, tone, or twist. Do NOT just reword the same idea four times.",
+      "- Be wildly creative and diverse — each idea should feel distinct, not interchangeable.",
+      "- Each description must be exactly 2-3 sentences. No bullet points, no markdown beyond the bolded name.",
+      "- Output ONLY the 4 numbered ideas, nothing else — no preamble, no closing remarks.",
+    ].join("\n");
+
+    let userPrompt = concept
+      ? `Character concept: ${concept}`
+      : "No text concept was given — base the ideas entirely on the visual reference description below.";
+    if (referenceImageDescription) {
+      userPrompt += `\n\nVisual reference description: ${referenceImageDescription}`;
+    }
+    userPrompt += "\n\nGenerate 4 distinct character ideas based on the above. Make them feel like genuinely different directions, not variations of one idea.";
+
+    return { systemPrompt, userPrompt };
+  },
+
 });
