@@ -176,6 +176,66 @@ Object.assign(APIHandler.prototype, {
     throw new Error("Unexpected image API response format: " + JSON.stringify(result));
   },
 
+  // ── Text-to-Image Generation (Playground) ───────────────────────────────────
+  // A deliberately lightweight sibling of generateImage() above: that method
+  // is built for character cards (LLM-authored prompt, style/mood tag
+  // injection, per-model prompt-length prefs). This one just sends whatever
+  // the user typed straight to the model via the same /api/image/generations
+  // proxy route, for the Playground's "create from nothing" tab.
+  async generateImageFromPrompt({ prompt, model, aspectRatio }) {
+    const trimmedPrompt = (prompt || "").trim();
+    if (!trimmedPrompt) throw new Error("A prompt is required to generate an image.");
+
+    const generateModel = model || this.config.get("api.image.generateModel");
+    if (!generateModel) throw new Error("Choose a model first.");
+
+    const data = {
+      model: generateModel,
+      prompt: trimmedPrompt,
+      n: 1,
+      response_format: "url",
+      seed: Math.floor(Math.random() * 2147483647),
+    };
+
+    const ratio = aspectRatio || this.config.get("api.image.aspectRatio");
+    const dims = ratio && getRatioDims(generateModel, ratio);
+    if (dims) {
+      data.aspect_ratio = ratio;
+      data.width = dims.width;
+      data.height = dims.height;
+      data.size = `${dims.width}x${dims.height}`;
+    }
+
+    console.log("=== SENDING PLAYGROUND GENERATE REQUEST ===");
+    console.log("Generate model:", generateModel);
+
+    const response = await this.makeRequest("/api/image/generations", data, true);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Image Generate API error response:", errorText);
+      let errorData;
+      try { errorData = JSON.parse(errorText); } catch (e) {
+        throw new Error(`Image Generate API Error (${response.status}): ${errorText}`);
+      }
+      const errorMessage = errorData.error?.message || errorData.message || errorData.error || "Unknown error";
+      throw new Error(`Image Generate API Error (${response.status}): ${errorMessage}`);
+    }
+
+    const result = await response.json();
+    if (result.error) {
+      console.error("Image Generate API returned error object:", result.error);
+      throw new Error(`Image Generate API Error: ${result.error.message || result.error.details || result.error}`);
+    }
+
+    const resultUrl = (result.data && result.data.length > 0 && result.data[0].url) || result.image || result.url;
+    if (!resultUrl) {
+      console.error("Unexpected image generate API response format. Full response:", result);
+      throw new Error("Unexpected image generate API response format: " + JSON.stringify(result));
+    }
+    return resultUrl;
+  },
+
   // ── Image-to-Image Editing ────────────────────────────────────────────────
   // Sends an existing image + a plain-language instruction to an image-to-image
   // model (e.g. flux-2-pro-image-to-image, flux-kontext) via the same

@@ -17,10 +17,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // tab, this attaches its own show/hide listeners to their existing
     // buttons — the same non-invasive approach chat-handler.js used when it
     // was added alongside the original two tabs.
-    const otherTabs = ["tab-cardgen", "tab-storywriter", "tab-roleplaychat", "tab-adventure"]
+    // Includes tab-home/view-home (injected at runtime by home-handler.js,
+    // which post-dates this file and never knew to hide/be-hidden-by
+    // Playground) — without it, Home stays visible underneath Playground on
+    // the very first switch from a fresh load, and switching back to Home
+    // from Playground leaves Playground visible underneath it too.
+    const otherTabs = ["tab-home", "tab-cardgen", "tab-storywriter", "tab-roleplaychat", "tab-adventure"]
       .map(id => document.getElementById(id))
       .filter(Boolean);
-    const otherViews = ["view-cardgen", "view-storywriter", "view-roleplaychat", "view-adventure"]
+    const otherViews = ["view-home", "view-cardgen", "view-storywriter", "view-roleplaychat", "view-adventure"]
       .map(id => document.getElementById(id))
       .filter(Boolean);
 
@@ -36,6 +41,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // Refreshed on every tab-open (not just once at init) so a model/
       // provider changed in Settings while on another tab shows up
       // immediately.
+      this._updatePlaygroundGenerateModelDropdown();
       this._updatePlaygroundEditModelDropdown();
       this._updatePlaygroundCombineModelDropdown();
     });
@@ -80,15 +86,27 @@ Object.assign(CharacterGeneratorApp.prototype, {
       combineImage2Zone.addEventListener("paste", (e) => this.handleCombineImage2Paste(e));
     }
 
-    // Tool tabs (Crop / Edit / Combine) — only one panel on screen at a
-    // time. Crop embeds the same shared crop modal tool used elsewhere in
-    // the app (see _relocateCropModal), opened the moment its tab is
-    // selected. In-fill/Consistency/Expand tabs were cut in favor of just
-    // using Edit with a good image-to-image model.
-    ["crop", "edit", "combine"].forEach(tab => {
+    // Tool tabs (Generate / Crop / Edit / Combine) — only one panel on
+    // screen at a time. Crop embeds the same shared crop modal tool used
+    // elsewhere in the app (see _relocateCropModal), opened the moment its
+    // tab is selected. In-fill/Consistency/Expand tabs were cut in favor of
+    // just using Edit with a good image-to-image model. Generate is the only
+    // tab that doesn't require an existing working image — it's how one gets
+    // created from nothing but a prompt.
+    ["generate", "crop", "edit", "combine"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
+    // Reflects the HTML's default active tab (Generate) in _pgActiveTab so
+    // the first tab switch after load behaves consistently with any other.
+    this._setPlaygroundToolTab("generate");
+
+    const generateModelSelect = document.getElementById("playground-generate-model");
+    if (generateModelSelect) {
+      generateModelSelect.addEventListener("change", (e) => this.config.set("api.image.generateModel", e.target.value));
+    }
+    const generateBtn = document.getElementById("generate-playground-image-btn");
+    if (generateBtn) generateBtn.addEventListener("click", () => this.handleGeneratePlaygroundImage());
 
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
@@ -105,6 +123,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const combineBtn = document.getElementById("combine-images-btn");
     if (combineBtn) combineBtn.addEventListener("click", () => this.handleCombineImages());
 
+    // Generate model dropdown — its own api.image.generateModel setting, not
+    // synced with Edit's, since a plain text-to-image model is a different
+    // category from an image-to-image one (same reasoning as Combine below).
+    this._updatePlaygroundGenerateModelDropdown();
+
     // Edit model dropdown reads/writes the one api.image.editModel setting
     // (shared with the Settings text field too, see config.js).
     this._updatePlaygroundEditModelDropdown();
@@ -114,15 +137,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
-  // Switches which of the Crop / Edit / Combine panels is visible. Crop is
-  // the shared modal tool (see image-cropper.js) embedded inline here —
-  // opening it is what actually loads the current image into its canvas, so
-  // selecting that tab triggers the same openCropModal('playground') a
-  // button click used to.
+  // Switches which of the Generate / Crop / Edit / Combine panels is
+  // visible. Crop is the shared modal tool (see image-cropper.js) embedded
+  // inline here — opening it is what actually loads the current image into
+  // its canvas, so selecting that tab triggers the same
+  // openCropModal('playground') a button click used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { crop: "pg-tab-crop", edit: "pg-tab-edit", combine: "pg-tab-combine" };
-    const panels = { crop: "pg-panel-crop", edit: "pg-panel-edit", combine: "pg-panel-combine" };
+    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", combine: "pg-tab-combine" };
+    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", combine: "pg-panel-combine" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -175,6 +198,86 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     if (!models.includes(currentModel)) {
       select.value = models[0];
+    }
+  },
+
+  // ── Text-to-image generation ────────────────────────────────────────────────
+  // The only Playground tool that doesn't need a working image first — it's
+  // how one gets created from nothing but a prompt. Plain population, no
+  // "_looksEditCapable" heuristic in the positive sense — here it's inverted:
+  // a model whose name signals it wants a source image (e.g.
+  // "-image-to-image") is flagged as a *risk* for text-only generation,
+  // since it may ignore the prompt or fail outright with nothing to edit.
+  _updatePlaygroundGenerateModelDropdown() {
+    const select = document.getElementById("playground-generate-model");
+    if (!select) return;
+
+    const models = this.config.get("api.image.models") || [];
+    const currentModel = this.config.get("api.image.generateModel") || "";
+
+    const label = (model) => this._looksEditCapable(model) ? `${model} ⚠️ may expect a source image` : model;
+
+    if (models.length === 0) {
+      select.innerHTML = `<option value="">No models configured — add one via Settings</option>`;
+      return;
+    }
+
+    select.innerHTML = models
+      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(label(model))}</option>`)
+      .join("");
+
+    if (!models.includes(currentModel)) {
+      select.value = models[0];
+    }
+  },
+
+  // Generates a fresh image from a prompt alone and makes it the working
+  // image — same as an upload/paste, including resetting history (a newly
+  // generated image is unrelated to whatever was there before) and handing
+  // off to the Edit tab afterward, matching processPlaygroundImageFile.
+  async handleGeneratePlaygroundImage() {
+    const promptEl = document.getElementById("playground-generate-prompt");
+    const prompt = promptEl?.value?.trim();
+    if (!prompt) {
+      this.showNotification("Describe the image you want to create first", "warning");
+      promptEl?.focus();
+      return;
+    }
+
+    const model = document.getElementById("playground-generate-model")?.value
+      || this.config.get("api.image.generateModel");
+    if (!model) {
+      this.showNotification("Choose a model first (⚙️ Settings → Image API → Fetch Models)", "warning");
+      return;
+    }
+
+    const btn = document.getElementById("generate-playground-image-btn");
+    const statusEl = document.getElementById("playground-generate-status");
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.textContent = `🪄 Generating with ${model}… this may take a minute.`;
+    }
+
+    try {
+      const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model });
+      const dataUrl = await this._urlToDataUrl(resultUrl);
+
+      this.playgroundImageUrl = dataUrl;
+      this.updatePlaygroundImagePreview(dataUrl);
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+
+      this.playgroundHistory = [];
+      this._addPlaygroundHistoryEntry(dataUrl, `Generated (${model})`);
+
+      this.showNotification("Image generated!", "success");
+      this._setPlaygroundToolTab("edit");
+    } catch (error) {
+      console.error("Playground generate error:", error);
+      this.showNotification(`Failed: ${error.message}`, "error", 6000);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (statusEl) statusEl.style.display = "none";
     }
   },
 
