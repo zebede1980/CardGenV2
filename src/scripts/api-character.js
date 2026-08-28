@@ -1,4 +1,131 @@
 // Character generation methods — extends APIHandler via prototype
+
+// Shared naming data + lightweight persistent history, used by every name
+// generation path (full-card auto-name, single-name regenerate, and the
+// Name Generator modal) so bans/history don't drift out of sync across them
+// and repeats aren't limited to a single in-memory session.
+const NameGenShared = (() => {
+  const WESTERN_TRADITIONS = [
+    "English or British (including classic English surnames and given names)",
+    "Irish (Gaelic and anglicised Irish names)",
+    "Scottish (Highland and Lowland traditions)",
+    "North American (classic American or Canadian names)",
+    "Australian or New Zealand",
+  ];
+
+  // Deliberately excludes Western traditions — injected into the full-card
+  // and single-name prompts specifically to break the AI's tendency to
+  // default to Anglo names. The modal (which has an explicit gender/type
+  // picker aimed at users who may want an English name) adds these back.
+  const NON_WESTERN_TRADITIONS = [
+    "Eastern European — Polish, Czech, Slovak, or Romanian",
+    "Slavic — Russian, Ukrainian, Bulgarian, or Serbian",
+    "Scandinavian — Norwegian, Swedish, Danish, or Icelandic",
+    "Celtic — Welsh, Scottish Gaelic, Irish Gaelic, or Breton",
+    "Iberian — Spanish, Portuguese, Catalan, or Basque",
+    "Italian or Sicilian",
+    "Greek — modern or classical",
+    "Turkish, Azerbaijani, or Uzbek",
+    "Arabic — Levantine, Gulf, or North African",
+    "Persian or Dari",
+    "South Asian — Hindi, Bengali, Tamil, Punjabi, or Urdu",
+    "Japanese",
+    "Korean",
+    "Chinese — Mandarin or Cantonese romanisation",
+    "Vietnamese or Thai",
+    "Filipino or Tagalog",
+    "West African — Yoruba, Igbo, Akan, or Hausa",
+    "East African — Swahili, Amharic, or Somali",
+    "Southern African — Zulu, Xhosa, or Shona",
+    "Hebrew or Yiddish",
+    "Armenian or Georgian",
+    "Finnish, Estonian, or Sami",
+    "Baltic — Lithuanian or Latvian",
+    "Hungarian or Magyar",
+    "Dutch or Flemish",
+    "German or Austrian",
+    "French or Occitan",
+    "Albanian or Macedonian",
+    "Mongolian, Kazakh, or Kyrgyz",
+    "Indigenous Mesoamerican — Nahuatl or Maya inspired",
+  ];
+
+  const BANNED_NAMES_BLOCK = `- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
+- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
+- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
+- Any two-syllable name ending in "-ael", "-iel", or "-yn" unless the concept is explicitly high fantasy`;
+
+  // Stops the model inventing plausible-sounding-but-fake names when asked
+  // for a tradition it has thin training data on (Sami, Breton, Basque,
+  // Baltic, Mesoamerican, etc.) instead of guessing wrong.
+  const AUTHENTICITY_GUARD = `**AUTHENTICITY OVER INVENTION:** Only use a name if you are confident it is a real, attested name from the assigned tradition — not a plausible-sounding invention. If you are not sure a name is genuinely authentic, pick a different real name from a closely related, better-known culture in the same region instead of guessing.`;
+
+  // Counters LLM mode-collapse, where the same 2-3 "safe" names get produced
+  // for a given culture every time (e.g. always "Yuki Tanaka" for Japanese).
+  const AVOID_DEFAULT_GUARD = `**AVOID YOUR DEFAULT PICK:** Don't reach for the single most common or stereotypical name you'd normally produce for this tradition. Choose something you'd consider a distinctive, less-obvious choice while staying authentic.`;
+
+  const NAME_HISTORY_KEY = "cardgenv2_recent_names";
+  const STYLE_HISTORY_KEY = "cardgenv2_recent_styles";
+  const NAME_HISTORY_MAX = 40;
+  const STYLE_HISTORY_MAX = 6;
+
+  function readList(key) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeList(key, arr, max) {
+    try {
+      localStorage.setItem(key, JSON.stringify(arr.slice(-max)));
+    } catch {
+      // localStorage unavailable/full — history just won't persist this run
+    }
+  }
+
+  function recentNames() {
+    return readList(NAME_HISTORY_KEY);
+  }
+
+  function recordNames(names) {
+    if (!names || !names.length) return;
+    writeList(NAME_HISTORY_KEY, [...readList(NAME_HISTORY_KEY), ...names], NAME_HISTORY_MAX);
+  }
+
+  function recentStyles() {
+    return readList(STYLE_HISTORY_KEY);
+  }
+
+  function recordStyle(style) {
+    writeList(STYLE_HISTORY_KEY, [...readList(STYLE_HISTORY_KEY), style], STYLE_HISTORY_MAX);
+  }
+
+  // Picks a style while avoiding whichever styles were picked most recently,
+  // so the same cultural tradition can't repeat back-to-back across calls.
+  function pickStyle(pool) {
+    const recent = recentStyles();
+    const available = pool.filter((s) => !recent.includes(s));
+    const choices = available.length ? available : pool;
+    const choice = choices[Math.floor(Math.random() * choices.length)];
+    recordStyle(choice);
+    return choice;
+  }
+
+  return {
+    WESTERN_TRADITIONS,
+    NON_WESTERN_TRADITIONS,
+    BANNED_NAMES_BLOCK,
+    AUTHENTICITY_GUARD,
+    AVOID_DEFAULT_GUARD,
+    recentNames,
+    recordNames,
+    pickStyle,
+  };
+})();
+
 Object.assign(APIHandler.prototype, {
 
   async generateCharacter(
@@ -175,44 +302,12 @@ Object.assign(APIHandler.prototype, {
   },
 
   /**
-   * Randomly picks a cultural naming tradition on each call.
-   * Injected into name prompts so every generation is pushed into a different
-   * cultural space, breaking the AI's tendency to default to Anglo surnames.
+   * Picks a cultural naming tradition on each call, avoiding whichever
+   * traditions were picked most recently (see NameGenShared) so the same
+   * style can't land twice in a row across generations.
    */
   _pickNameStyle() {
-    const styles = [
-      "Eastern European — Polish, Czech, Slovak, or Romanian",
-      "Slavic — Russian, Ukrainian, Bulgarian, or Serbian",
-      "Scandinavian — Norwegian, Swedish, Danish, or Icelandic",
-      "Celtic — Welsh, Scottish Gaelic, Irish Gaelic, or Breton",
-      "Iberian — Spanish, Portuguese, Catalan, or Basque",
-      "Italian or Sicilian",
-      "Greek — modern or classical",
-      "Turkish, Azerbaijani, or Uzbek",
-      "Arabic — Levantine, Gulf, or North African",
-      "Persian or Dari",
-      "South Asian — Hindi, Bengali, Tamil, Punjabi, or Urdu",
-      "Japanese",
-      "Korean",
-      "Chinese — Mandarin or Cantonese romanisation",
-      "Vietnamese or Thai",
-      "Filipino or Tagalog",
-      "West African — Yoruba, Igbo, Akan, or Hausa",
-      "East African — Swahili, Amharic, or Somali",
-      "Southern African — Zulu, Xhosa, or Shona",
-      "Hebrew or Yiddish",
-      "Armenian or Georgian",
-      "Finnish, Estonian, or Sami",
-      "Baltic — Lithuanian or Latvian",
-      "Hungarian or Magyar",
-      "Dutch or Flemish",
-      "German or Austrian",
-      "French or Occitan",
-      "Albanian or Macedonian",
-      "Mongolian, Kazakh, or Kyrgyz",
-      "Indigenous Mesoamerican — Nahuatl or Maya inspired",
-    ];
-    return styles[Math.floor(Math.random() * styles.length)];
+    return NameGenShared.pickStyle(NameGenShared.NON_WESTERN_TRADITIONS);
   },
 
   buildCharacterPrompt(concept, characterName, pov = "third", lorebook = null, cardType = "single") {
@@ -221,6 +316,10 @@ Object.assign(APIHandler.prototype, {
     if (cardType === "scenario") return this._buildScenarioPrompt(concept, characterName, lorebook);
 
     const nameStyle = this._pickNameStyle();
+    const recentNames = NameGenShared.recentNames();
+    const recentNamesBan = recentNames.length
+      ? `\n- Also avoid reusing any of these recently-generated names: ${recentNames.slice(-15).join(", ")}`
+      : "";
     let povInstruction = "";
     let templateInstruction = "";
     let templateContent = "";
@@ -345,11 +444,12 @@ ${povInstruction}
 
 **NAME — CULTURAL DIVERSITY REQUIRED:** For this character's name, draw from a **${nameStyle}** naming tradition. Use authentic first names and surnames (or single names where culturally appropriate) from that tradition. Exception: if the player's concept explicitly places the character in a clearly different culture or time period, use whatever is most historically and geographically accurate for that context — but in either case do NOT fall back to generic Anglo-American defaults.
 
+${NameGenShared.AUTHENTICITY_GUARD}
+
+${NameGenShared.AVOID_DEFAULT_GUARD}
+
 **BANNED — do NOT use any of the following overused AI-generated names:**
-- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
-- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
-- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
-- Any two-syllable name ending in "-ael", "-iel", or "-yn" unless the concept is explicitly high fantasy
+${NameGenShared.BANNED_NAMES_BLOCK}${recentNamesBan}
 
 Use this actual name ONLY in the "# [Character Name]'s Profile" header and the first introduction sentence.
 
@@ -691,63 +791,11 @@ ${lorebookContent}`;
     }
   },
 
-  async generateName(character) {
-    if (!character) throw new Error("Character is required to generate a name");
-
-    const model = this.config.get("api.text.model");
-    const nameStyle = this._pickNameStyle();
-
-    const systemPrompt = `You are an expert at creating character names with genuine cultural variety. Generate a single name for the described character.
-
-**CULTURAL STYLE FOR THIS NAME:** Draw from a ${nameStyle} naming tradition. Use an authentic first name and surname (or single name where culturally appropriate) from that tradition — UNLESS the character's description clearly places them in a different culture, in which case use whatever is most historically and geographically accurate. Either way, do NOT fall back to generic Anglo-American defaults.
-
-**BANNED — do NOT use any of these overused AI defaults:**
-- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
-- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
-- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
-- Any two-syllable name ending in "-ael", "-iel", or "-yn" unless the concept is explicitly high fantasy
-
-Output ONLY the name — nothing else, no explanation, no punctuation around it.`;
-
-    const currentNameInfo = character.name && character.name !== "{{char}}" && character.name !== "Unknown Character"
-      ? `\nCurrent Name: "${character.name}" (DO NOT generate this name again)`
-      : "";
-
-    const userPrompt = `Description:
-${character.description || "No description provided"}
-
-Personality:
-${character.personality || "No personality provided"}${currentNameInfo}
-
-Generate a single name. Remember: draw from a ${nameStyle} tradition unless the character's background demands otherwise.
-[Entropy: ${Math.floor(Math.random() * 1000000)}]`;
-
-    const data = {
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      // Naming benefits from variety, so this stays generative rather than
-      // being crushed to an extraction temperature; top_p (applied at the
-      // proxy) clips the junk tail that made 1.0 risky.
-      temperature: 0.85,
-      max_tokens: 50,
-      stream: false,
-    };
-
-    try {
-      console.log("=== STARTING NAME GENERATION ===");
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      const output = this.processNormalResponse(response);
-      let newName = output.trim();
-      if (newName.startsWith('"') && newName.endsWith('"')) {
-        newName = newName.substring(1, newName.length - 1);
-      }
-      return newName;
-    } catch (error) {
-      console.error("=== NAME GENERATION FAILED ===", error);
-      throw error;
+  // Exposes the persistent recently-generated-name history to other modules
+  // (e.g. the character parser records each freshly-generated name here).
+  recordGeneratedName(name) {
+    if (name && name !== "{{char}}" && name !== "Unknown Character") {
+      NameGenShared.recordNames([name]);
     }
   },
 
@@ -761,44 +809,9 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
 
     const model = this.config.get("api.text.model");
 
-    // Base cultural traditions pool — now includes English/Western options
-    const basePool = [
-      "English or British (including classic English surnames and given names)",
-      "Irish (Gaelic and anglicised Irish names)",
-      "Scottish (Highland and Lowland traditions)",
-      "North American (classic American or Canadian names)",
-      "Australian or New Zealand",
-      "Eastern European (Polish, Czech, Slovak, or Romanian)",
-      "Slavic (Russian, Ukrainian, Bulgarian, or Serbian)",
-      "Scandinavian (Norwegian, Swedish, Danish, or Icelandic)",
-      "Celtic (Welsh, Cornish, or Breton)",
-      "Iberian (Spanish, Portuguese, Catalan, or Basque)",
-      "Italian or Sicilian",
-      "Greek (modern or classical)",
-      "Turkish, Azerbaijani, or Uzbek",
-      "Arabic (Levantine, Gulf, or North African)",
-      "Persian or Dari",
-      "South Asian (Hindi, Bengali, Tamil, Punjabi, or Urdu)",
-      "Japanese",
-      "Korean",
-      "Chinese (Mandarin or Cantonese romanisation)",
-      "Vietnamese or Thai",
-      "Filipino or Tagalog",
-      "West African (Yoruba, Igbo, Akan, or Hausa)",
-      "East African (Swahili, Amharic, or Somali)",
-      "Southern African (Zulu, Xhosa, or Shona)",
-      "Hebrew or Yiddish",
-      "Armenian or Georgian",
-      "Finnish, Estonian, or Sami",
-      "Baltic (Lithuanian or Latvian)",
-      "Hungarian or Magyar",
-      "Dutch or Flemish",
-      "German or Austrian",
-      "French or Occitan",
-      "Albanian or Macedonian",
-      "Mongolian, Kazakh, or Kyrgyz",
-      "Indigenous Mesoamerican (Nahuatl or Maya inspired)",
-    ];
+    // Base cultural traditions pool — includes English/Western options, unlike
+    // the full-card/single-name paths (see NameGenShared).
+    const basePool = [...NameGenShared.WESTERN_TRADITIONS, ...NameGenShared.NON_WESTERN_TRADITIONS];
 
     // Supplementary pool for supernatural types
     const supernaturalPool = [
@@ -877,10 +890,10 @@ Generate a single name. Remember: draw from a ${nameStyle} tradition unless the 
     };
     const periodInstruction = periodMap[timePeriod] ? `\n\n${periodMap[timePeriod]}` : "";
 
-    // Banned previously-seen names
-    const previousBan = previousNames.length > 0
-      ? `\n\n**PREVIOUSLY SHOWN — do NOT repeat any of these, the user wants entirely fresh options:**\n${previousNames.map(n => `"${n}"`).join(", ")}`
-      : "";
+    // Ban names shown earlier in this modal session AND names generated in
+    // past sessions (persisted via NameGenShared), so a reroll or a fresh
+    // modal open for a different character still avoids recent repeats.
+    const allPreviousNames = [...new Set([...previousNames, ...NameGenShared.recentNames()])].slice(-40);
 
     const guidanceInstruction = guidance
       ? `\n\nAdditional guidance from user: "${guidance}" — this is your PRIMARY instruction. If it specifies a cultural style, use that style for all 10 names.`
@@ -894,11 +907,12 @@ ${genderInstruction}
 
 If no cultural guidance is given, use the tradition list to produce maximum variety: each name must authentically come from its assigned tradition.
 
+${NameGenShared.AUTHENTICITY_GUARD}
+
+${NameGenShared.AVOID_DEFAULT_GUARD}
+
 **Banned overused AI defaults — only apply this ban when NO specific cultural guidance is given. If the user has requested a style that includes these names, authentic examples from that tradition are fine:**
-- Edgy Anglo surnames to avoid by default: Voss, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Storm, Dusk, Mace, Blair
-- Overused female fantasy defaults: Aria, Elara, Lyra, Luna, Seraphine, Nova, Aurora, Celeste, Ember, Selene, Nyx, Raven
-- Overused male fantasy defaults: Cael, Rael, Zael, Theron, Oryn, Brayden
-- Names ending in -ael, -iel, or -yn UNLESS the character type explicitly permits it${previousNames.length > 0 ? `\n\n**PREVIOUSLY SHOWN — do NOT repeat any of these:**\n${previousNames.map(n => `"${n}"`).join(", ")}` : ""}
+${NameGenShared.BANNED_NAMES_BLOCK}${allPreviousNames.length > 0 ? `\n\n**PREVIOUSLY SHOWN — do NOT repeat any of these, the user wants entirely fresh options:**\n${allPreviousNames.map(n => `"${n}"`).join(", ")}` : ""}
 
 Return ONLY a strict JSON array of exactly 10 strings. No objects, no explanations.
 Example: ["Yuki Tanaka", "Kofi Mensah", "Ingrid Halvorsen", "Mirela Petrović", ...]`;
@@ -944,10 +958,13 @@ Generate exactly 10 names as a JSON array. Make each name as different from the 
 
       if (!Array.isArray(parsed)) throw new Error("Response was not an array");
 
-      return parsed
+      const names = parsed
         .slice(0, 10)
         .map((n) => String(n).trim().replace(/^["']|["']$/g, ""))
         .filter(Boolean);
+
+      NameGenShared.recordNames(names);
+      return names;
     } catch (error) {
       console.error("=== NAME OPTIONS GENERATION FAILED ===", error);
       throw error;

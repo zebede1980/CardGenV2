@@ -68,6 +68,12 @@ class CharacterGenerator {
       character.name = "{{char}}";
     }
 
+    // Feed the name into the shared cross-generation history so future
+    // auto-generated and picker names avoid repeating it.
+    if (this.apiHandlerInstance && typeof this.apiHandlerInstance.recordGeneratedName === "function") {
+      this.apiHandlerInstance.recordGeneratedName(character.name);
+    }
+
     // Extract description section (everything from start or # Profile to ## Personality)
     // More robust regex that doesn't strictly require the # Profile header
     const descriptionMatch = rawData.match(

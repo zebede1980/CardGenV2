@@ -380,38 +380,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     onGenerate();
   },
 
-  async handleRegenerateName() {
-    if (!this.currentCharacter) return;
-
-    const nameInput = document.getElementById("character-generated-name");
-    const regenBtn = document.getElementById("regenerate-name-btn");
-
-    if (!nameInput || !regenBtn) return;
-
-    try {
-      regenBtn.disabled = true;
-      const originalText = regenBtn.textContent;
-      regenBtn.textContent = "⏳...";
-
-      const newName = await window.apiHandler.generateName(this.currentCharacter);
-
-      if (newName) {
-        nameInput.value = newName;
-        this.currentCharacter.name = newName;
-        this.handleCharacterEdit("name");
-        this.showNotification("Name regenerated!", "success");
-      }
-
-      regenBtn.textContent = originalText;
-      regenBtn.disabled = false;
-    } catch (error) {
-      console.error("Name generation failed:", error);
-      this.showNotification(`Failed to generate name: ${error.message}`, "error");
-      regenBtn.disabled = false;
-      regenBtn.textContent = "🔄 Gen Name";
-    }
-  },
-
   async handleRegenerateField(field) {
     if (!this.currentCharacter) return;
 
