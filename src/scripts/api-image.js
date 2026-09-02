@@ -148,6 +148,11 @@ Object.assign(APIHandler.prototype, {
       data.cfg_scale = parseFloat(imageCfgScale);
     }
 
+    // Same reasoning as editImage(): a phone locking mid-generation must not
+    // strand a paid-for image with nowhere to land.
+    data.resumable = true;
+    data.__jobLabel = "Character image";
+
     const response = await this.makeRequest("/api/image/generations", data, true);
 
     if (!response.ok) {
@@ -208,6 +213,11 @@ Object.assign(APIHandler.prototype, {
 
     console.log("=== SENDING PLAYGROUND GENERATE REQUEST ===");
     console.log("Generate model:", generateModel);
+
+    // Same reasoning as editImage(): a phone locking mid-generation must not
+    // strand a paid-for image with nowhere to land.
+    data.resumable = true;
+    data.__jobLabel = "Playground image";
 
     const response = await this.makeRequest("/api/image/generations", data, true);
 
@@ -271,6 +281,12 @@ Object.assign(APIHandler.prototype, {
     console.log("Edit model:", editModel);
     console.log("Instruction:", trimmedInstruction);
 
+    // Edits routinely run past a minute; opt into server-side buffering so a
+    // phone locking or backgrounding mid-edit doesn't strand the result —
+    // nano-gpt finishes and saves the image on its side regardless, this is
+    // what lets a returning client collect it instead of losing it.
+    data.resumable = true;
+    data.__jobLabel = "Image edit";
     const response = await this.makeRequest("/api/image/generations", data, true);
 
     if (!response.ok) {

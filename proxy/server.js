@@ -1724,6 +1724,14 @@ const TEXT_UPSTREAM_TIMEOUT_MS = 10 * 60 * 1000;
 //
 // Deliberately in-memory: a generation lasts under a minute, so a proxy restart
 // mid-flight is rare and acceptable (the client treats it as an eviction).
+//
+// Shared with image generation/editing (`/api/image/generations` below): the
+// exact same "socket dies, upstream keeps running and billing" gap existed
+// there — nano-gpt would finish and store the image on its own side with
+// nothing on ours to hand it back to a client that already gave up. Image
+// jobs never stream (there is no `content`/`listeners` traffic for them),
+// they just hold `result` until a returning client collects it via
+// GET /api/jobs/:id/result, same as a non-streaming text job.
 
 const { randomUUID } = require("crypto");
 const { StringDecoder } = require("string_decoder");
@@ -1909,7 +1917,7 @@ if (jobSweeper.unref) jobSweeper.unref();
  * Resume a generation, replaying everything after `from` and then tailing live.
  * `from` is a character count of assembled content, not a chunk index.
  */
-app.get("/api/text/jobs/:jobId/stream", requireAuth, (req, res) => {
+app.get("/api/jobs/:jobId/stream", requireAuth, (req, res) => {
   const job = generationJobs.get(req.params.jobId);
 
   if (!job || jobIsExpired(job)) {
@@ -1981,7 +1989,7 @@ app.get("/api/text/jobs/:jobId/stream", requireAuth, (req, res) => {
  *
  * 202 while still running, so the caller can poll rather than give up.
  */
-app.get("/api/text/jobs/:jobId/result", requireAuth, (req, res) => {
+app.get("/api/jobs/:jobId/result", requireAuth, (req, res) => {
   const job = generationJobs.get(req.params.jobId);
 
   if (!job || jobIsExpired(job)) {
@@ -2016,8 +2024,11 @@ app.get("/api/text/jobs/:jobId/result", requireAuth, (req, res) => {
 /**
  * List the caller's live jobs. The safety net for when Safari discards the tab
  * entirely, or the stored jobId turns out to be stale.
+ *
+ * Shared across text and image generation — jobs already carry their own
+ * clientRef/userId, so there is nothing type-specific about looking one up.
  */
-app.get("/api/text/jobs", requireAuth, (req, res) => {
+app.get("/api/jobs", requireAuth, (req, res) => {
   const now = Date.now();
   const wantRef = req.query.clientRef;
   const list = [];
@@ -2436,8 +2447,16 @@ app.post("/api/image/forge", requireAuth, async (req, res) => {
 
 // Proxy endpoint for image API
 app.post("/api/image/generations", requireAuth, async (req, res) => {
+  // Set when the caller opts into resumable buffering; see the job registry
+  // above `/api/text/chat/completions`. Image edits/generations can run past
+  // a minute, and a phone locking or backgrounding mid-request tears the
+  // socket down exactly like it does for text — nano-gpt finishes and stores
+  // the image on its side regardless, so without this the result just has
+  // nowhere to land back on the client.
+  let job = null;
+  let clientGone = false;
   try {
-    const { model, prompt, size } = req.body;
+    const { model, prompt, size, resumable, clientRef } = req.body;
 
     const apiKey = req.headers["x-api-key"];
     const apiUrl = req.headers["x-api-url"];
@@ -2473,10 +2492,13 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     console.log("Model:", model);
     console.log("Prompt length:", prompt?.length || 0);
 
-    // Use simplified format for all models, but forward all parameters
-    // This supports APIs like NanoGPT that need n, response_format, etc.
+    // Use simplified format for all models, but forward all parameters.
+    // This supports APIs like NanoGPT that need n, response_format, etc. —
+    // minus resumable/clientRef, which are our own bookkeeping and not
+    // something the upstream image API should ever see.
+    const { resumable: _resumable, clientRef: _clientRef, ...forwardedBody } = req.body;
     const requestBody = {
-      ...req.body,
+      ...forwardedBody,
     };
 
     // Ensure model is set (should be from req.body, but just in case)
@@ -2496,6 +2518,25 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
         "X-Title": "SillyTavern Character Generator",
       }
       : {};
+
+    if (resumable) {
+      const running = countRunningJobsForUser(req.user.userId);
+      if (running >= JOB_LIMITS.MAX_RUNNING_PER_USER) {
+        return res.status(429).json({
+          error: {
+            code: "429",
+            message: `Too many generations in flight (limit ${JOB_LIMITS.MAX_RUNNING_PER_USER}). Wait for one to finish.`,
+          },
+        });
+      }
+      // No AbortController tied to the upstream fetch here (unlike text) —
+      // the point is the opposite: let the image finish generating into the
+      // job regardless of what the client's connection does.
+      job = createGenerationJob(req.user.userId, new AbortController(), clientRef);
+    }
+    res.on("close", () => {
+      clientGone = true;
+    });
 
     // Try Bearer auth first (most common for image APIs)
     let response = await fetch(fullImageUrl, {
@@ -2525,6 +2566,12 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Image API error:", response.status, errorText);
+      if (job) {
+        finishGenerationJob(job, "error", {
+          error: `Image API Error: ${response.status} ${response.statusText}`,
+        });
+      }
+      if (res.writableEnded) return;
       return res.status(response.status).json({
         error: {
           code: response.status.toString(),
@@ -2536,11 +2583,22 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
 
     const data = await response.json();
 
+    if (job) {
+      job.result = data;
+      finishGenerationJob(job, "done", { finishReason: "stop" });
+      if (clientGone) {
+        console.log(`[jobs] image job ${job.id} finished after the client had detached (held for collection)`);
+      }
+    }
+
     // Handle different response formats flexibly
     // Just pass through whatever the image API returns
+    if (res.writableEnded) return;
     res.json(data);
   } catch (error) {
     console.error("Image proxy error:", error);
+    if (job) finishGenerationJob(job, "error", { error: error.message });
+    if (res.writableEnded || clientGone) return;
     res.status(500).json({
       error: {
         code: "500",

@@ -107,7 +107,7 @@ class APIHandler {
           } else {
             // Nothing to resume mid-flight, but the finished result may be
             // waiting on the server. Collecting it is free; regenerating is not.
-            const collected = await this._tryCollectResult(clientRef);
+            const collected = await this._tryCollectResult(clientRef, isImageRequest);
             if (collected) {
               console.warn(`[API] Attempt ${attempt} failed (${error.message}) — collected the completed result instead of regenerating`);
               window.ResumableJobs.remove(clientRef);
@@ -151,9 +151,17 @@ class APIHandler {
    * call's connection dies: the generation is still running (or finished) on
    * the server, so paying for a second one would be pure waste.
    *
-   * Returns the provider response object, or null if there is nothing to collect.
+   * Text and image jobs share the same server-side registry (see
+   * `/api/jobs` in proxy/server.js) — `isImageRequest` only changes what
+   * gets *returned* here, since the two callers expect different shapes:
+   * text callers (processNormalResponse) want the raw parsed provider JSON,
+   * while image callers (editImage/generateImage) call `.json()` on a
+   * fetch-like Response themselves.
+   *
+   * Returns the provider response (or a Response-shaped shim for images), or
+   * null if there is nothing to collect.
    */
-  async _tryCollectResult(clientRef, { maxWaitMs = 120000 } = {}) {
+  async _tryCollectResult(clientRef, isImageRequest = false, { maxWaitMs = 120000 } = {}) {
     if (!clientRef) return null;
     try {
       const jobId = await this._findJobId(clientRef);
@@ -168,7 +176,7 @@ class APIHandler {
         let res;
         try {
           res = await (window.authFetch || fetch)(
-            `/api/text/jobs/${encodeURIComponent(jobId)}/result`,
+            `/api/jobs/${encodeURIComponent(jobId)}/result`,
             { headers: this._authHeaders() },
           );
         } catch (err) {
@@ -192,6 +200,12 @@ class APIHandler {
         if (payload.status === "error") {
           throw new Error(payload.error || "Generation failed on the server");
         }
+        if (isImageRequest) {
+          // _doMakeRequest's image branch returns the raw fetch Response for
+          // callers to .json() themselves — match that shape here rather than
+          // handing back an already-parsed object they'd double-unwrap.
+          return { ok: true, status: 200, json: async () => payload.result };
+        }
         return payload.result || null;
       }
       console.warn("[API] gave up waiting for job result after", maxWaitMs, "ms");
@@ -208,7 +222,7 @@ class APIHandler {
     if (entry?.jobId) return entry.jobId;
 
     const res = await (window.authFetch || fetch)(
-      `/api/text/jobs?clientRef=${encodeURIComponent(clientRef)}`,
+      `/api/jobs?clientRef=${encodeURIComponent(clientRef)}`,
       { headers: this._authHeaders() },
     );
     if (!res.ok) return null;
@@ -226,7 +240,7 @@ class APIHandler {
   /** Open the SSE resume stream for a job, starting after `offset` characters. */
   async _openResumeStream(jobId, offset, clientRef) {
     const res = await (window.authFetch || fetch)(
-      `/api/text/jobs/${encodeURIComponent(jobId)}/stream?from=${offset}`,
+      `/api/jobs/${encodeURIComponent(jobId)}/stream?from=${offset}`,
       { headers: { ...this._authHeaders(), Accept: "text/event-stream" } },
     );
 
