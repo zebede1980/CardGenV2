@@ -192,6 +192,11 @@ class CharacterGeneratorApp {
     // Character gallery panel
     const galleryGenerateBtn = document.getElementById("gallery-generate-btn");
     if (galleryGenerateBtn) galleryGenerateBtn.addEventListener("click", () => this.handleGalleryGenerate());
+    // Saves the card straight from the gallery hint, so the fix is one click
+    // from the thing that's blocked rather than a hunt for the Save to Library
+    // button further down the page. Sets currentCardId, which unlocks the panel.
+    const gallerySaveCardBtn = document.getElementById("gallery-save-card-btn");
+    if (gallerySaveCardBtn) gallerySaveCardBtn.addEventListener("click", () => this.handleSaveCardManual());
     const galleryGenerateCount = document.getElementById("gallery-generate-count");
     if (galleryGenerateCount) galleryGenerateCount.addEventListener("change", () => this._renderGalleryInstructionInputs());
     // Renders the initial single instruction box — the container starts
@@ -199,7 +204,15 @@ class CharacterGeneratorApp {
     if (typeof this._renderGalleryInstructionInputs === "function") this._renderGalleryInstructionInputs();
     const galleryUploadBtn = document.getElementById("gallery-upload-btn");
     const galleryUploadInput = document.getElementById("gallery-upload-input");
-    if (galleryUploadBtn && galleryUploadInput) galleryUploadBtn.addEventListener("click", () => galleryUploadInput.click());
+    // Gate before opening the file picker — the button is soft-locked rather
+    // than `disabled` on an unsaved card (see _setGalleryPanelLocked), so the
+    // click does reach us and must be explained instead of silently ignored.
+    if (galleryUploadBtn && galleryUploadInput) {
+      galleryUploadBtn.addEventListener("click", () => {
+        if (!this._requireSavedCard()) return;
+        galleryUploadInput.click();
+      });
+    }
     if (galleryUploadInput) galleryUploadInput.addEventListener("change", (e) => this.handleGalleryUpload(e));
     const galleryGenerateAcceptAllBtn = document.getElementById("gallery-generate-accept-all-btn");
     if (galleryGenerateAcceptAllBtn) galleryGenerateAcceptAllBtn.addEventListener("click", () => this.handleGalleryGenerateAcceptAll());

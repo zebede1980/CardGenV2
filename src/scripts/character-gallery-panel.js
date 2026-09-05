@@ -10,21 +10,94 @@
 const GALLERY_CONSISTENCY_INSTRUCTION =
   "Keep this exact character's face, identity, hairstyle, and defining features fully consistent with the source image. Only change what is described next:";
 
+// Why the panel is locked, in both the forms the UI needs: `hint` is markup
+// for the in-page callout, `tooltip` is plain text because a title attribute
+// renders tags literally instead of formatting them. Kept together here so the
+// two states can't drift apart across the places that apply them.
+const GALLERY_LOCK_REASONS = {
+  unsaved: {
+    hint: "🔒 <strong>Save this character to the library first</strong> — the gallery is attached to a saved card, so Generate and Upload stay locked until then.",
+    tooltip: "Save this character to the library first — the gallery is attached to a saved card",
+  },
+  history: {
+    hint: "🔒 <strong>This card came from History</strong> — save it to the library to give it its own gallery.",
+    tooltip: "This card came from History — save it to the library to give it its own gallery",
+  },
+};
+
 Object.assign(CharacterGeneratorApp.prototype, {
+
+  // Single owner of the panel's locked/unlocked state, so the buttons and the
+  // hint can never disagree about whether the gallery is usable.
+  //
+  // Deliberately does NOT use the `disabled` attribute: a disabled button
+  // fires no click event at all, so clicking Generate on an unsaved card gave
+  // no notification, no console error and no clue what was wrong. Soft-locking
+  // (aria-disabled + a muted class) keeps the button focusable and clickable
+  // so the handlers can say what's missing — see _requireSavedCard().
+  //
+  // `reason` is one of GALLERY_LOCK_REASONS; ignored when unlocking.
+  _setGalleryPanelLocked(locked, reason = GALLERY_LOCK_REASONS.unsaved) {
+    const hint = document.getElementById("character-gallery-hint");
+
+    const titles = {
+      "gallery-generate-btn": "Generate new image(s) of this character from its current portrait and add them to the gallery",
+      "gallery-upload-btn": "Upload an image from your device and add it to this character's gallery",
+    };
+
+    for (const id of Object.keys(titles)) {
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      btn.classList.toggle("is-soft-disabled", locked);
+      btn.setAttribute("aria-disabled", locked ? "true" : "false");
+      btn.title = locked ? reason.tooltip : titles[id];
+    }
+
+    if (hint) {
+      hint.style.display = locked ? "flex" : "none";
+      const text = hint.querySelector("span");
+      if (text && locked) text.innerHTML = reason.hint;
+    }
+  },
+
+  // Shared precondition for every gallery action. Returns true when the panel
+  // is usable; otherwise explains why and points at the fix. Both callers used
+  // to `return` silently here, which is what made this look unwired.
+  _requireSavedCard() {
+    if (!this.currentCharacter) {
+      this.showNotification("Generate or load a character first", "warning");
+      return false;
+    }
+    if (!this.currentCardId || String(this.currentCardId).startsWith("h_")) {
+      const reason = String(this.currentCardId || "").startsWith("h_")
+        ? GALLERY_LOCK_REASONS.history
+        : GALLERY_LOCK_REASONS.unsaved;
+      this.showNotification(reason.tooltip, "warning");
+      // Draw the eye to the answer rather than just stating it.
+      const hint = document.getElementById("character-gallery-hint");
+      if (hint) {
+        hint.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        hint.classList.remove("attention-pulse");
+        void hint.offsetWidth; // restart the animation on repeat clicks
+        hint.classList.add("attention-pulse");
+      }
+      return false;
+    }
+    return true;
+  },
 
   async _renderCharacterGalleryPanel() {
     const strip = document.getElementById("character-gallery-strip");
-    const hint = document.getElementById("character-gallery-hint");
-    const generateBtn = document.getElementById("gallery-generate-btn");
-    const uploadBtn = document.getElementById("gallery-upload-btn");
     if (!strip) return;
 
     const cardId = this.currentCardId;
     const isRealCard = !!cardId && !String(cardId).startsWith("h_");
 
-    if (generateBtn) generateBtn.disabled = !isRealCard;
-    if (uploadBtn) uploadBtn.disabled = !isRealCard;
-    if (hint) hint.style.display = isRealCard ? "none" : "block";
+    const fromHistory = String(cardId || "").startsWith("h_");
+    this._setGalleryPanelLocked(
+      !isRealCard,
+      fromHistory ? GALLERY_LOCK_REASONS.history : GALLERY_LOCK_REASONS.unsaved,
+    );
 
     strip.innerHTML = "";
     this._characterGalleryImages = [];
@@ -184,13 +257,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   _clearCharacterGallery() {
     const strip = document.getElementById("character-gallery-strip");
-    const hint = document.getElementById("character-gallery-hint");
-    const generateBtn = document.getElementById("gallery-generate-btn");
-    const uploadBtn = document.getElementById("gallery-upload-btn");
     if (strip) strip.innerHTML = "";
-    if (hint) hint.style.display = "block";
-    if (generateBtn) generateBtn.disabled = true;
-    if (uploadBtn) uploadBtn.disabled = true;
+    this._setGalleryPanelLocked(true, GALLERY_LOCK_REASONS.unsaved);
     this._characterGalleryImages = [];
     this._pendingGalleryImages = [];
     this._renderGalleryGeneratePreview();
@@ -271,7 +339,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // of what's typed. One independent edit call per instruction box, run in
   // parallel.
   async handleGalleryGenerate() {
-    if (!this.currentCharacter || !this.currentCardId) return;
+    if (!this._requireSavedCard()) return;
     if (!this.currentImageUrl) {
       this.showNotification("This character needs a portrait image first", "warning");
       return;
@@ -279,6 +347,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const instructionEls = Array.from(document.querySelectorAll("#gallery-generate-instructions .gallery-instruction-input"));
     const instructions = instructionEls.map((el) => el.value.trim());
+    // An empty list would sail past the findIndex check below (-1 == "none
+    // empty"), fire zero requests, and surface as a bare "Image generation
+    // failed" — so catch it here and rebuild the boxes instead.
+    if (instructions.length === 0) {
+      this.showNotification("Describe the new pose/scene/outfit first", "warning");
+      this._renderGalleryInstructionInputs();
+      return;
+    }
     const emptyIndex = instructions.findIndex((text) => !text);
     if (emptyIndex !== -1) {
       this.showNotification(
@@ -347,7 +423,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       console.error("Gallery image generation failed:", error);
       this.showNotification(`Image generation failed: ${error.message}`, "error");
     } finally {
-      if (btn) { btn.disabled = !this.currentCardId; btn.textContent = "✨ Generate"; }
+      // Genuine `disabled` is correct here (an in-flight request really must
+      // not be re-fired), unlike the unsaved-card case which soft-locks.
+      if (btn) { btn.disabled = false; btn.textContent = "✨ Generate"; }
     }
   },
 
