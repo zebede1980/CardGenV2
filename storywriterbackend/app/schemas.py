@@ -38,6 +38,18 @@ class CharacterCardGalleryImageOut(BaseModel):
 class GalleryReorderRequest(BaseModel):
     ordered_ids: List[int]
 
+class PlaygroundImageCreate(BaseModel):
+    label: str = ""
+    prompt: str = ""
+
+class PlaygroundImageOut(BaseModel):
+    id: int
+    label: str = ""
+    prompt: str = ""
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
 class StoryCreate(BaseModel):
     title: str
     synopsis: str = ""

@@ -1111,6 +1111,130 @@ app.get("/api/storage/cards/:id/gallery/:galleryId/image", requireAuth, async (r
   }
 });
 
+// ── Playground image library ──────────────────────────────────────────────────
+// Images the user chose to keep from the Image Playground. Same split as the
+// card gallery above: the row (and therefore the id) comes from the database,
+// the bytes live on this box's disk under the user's data dir. Unlike the card
+// gallery these belong to the user rather than to any one card — the Playground
+// has no card concept at all — so they outlive every card and are the pile a
+// new character can be started from.
+
+function playgroundImageDir(userId) {
+  const dir = path.join(getUserDataDir(userId), "playground-images");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function playgroundInternalUrl() {
+  return (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+}
+
+// Shapes a database row the way the browser wants it: the bytes are behind a
+// URL rather than inlined, so listing a hundred saved images stays a small
+// response and each thumbnail is cached by the browser separately.
+function playgroundImageResponse(row) {
+  return {
+    id: row.id,
+    label: row.label || "",
+    prompt: row.prompt || "",
+    createdAt: row.created_at,
+    url: `/api/storage/playground-images/${row.id}/image`,
+  };
+}
+
+app.get("/api/storage/playground-images", requireAuth, async (req, res) => {
+  try {
+    const response = await fetch(`${playgroundInternalUrl()}/api/playground/images`, {
+      headers: galleryInternalHeaders(req),
+    });
+    if (!response.ok) throw new Error(`Database returned ${response.status}`);
+    const rows = await response.json();
+    res.json(rows.map(playgroundImageResponse));
+  } catch (e) {
+    console.error("[Playground] GET Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/storage/playground-images", requireAuth, async (req, res) => {
+  const imageBase64 = req.body?.imageBase64 || "";
+  const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) {
+    return res.status(400).json({ error: "imageBase64 must be a data: URL" });
+  }
+  try {
+    const response = await fetch(`${playgroundInternalUrl()}/api/playground/images`, {
+      method: "POST",
+      headers: galleryInternalHeaders(req),
+      body: JSON.stringify({ label: req.body?.label || "", prompt: req.body?.prompt || "" }),
+    });
+    if (!response.ok) throw new Error(`Database returned ${response.status}`);
+    const row = await response.json();
+
+    const imgDir = playgroundImageDir(req.user.userId);
+    await Promise.all([
+      fsPromises.writeFile(path.join(imgDir, `${row.id}.img`), Buffer.from(match[2], "base64")),
+      fsPromises.writeFile(path.join(imgDir, `${row.id}.mime`), match[1]),
+    ]);
+
+    res.json(playgroundImageResponse(row));
+  } catch (e) {
+    console.error("[Playground] POST Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/storage/playground-images/:id", requireAuth, async (req, res) => {
+  const imageId = String(req.params.id);
+  // Ids are database row ids and go straight into a filename below, so anything
+  // that isn't digits is rejected before it can climb out of the image dir.
+  if (!/^\d+$/.test(imageId)) return res.status(400).json({ error: "invalid image id" });
+  try {
+    const response = await fetch(`${playgroundInternalUrl()}/api/playground/images/${imageId}`, {
+      method: "DELETE",
+      headers: galleryInternalHeaders(req),
+    });
+    // The row is what proves ownership, so a 404 has to stay a 404 rather than
+    // letting one user's request delete a file named after someone else's id.
+    if (!response.ok) {
+      return res.status(response.status === 404 ? 404 : 500).json({ error: `Database returned ${response.status}` });
+    }
+
+    const imgDir = playgroundImageDir(req.user.userId);
+    for (const ext of [".img", ".mime"]) {
+      fsPromises.unlink(path.join(imgDir, `${imageId}${ext}`)).catch(() => { });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[Playground] DELETE Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/storage/playground-images/:id/image", requireAuth, async (req, res) => {
+  const imageId = String(req.params.id);
+  if (!/^\d+$/.test(imageId)) return res.status(400).end();
+  const imgDir = playgroundImageDir(req.user.userId);
+  const imgFile = path.join(imgDir, `${imageId}.img`);
+  const mimeFile = path.join(imgDir, `${imageId}.mime`);
+
+  if (!fs.existsSync(imgFile) || !fs.existsSync(mimeFile)) {
+    return res.status(404).end();
+  }
+  try {
+    const [imgBuf, mime] = await Promise.all([
+      fsPromises.readFile(imgFile),
+      fsPromises.readFile(mimeFile, "utf8"),
+    ]);
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(imgBuf);
+  } catch (error) {
+    console.error("[Playground] Image serve error:", error);
+    res.status(500).end();
+  }
+});
+
 // ── Migrate JSON configuration files to PostgreSQL (Config, Prompts, History, etc.) ─
 app.post("/api/storage/migrate-all", requireAuth, async (req, res) => {
   const dir = getUserDataDir(req.user.userId);

@@ -93,7 +93,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // just using Edit with a good image-to-image model. Generate is the only
     // tab that doesn't require an existing working image — it's how one gets
     // created from nothing but a prompt.
-    ["generate", "crop", "edit", "combine"].forEach(tab => {
+    ["generate", "crop", "edit", "combine", "library"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
@@ -107,6 +107,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     const generateBtn = document.getElementById("generate-playground-image-btn");
     if (generateBtn) generateBtn.addEventListener("click", () => this.handleGeneratePlaygroundImage());
+
+    const saveBtn = document.getElementById("save-playground-image-btn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", () =>
+        this.savePlaygroundImageToLibrary(this.playgroundImageUrl, this._currentPlaygroundLabel()));
+    }
 
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
@@ -144,8 +150,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // openCropModal('playground') a button click used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", combine: "pg-tab-combine" };
-    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", combine: "pg-panel-combine" };
+    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", combine: "pg-tab-combine", library: "pg-tab-library" };
+    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", combine: "pg-panel-combine", library: "pg-panel-library" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -155,6 +161,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const panel = document.getElementById(id);
       if (panel) panel.style.display = key === tab ? "block" : "none";
     });
+
+    // Re-fetched on every open rather than once: the library is per-account, so
+    // something saved on another device should show up simply by coming back to
+    // this tab. Deliberately above the working-image check below — the library
+    // is the one tool that has nothing to do with the current image.
+    if (tab === "library" && typeof this.renderPlaygroundLibrary === "function") {
+      this.renderPlaygroundLibrary();
+    }
 
     if (!this.playgroundImageUrl) return;
     if (tab === "crop") this.openCropModal('playground');
@@ -328,6 +342,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!preview) return;
     preview.style.display = "block";
     preview.innerHTML = `<img src="${dataUrl}" alt="Playground image" style="width: 100%; display: block;" />`;
+
+    const saveRow = document.getElementById("playground-save-row");
+    if (saveRow) saveRow.style.display = dataUrl ? "block" : "none";
+  },
+
+  // How the working image came to be, as recorded in the history strip — saved
+  // alongside the image so the library can say what made it.
+  _currentPlaygroundLabel() {
+    const entry = (this.playgroundHistory || []).find(e => e.url === this.playgroundImageUrl);
+    return entry?.label || "";
   },
 
   // Applies the result immediately rather than opening a compare-and-choose
@@ -439,7 +463,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       `;
       thumb.innerHTML = `
         <img src="${entry.url}" alt="${entry.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
-        <button type="button" data-save-index="${index}" title="Save this version to your device"
+        <button type="button" data-save-index="${index}" title="Save this version to your image library"
           style="position:absolute; bottom:0; right:0; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; line-height:1; padding:0.2rem 0.3rem; cursor:pointer;"
         >💾</button>
       `;
@@ -471,16 +495,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (this._pgActiveTab === "crop") this.openCropModal('playground');
   },
 
+  // Saves to the account's image library rather than downloading to this
+  // device: an image made on a phone used to be stranded on that phone, and
+  // the library is where every other action on it now lives (view, delete,
+  // download, start a character from it — see playground-library.js).
   _savePlaygroundHistoryEntry(index) {
     const entry = this.playgroundHistory?.[index];
     if (!entry) return;
-    const a = document.createElement("a");
-    a.href = entry.url;
-    a.download = `playground-image-${index + 1}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    this.showNotification("Image saved to your device.", "success");
+    this.savePlaygroundImageToLibrary(entry.url, entry.label || "");
   },
 
   // ── Two-image combining ──────────────────────────────────────────────────────

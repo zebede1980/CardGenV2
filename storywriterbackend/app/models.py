@@ -47,6 +47,24 @@ class CharacterCardGalleryImage(Base):
     order_index = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class PlaygroundImage(Base):
+    """An image the user kept from the Image Playground.
+
+    Only the metadata lives here; the bytes stay on the proxy's disk under the
+    user's data dir, exactly as character_card_gallery_images works — see the
+    /api/storage/playground-images routes in proxy/server.js.
+    """
+    __tablename__ = "playground_images"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # How the image came to be ("Generated (flux-2-pro)", "Edited (…)", "Original"),
+    # carried over from the Playground history strip's own label.
+    label = Column(Text, default="")
+    # The prompt or edit instruction behind it, when there was one — worth keeping
+    # since it is usually the only reason one image is worth more than another.
+    prompt = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Story(Base):
     __tablename__ = "stories"
     id = Column(Integer, primary_key=True, index=True)

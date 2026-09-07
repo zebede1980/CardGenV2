@@ -45,8 +45,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (useBtn) {
       useBtn.title = context === 'reference' ? "Use This as the Reference Image"
         : context === 'galleryPending' ? "Add This Image to the Gallery"
+        : context === 'playgroundLibrary' ? "Start a New Character from This Image"
         : "Use This Image for Card";
-      useBtn.textContent = context === 'galleryPending' ? "✔️ Add to Gallery" : "✓ Use This";
+      useBtn.textContent = context === 'galleryPending' ? "✔️ Add to Gallery"
+        : context === 'playgroundLibrary' ? "🎭 New Character"
+        : "✓ Use This";
     }
     const discardBtn = document.getElementById("gallery-lightbox-discard-btn");
     if (discardBtn) discardBtn.style.display = context === 'galleryPending' ? "" : "none";
@@ -179,6 +182,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.closeGallery();
       if (typeof this.handleGalleryGenerateAcceptOne === "function") {
         await this.handleGalleryGenerateAcceptOne(idx);
+      }
+      return;
+    }
+
+    if (this._galleryContext === 'playgroundLibrary') {
+      // Same action as the tile's "🎭 New character" button — the row, not the
+      // token-carrying display URL, is what that flow needs.
+      const row = (this._playgroundLibraryRows || [])[this._galleryCurrentIdx];
+      this.closeGallery();
+      if (row && typeof this.sendPlaygroundImageToNewCharacter === "function") {
+        await this.sendPlaygroundImageToNewCharacter(row);
       }
       return;
     }

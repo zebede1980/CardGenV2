@@ -144,6 +144,36 @@ class CharacterStorage {
     if (!res.ok) throw new Error("Failed to delete gallery image");
   }
 
+  // ── Playground image library ───────────────────────────────────────────────
+  // The user's own pile of kept Playground images, not tied to any card. Only
+  // metadata comes back over JSON; each image is fetched from its own URL.
+
+  async listPlaygroundImages() {
+    try {
+      const res = await authFetch(`${this.baseUrl}/api/storage/playground-images`);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch (e) {
+      console.error("Failed to list playground images:", e);
+      return [];
+    }
+  }
+
+  async savePlaygroundImage(imageBase64, { label = "", prompt = "" } = {}) {
+    const res = await authFetch(`${this.baseUrl}/api/storage/playground-images`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageBase64, label, prompt }),
+    });
+    if (!res.ok) throw new Error("Failed to save the image to your library");
+    return await res.json();
+  }
+
+  async deletePlaygroundImage(id) {
+    const res = await authFetch(`${this.baseUrl}/api/storage/playground-images/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete the image");
+  }
+
   async reorderGalleryImages(cardId, orderedIds) {
     const res = await authFetch(`${this.baseUrl}/api/storage/cards/${cardId}/gallery/reorder`, {
       method: "PUT",

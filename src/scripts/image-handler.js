@@ -1228,27 +1228,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.imageGenerator.validateImageFile(file);
 
       const dataUrl = await this.prepareReferenceImageForVision(file);
-
-      this.referenceImageDataUrl = dataUrl;
-      this.updateReferenceImagePreview(dataUrl);
-      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-      const editSection = document.getElementById("reference-image-edit-section");
-      if (editSection) editSection.style.display = "block";
-
-      const descriptionField = document.getElementById(
-        "reference-image-description",
-      );
-      const hint = descriptionField?.value?.trim() || "";
-
-      this.showNotification("Analyzing reference image...", "info");
-      const imageDescription = await this.apiHandler.describeReferenceImage(
-        dataUrl,
-        hint,
-      );
-      if (descriptionField) {
-        descriptionField.value = imageDescription;
-      }
-      this.showNotification("Reference image description generated", "success");
+      await this.applyReferenceImageDataUrl(dataUrl);
     } catch (error) {
       console.error("Reference image handling failed:", error);
       this.showNotification(
@@ -1256,6 +1236,34 @@ Object.assign(CharacterGeneratorApp.prototype, {
         "warning",
       );
     }
+  },
+
+  // Everything that happens to an image once it *is* the reference image:
+  // preview, crop/edit affordances, and the vision pass that fills in the
+  // description. Split out from processReferenceImageFile so an image that
+  // never was a File can take the same path — the Playground library sends
+  // saved images straight here (see sendPlaygroundImageToNewCharacter).
+  async applyReferenceImageDataUrl(dataUrl) {
+    this.referenceImageDataUrl = dataUrl;
+    this.updateReferenceImagePreview(dataUrl);
+    if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+    const editSection = document.getElementById("reference-image-edit-section");
+    if (editSection) editSection.style.display = "block";
+
+    const descriptionField = document.getElementById(
+      "reference-image-description",
+    );
+    const hint = descriptionField?.value?.trim() || "";
+
+    this.showNotification("Analyzing reference image...", "info");
+    const imageDescription = await this.apiHandler.describeReferenceImage(
+      dataUrl,
+      hint,
+    );
+    if (descriptionField) {
+      descriptionField.value = imageDescription;
+    }
+    this.showNotification("Reference image description generated", "success");
   },
 
   async prepareReferenceImageForVision(file) {

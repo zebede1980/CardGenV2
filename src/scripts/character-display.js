@@ -743,7 +743,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!confirm("Discard the current character and start a new one? Any unsaved changes will be lost.")) {
       return;
     }
+    this.resetCharacterForm();
+    this.showNotification("Cleared — ready for a new character", "info");
+  },
 
+  // The clearing itself, without the confirm — anything else that starts a
+  // fresh character (the Playground library's "new character from this image")
+  // asks its own question first and then comes straight here.
+  resetCharacterForm() {
     this.currentCharacter = null;
     this.originalCharacter = null;
     this.stSourceAvatar = null;
@@ -798,8 +805,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.hideResultSection();
 
     window.scrollTo({ top: 0, behavior: "smooth" });
-
-    this.showNotification("Cleared — ready for a new character", "info");
   },
 
   showDropImportModal(file) {

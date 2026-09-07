@@ -2281,6 +2281,21 @@
                             "
                         ></div>
 
+                        <!-- Saving the working image itself. The history strip's own 💾
+                             buttons only appear once there are two versions to choose between,
+                             which left a freshly generated image with no way to be kept at
+                             all — this is that way. -->
+                        <div id="playground-save-row" style="display: none; margin-top: 0.5rem;">
+                            <button
+                                type="button"
+                                id="save-playground-image-btn"
+                                class="btn-small"
+                                title="Save this image to your library, where it is available from any device"
+                            >
+                                💾 Save to library
+                            </button>
+                        </div>
+
                         <!-- History strip — every version of the working image (original,
                              plus after each crop/edit). Click a thumbnail to make it current
                              again; nothing is destroyed by picking a different one. Hidden
@@ -2304,6 +2319,7 @@
                                 <button type="button" id="pg-tab-crop" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✂️ Crop</button>
                                 <button type="button" id="pg-tab-edit" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
                                 <button type="button" id="pg-tab-combine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🔀 Combine</button>
+                                <button type="button" id="pg-tab-library" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="Images you have saved, on the server and available from any device">📚 Library</button>
                             </div>
 
                             <!-- Create-from-nothing: the only tab that doesn't need an image
@@ -2472,6 +2488,23 @@
                                 </button>
                                 <p id="playground-combine-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
                             </div>
+
+                            <!-- Saved images, kept on the server against the account rather
+                                 than downloaded to whichever device made them — so an image
+                                 generated on a phone is there on the desktop too. Populated by
+                                 renderPlaygroundLibrary() (playground-library.js) each time
+                                 this tab is opened, since another device may have added to it
+                                 since the page was loaded. -->
+                            <div id="pg-panel-library" style="display: none;">
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
+                                    Images you have kept with 💾. Click one to view it full-screen; 🎭 clears the Character Generator and starts a brand-new character from it.
+                                </p>
+                                <p id="playground-library-status" style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;"></p>
+                                <div
+                                    id="playground-library-grid"
+                                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem;"
+                                ></div>
+                            </div>
                         </div>
                     </section>
                 </div>
@@ -2550,14 +2583,15 @@
         <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260218"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
-        <script src="src/scripts/storage.js?v=20260215-fix1"></script> 
+        <script src="src/scripts/storage.js?v=20260907-imagelibrary"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
         <script src="src/scripts/main.js?v=20260905-gallerylock"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
-        <script src="src/scripts/character-display.js?v=20260514"></script>
-        <script src="src/scripts/image-handler.js?v=20260825-pastescope"></script>
+        <script src="src/scripts/character-display.js?v=20260907-imagelibrary"></script>
+        <script src="src/scripts/image-handler.js?v=20260907-imagelibrary"></script>
         <script src="src/scripts/image-cropper.js?v=20260825-cleanup"></script>
-        <script src="src/scripts/image-playground.js?v=20260825-pastescope"></script>
+        <script src="src/scripts/image-playground.js?v=20260907-imagelibrary"></script>
+        <script src="src/scripts/playground-library.js?v=20260907-imagelibrary"></script>
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/library-handler.js?v=20260514"></script>
@@ -2566,7 +2600,7 @@
         <script src="src/scripts/rich-element-parser.js"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
         <script src="src/scripts/batch-generator.js?v=20260518"></script>
-        <script src="src/scripts/image-gallery.js?v=20260825-fixes"></script>
+        <script src="src/scripts/image-gallery.js?v=20260907-imagelibrary"></script>
         <script src="src/scripts/character-gallery-panel.js?v=20260905-gallerylock"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
         <script src="src/scripts/storywriter.js?v=13"></script>
