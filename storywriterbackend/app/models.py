@@ -93,6 +93,11 @@ class StorySegment(Base):
     summary = Column(Text, default="")
     is_summary = Column(Boolean, default=False)
     is_summarized = Column(Boolean, default=False)
+    # Cached speaker attribution for TTS: a JSON array of {"speaker", "text"}
+    # objects covering this segment, produced once after generation rather than
+    # re-derived by an LLM call every time the segment is played. Empty string
+    # means "not attributed yet" — playback falls back to doing it on demand.
+    speaker_map = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     story = relationship("Story", back_populates="segments")
 

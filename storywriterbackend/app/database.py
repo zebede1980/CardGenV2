@@ -67,6 +67,12 @@ def run_migrations():
                 "ALTER TABLE settings ADD COLUMN image_model TEXT NOT NULL DEFAULT ''"
             ))
 
+        # story_segments.speaker_map — cached TTS speaker attribution
+        if not _column_exists(conn, "story_segments", "speaker_map"):
+            conn.execute(text(
+                "ALTER TABLE story_segments ADD COLUMN speaker_map TEXT NOT NULL DEFAULT ''"
+            ))
+
         # TTS settings columns
         if not _column_exists(conn, "settings", "tts_enabled"):
             conn.execute(text(

@@ -75,6 +75,7 @@ class StorySegmentOut(BaseModel):
     content: str
     summary: str
     is_summary: bool
+    speaker_map: str = ""
     created_at: datetime
     class Config:
         from_attributes = True
@@ -153,6 +154,11 @@ class GenerateResponse(BaseModel):
 
 class EditSegmentRequest(BaseModel):
     content: str
+
+class SpeakerMapRequest(BaseModel):
+    # A JSON string, not a parsed structure: the client builds it from an LLM
+    # response and the backend only stores it. Validated for shape on the way in.
+    speaker_map: str
 
 class SummaryRequest(BaseModel):
     story_id: int

@@ -1,10 +1,12 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
 from app.models import Story, StorySegment, StoryCard, CharacterCard, User, SteeringInstruction
-from app.schemas import StoryCreate, StoryOut, StoryDetailOut, StorySegmentOut, StoryCardOut, EditSegmentRequest
+from app.schemas import StoryCreate, StoryOut, StoryDetailOut, StorySegmentOut, StoryCardOut, EditSegmentRequest, SpeakerMapRequest
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/stories", tags=["stories"])
@@ -134,6 +136,48 @@ def edit_segment(story_id: int, segment_id: int, req: EditSegmentRequest, db: Se
     if not seg:
         raise HTTPException(status_code=404, detail="Segment not found")
     seg.content = req.content
+    # The cached attribution described the old text; keeping it would have the
+    # narrator reading a stale split of an edited segment.
+    seg.speaker_map = ""
+    db.commit()
+    db.refresh(seg)
+    return seg
+
+@router.put("/{story_id}/segments/{segment_id}/speaker-map", response_model=StorySegmentOut)
+def set_segment_speaker_map(story_id: int, segment_id: int, req: SpeakerMapRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Store the TTS speaker attribution for a segment.
+
+    Attribution is an LLM pass over the prose, so it is done once — ideally just
+    after the segment is generated, while the reader is still reading — and
+    cached here. Without this, every replay re-ran the pass and paid for it
+    again, and the first audio could not start until it finished.
+    """
+    story = db.query(Story).filter(Story.id == story_id, Story.user_id == current_user.id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    seg = db.query(StorySegment).filter(
+        StorySegment.id == segment_id,
+        StorySegment.story_id == story_id
+    ).first()
+    if not seg:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    # Stored as an opaque string, but not blindly: a malformed map would fail at
+    # playback time, in the middle of narration, which is the worst place to
+    # discover it. "" is allowed and means "forget the cached attribution".
+    raw = (req.speaker_map or "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="speaker_map must be valid JSON")
+        if not isinstance(parsed, list):
+            raise HTTPException(status_code=400, detail="speaker_map must be a JSON array")
+        for entry in parsed:
+            if not isinstance(entry, dict) or "text" not in entry:
+                raise HTTPException(status_code=400, detail="each speaker_map entry needs a 'text' field")
+
+    seg.speaker_map = raw
     db.commit()
     db.refresh(seg)
     return seg

@@ -1019,7 +1019,45 @@ class StoryWriterApp {
 
             this.renderCards();
             this.renderSegments();
+
+            // Deliberately not awaited: attribution is a nice-to-have that
+            // should never hold up rendering the story the user is waiting to
+            // read. It only runs when there are character voices to assign.
+            this._attributeNewSegmentsInBackground();
         } catch (e) { console.error(e); }
+    }
+
+    /**
+     * Fill in the cached speaker attribution for any segment that lacks one,
+     * in the background, newest first.
+     *
+     * This is the point of the whole cache: the LLM pass happens while the
+     * reader is reading, so pressing Play later starts speaking immediately
+     * instead of stalling on an extraction call — and replaying a segment
+     * costs nothing at all.
+     */
+    async _attributeNewSegmentsInBackground() {
+        const voices = window.config?.get('api.tts.characterVoices') || {};
+        if (Object.keys(voices).length === 0) return;   // no per-character voices, nothing to attribute for
+        if (!this.story?.segments?.length) return;
+        if (this._attributingSegments) return;          // one pass at a time
+        this._attributingSegments = true;
+
+        try {
+            const pending = this.story.segments
+                .filter(seg => seg && seg.id && seg.content && !seg.is_summary && !seg.speaker_map)
+                .slice(-3)          // only recent ones; back-filling a long story would be a lot of calls
+                .reverse();         // newest first — the most likely to be played next
+
+            for (const seg of pending) {
+                if (this.currentStoryId !== this.story.id) break;   // user moved on
+                await this.attributeSegmentSpeakers(seg);
+            }
+        } catch (e) {
+            console.warn('[StoryWriter][TTS] Background attribution stopped:', e.message);
+        } finally {
+            this._attributingSegments = false;
+        }
     }
 
     async updateStory(title, synopsis) {
@@ -1416,6 +1454,10 @@ class StoryWriterApp {
 
         const segmentsToPlay = this.story.segments.slice(index);
         let queued = 0;
+        // Set by the audiobook branch, which reports its own progress
+        // asynchronously and must not be overwritten by the synchronous
+        // status update at the end of this method.
+        let audiobookPathOwnsStatus = false;
 
         if (scriptMode) {
             let currentSpeaker = 'Narrator';
@@ -1443,10 +1485,24 @@ class StoryWriterApp {
             });
         } else {
             if (Object.keys(characterVoices).length > 0) {
-                segmentsToPlay.forEach(seg => {
-                    this._extractAndPlayAudiobook(seg.content, characterVoices, ttsVoice);
-                    queued += 1;
-                });
+                // The segment object, not just its text — that is what lets the
+                // attribution be read from (and written back to) its cache.
+                // Sequential rather than forEach: each call may need an LLM pass
+                // and the queue order is the reading order.
+                //
+                // This path reports its own progress ("Working out who is
+                // speaking…" while attributing, then "Speaking…"), so the
+                // synchronous status update at the end of this method is
+                // suppressed — otherwise it would immediately overwrite the
+                // message with "Speaking..." before anything had been queued.
+                audiobookPathOwnsStatus = true;
+                (async () => {
+                    for (const seg of segmentsToPlay) {
+                        if (this.ttsPlayer?.stopped) break;
+                        await this._extractAndPlayAudiobook(seg, characterVoices, ttsVoice);
+                    }
+                })();
+                queued += segmentsToPlay.length;
             } else {
                 const detector = new SentenceDetector();
                 segmentsToPlay.forEach(seg => {
@@ -1464,7 +1520,7 @@ class StoryWriterApp {
         }
 
         if (queued > 0) {
-            this._updateNarrationProgress('Speaking...');
+            if (!audiobookPathOwnsStatus) this._updateNarrationProgress('Speaking...');
         } else {
             this._updateNarrationProgress('No text available to play.');
             this._hideNarrationControls();
@@ -1498,17 +1554,61 @@ class StoryWriterApp {
         this._hideNarrationControls();
     }
 
-    async _extractAndPlayAudiobook(text, voices, defaultVoice) {
-        if (!text || !this.ttsPlayer || this.ttsPlayer.stopped) return;
-        
+    /**
+     * Pull a speaker-attribution array out of whatever the model replied with.
+     *
+     * The old version did JSON.parse() on the whole reply after stripping code
+     * fences, so any preamble ("Here's the JSON:") threw and silently dropped
+     * the whole segment to a single voice — with no way to tell that had
+     * happened. This finds the first bracketed array in the text instead, and
+     * checks the shape before trusting it.
+     *
+     * Returns a clean [{speaker, text}] array, or null if nothing usable is
+     * present. Never throws.
+     */
+    _parseSpeakerMap(raw) {
+        if (!raw || typeof raw !== 'string') return null;
+
+        let text = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        // Take from the first "[" to the last "]" — tolerates text on either
+        // side, which is the common failure rather than malformed JSON itself.
+        const start = text.indexOf('[');
+        const end = text.lastIndexOf(']');
+        if (start === -1 || end === -1 || end < start) return null;
+        text = text.slice(start, end + 1);
+
+        let parsed;
         try {
-            const prompt = `Given the following story segment, extract all sentences and attribute them to a speaker. 
+            parsed = JSON.parse(text);
+        } catch (e) {
+            console.warn('[StoryWriter][TTS] Speaker map was not valid JSON:', e.message);
+            return null;
+        }
+        if (!Array.isArray(parsed)) return null;
+
+        const cleaned = parsed
+            .filter(item => item && typeof item.text === 'string' && item.text.trim())
+            .map(item => ({
+                speaker: String(item.speaker || 'Narrator').replace(/[*_~`]/g, '').trim() || 'Narrator',
+                text: item.text.trim(),
+            }));
+
+        return cleaned.length > 0 ? cleaned : null;
+    }
+
+    /** Ask the text model to attribute each sentence in `text` to a speaker. */
+    async _requestSpeakerMap(text) {
+        if (!text || !text.trim()) return null;
+
+        const prompt = `Given the following story segment, extract all sentences and attribute them to a speaker. 
 Output exactly a JSON array of objects with keys "speaker" and "text". 
 Use "Narrator" for non-dialogue descriptive sentences. Do not include markdown formatting or any other text.
 
 Segment:
 ${text}`;
 
+        try {
             const res = await (window.authFetch || fetch)('/api/text/chat/completions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1518,37 +1618,102 @@ ${text}`;
                     temperature: 0.1
                 })
             });
-
-            if (!res.ok) throw new Error('Extraction LLM failed');
-            if (this.ttsPlayer.stopped) return;
-            
+            if (!res.ok) throw new Error(`Extraction LLM returned ${res.status}`);
             const data = await res.json();
-            let content = data.choices?.[0]?.message?.content || '[]';
-            content = content.replace(/```json/gi, '').replace(/```/g, '').trim();
-            
-            const parsed = JSON.parse(content);
-            if (!Array.isArray(parsed)) throw new Error('Invalid JSON format');
-            
-            parsed.forEach(item => {
-                if (item.text && item.text.trim()) {
-                    let speaker = (item.speaker || 'Narrator').replace(/[*_~`]/g, '').trim();
-                    const voiceKey = Object.keys(voices).find(k => k.toLowerCase() === speaker.toLowerCase());
-                    const voice = voiceKey ? voices[voiceKey] : (voices['Narrator'] || defaultVoice);
-                    this.ttsPlayer.enqueue(item.text, voice);
-                }
-            });
-            
-            this._updateNarrationProgress('Speaking...');
+            return this._parseSpeakerMap(data.choices?.[0]?.message?.content || '');
         } catch (e) {
-            console.error('[StoryWriter][TTS] Failed to extract audiobook voices, falling back to default voice.', e);
-            if (this.ttsPlayer && !this.ttsPlayer.stopped) {
-                const detector = new SentenceDetector();
-                const sentences = detector.feed(text);
-                detector.flush().forEach(s => sentences.push(s));
-                sentences.forEach(s => this.ttsPlayer.enqueue(s, defaultVoice));
-                this._updateNarrationProgress('Speaking...');
-            }
+            console.warn('[StoryWriter][TTS] Speaker attribution request failed:', e.message);
+            return null;
         }
+    }
+
+    /**
+     * Attribute a segment once and store the result on it, so playback never
+     * has to wait for an LLM call and a replay costs nothing. Called right
+     * after generation, while the reader is still reading the new text —
+     * which is the whole point: the latency lands where nobody is waiting.
+     */
+    async attributeSegmentSpeakers(segment, { force = false } = {}) {
+        if (!segment?.id || !segment.content) return null;
+        if (!force && segment.speaker_map) {
+            const cached = this._parseSpeakerMap(segment.speaker_map);
+            if (cached) return cached;
+        }
+
+        const map = await this._requestSpeakerMap(segment.content);
+        if (!map) return null;
+
+        try {
+            await this.apiCall(`/stories/${this.story.id}/segments/${segment.id}/speaker-map`, 'PUT', {
+                speaker_map: JSON.stringify(map),
+            });
+            segment.speaker_map = JSON.stringify(map);
+        } catch (e) {
+            // A failed save is not a failed attribution — narrate with what we
+            // have and simply pay for it again next time.
+            console.warn('[StoryWriter][TTS] Could not cache the speaker map:', e.message);
+        }
+        return map;
+    }
+
+    /** Queue an already-attributed segment onto the player. */
+    _playSpeakerMap(entries, voices, defaultVoice) {
+        entries.forEach(item => {
+            const voiceKey = Object.keys(voices).find(k => k.toLowerCase() === item.speaker.toLowerCase());
+            const voice = voiceKey ? voices[voiceKey] : (voices['Narrator'] || defaultVoice);
+            this.ttsPlayer.enqueue(item.text, voice);
+        });
+    }
+
+    /** Last resort: one voice, split into sentences. */
+    _playSingleVoice(text, defaultVoice) {
+        const detector = new SentenceDetector();
+        const sentences = detector.feed(text);
+        detector.flush().forEach(s => sentences.push(s));
+        sentences.forEach(s => this.ttsPlayer.enqueue(s, defaultVoice));
+    }
+
+    /**
+     * Narrate a segment with per-character voices. Uses the cached attribution
+     * when there is one — the common case once a segment has been generated —
+     * and only falls back to an on-demand LLM pass when there isn't.
+     *
+     * `segment` may be a segment object (preferred, enables caching) or a bare
+     * string, which still works but cannot cache.
+     */
+    async _extractAndPlayAudiobook(segment, voices, defaultVoice) {
+        const isObject = segment && typeof segment === 'object';
+        const text = isObject ? segment.content : segment;
+        if (!text || !this.ttsPlayer || this.ttsPlayer.stopped) return;
+
+        let map = null;
+
+        if (isObject && segment.speaker_map) {
+            map = this._parseSpeakerMap(segment.speaker_map);
+            if (map) console.debug('[StoryWriter][TTS] Using cached speaker map for segment', segment.id);
+        }
+
+        if (!map) {
+            this._updateNarrationProgress('Working out who is speaking...');
+            map = isObject
+                ? await this.attributeSegmentSpeakers(segment)
+                : await this._requestSpeakerMap(text);
+        }
+
+        if (this.ttsPlayer.stopped) return;
+
+        if (map) {
+            this._playSpeakerMap(map, voices, defaultVoice);
+            this._updateNarrationProgress('Speaking...');
+            return;
+        }
+
+        // Say so rather than quietly narrating everything in the narrator's
+        // voice — a silent downgrade here reads as "the character voices don't
+        // work", which sends you looking in the wrong place entirely.
+        console.warn('[StoryWriter][TTS] Speaker attribution unavailable — narrating in a single voice.');
+        this._playSingleVoice(text, defaultVoice);
+        this._updateNarrationProgress('Speaking (single voice — could not identify speakers)');
     }
 
     // ── Generate next story chunk (with optional TTS narration) ────────────────
@@ -1797,8 +1962,13 @@ ${text}`;
                         }
                     }
                 } else if (Object.keys(characterVoices).length > 0) {
-                    // Audiobook Buffered Plan C Extraction
-                    this._updateNarrationProgress('Extracting speakers...');
+                    // Attribute the text we just streamed so it can be spoken
+                    // now. The segment row is written by the backend during
+                    // generation and is not in hand here, so this pass is not
+                    // cached; _attributeNewSegmentsInBackground (called after
+                    // refreshWorkspace) is what stores attribution against the
+                    // saved rows and makes later replays free.
+                    this._updateNarrationProgress('Working out who is speaking...');
                     this._extractAndPlayAudiobook(fullText, characterVoices, ttsVoice);
                 } else if (sentenceDetector) {
                     // Legacy flush
