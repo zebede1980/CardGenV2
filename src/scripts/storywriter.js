@@ -53,9 +53,58 @@ const TTS_SPEAKER_LABELS = {
     p272: 'Speaker 272',
 };
 
+/**
+ * Kokoro encodes language and gender in the voice id: `<lang><gender>_<name>`,
+ * so `af_bella` is American-English Female "Bella" and `bm_george` is
+ * British-English Male "George". Decoding that turns an opaque list of sixty-odd
+ * ids into something you can actually choose from.
+ */
+function capitaliseFirst(word) {
+    const w = String(word || '');
+    return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
+const KOKORO_LANGUAGES = {
+    a: 'American English', b: 'British English', j: 'Japanese', z: 'Mandarin',
+    e: 'Spanish', f: 'French', h: 'Hindi', i: 'Italian', p: 'Portuguese',
+};
+const KOKORO_GENDERS = { f: 'Female', m: 'Male' };
+
+/** Split a Kokoro voice id into its parts, or null if it isn't one. */
+function parseKokoroVoice(voiceId) {
+    const match = /^([abjzefhip])([fm])_(.+)$/.exec(String(voiceId || ''));
+    if (!match) return null;
+    const [, lang, gender, name] = match;
+    return {
+        language: KOKORO_LANGUAGES[lang] || 'Other',
+        gender: KOKORO_GENDERS[gender] || '',
+        // The v0 voices are the older, lower-quality generation kept for
+        // compatibility — worth flagging rather than hiding, since they sound
+        // noticeably worse and it isn't obvious from the name.
+        legacy: name.startsWith('v0'),
+        name: name.replace(/^v0/, '') || name,
+    };
+}
+
 function formatSpeakerLabel(speakerId) {
     if (typeof speakerId !== 'string') {
         return String(speakerId);
+    }
+    // A blended voice, e.g. "af_bella+af_sky" — name it by its parts.
+    if (speakerId.includes('+')) {
+        const parts = speakerId.split('+').map(part => {
+            const bare = part.replace(/\(.*\)$/, '');
+            const parsed = parseKokoroVoice(bare);
+            const weight = /\((\d+(?:\.\d+)?)\)$/.exec(part);
+            const nice = parsed ? capitaliseFirst(parsed.name) : bare;
+            return weight ? `${nice}×${weight[1]}` : nice;
+        });
+        return `${parts.join(' + ')} (blend)`;
+    }
+    const kokoro = parseKokoroVoice(speakerId);
+    if (kokoro) {
+        const bits = [capitaliseFirst(kokoro.name), kokoro.gender, kokoro.language].filter(Boolean);
+        return kokoro.legacy ? `${bits.join(' · ')} (legacy)` : bits.join(' · ');
     }
     const label = TTS_SPEAKER_LABELS[speakerId];
     if (label) {
@@ -76,6 +125,18 @@ function formatSpeakerLabel(speakerId) {
  * Uses a GainNode for volume control and queues sentences fetched from the TTS bridge.
  */
 class TTSPlayer {
+    // Words that commonly start a line followed by a colon in ordinary prose.
+    // Only consulted when the cast is unknown; with a cast, membership of that
+    // list is the test instead.
+    static NON_SPEAKER_LABELS = new Set([
+        'warning', 'note', 'caution', 'danger', 'notice', 'attention', 'important',
+        'chapter', 'part', 'act', 'scene', 'prologue', 'epilogue', 'interlude',
+        'day', 'night', 'morning', 'afternoon', 'evening', 'today', 'tomorrow', 'yesterday',
+        'location', 'setting', 'time', 'date', 'subject', 'from', 'to', 'cc', 're',
+        'objective', 'mission', 'status', 'result', 'summary', 'conclusion', 'example',
+        'rule', 'reminder', 'update', 'edit', 'error', 'question', 'answer',
+    ]);
+
     constructor() {
         this.audioElement = new Audio();
         // Unlock audio element on iOS immediately during instantiation (which happens in a click handler)
@@ -108,6 +169,57 @@ class TTSPlayer {
         this.nanogptModel = '';
         this.nanogptVoice = '';
         this.errorCount = 0;
+        // Names the story actually has voices/cards for. Used to decide whether
+        // a leading "Word:" is a speaker label or ordinary prose — see
+        // _stripSpeakerLabel.
+        this.knownSpeakers = [];
+    }
+
+    /**
+     * Tell the player which names count as speakers, so a leading "Name:" can
+     * be recognised as a script-style label rather than guessed at.
+     */
+    setKnownSpeakers(names) {
+        this.knownSpeakers = (names || [])
+            .map(n => String(n || '').replace(/[*_~`]/g, '').trim().toLowerCase())
+            .filter(Boolean);
+    }
+
+    /**
+     * Remove a leading script-style speaker label ("Beth: ", "**Beth**: ") that
+     * has leaked into narration text.
+     *
+     * This used to be a global, unanchored `\b\*?[A-Z][a-zA-Z0-9_-]*\*?:\s*`
+     * replace, which ate any *capitalised* word followed by a colon, anywhere
+     * in the line — so "Warning: the bridge is out" lost its first word, and
+     * "The sign read Warning: keep out" lost one mid-sentence. (Lowercase words
+     * were always safe, so "one word: Run" survived even before.)
+     *
+     * Now it only ever strips at the START of the text, and only when the label
+     * is plausibly a name: a match against the known cast when we have one, and
+     * otherwise a short capitalised token that is not a common prose lead-in.
+     */
+    _stripSpeakerLabel(text) {
+        // Anchored, and the colon must be followed by whitespace — "5:30" and
+        // "ratio 3:1" are never labels.
+        const match = text.match(/^\s*\*{0,2}([A-Za-z][\w'’-]*(?:\s+[A-Za-z][\w'’-]*){0,2})\*{0,2}:\s+/);
+        if (!match) return text;
+
+        const label = match[1].replace(/[*_~`]/g, '').trim();
+        const lower = label.toLowerCase();
+
+        // When the cast is known, that is the whole test — anything else
+        // beginning a line is prose and must be left alone.
+        if (this.knownSpeakers.length > 0) {
+            const isSpeaker = this.knownSpeakers.some(name => name === lower);
+            return isSpeaker ? text.slice(match[0].length) : text;
+        }
+
+        // No cast to check against: strip only a single capitalised word that
+        // isn't one of the words prose commonly opens with this way.
+        if (!/^[A-Z][\w'’-]*$/.test(label)) return text;
+        if (TTSPlayer.NON_SPEAKER_LABELS.has(lower)) return text;
+        return text.slice(match[0].length);
     }
 
     _setupMediaSession() {
@@ -145,9 +257,7 @@ class TTSPlayer {
         
         // Clean up markdown and special characters that TTS struggles with
         let cleaned = text;
-        // Remove script-style character names if they leak into the TTS text
-        // This matches names like "Beth: ", "**Beth**: ", "Joe: "
-        cleaned = cleaned.replace(/\b\*?[A-Z][a-zA-Z0-9_-]*\*?:\s*/g, ' ');
+        cleaned = this._stripSpeakerLabel(cleaned);
         // Remove markdown headings
         cleaned = cleaned.replace(/^[#]+\s*/g, '');
         // Remove markdown list bullets
@@ -848,12 +958,54 @@ class StoryWriterApp {
                 return;
             }
 
+            // Grouped by language, English first, legacy voices last within each
+            // group. A flat list of sixty-odd ids like "af_v0irulan" is not
+            // something anyone can pick a narrator from.
+            const groups = new Map();
             speakers.forEach(speaker => {
-                const opt = document.createElement('option');
-                opt.value = speaker;
-                opt.textContent = formatSpeakerLabel(speaker);
-                voiceSelect.appendChild(opt);
+                const parsed = parseKokoroVoice(speaker);
+                const groupName = parsed ? parsed.language : 'Other voices';
+                if (!groups.has(groupName)) groups.set(groupName, []);
+                groups.get(groupName).push({ id: speaker, legacy: !!parsed?.legacy });
             });
+
+            const languageOrder = ['American English', 'British English'];
+            const orderedGroups = [...groups.keys()].sort((a, b) => {
+                const ia = languageOrder.indexOf(a), ib = languageOrder.indexOf(b);
+                if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                if (a === 'Other voices') return 1;
+                if (b === 'Other voices') return -1;
+                return a.localeCompare(b);
+            });
+
+            orderedGroups.forEach(groupName => {
+                const entries = groups.get(groupName)
+                    .sort((a, b) => (a.legacy - b.legacy) || a.id.localeCompare(b.id));
+                // Only bother with an <optgroup> when the list is actually split.
+                const parent = groups.size > 1
+                    ? Object.assign(document.createElement('optgroup'), { label: groupName })
+                    : voiceSelect;
+                entries.forEach(entry => {
+                    const opt = document.createElement('option');
+                    opt.value = entry.id;
+                    opt.textContent = formatSpeakerLabel(entry.id);
+                    opt.title = entry.id;   // the raw id is still what gets sent
+                    parent.appendChild(opt);
+                });
+                if (parent !== voiceSelect) voiceSelect.appendChild(parent);
+            });
+
+            // A blended voice saved earlier ("af_bella+af_sky") is not in the
+            // server's list, so add it back or the selection below silently
+            // falls through to the first voice and the setting is lost.
+            const saved = this.ttsSettings.tts_voice;
+            if (saved && saved.includes('+') && !speakers.includes(saved)) {
+                const opt = document.createElement('option');
+                opt.value = saved;
+                opt.textContent = formatSpeakerLabel(saved);
+                voiceSelect.appendChild(opt);
+                speakers.push(saved);
+            }
 
             // Restore saved voice
             if (this.ttsSettings.tts_voice && speakers.includes(this.ttsSettings.tts_voice)) {
@@ -1424,6 +1576,7 @@ class StoryWriterApp {
         this.ttsPlayer.voice = ttsVoice;
         this.ttsPlayer.speed = ttsSpeed;
         this.ttsPlayer.setVolume(volume);
+        this.ttsPlayer.setKnownSpeakers(this._knownSpeakerNames());
         this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
         this.ttsPlayer.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
         this.ttsPlayer.nanogptKey = document.getElementById('sw-tts-nanogpt-key')?.value || '';
@@ -1552,6 +1705,18 @@ class StoryWriterApp {
         }
         this._clearPlayingSegmentIndicator();
         this._hideNarrationControls();
+    }
+
+    /**
+     * Every name that should be treated as a speaker: the characters with
+     * voices mapped, plus the cards attached to the story, plus the narrator.
+     * Feeding this to the player is what lets it tell a script-style label
+     * apart from prose that merely starts with a capitalised word and a colon.
+     */
+    _knownSpeakerNames() {
+        const voices = window.config?.get('api.tts.characterVoices') || {};
+        const cardNames = (this.story?.cards || []).map(sc => sc?.card?.name).filter(Boolean);
+        return [...new Set([...Object.keys(voices), ...cardNames, 'Narrator'])];
     }
 
     /**
@@ -1760,6 +1925,7 @@ ${text}`;
             this.ttsPlayer.voice = ttsVoice;
             this.ttsPlayer.speed = ttsSpeed;
             this.ttsPlayer.setVolume(volume);
+            this.ttsPlayer.setKnownSpeakers(this._knownSpeakerNames());
             this.ttsPlayer.provider = document.getElementById('sw-tts-provider')?.value || 'kokoro';
             this.ttsPlayer.googleApiKey = document.getElementById('sw-tts-google-key')?.value || '';
             this._showNarrationControls();

@@ -1615,21 +1615,74 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: "StoryWriter backend unreachable: " + error.message }); }
 });
 
+// The voice list Kokoro *actually* has, asked of the server rather than
+// hardcoded. The hardcoded list this replaces had drifted from the running
+// container in both directions: it offered bf_isabella, which the server
+// rejects with a 400 ("Voice not found"), and it hid fourteen voices the
+// server does have. Picking a voice that then fails to synthesize is a
+// miserable way to find that out.
+//
+// Cached briefly because the voice list changes only when the Kokoro image
+// does, and the settings screen asks for it on every open.
+const KOKORO_VOICE_CACHE_MS = 5 * 60 * 1000;
+let kokoroVoiceCache = { voices: null, fetchedAt: 0 };
+
+// Used only when the Kokoro server cannot be reached, so the settings screen
+// still shows something rather than an empty dropdown. Deliberately the safe
+// subset — every entry here is a stock Kokoro voice.
+const KOKORO_FALLBACK_VOICES = [
+  "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
+  "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
+  "bf_alice", "bf_emma", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
+  "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
+  "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi", "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
+  "ef_dora", "em_alex", "em_santa", "ff_siwis", "hf_alpha", "hf_beta", "hm_omega", "hm_psi",
+  "if_sara", "im_nicola", "pf_dora", "pm_alex", "pm_santa",
+];
+
+async function getKokoroVoices() {
+  const now = Date.now();
+  if (kokoroVoiceCache.voices && now - kokoroVoiceCache.fetchedAt < KOKORO_VOICE_CACHE_MS) {
+    return { voices: kokoroVoiceCache.voices, live: true };
+  }
+
+  const kokoroUrl = (process.env.KOKORO_TTS_URL || "http://kokoro-tts:8880").replace(/\/$/, "");
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(`${kokoroUrl}/v1/audio/voices`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`Kokoro returned ${response.status}`);
+
+    const data = await response.json();
+    // Accept either [{id,name}] or a bare array of strings — different
+    // kokoro-fastapi versions have used both shapes.
+    const raw = Array.isArray(data) ? data : (data.voices || data.speakers || []);
+    const voices = raw
+      .map(v => (typeof v === "string" ? v : v?.id || v?.name))
+      .filter(v => typeof v === "string" && v)
+      .sort();
+
+    if (voices.length === 0) throw new Error("Kokoro returned no voices");
+
+    kokoroVoiceCache = { voices, fetchedAt: now };
+    return { voices, live: true };
+  } catch (error) {
+    console.warn("[TTS] Could not fetch Kokoro voices, using the built-in list:", error.message);
+    // A stale cache still beats the hardcoded fallback — it came from this
+    // server at some point.
+    if (kokoroVoiceCache.voices) return { voices: kokoroVoiceCache.voices, live: true };
+    return { voices: KOKORO_FALLBACK_VOICES, live: false };
+  }
+}
+
 app.get("/api/tts/voices", async (req, res) => {
   try {
     const provider = req.query.provider;
     
     if (provider === "kokoro") {
-      const kokoroVoices = [
-        "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
-        "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
-        "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
-        "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
-        "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi", "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
-        "ef_dora", "em_alex", "em_santa", "ff_siwis", "hf_alpha", "hf_beta", "hm_omega", "hm_psi",
-        "if_sara", "im_nicola", "pf_dora", "pm_alex", "pm_santa"
-      ];
-      return res.json({ status: "ready", speakers: kokoroVoices });
+      const { voices, live } = await getKokoroVoices();
+      return res.json({ status: "ready", speakers: voices, live });
     }
 
     res.json({ status: "ready", speakers: [] });
