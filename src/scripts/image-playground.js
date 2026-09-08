@@ -4,6 +4,30 @@
 // image-handler.js's handleEditReferenceImage) via a third 'playground'
 // target, working on this.playgroundImageUrl instead of a card's portrait or
 // the pre-generation reference image.
+// Prompt presets. The built-ins ship with the app and cannot be deleted — they
+// exist so the feature is useful the first time it is opened rather than after
+// the user has curated a list. Anything the user saves lives in config under
+// api.image.promptPresets and is listed alongside them.
+const PLAYGROUND_BUILTIN_PRESETS = {
+  generate: [
+    { name: "Portrait, photoreal", text: "a photorealistic portrait, natural lighting, shallow depth of field, sharp focus on the eyes" },
+    { name: "Character, painted", text: "digital painting of a character, full body, dramatic lighting, detailed rendering, fantasy art style" },
+    { name: "Scene, cinematic", text: "a cinematic wide shot, volumetric lighting, film grain, moody colour grading" },
+  ],
+  edit: [
+    { name: "Remove the background", text: "remove the background completely, leave the subject on a plain neutral background, keep the subject unchanged" },
+    { name: "Convert to photoreal", text: "convert this into a realistic photograph, same character, same pose, same outfit, photographic lighting and skin texture" },
+    { name: "Change the outfit", text: "change the outfit to <describe it here>, keep the face, hair, pose and background exactly the same" },
+    { name: "Change the setting", text: "place the same character in <describe the setting>, keep the character's face, hair and outfit exactly the same" },
+    { name: "Clean up / restore", text: "clean up this image: remove artefacts and noise, sharpen detail, correct the colours, change nothing else" },
+  ],
+  combine: [
+    { name: "Outfit from image 2", text: "put the outfit from Image 2 onto the character in Image 1, keeping the face, hair and pose from Image 1" },
+    { name: "Both characters together", text: "combine both characters into a single group shot, consistent lighting and art style" },
+    { name: "Style of image 2", text: "redraw Image 1 in the art style of Image 2, keeping the subject and composition of Image 1" },
+  ],
+};
+
 Object.assign(CharacterGeneratorApp.prototype, {
 
   initPlaygroundTab() {
@@ -44,6 +68,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._updatePlaygroundGenerateModelDropdown();
       this._updatePlaygroundEditModelDropdown();
       this._updatePlaygroundCombineModelDropdown();
+      this._updatePlaygroundUpscaleModelDropdown();
     });
 
     otherTabs.forEach(btn => {
@@ -93,7 +118,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // just using Edit with a good image-to-image model. Generate is the only
     // tab that doesn't require an existing working image — it's how one gets
     // created from nothing but a prompt.
-    ["generate", "crop", "edit", "combine", "library"].forEach(tab => {
+    ["generate", "crop", "edit", "enhance", "combine", "library"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
@@ -116,6 +141,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
+
+    // Prompt presets for each of the three text-driven tools.
+    ["generate", "edit", "combine"].forEach(tool => this._initPlaygroundPresets(tool));
+
+    this._updatePlaygroundUpscaleModelDropdown();
+    const upscaleModelSelect = document.getElementById("playground-upscale-model");
+    if (upscaleModelSelect) {
+      upscaleModelSelect.addEventListener("change", (e) => this.config.set("api.image.upscaleModel", e.target.value));
+    }
+    const upscaleBtn = document.getElementById("upscale-playground-image-btn");
+    if (upscaleBtn) upscaleBtn.addEventListener("click", () => this.handleUpscalePlaygroundImage());
 
     // Combine model dropdown — its own api.image.combineModel setting, not
     // synced with Edit's api.image.editModel, since a model that accepts
@@ -150,8 +186,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // openCropModal('playground') a button click used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", combine: "pg-tab-combine", library: "pg-tab-library" };
-    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", combine: "pg-panel-combine", library: "pg-panel-library" };
+    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", enhance: "pg-tab-enhance", combine: "pg-tab-combine", library: "pg-tab-library" };
+    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", enhance: "pg-panel-enhance", combine: "pg-panel-combine", library: "pg-panel-library" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -174,75 +210,98 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (tab === "crop") this.openCropModal('playground');
   },
 
-  // Heuristic only — providers like nano-gpt list a plain text-to-image model
-  // (e.g. z-image-turbo) right alongside its image-to-image variant
-  // (z-image-turbo-image-to-image) with no other signal to tell them apart.
-  // The plain one silently ignores the source image and free-generates from
-  // the prompt instead — no error, just zero resemblance to the original.
-  // This just flags models that don't look edit-capable by name so that
-  // mistake is visible before spending a credit on it, not a guarantee.
-  _looksEditCapable(modelId) {
-    const id = (modelId || "").toLowerCase();
-    return ["image-to-image", "img2img", "-edit", "edit-", "kontext", "inpaint", "instruct"]
-      .some(marker => id.includes(marker));
-  },
+  // ── Model dropdowns ─────────────────────────────────────────────────────────
+  // All three read the same model list but show only the models the user has
+  // marked for that job in ⚙️ Settings → Image API (see
+  // getImageModelCapabilities in config.js). Before that existed, each dropdown
+  // listed every model and leaned on a name heuristic to flag the wrong ones —
+  // which mattered because a plain text-to-image model handed a source image
+  // doesn't error, it silently ignores the image and free-generates from the
+  // prompt, so the mistake only shows up as a paid-for result with no
+  // resemblance to the original.
+  //
+  // The shared helper falls back to listing everything (flagged) when nothing
+  // is marked for a job, so no tool is ever left with an empty dropdown.
 
-  // Populated from api.image.models — the same list "Fetch Models" in
-  // Settings → Image API fills in (or the user adds to manually via its
-  // "Add" button), since that endpoint returns every model the account has
-  // access to, edit-capable or not.
-  _updatePlaygroundEditModelDropdown(selectId = "playground-edit-model") {
+  _updatePlaygroundModelDropdown(selectId, capability, configKey, hintId) {
     const select = document.getElementById(selectId);
     if (!select) return;
 
-    const models = this.config.get("api.image.models") || [];
-    const currentModel = this.config.get("api.image.editModel") || "";
+    const result = populateImageModelSelect(select, capability, configKey, this.config);
+    renderImageModelHint(document.getElementById(hintId), capability, result, this.config);
+  },
 
-    const label = (model) => this._looksEditCapable(model) ? model : `${model} ⚠️ may ignore your image`;
+  _updatePlaygroundEditModelDropdown() {
+    this._updatePlaygroundModelDropdown(
+      "playground-edit-model", "edit", "api.image.editModel", "playground-edit-model-hint",
+    );
+  },
 
-    if (models.length === 0) {
-      const fallback = currentModel || "flux-2-pro-image-to-image";
-      select.innerHTML = `<option value="${escapeHtml(fallback)}">${escapeHtml(label(fallback))}</option>`;
+  _updatePlaygroundUpscaleModelDropdown() {
+    this._updatePlaygroundModelDropdown(
+      "playground-upscale-model", "upscale", "api.image.upscaleModel", "playground-upscale-model-hint",
+    );
+  },
+
+  // Enhance: a fixed "make this bigger and cleaner, change nothing else"
+  // instruction at a larger requested size. Shares the working-image and
+  // history mechanics with Edit — the difference is entirely in what is asked
+  // for, so there is no separate result-handling path.
+  async handleUpscalePlaygroundImage() {
+    if (!this.playgroundImageUrl) {
+      this.showNotification("Upload, paste or generate an image first", "warning");
       return;
     }
 
-    select.innerHTML = models
-      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(label(model))}</option>`)
-      .join("");
+    const model = document.getElementById("playground-upscale-model")?.value
+      || this.config.get("api.image.upscaleModel")
+      || this.config.get("api.image.editModel");
+    if (!model) {
+      this.showNotification("Choose a model to enhance with first", "warning");
+      return;
+    }
 
-    if (!models.includes(currentModel)) {
-      select.value = models[0];
+    const scale = parseFloat(document.getElementById("playground-upscale-scale")?.value) || 2;
+    const instruction = document.getElementById("playground-upscale-instruction")?.value?.trim() || "";
+
+    const btn = document.getElementById("upscale-playground-image-btn");
+    const statusEl = document.getElementById("playground-upscale-status");
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.textContent = `⬆️ Enhancing at ${scale}× with ${model}… this may take a minute.`;
+    }
+
+    try {
+      const resultUrl = await window.apiHandler.upscaleImage({
+        imageBase64: this.playgroundImageUrl, model, scale, instruction,
+      });
+      const dataUrl = await this._urlToDataUrl(resultUrl);
+
+      this.playgroundImageUrl = dataUrl;
+      this.updatePlaygroundImagePreview(dataUrl);
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      this._addPlaygroundHistoryEntry(dataUrl, `Enhanced ${scale}× (${model})`, {
+        tool: "enhance", model, prompt: instruction,
+      });
+
+      this.showNotification("Image enhanced!", "success");
+    } catch (error) {
+      console.error("Playground upscale error:", error);
+      this.showNotification(`Enhance failed: ${error.message}`, "error", 6000);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (statusEl) statusEl.style.display = "none";
     }
   },
 
   // ── Text-to-image generation ────────────────────────────────────────────────
   // The only Playground tool that doesn't need a working image first — it's
-  // how one gets created from nothing but a prompt. Plain population, no
-  // "_looksEditCapable" heuristic in the positive sense — here it's inverted:
-  // a model whose name signals it wants a source image (e.g.
-  // "-image-to-image") is flagged as a *risk* for text-only generation,
-  // since it may ignore the prompt or fail outright with nothing to edit.
+  // how one gets created from nothing but a prompt.
   _updatePlaygroundGenerateModelDropdown() {
-    const select = document.getElementById("playground-generate-model");
-    if (!select) return;
-
-    const models = this.config.get("api.image.models") || [];
-    const currentModel = this.config.get("api.image.generateModel") || "";
-
-    const label = (model) => this._looksEditCapable(model) ? `${model} ⚠️ may expect a source image` : model;
-
-    if (models.length === 0) {
-      select.innerHTML = `<option value="">No models configured — add one via Settings</option>`;
-      return;
-    }
-
-    select.innerHTML = models
-      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(label(model))}</option>`)
-      .join("");
-
-    if (!models.includes(currentModel)) {
-      select.value = models[0];
-    }
+    this._updatePlaygroundModelDropdown(
+      "playground-generate-model", "generate", "api.image.generateModel", "playground-generate-model-hint",
+    );
   },
 
   // Generates a fresh image from a prompt alone and makes it the working
@@ -282,7 +341,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
 
       this.playgroundHistory = [];
-      this._addPlaygroundHistoryEntry(dataUrl, `Generated (${model})`);
+      this._addPlaygroundHistoryEntry(dataUrl, `Generated (${model})`, {
+        tool: "generate", model, prompt,
+      });
 
       this.showNotification("Image generated!", "success");
       this._setPlaygroundToolTab("edit");
@@ -412,7 +473,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.playgroundImageUrl = dataUrl;
       this.updatePlaygroundImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-      this._addPlaygroundHistoryEntry(dataUrl, `Edited (${editModel})`);
+      this._addPlaygroundHistoryEntry(dataUrl, `Edited (${editModel})`, {
+        tool: "edit",
+        model: useLocalForge ? "" : editModel,
+        prompt: instruction,
+        useLocalForge: !!useLocalForge,
+        denoisingStrength,
+      });
 
       this.showNotification("Image updated!", "success");
     } catch (error) {
@@ -430,11 +497,29 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // makes it safe to apply edits immediately above instead of asking the
   // user to confirm via a compare modal first.
 
-  _addPlaygroundHistoryEntry(url, label) {
+  // Each entry holds a whole data URL — a cropped PNG runs 1-2 MB — so an
+  // uncapped strip is tens of megabytes of live memory after a dozen
+  // operations, which on an iPhone is enough for Safari to discard the tab and
+  // lose the working image entirely. Saving to the library (💾) is what makes
+  // a version durable; this strip is only a short undo trail.
+  _PLAYGROUND_HISTORY_MAX: 15,
+
+  // `meta` records what actually produced this version — { tool, model, prompt }
+  // and, for a Local Forge edit, its denoising strength. Without it the strip
+  // was a row of pictures with no way to tell what made any of them, and no way
+  // to run the same instruction again against a different model.
+  _addPlaygroundHistoryEntry(url, label, meta = null) {
     if (!this.playgroundHistory) this.playgroundHistory = [];
     const last = this.playgroundHistory[this.playgroundHistory.length - 1];
     if (last && last.url === url) return; // avoid consecutive dupes (e.g. re-selecting the active entry)
-    this.playgroundHistory.push({ url, label });
+    this.playgroundHistory.push({ url, label, meta });
+
+    // Drops the *second* entry rather than the first: index 0 is the original
+    // upload/generation, which is the one version people actually want to get
+    // back to, so it is the last thing that should be evicted.
+    while (this.playgroundHistory.length > this._PLAYGROUND_HISTORY_MAX) {
+      this.playgroundHistory.splice(1, 1);
+    }
     this._renderPlaygroundHistory();
   },
 
@@ -455,20 +540,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const isActive = entry.url === this.playgroundImageUrl;
 
       const thumb = document.createElement("div");
-      thumb.title = entry.label;
+      thumb.title = entry.meta?.prompt
+        ? `${entry.label}\n"${entry.meta.prompt}"`
+        : entry.label;
       thumb.style.cssText = `
         flex: 0 0 auto; position: relative; width: 64px; height: 64px; cursor: pointer;
         border-radius: 0.5rem; overflow: hidden;
         border: 2px solid ${isActive ? "var(--accent)" : "var(--border)"};
       `;
+      // ↻ only appears on versions that record how they were made — the
+      // original upload has nothing to reuse.
+      const reuseBtn = entry.meta?.tool
+        ? `<button type="button" data-reuse-index="${index}" title="Put this prompt and model back in the panel, ready to run again"
+             style="position:absolute; bottom:0; left:0; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; line-height:1; padding:0.2rem 0.3rem; cursor:pointer;"
+           >↻</button>`
+        : "";
       thumb.innerHTML = `
-        <img src="${entry.url}" alt="${entry.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+        <img src="${entry.url}" alt="${escapeHtml(entry.label || "")}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+        ${reuseBtn}
         <button type="button" data-save-index="${index}" title="Save this version to your image library"
           style="position:absolute; bottom:0; right:0; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; line-height:1; padding:0.2rem 0.3rem; cursor:pointer;"
         >💾</button>
       `;
       thumb.addEventListener("click", (e) => {
-        if (e.target.closest("[data-save-index]")) return;
+        if (e.target.closest("[data-save-index]") || e.target.closest("[data-reuse-index]")) return;
         this._selectPlaygroundHistoryEntry(index);
       });
       const saveBtn = thumb.querySelector("[data-save-index]");
@@ -476,6 +571,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
         saveBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           this._savePlaygroundHistoryEntry(index);
+        });
+      }
+      const reuse = thumb.querySelector("[data-reuse-index]");
+      if (reuse) {
+        reuse.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this._reusePlaygroundHistoryEntry(index);
         });
       }
       strip.appendChild(thumb);
@@ -502,36 +604,184 @@ Object.assign(CharacterGeneratorApp.prototype, {
   _savePlaygroundHistoryEntry(index) {
     const entry = this.playgroundHistory?.[index];
     if (!entry) return;
-    this.savePlaygroundImageToLibrary(entry.url, entry.label || "");
+    // The entry knows the prompt that produced it; the panel may since have
+    // been retyped, so prefer the recorded one.
+    this.savePlaygroundImageToLibrary(entry.url, entry.label || "", entry.meta?.prompt);
+  },
+
+  // Refills the panel that produced a version with the same prompt and model
+  // and switches to it — deliberately WITHOUT running it. Every one of these
+  // calls costs credits, so the last step stays a decision the user makes;
+  // this only removes the retyping. Swapping the model before pressing the
+  // button is the whole point ("same instruction, better model").
+  _reusePlaygroundHistoryEntry(index) {
+    const entry = this.playgroundHistory?.[index];
+    const meta = entry?.meta;
+    if (!meta?.tool) return;
+
+    const setValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (el && value !== undefined && value !== null && value !== "") el.value = value;
+    };
+
+    if (meta.tool === "generate") {
+      setValue("playground-generate-prompt", meta.prompt);
+      setValue("playground-generate-model", meta.model);
+      this._setPlaygroundToolTab("generate");
+    } else if (meta.tool === "edit") {
+      setValue("playground-edit-instruction", meta.prompt);
+      setValue("playground-edit-model", meta.model);
+      const forgeToggle = document.getElementById("playground-edit-use-forge");
+      if (forgeToggle) forgeToggle.checked = !!meta.useLocalForge;
+      setValue("playground-edit-denoising", meta.denoisingStrength);
+      this._setPlaygroundToolTab("edit");
+    } else if (meta.tool === "combine") {
+      setValue("playground-combine-instruction", meta.prompt);
+      setValue("playground-combine-model", meta.model);
+      this._setPlaygroundToolTab("combine");
+    } else if (meta.tool === "enhance") {
+      setValue("playground-upscale-instruction", meta.prompt);
+      setValue("playground-upscale-model", meta.model);
+      this._setPlaygroundToolTab("enhance");
+    } else {
+      return;
+    }
+
+    this.showNotification("Settings restored — adjust the model or wording, then run it again.", "info", 5000);
+  },
+
+  // ── Prompt presets ──────────────────────────────────────────────────────────
+  // Common instructions ("remove the background", "convert to photoreal") are
+  // retyped constantly and are fiddly to type on a phone, which is this app's
+  // primary client. Built-ins plus whatever the user saves, per tool — an Edit
+  // instruction is no use in the Generate box, so the lists are kept separate.
+
+  _playgroundPresetFieldId(tool) {
+    return tool === "generate" ? "playground-generate-prompt"
+      : tool === "edit" ? "playground-edit-instruction"
+      : "playground-combine-instruction";
+  },
+
+  _initPlaygroundPresets(tool) {
+    const select = document.getElementById(`playground-${tool}-preset`);
+    const saveBtn = document.getElementById(`playground-${tool}-preset-save`);
+    const deleteBtn = document.getElementById(`playground-${tool}-preset-delete`);
+    if (!select) return;
+
+    this._renderPlaygroundPresets(tool);
+
+    select.addEventListener("change", () => {
+      const chosen = this._findPlaygroundPreset(tool, select.value);
+      if (!chosen) return;
+      const field = document.getElementById(this._playgroundPresetFieldId(tool));
+      if (field) {
+        field.value = chosen.text;
+        field.focus();
+      }
+      // Deleting is only meaningful for a saved preset, never a built-in.
+      if (deleteBtn) deleteBtn.style.display = chosen.builtIn ? "none" : "";
+    });
+
+    if (saveBtn) saveBtn.addEventListener("click", () => this._savePlaygroundPreset(tool));
+    if (deleteBtn) deleteBtn.addEventListener("click", () => this._deletePlaygroundPreset(tool));
+  },
+
+  _userPlaygroundPresets(tool) {
+    const all = this.config.get("api.image.promptPresets") || [];
+    return all.filter(preset => preset && preset.tool === tool);
+  },
+
+  _findPlaygroundPreset(tool, id) {
+    if (!id) return null;
+    const builtIn = (PLAYGROUND_BUILTIN_PRESETS[tool] || [])
+      .map((preset, i) => ({ ...preset, id: `builtin:${i}`, builtIn: true }));
+    return [...builtIn, ...this._userPlaygroundPresets(tool)].find(preset => preset.id === id) || null;
+  },
+
+  _renderPlaygroundPresets(tool, selectedId = "") {
+    const select = document.getElementById(`playground-${tool}-preset`);
+    if (!select) return;
+
+    const builtIn = PLAYGROUND_BUILTIN_PRESETS[tool] || [];
+    const mine = this._userPlaygroundPresets(tool);
+
+    const option = (value, label, selected) =>
+      `<option value="${escapeHtml(value)}"${selected ? " selected" : ""}>${escapeHtml(label)}</option>`;
+
+    let html = option("", "— Prompt presets —", !selectedId);
+    if (builtIn.length > 0) {
+      html += `<optgroup label="Built in">`
+        + builtIn.map((preset, i) => option(`builtin:${i}`, preset.name, selectedId === `builtin:${i}`)).join("")
+        + `</optgroup>`;
+    }
+    if (mine.length > 0) {
+      html += `<optgroup label="Yours">`
+        + mine.map(preset => option(preset.id, preset.name, selectedId === preset.id)).join("")
+        + `</optgroup>`;
+    }
+    select.innerHTML = html;
+
+    const deleteBtn = document.getElementById(`playground-${tool}-preset-delete`);
+    if (deleteBtn) {
+      const chosen = this._findPlaygroundPreset(tool, selectedId);
+      deleteBtn.style.display = chosen && !chosen.builtIn ? "" : "none";
+    }
+  },
+
+  _savePlaygroundPreset(tool) {
+    const field = document.getElementById(this._playgroundPresetFieldId(tool));
+    const text = field?.value?.trim();
+    if (!text) {
+      this.showNotification("Type the prompt you want to save first", "warning");
+      field?.focus();
+      return;
+    }
+
+    const name = (prompt("Name this preset:", text.slice(0, 40)) || "").trim();
+    if (!name) return;
+
+    const presets = [...(this.config.get("api.image.promptPresets") || [])];
+    const existing = presets.find(preset => preset.tool === tool && preset.name === name);
+    if (existing) {
+      if (!confirm(`Replace the existing preset "${name}"?`)) return;
+      existing.text = text;
+      this.config.set("api.image.promptPresets", presets);
+      this._renderPlaygroundPresets(tool, existing.id);
+    } else {
+      const preset = { id: `user:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`, tool, name, text };
+      presets.push(preset);
+      this.config.set("api.image.promptPresets", presets);
+      this._renderPlaygroundPresets(tool, preset.id);
+    }
+    this.showNotification(`Saved preset "${name}"`, "success");
+  },
+
+  _deletePlaygroundPreset(tool) {
+    const select = document.getElementById(`playground-${tool}-preset`);
+    const chosen = this._findPlaygroundPreset(tool, select?.value);
+    if (!chosen || chosen.builtIn) return;
+    if (!confirm(`Delete the preset "${chosen.name}"?`)) return;
+
+    const presets = (this.config.get("api.image.promptPresets") || [])
+      .filter(preset => preset.id !== chosen.id);
+    this.config.set("api.image.promptPresets", presets);
+    this._renderPlaygroundPresets(tool);
+    this.showNotification("Preset deleted", "success");
   },
 
   // ── Two-image combining ──────────────────────────────────────────────────────
   // Unlike Edit (a single-image editImage() call), this needs a model that
   // accepts multiple reference images in one call
   // (apiHandler.combineImages, its own proxy route), which is a genuinely
-  // different, less-common capability. Plain population, no
-  // "looks edit-capable" heuristic (_looksEditCapable) — there's no reliable
-  // naming convention for "accepts multiple images" the way "-image-to-image"
-  // signals single-image editing.
+  // different, less-common capability. Nothing in a model's name signals it
+  // (qwen-image-3-pro, reve/2.1/remix and xai/…/edit all do it, with nothing in
+  // common), so unlike Edit there's no heuristic to seed the marks from — the
+  // 🔀 box in Settings starts unticked for everything and the list falls back
+  // to showing all models until the user marks one.
   _updatePlaygroundCombineModelDropdown() {
-    const select = document.getElementById("playground-combine-model");
-    if (!select) return;
-
-    const models = this.config.get("api.image.models") || [];
-    const currentModel = this.config.get("api.image.combineModel") || "";
-
-    if (models.length === 0) {
-      select.innerHTML = `<option value="">No models configured — add one via Settings</option>`;
-      return;
-    }
-
-    select.innerHTML = models
-      .map(model => `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(model)}</option>`)
-      .join("");
-
-    if (!models.includes(currentModel)) {
-      select.value = models[0];
-    }
+    this._updatePlaygroundModelDropdown(
+      "playground-combine-model", "combine", "api.image.combineModel", "playground-combine-model-hint",
+    );
   },
 
   async handleCombineImage2Upload(event) {
@@ -611,7 +861,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.playgroundImageUrl = dataUrl;
       this.updatePlaygroundImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-      this._addPlaygroundHistoryEntry(dataUrl, `Combined (${combineModel})`);
+      this._addPlaygroundHistoryEntry(dataUrl, `Combined (${combineModel})`, {
+        tool: "combine", model: combineModel, prompt: instruction,
+      });
 
       this.showNotification("Images combined!", "success");
     } catch (error) {

@@ -34,7 +34,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   // Saves whatever is passed as a data URL. Used by the 💾 on each history
   // thumbnail and by the Save button under the working image.
-  async savePlaygroundImageToLibrary(dataUrl, label = "") {
+  async savePlaygroundImageToLibrary(dataUrl, label = "", promptOverride = undefined) {
     if (!dataUrl) return null;
     if (!this.storage?.savePlaygroundImage) {
       this.showNotification("Image library is unavailable", "error");
@@ -44,7 +44,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // The prompt/instruction that produced it is the one bit of context worth
       // keeping — a grid of faces with no idea how any of them was made is a
       // much less useful pile than one you can read back.
-      const prompt = this._playgroundPromptForLabel(label);
+      const prompt = promptOverride !== undefined && promptOverride !== null
+        ? promptOverride
+        : this._playgroundPromptForLabel(label);
       const row = await this.storage.savePlaygroundImage(dataUrl, { label, prompt });
       this.showNotification("Saved to your image library", "success");
       // Only refresh what is on screen; the library tab renders from scratch
@@ -66,6 +68,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (label.startsWith("Generated")) return from("playground-generate-prompt");
     if (label.startsWith("Edited")) return from("playground-edit-instruction");
     if (label.startsWith("Combined")) return from("playground-combine-instruction");
+    if (label.startsWith("Enhanced")) return from("playground-upscale-instruction");
     return "";
   },
 
@@ -76,10 +79,34 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     if (status) {
       status.style.display = "block";
+      status.style.color = "";
       status.textContent = "Loading your saved images…";
     }
 
-    const rows = await (this.storage?.listPlaygroundImages?.() ?? []);
+    let rows;
+    try {
+      rows = await (this.storage?.listPlaygroundImages?.() ?? []);
+    } catch (error) {
+      // A failed load must never look like an empty library — see
+      // listPlaygroundImages in storage.js. Offers a retry rather than leaving
+      // the tab stuck, since the usual cause is a flaky mobile connection.
+      console.error("Playground library load failed:", error);
+      grid.innerHTML = "";
+      this._playgroundLibraryRows = [];
+      if (status) {
+        status.style.display = "block";
+        status.style.color = "var(--error)";
+        status.textContent = `Could not load your library: ${error.message}. `;
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "btn-small";
+        retry.textContent = "Try again";
+        retry.addEventListener("click", () => this.renderPlaygroundLibrary());
+        status.appendChild(retry);
+      }
+      return;
+    }
+
     this._playgroundLibraryRows = rows;
     grid.innerHTML = "";
 
@@ -115,6 +142,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       </div>
       ${row.prompt ? `<div title="${escapeHtml(row.prompt)}" style="padding: 0 0.5rem 0.4rem; font-size: 0.7rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(row.prompt)}</div>` : ""}
       <div style="display: flex; gap: 0.25rem; padding: 0 0.4rem 0.45rem; flex-wrap: wrap; margin-top: auto;">
+        <button type="button" data-pg-reopen class="btn-small" title="Bring this back into the Playground as the working image">✏️ Edit</button>
         <button type="button" data-pg-newchar class="btn-small" title="Start a new character from this image">🎭 New character</button>
         <button type="button" data-pg-download class="btn-small" title="Download to this device">⬇</button>
         <button type="button" data-pg-delete class="btn-small" title="Delete from your library">🗑️</button>
@@ -122,6 +150,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     `;
 
     tile.querySelector("[data-pg-view]")?.addEventListener("click", () => this.openPlaygroundLibraryViewer(index));
+    tile.querySelector("[data-pg-reopen]")?.addEventListener("click", () => this.reopenPlaygroundLibraryImage(row));
     tile.querySelector("[data-pg-newchar]")?.addEventListener("click", () => this.sendPlaygroundImageToNewCharacter(row));
     tile.querySelector("[data-pg-download]")?.addEventListener("click", () => this.downloadPlaygroundLibraryImage(row));
     tile.querySelector("[data-pg-delete]")?.addEventListener("click", () => this.deletePlaygroundLibraryImage(row));
@@ -157,6 +186,42 @@ Object.assign(CharacterGeneratorApp.prototype, {
       console.error("Playground library delete failed:", error);
       this.showNotification(`Delete failed: ${error.message}`, "error", 6000);
     }
+  },
+
+  // Puts a saved image back on the workbench. Until this existed the library
+  // was a one-way door — an image could start a new *character* but could not be
+  // picked up and edited further, so "come back to this tomorrow and keep
+  // working on it" meant re-downloading and re-uploading it by hand.
+  //
+  // Loads it as the working image exactly as an upload does, history reset,
+  // seeded with the prompt that made it so ↻ still works on it.
+  async reopenPlaygroundLibraryImage(row) {
+    if (this.playgroundImageUrl && !confirm("Replace the current Playground image? Versions you have not saved will be lost.")) {
+      return;
+    }
+
+    let dataUrl;
+    try {
+      dataUrl = await this._playgroundLibraryDataUrl(row);
+    } catch (error) {
+      console.error("Playground library → workbench failed:", error);
+      this.showNotification(`Could not load that image: ${error.message}`, "error", 6000);
+      return;
+    }
+
+    this.playgroundImageUrl = dataUrl;
+    this.updatePlaygroundImagePreview(dataUrl);
+    if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+
+    this.playgroundHistory = [];
+    this._addPlaygroundHistoryEntry(
+      dataUrl,
+      row.label || "From library",
+      row.prompt ? { tool: "edit", model: "", prompt: row.prompt } : null,
+    );
+
+    this._setPlaygroundToolTab("edit");
+    this.showNotification("Loaded into the Playground.", "success");
   },
 
   // The point of the library: a saved image becomes the starting point for a

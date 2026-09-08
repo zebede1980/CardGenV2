@@ -592,7 +592,7 @@ class CharacterGeneratorApp {
     apiStatus.addEventListener("click", () => this.handleAPIConfig());
     apiStatus.style.cursor = "pointer";
 
-    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-edit-model, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref, #image-is-flux")
+    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-edit-model, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref, #image-is-flux, #image-cost-note")
       .forEach((input) => input.addEventListener("change", () => {
           this.saveAPISettings();
           const status = document.getElementById("model-settings-status");
@@ -815,11 +815,7 @@ class CharacterGeneratorApp {
           manualImageModelInput.value = "";
           return;
         }
-        const row = document.createElement("div");
-        row.className = "image-model-row";
-        row.style.cssText = "display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;";
-        row.innerHTML = `<label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;"><input type="checkbox" class="image-model-checkbox" value="${escapeHtml(modelId)}" checked> ${escapeHtml(modelId)}</label><button type="button" class="image-model-delete-btn" data-model="${escapeHtml(modelId)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>`;
-        container.appendChild(row);
+        container.insertAdjacentHTML("beforeend", renderImageModelRow(modelId, true, this.config));
         manualImageModelInput.value = "";
         this.saveAPISettings();
         const searchInput = document.getElementById("image-model-search");
@@ -835,8 +831,12 @@ class CharacterGeneratorApp {
         const term = e.target.value.toLowerCase();
         const container = document.getElementById("image-models-container");
         if (!container) return;
-        container.querySelectorAll("label").forEach((label) => {
-          label.style.display = label.textContent.toLowerCase().includes(term) ? "flex" : "none";
+        // Hides the whole row, not just its name label: a row now also holds
+        // three capability checkboxes and a delete button, and hiding only the
+        // label left those floating with nothing to identify them.
+        container.querySelectorAll(".image-model-row").forEach((row) => {
+          const modelId = (row.dataset.model || "").toLowerCase();
+          row.style.display = modelId.includes(term) ? "flex" : "none";
         });
       });
     }
@@ -849,7 +849,10 @@ class CharacterGeneratorApp {
     const imageModelsContainer = document.getElementById("image-models-container");
     if (imageModelsContainer) {
       imageModelsContainer.addEventListener("change", (e) => {
-        if (e.target.classList.contains("image-model-checkbox")) this.saveAPISettings();
+        const isModelToggle = e.target.classList.contains("image-model-checkbox");
+        const isCapToggle = e.target.classList.contains("image-model-cap-checkbox");
+        if (!isModelToggle && !isCapToggle) return;
+        this.saveAPISettings();
       });
       imageModelsContainer.addEventListener("click", (e) => {
         const btn = e.target.closest(".image-model-delete-btn");
@@ -975,7 +978,10 @@ class CharacterGeneratorApp {
   saveAPISettings() {
     this.config.loadFromForm();
     this.config.saveConfig();
-    this.updateActiveModelsDropdown();
+    // Every image-model dropdown, not just the active-model one: the Playground's
+    // three lists and Settings' Edit Model all filter on the per-model capability
+    // marks, so any settings save has to re-filter them.
+    this.refreshImageModelDropdowns();
     this.checkAPIStatus();
     this._syncStoryWriterSettings();
   }
@@ -1304,10 +1310,14 @@ class CharacterGeneratorApp {
           this.showStreamMessage("🎨 Generating character image...\n");
           
           // Apply sensible defaults for a brand new character
-          if (this.config.get("api.image.models") && this.config.get("api.image.models").length > 0) {
-            this.config.set("api.image.model", this.config.get("api.image.models")[0]);
+          // First model marked 🪄 Generate, not just the first model in the
+          // list — this is a text-to-image portrait, and an image-to-image
+          // model here produces a portrait with no source image to work from.
+          const defaultImageModel = firstImageModelWithCapability("generate", this.config);
+          if (defaultImageModel) {
+            this.config.set("api.image.model", defaultImageModel);
             const activeImageModelSelect = document.getElementById("active-image-model");
-            if (activeImageModelSelect) activeImageModelSelect.value = this.config.get("api.image.models")[0];
+            if (activeImageModelSelect) activeImageModelSelect.value = defaultImageModel;
           }
           this.config.set("api.image.style", "realistic");
           const styleSelect = document.getElementById("image-style");

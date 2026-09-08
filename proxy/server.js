@@ -11,6 +11,16 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 
+// Read a positive integer from the environment, falling back when unset or
+// nonsense. Declared up here because module-level constants below (stored-image
+// limits, job limits) evaluate at load time and would hit the temporal dead
+// zone if this lived further down the file.
+const envInt = (name, fallback) => {
+  const raw = process.env[name];
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
 // ── Auth configuration ────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || "cardgen-default-secret-change-me";
 const JWT_EXPIRES_IN = "30d";
@@ -140,6 +150,45 @@ function getUserDataDir(userId) {
   return dir;
 }
 
+// ── Stored image validation ───────────────────────────────────────────────────
+// Every route that persists an image takes a data: URL from the browser and
+// writes its MIME type to a sidecar .mime file, which is later handed straight
+// back as the response Content-Type. Without an allowlist that makes the store
+// a same-origin file host: a data:text/html payload would be served as HTML
+// from the app's own origin, with access to the session token in localStorage.
+// The stored bytes are also uncapped without this, so one request could fill
+// the disk.
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
+
+// 4/3 of the byte size, so this is roughly a 24 MB image.
+const MAX_STORED_IMAGE_BASE64_CHARS = envInt("MAX_STORED_IMAGE_B64", 32 * 1024 * 1024);
+
+/**
+ * Parse a data: URL into { mime, base64 }, or return null when it isn't one,
+ * carries a MIME we refuse to serve back, or is too large to store.
+ * `reason` on the failure result is safe to show a user.
+ */
+function parseStorableImageDataUrl(dataUrl) {
+  if (typeof dataUrl !== "string") return { ok: false, reason: "imageBase64 must be a data: URL" };
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) return { ok: false, reason: "imageBase64 must be a data: URL" };
+
+  const mime = match[1].trim().toLowerCase();
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(mime)) {
+    return { ok: false, reason: `unsupported image type "${mime}"` };
+  }
+  if (match[2].length > MAX_STORED_IMAGE_BASE64_CHARS) {
+    return { ok: false, reason: "image is too large to store" };
+  }
+  return { ok: true, mime, base64: match[2] };
+}
+
 // ── Per-user history (non-permanent auto-saves) stored as a local flat file ──
 const HISTORY_MAX = 30;
 
@@ -241,11 +290,11 @@ async function saveCardHistoryImages(imgDir, cardId, imageHistory) {
   for (let i = 0; i < imageHistory.length; i++) {
     const item = imageHistory[i];
     if (typeof item !== "string") continue;
-    const match = item.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!match) continue;
+    const parsed = parseStorableImageDataUrl(item);
+    if (!parsed.ok) continue;
     await Promise.all([
-      fsPromises.writeFile(path.join(imgDir, `${cardId}_h${i}.img`), Buffer.from(match[2], "base64")),
-      fsPromises.writeFile(path.join(imgDir, `${cardId}_h${i}.mime`), match[1]),
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_h${i}.img`), Buffer.from(parsed.base64, "base64")),
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_h${i}.mime`), parsed.mime),
     ]);
   }
 }
@@ -827,12 +876,12 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
       const imageBase64 = record.imageBase64 || "";
       const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
       if (imageBase64.startsWith("data:")) {
-        const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
-        if (match) {
+        const parsed = parseStorableImageDataUrl(imageBase64);
+        if (parsed.ok) {
           if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
           await Promise.all([
-            fsPromises.writeFile(path.join(imgDir, `${histId}.img`), Buffer.from(match[2], "base64")),
-            fsPromises.writeFile(path.join(imgDir, `${histId}.mime`), match[1]),
+            fsPromises.writeFile(path.join(imgDir, `${histId}.img`), Buffer.from(parsed.base64, "base64")),
+            fsPromises.writeFile(path.join(imgDir, `${histId}.mime`), parsed.mime),
           ]);
         }
       }
@@ -911,12 +960,12 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     const imageBase64 = record.imageBase64 || "";
     const permImgDir = path.join(getUserDataDir(req.user.userId), "card-images");
     if (imageBase64.startsWith("data:")) {
-      const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
-      if (match) {
+      const parsed = parseStorableImageDataUrl(imageBase64);
+      if (parsed.ok) {
         if (!fs.existsSync(permImgDir)) fs.mkdirSync(permImgDir, { recursive: true });
         await Promise.all([
-          fsPromises.writeFile(path.join(permImgDir, `${dbCard.id}.img`), Buffer.from(match[2], "base64")),
-          fsPromises.writeFile(path.join(permImgDir, `${dbCard.id}.mime`), match[1]),
+          fsPromises.writeFile(path.join(permImgDir, `${dbCard.id}.img`), Buffer.from(parsed.base64, "base64")),
+          fsPromises.writeFile(path.join(permImgDir, `${dbCard.id}.mime`), parsed.mime),
         ]);
       }
     }
@@ -1020,10 +1069,9 @@ app.get("/api/storage/cards/:id/gallery", requireAuth, async (req, res) => {
 
 app.post("/api/storage/cards/:id/gallery", requireAuth, async (req, res) => {
   const cardId = req.params.id;
-  const imageBase64 = req.body?.imageBase64 || "";
-  const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
-  if (!match) {
-    return res.status(400).json({ error: "imageBase64 must be a data: URL" });
+  const parsed = parseStorableImageDataUrl(req.body?.imageBase64);
+  if (!parsed.ok) {
+    return res.status(400).json({ error: parsed.reason });
   }
   try {
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
@@ -1157,10 +1205,9 @@ app.get("/api/storage/playground-images", requireAuth, async (req, res) => {
 });
 
 app.post("/api/storage/playground-images", requireAuth, async (req, res) => {
-  const imageBase64 = req.body?.imageBase64 || "";
-  const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
-  if (!match) {
-    return res.status(400).json({ error: "imageBase64 must be a data: URL" });
+  const parsed = parseStorableImageDataUrl(req.body?.imageBase64);
+  if (!parsed.ok) {
+    return res.status(400).json({ error: parsed.reason });
   }
   try {
     const response = await fetch(`${playgroundInternalUrl()}/api/playground/images`, {
@@ -1171,11 +1218,30 @@ app.post("/api/storage/playground-images", requireAuth, async (req, res) => {
     if (!response.ok) throw new Error(`Database returned ${response.status}`);
     const row = await response.json();
 
+    // The row is created before the bytes exist, so a failed write leaves a
+    // library entry pointing at nothing — a permanently broken tile with no way
+    // to clear it from the UI. Roll the row back instead of leaving the two
+    // halves out of step.
     const imgDir = playgroundImageDir(req.user.userId);
-    await Promise.all([
-      fsPromises.writeFile(path.join(imgDir, `${row.id}.img`), Buffer.from(match[2], "base64")),
-      fsPromises.writeFile(path.join(imgDir, `${row.id}.mime`), match[1]),
-    ]);
+    try {
+      await Promise.all([
+        fsPromises.writeFile(path.join(imgDir, `${row.id}.img`), Buffer.from(parsed.base64, "base64")),
+        fsPromises.writeFile(path.join(imgDir, `${row.id}.mime`), parsed.mime),
+      ]);
+    } catch (writeError) {
+      console.error("[Playground] image write failed, rolling back row", row.id, writeError.message);
+      await fetch(`${playgroundInternalUrl()}/api/playground/images/${row.id}`, {
+        method: "DELETE",
+        headers: galleryInternalHeaders(req),
+      }).catch((rollbackError) => {
+        // Nothing more we can do; log loudly so the orphan is at least findable.
+        console.error("[Playground] rollback of row", row.id, "failed:", rollbackError.message);
+      });
+      for (const ext of [".img", ".mime"]) {
+        fsPromises.unlink(path.join(imgDir, `${row.id}${ext}`)).catch(() => { });
+      }
+      throw new Error("Could not save the image file");
+    }
 
     res.json(playgroundImageResponse(row));
   } catch (e) {
@@ -1348,13 +1414,13 @@ app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
   // Helper: write imageBase64 to proxy card-images keyed by DB card id
   async function cacheImage(dbId, imageBase64) {
     if (!imageBase64 || !imageBase64.startsWith("data:")) return;
-    const m = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!m) return;
+    const parsed = parseStorableImageDataUrl(imageBase64);
+    if (!parsed.ok) return;
     try {
       if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
       await Promise.all([
-        fsPromises.writeFile(path.join(imgDir, `${dbId}.img`), Buffer.from(m[2], "base64")),
-        fsPromises.writeFile(path.join(imgDir, `${dbId}.mime`), m[1]),
+        fsPromises.writeFile(path.join(imgDir, `${dbId}.img`), Buffer.from(parsed.base64, "base64")),
+        fsPromises.writeFile(path.join(imgDir, `${dbId}.mime`), parsed.mime),
       ]);
       console.log(`[Migration] Cached image for DB card ${dbId}`);
     } catch (e) {
@@ -1859,12 +1925,6 @@ const TEXT_UPSTREAM_TIMEOUT_MS = 10 * 60 * 1000;
 
 const { randomUUID } = require("crypto");
 const { StringDecoder } = require("string_decoder");
-
-const envInt = (name, fallback) => {
-  const raw = process.env[name];
-  const n = raw === undefined ? NaN : Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-};
 
 // Overridable so retention can be tuned in production without a code change,
 // and so the bounds are testable without waiting out minute-long timers.
@@ -2740,6 +2800,10 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
 // /images/generations shape that endpoint already forwards, so this can't
 // just reuse it.
 app.post("/api/image/combine", requireAuth, async (req, res) => {
+  const { resumable, clientRef } = req.body || {};
+  let job = null;
+  let clientGone = false;
+
   try {
     const { model, prompt, input_references } = req.body;
 
@@ -2768,7 +2832,31 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
     console.log("Model:", model);
     console.log("Reference image count:", input_references.length);
 
-    const requestBody = { model, prompt, input_references, n: 1, ...req.body };
+    // The spread goes FIRST so the explicit fields below actually win. Written
+    // the other way round, `n: 1` and friends were dead code — whatever the
+    // client sent overrode them. `resumable`/`clientRef` are our own
+    // bookkeeping and are stripped, exactly as /api/image/generations does.
+    const { resumable: _resumable, clientRef: _clientRef, ...forwardedBody } = req.body;
+    const requestBody = { ...forwardedBody, model, prompt, input_references, n: forwardedBody.n || 1 };
+
+    if (resumable) {
+      const running = countRunningJobsForUser(req.user.userId);
+      if (running >= JOB_LIMITS.MAX_RUNNING_PER_USER) {
+        return res.status(429).json({
+          error: {
+            code: "429",
+            message: `Too many generations in flight (limit ${JOB_LIMITS.MAX_RUNNING_PER_USER}). Wait for one to finish.`,
+          },
+        });
+      }
+      // Same reasoning as the image generations route: no AbortController wired
+      // to the upstream fetch, because the whole point is that the combine keeps
+      // running — and stays collectable — when the client's connection drops.
+      job = createGenerationJob(req.user.userId, new AbortController(), clientRef);
+    }
+    res.on("close", () => {
+      clientGone = true;
+    });
 
     let response = await fetch(targetUrl, {
       method: "POST",
@@ -2788,15 +2876,36 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Image combine API error:", response.status, errorText);
-      return res.status(response.status).json({
+      if (job) {
+        finishGenerationJob(job, "error", {
+          error: `Image Combine API Error: ${response.status} ${response.statusText}`,
+        });
+      }
+      if (res.writableEnded || clientGone) return;
+      // upstreamFailureStatus, not the raw upstream status — relaying a
+      // third-party 401/403 verbatim is the pattern that once bounced users to
+      // the login screen. The real status stays in the message body.
+      return res.status(upstreamFailureStatus(response.status)).json({
         error: { code: response.status.toString(), message: `Image Combine API Error: ${response.statusText}`, details: errorText },
       });
     }
 
     const data = await response.json();
+
+    if (job) {
+      job.result = data;
+      finishGenerationJob(job, "done", { finishReason: "stop" });
+      if (clientGone) {
+        console.log(`[jobs] image combine job ${job.id} finished after the client had detached (held for collection)`);
+      }
+    }
+
+    if (res.writableEnded) return;
     res.json(data);
   } catch (error) {
     console.error("Image combine proxy error:", error);
+    if (job) finishGenerationJob(job, "error", { error: error.message });
+    if (res.writableEnded || clientGone) return;
     res.status(500).json({
       error: { code: "500", message: "Internal server error in image combine proxy", details: error.message },
     });

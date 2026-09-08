@@ -219,6 +219,7 @@ Object.assign(APIHandler.prototype, {
     data.resumable = true;
     data.__jobLabel = "Playground image";
 
+    const startedAt = performance.now();
     const response = await this.makeRequest("/api/image/generations", data, true);
 
     if (!response.ok) {
@@ -243,7 +244,96 @@ Object.assign(APIHandler.prototype, {
       console.error("Unexpected image generate API response format. Full response:", result);
       throw new Error("Unexpected image generate API response format: " + JSON.stringify(result));
     }
+    // Only successful runs are timed — a call that errored out after two
+    // seconds says nothing about how long the model takes when it works.
+    recordImageModelRun(generateModel, performance.now() - startedAt, this.config);
     return resultUrl;
+  },
+
+  // ── Upscale / enhance ───────────────────────────────────────────────────────
+  // Deliberately its own method rather than a flag on editImage(): the prompt is
+  // fixed (the whole point is to change nothing but the resolution), and it asks
+  // for explicit larger dimensions, which no other call does.
+  //
+  // Whether this produces a genuine upscale depends entirely on the model —
+  // nano-gpt has no documented dedicated upscaler, so this drives whichever
+  // image-to-image model the user marked ⬆️ Enhance. A weak model will re-imagine
+  // detail rather than recover it; that is a property of the model, not a bug
+  // here, which is why the choice is exposed rather than hardcoded.
+  async upscaleImage({ imageBase64, model, scale = 2, instruction = "" }) {
+    if (!imageBase64) throw new Error("An image is required to upscale.");
+
+    const upscaleModel = model || this.config.get("api.image.upscaleModel") || this.config.get("api.image.editModel");
+    if (!upscaleModel) throw new Error("Choose a model to enhance with first.");
+
+    // Measured from the source rather than assumed, so the aspect ratio is
+    // preserved whatever was loaded.
+    const { width, height } = await this._measureImageDataUrl(imageBase64);
+    const factor = Math.max(1, Math.min(4, Number(scale) || 2));
+    // Capped because providers reject absurd dimensions outright, and a request
+    // that fails on size wastes the call.
+    const targetWidth = Math.min(4096, Math.round(width * factor));
+    const targetHeight = Math.min(4096, Math.round(height * factor));
+
+    const basePrompt =
+      "Upscale this image to a higher resolution. Increase fine detail and sharpness, " +
+      "remove compression artefacts, noise and blur. Keep the composition, subject, framing, " +
+      "colours and art style exactly as they are — do not add, remove or reinterpret anything.";
+
+    const data = {
+      model: upscaleModel,
+      prompt: instruction.trim() ? `${basePrompt} ${instruction.trim()}` : basePrompt,
+      image: imageBase64,
+      n: 1,
+      response_format: "url",
+      width: targetWidth,
+      height: targetHeight,
+      size: `${targetWidth}x${targetHeight}`,
+      seed: Math.floor(Math.random() * 2147483647),
+      resumable: true,
+      __jobLabel: "Image enhance",
+    };
+
+    console.log("=== SENDING IMAGE UPSCALE REQUEST ===");
+    console.log("Upscale model:", upscaleModel, `${width}x${height} -> ${targetWidth}x${targetHeight}`);
+
+    const startedAt = performance.now();
+    const response = await this.makeRequest("/api/image/generations", data, true);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Image Upscale API error response:", errorText);
+      let errorMessage = errorText;
+      try {
+        const errData = JSON.parse(errorText);
+        errorMessage = errData.error?.message || errData.error?.details || errData.message || errorText;
+      } catch (e) { /* fall back to the raw body */ }
+      throw new Error(`Image Enhance API Error (${response.status}): ${errorMessage}`);
+    }
+
+    const result = await response.json();
+    if (result.error) {
+      throw new Error(`Image Enhance API Error: ${result.error.message || result.error.details || result.error}`);
+    }
+
+    const resultUrl = (result.data && result.data.length > 0 && result.data[0].url) || result.image || result.url;
+    if (!resultUrl) {
+      console.error("Unexpected image enhance API response format. Full response:", result);
+      throw new Error("Unexpected response format from the Image Enhance API: " + JSON.stringify(result).slice(0, 300));
+    }
+
+    recordImageModelRun(upscaleModel, performance.now() - startedAt, this.config);
+    return resultUrl;
+  },
+
+  /** Natural pixel dimensions of a data: URL, for scaling decisions. */
+  _measureImageDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+      img.onerror = () => reject(new Error("Could not read the image dimensions"));
+      img.src = dataUrl;
+    });
   },
 
   // ── Image-to-Image Editing ────────────────────────────────────────────────
@@ -287,6 +377,7 @@ Object.assign(APIHandler.prototype, {
     // what lets a returning client collect it instead of losing it.
     data.resumable = true;
     data.__jobLabel = "Image edit";
+    const startedAt = performance.now();
     const response = await this.makeRequest("/api/image/generations", data, true);
 
     if (!response.ok) {
@@ -325,6 +416,9 @@ Object.assign(APIHandler.prototype, {
       );
     }
 
+    // Recorded after the safety-blank check, so a rejected edit doesn't count
+    // as a fast successful run and drag the model's average down.
+    recordImageModelRun(editModel, performance.now() - startedAt, this.config);
     return resultUrl;
   },
 
@@ -1045,15 +1139,16 @@ BEGIN PROMPT:`;
     console.log("Combine model:", combineModel);
     console.log("Reference image count:", images.length);
 
-    const response = await (window.authFetch || fetch)("/api/image/combine", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey,
-        "X-API-URL": apiUrl,
-      },
-      body: JSON.stringify(payload),
-    });
+    // Combining is the slowest call in the app — two full-size reference images
+    // going up, a multi-image model working on them — and it used to be the one
+    // image operation with no resumable job behind it: a phone locking mid-run
+    // lost a result that had already been paid for. It now goes through
+    // makeRequest on its own proxy route, which buffers the result server-side
+    // and collects it on reconnect exactly as Generate and Edit do.
+    payload.resumable = true;
+    payload.__jobLabel = "Image combine";
+    const startedAt = performance.now();
+    const response = await this.makeRequest("/api/image/combine", payload, true);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1077,6 +1172,7 @@ BEGIN PROMPT:`;
       console.error("Unexpected image combine API response format. Full response:", data);
       throw new Error("Unexpected response format from Image Combine API: " + JSON.stringify(data).slice(0, 300));
     }
+    recordImageModelRun(combineModel, performance.now() - startedAt, this.config);
     return resultUrl;
   },
 

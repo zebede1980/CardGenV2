@@ -614,7 +614,17 @@ class StoryWriterApp {
             // Populate image model dropdown from CardGen config
             const select = document.getElementById('sw-image-model');
             if (select) {
-                const models = window.configManager?.config?.api?.image?.models || [];
+                // Story Writer illustrations are text-to-image, so only offer
+                // models marked 🪄 Generate (see config.js). Falls back to the
+                // full list when nothing is marked, same as everywhere else.
+                //
+                // This used to read window.configManager, which is defined
+                // nowhere in the app — the global is window.config — so the
+                // list silently resolved to [] and this dropdown had never
+                // shown anything but "Use CardGen active model".
+                const allModels = window.config?.get("api.image.models") || [];
+                const generateModels = getImageModelsWithCapability("generate", window.config);
+                const models = generateModels.length > 0 ? generateModels : allModels;
                 select.innerHTML = '<option value="">\u2014 Use CardGen active model \u2014</option>';
                 models.forEach(m => {
                     const opt = document.createElement('option');

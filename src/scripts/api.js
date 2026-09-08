@@ -266,7 +266,18 @@ class APIHandler {
     const proxyEndpoint = isImageRequest
       ? "/api/image/generations"
       : "/api/text/chat/completions";
-    endpoint = proxyEndpoint;
+    // Callers have always passed upstream-shaped paths ("/chat/completions")
+    // that this method ignored in favour of the proxy route above — keep that.
+    // But a caller naming one of *our own* proxy routes is asking for that
+    // route specifically, and honouring it is what lets combineImages() go
+    // through makeRequest (and so inherit the resumable-job plumbing) instead
+    // of doing its own bare fetch() with no protection against a dropped
+    // mobile connection. Every pre-existing call site passes either an
+    // upstream path or exactly the route it would have been given anyway, so
+    // this changes nothing for them.
+    endpoint = (typeof endpoint === "string" && endpoint.startsWith("/api/"))
+      ? endpoint
+      : proxyEndpoint;
 
     const apiKey = isImageRequest
       ? this.config.get("api.image.apiKey")

@@ -148,15 +148,21 @@ class CharacterStorage {
   // The user's own pile of kept Playground images, not tied to any card. Only
   // metadata comes back over JSON; each image is fetched from its own URL.
 
+  // Throws rather than returning [] on failure. Swallowing the error here meant
+  // a network blip or a server error rendered as "Nothing saved yet" — telling
+  // someone with fifty saved images that their library is empty, with no hint
+  // that anything had gone wrong. The caller decides how to show the failure.
   async listPlaygroundImages() {
-    try {
-      const res = await authFetch(`${this.baseUrl}/api/storage/playground-images`);
-      if (!res.ok) return [];
-      return await res.json();
-    } catch (e) {
-      console.error("Failed to list playground images:", e);
-      return [];
+    const res = await authFetch(`${this.baseUrl}/api/storage/playground-images`);
+    if (!res.ok) {
+      let detail = `server returned ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body?.error) detail = body.error;
+      } catch (_) { /* keep the status-based message */ }
+      throw new Error(detail);
     }
+    return await res.json();
   }
 
   async savePlaygroundImage(imageBase64, { label = "", prompt = "" } = {}) {
@@ -165,7 +171,14 @@ class CharacterStorage {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imageBase64, label, prompt }),
     });
-    if (!res.ok) throw new Error("Failed to save the image to your library");
+    if (!res.ok) {
+      let detail = `server returned ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body?.error) detail = body.error;
+      } catch (_) { /* keep the status-based message */ }
+      throw new Error(detail);
+    }
     return await res.json();
   }
 

@@ -1410,6 +1410,10 @@
                                     <select id="active-image-model" class="input">
                                         <option value="">Default Model</option>
                                     </select>
+                                    <!-- Lists only models marked 🪄 Generate in Settings; the
+                                         hint appears only when nothing is marked and the list
+                                         has fallen back to showing everything. -->
+                                    <p id="active-image-model-hint" style="display: none; font-size: 0.7rem; color: var(--warning); margin: 0.3rem 0 0;"></p>
                                 </div>
                                 </div>
                             </div>
@@ -2318,6 +2322,7 @@
                                 <button type="button" id="pg-tab-generate" class="btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🪄 Generate</button>
                                 <button type="button" id="pg-tab-crop" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✂️ Crop</button>
                                 <button type="button" id="pg-tab-edit" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
+                                <button type="button" id="pg-tab-enhance" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">⬆️ Enhance</button>
                                 <button type="button" id="pg-tab-combine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🔀 Combine</button>
                                 <button type="button" id="pg-tab-library" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="Images you have saved, on the server and available from any device">📚 Library</button>
                             </div>
@@ -2330,11 +2335,23 @@
                                 <label for="playground-generate-model" class="label" style="display:block; margin-bottom:0.35rem;">
                                     Model:
                                 </label>
-                                <select id="playground-generate-model" class="input" style="margin-bottom: 0.75rem;"></select>
+                                <select id="playground-generate-model" class="input" style="margin-bottom: 0.35rem;"></select>
+                                <!-- Only shown when the list couldn't be filtered — i.e. no
+                                     model is marked 🪄 Generate yet, so every model is being
+                                     listed instead of an empty dropdown. -->
+                                <p id="playground-generate-model-hint" style="display: none; font-size: 0.7rem; color: var(--warning); margin: 0 0 0.75rem;"></p>
 
                                 <label for="playground-generate-prompt" class="label" style="display:block; margin-bottom:0.35rem;">
                                     🪄 Describe the image to create:
                                 </label>
+                                <!-- Prompt presets: built-ins plus anything saved, see
+                                     _initPlaygroundPresets in image-playground.js. -->
+                                <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
+                                    <select id="playground-generate-preset" class="input" style="flex: 1 1 12rem; min-width: 0; height: 2.1rem; padding: 0.15rem 0.4rem; font-size: 0.8rem;"></select>
+                                    <button type="button" id="playground-generate-preset-save" class="btn-small" title="Save what is in the box below as a reusable preset">＋ Save</button>
+                                    <button type="button" id="playground-generate-preset-delete" class="btn-small" title="Delete the selected preset" style="display: none;">🗑️</button>
+                                </div>
+
                                 <textarea
                                     id="playground-generate-prompt"
                                     class="input"
@@ -2343,7 +2360,7 @@
                                     placeholder="e.g. a lighthouse on a rocky cliff at sunset, oil painting style | a cyberpunk city street in the rain, neon reflections"
                                 ></textarea>
                                 <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
-                                    💡 Sends just your prompt to the model selected above — no source image involved. Costs API credits per attempt and may take a moment. Add more models via ⚙️ Settings → Image API → Fetch Models. Models flagged ⚠️ look like they expect a source image by name and may ignore a text-only prompt or fail outright — that's a guess from the name, not a guarantee either way.
+                                    💡 Sends just your prompt to the model selected above — no source image involved. Costs API credits per attempt and may take a moment. The list shows only models you've marked 🪄 <strong>Generate</strong> in ⚙️ Settings → Image API → Available Image Models; change what's listed here by ticking boxes there.
                                 </p>
 
                                 <button
@@ -2366,11 +2383,20 @@
                                 <label for="playground-edit-model" class="label" style="display:block; margin-bottom:0.35rem;">
                                     Model:
                                 </label>
-                                <select id="playground-edit-model" class="input" style="margin-bottom: 0.75rem;"></select>
+                                <select id="playground-edit-model" class="input" style="margin-bottom: 0.35rem;"></select>
+                                <p id="playground-edit-model-hint" style="display: none; font-size: 0.7rem; color: var(--warning); margin: 0 0 0.75rem;"></p>
 
                                 <label for="playground-edit-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
                                     ✨ Describe the change:
                                 </label>
+                                <!-- Prompt presets: built-ins plus anything saved, see
+                                     _initPlaygroundPresets in image-playground.js. -->
+                                <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
+                                    <select id="playground-edit-preset" class="input" style="flex: 1 1 12rem; min-width: 0; height: 2.1rem; padding: 0.15rem 0.4rem; font-size: 0.8rem;"></select>
+                                    <button type="button" id="playground-edit-preset-save" class="btn-small" title="Save what is in the box below as a reusable preset">＋ Save</button>
+                                    <button type="button" id="playground-edit-preset-delete" class="btn-small" title="Delete the selected preset" style="display: none;">🗑️</button>
+                                </div>
+
                                 <textarea
                                     id="playground-edit-instruction"
                                     class="input"
@@ -2379,7 +2405,7 @@
                                     placeholder="e.g. change the outfit to a red hoodie, keep the face and pose the same | convert to a realistic photo, same character | remove the background"
                                 ></textarea>
                                 <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
-                                    💡 Sends the image plus your instruction to the model selected above. Costs API credits per attempt and may take a moment. Add more models via ⚙️ Settings → Image API → Fetch Models. Models flagged ⚠️ don't look edit-capable by name (e.g. a plain text-to-image model vs. its "-image-to-image" variant) and may ignore your source image entirely — that's a guess from the name, not a guarantee either way.
+                                    💡 Sends the image plus your instruction to the model selected above. Costs API credits per attempt and may take a moment. The list shows only models you've marked ✨ <strong>Edit</strong> (image-to-image) in ⚙️ Settings → Image API → Available Image Models. This matters: a plain text-to-image model handed a source image doesn't fail, it quietly ignores the image and generates from your words alone — so an unmarked model costs a credit and returns something with no resemblance to your original.
                                 </p>
 
                                 <button
@@ -2417,6 +2443,59 @@
                                         </div>
                                     </div>
                                 </details>
+                            </div>
+
+                            <!-- Upscale / clean up, without changing the content. Driven by
+                                 whichever model is marked ⬆️ Enhance in Settings — see
+                                 apiHandler.upscaleImage, which sends a fixed
+                                 "bigger and sharper, change nothing else" instruction at
+                                 larger requested dimensions. How well that works is entirely
+                                 down to the model, which is why it is a separate mark. -->
+                            <div id="pg-panel-enhance" style="display: none;">
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
+                                    Re-renders the current image larger and sharper, keeping the composition, subject and style as they are. Useful as a finishing step, or before another edit.
+                                </p>
+
+                                <label for="playground-upscale-model" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    Model:
+                                </label>
+                                <select id="playground-upscale-model" class="input" style="margin-bottom: 0.35rem;"></select>
+                                <p id="playground-upscale-model-hint" style="display: none; font-size: 0.7rem; color: var(--warning); margin: 0 0 0.75rem;"></p>
+
+                                <label for="playground-upscale-scale" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    Scale:
+                                </label>
+                                <select id="playground-upscale-scale" class="input" style="margin-bottom: 0.75rem; max-width: 12rem;">
+                                    <option value="1.5">1.5× — gentle</option>
+                                    <option value="2" selected>2× — standard</option>
+                                    <option value="3">3× — large</option>
+                                    <option value="4">4× — maximum</option>
+                                </select>
+
+                                <label for="playground-upscale-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    Extra instruction (optional):
+                                </label>
+                                <textarea
+                                    id="playground-upscale-instruction"
+                                    class="input"
+                                    rows="2"
+                                    maxlength="500"
+                                    placeholder="e.g. pay particular attention to the face and hair | keep the soft painterly texture"
+                                ></textarea>
+                                <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
+                                    💡 Costs API credits per attempt. Results depend heavily on the model — a weaker one will invent new detail rather than recover what was there, so compare against the previous version in the strip above before keeping it. Requested size is capped at 4096px per side.
+                                </p>
+
+                                <button
+                                    type="button"
+                                    id="upscale-playground-image-btn"
+                                    class="btn-primary"
+                                    style="margin-top: 0.75rem;"
+                                    title="Re-render the current image at a higher resolution."
+                                >
+                                    ⬆️ Enhance Image
+                                </button>
+                                <p id="playground-upscale-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
                             </div>
 
                             <!-- Two-image combining — the image above is "Image 1"; upload/paste
@@ -2464,11 +2543,20 @@
                                 <label for="playground-combine-model" class="label" style="display:block; margin: 0.75rem 0 0.35rem;">
                                     Model:
                                 </label>
-                                <select id="playground-combine-model" class="input" style="margin-bottom: 0.75rem;"></select>
+                                <select id="playground-combine-model" class="input" style="margin-bottom: 0.35rem;"></select>
+                                <p id="playground-combine-model-hint" style="display: none; font-size: 0.7rem; color: var(--warning); margin: 0 0 0.75rem;"></p>
 
                                 <label for="playground-combine-instruction" class="label" style="display:block; margin-bottom:0.35rem;">
                                     🔀 Describe how to combine them:
                                 </label>
+                                <!-- Prompt presets: built-ins plus anything saved, see
+                                     _initPlaygroundPresets in image-playground.js. -->
+                                <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
+                                    <select id="playground-combine-preset" class="input" style="flex: 1 1 12rem; min-width: 0; height: 2.1rem; padding: 0.15rem 0.4rem; font-size: 0.8rem;"></select>
+                                    <button type="button" id="playground-combine-preset-save" class="btn-small" title="Save what is in the box below as a reusable preset">＋ Save</button>
+                                    <button type="button" id="playground-combine-preset-delete" class="btn-small" title="Delete the selected preset" style="display: none;">🗑️</button>
+                                </div>
+
                                 <textarea
                                     id="playground-combine-instruction"
                                     class="input"
@@ -2572,26 +2660,26 @@
 
         <script src="src/scripts/auth.js?v=20260515"></script>
         <script src="src/scripts/sanitize.js?v=20260512"></script>
-        <script src="src/scripts/config.js?v=20260825-cleanup"></script>
+        <script src="src/scripts/config.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/wake-lock.js?v=20260804-resilience"></script>
         <script src="src/scripts/resumable-jobs.js?v=20260804-resilience"></script>
-        <script src="src/scripts/api.js?v=20260804-resilience"></script>
+        <script src="src/scripts/api.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/api-character.js?v=20260804-sampling"></script>
         <script src="src/scripts/character-search.js?v=20260526"></script>
-        <script src="src/scripts/api-image.js?v=20260825-cleanup"></script>
+        <script src="src/scripts/api-image.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/api-lorebook.js?v=20260804-sampling"></script>
         <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260218"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
-        <script src="src/scripts/storage.js?v=20260907-imagelibrary"></script> 
+        <script src="src/scripts/storage.js?v=20260908-modelcaps"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
-        <script src="src/scripts/main.js?v=20260905-gallerylock"></script>
+        <script src="src/scripts/main.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-display.js?v=20260907-imagelibrary"></script>
-        <script src="src/scripts/image-handler.js?v=20260907-imagelibrary"></script>
+        <script src="src/scripts/image-handler.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/image-cropper.js?v=20260825-cleanup"></script>
-        <script src="src/scripts/image-playground.js?v=20260907-imagelibrary"></script>
-        <script src="src/scripts/playground-library.js?v=20260907-imagelibrary"></script>
+        <script src="src/scripts/image-playground.js?v=20260908-modelcaps"></script>
+        <script src="src/scripts/playground-library.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
         <script src="src/scripts/library-handler.js?v=20260514"></script>
@@ -2599,15 +2687,15 @@
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
         <script src="src/scripts/rich-element-parser.js"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
-        <script src="src/scripts/batch-generator.js?v=20260518"></script>
+        <script src="src/scripts/batch-generator.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/image-gallery.js?v=20260907-imagelibrary"></script>
         <script src="src/scripts/character-gallery-panel.js?v=20260905-gallerylock"></script>
         <script src="src/scripts/url-import.js?v=20260518"></script>
-        <script src="src/scripts/storywriter.js?v=13"></script>
+        <script src="src/scripts/storywriter.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/adventure-handler.js?v=1"></script>
         <script src="src/scripts/inspire-me.js?v=20260601"></script>
         <script src="src/scripts/gallery-mode.js"></script>
-        <script src="src/scripts/chat-handler.js?v=20260804-topp"></script>
+        <script src="src/scripts/chat-handler.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/chat-settings.js"></script>
         <script src="src/scripts/chat-character-cards.js?v=20260805"></script>
         <script src="src/scripts/home-handler.js?v=20260729-2"></script>
@@ -2750,6 +2838,20 @@
                         <label class="label"
                             >Available Image Models</label
                         >
+                        <!-- The three per-model boxes are what every model dropdown in the
+                             app filters on (see getImageModelCapabilities in config.js).
+                             Providers return bare model ids with no capability field, so
+                             this is the only place the app can learn which model does
+                             which job — and getting it wrong is silent, not an error: a
+                             text-to-image model handed a source image just ignores it. -->
+                        <p style="font-size: 0.72rem; color: var(--text-secondary); margin: 0 0 0.5rem;">
+                            Tick the left box to make a model available in the app, then mark what it can do:
+                            🪄 <strong>Generate</strong> (text-to-image) ·
+                            ✨ <strong>Edit</strong> (image-to-image) ·
+                            🔀 <strong>Combine</strong> (accepts two or more reference images).
+                            The Playground's Generate / Edit / Combine dropdowns each list only the models marked for that job.
+                            Marks start from a guess based on the model's name — 🔀 always starts off, since no naming convention signals it.
+                        </p>
                         <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
                             <button id="fetch-image-models-btn" class="btn-small" type="button">Fetch from API</button>
                             <input type="text" id="image-model-search" class="input" placeholder="Search/Filter..." style="flex: 1; min-width: 150px; height: 2.25rem; padding: 0.25rem 0.5rem; display: none;">
@@ -2779,15 +2881,15 @@
 
                     <div class="form-group">
                         <label for="image-edit-model" class="label"
-                            >Image Edit Model (image-to-image, optional)</label
+                            >Image Edit Model (image-to-image)</label
                         >
-                        <input
-                            type="text"
-                            id="image-edit-model"
-                            class="input"
-                            placeholder="e.g. flux-2-pro-image-to-image, flux-2-max-image-to-image, flux-kontext"
-                        />
-                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">Used by "✨ Edit Image" to modify the current portrait (pose/outfit/style) while keeping the character's likeness. Defaults to flux-2-pro-image-to-image if left blank.</p>
+                        <!-- Was a free-text box; now a dropdown of the models marked ✨ Edit
+                             above. The model list is the single source of truth, and a typo
+                             typed here used to surface only as an opaque API error at edit
+                             time. Add a model that isn't listed via "Available Image
+                             Models" → Add, then tick its ✨ box. -->
+                        <select id="image-edit-model" class="input"></select>
+                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">Used by "✨ Edit Image" to modify the current portrait (pose/outfit/style) while keeping the character's likeness, and by the Character Gallery's image-to-image generation. Lists the models marked ✨ <strong>Edit</strong> above — to add one that isn't here, add it under "Available Image Models" and tick its ✨ box.</p>
                     </div>
 
                     <div class="form-group" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
@@ -2811,6 +2913,21 @@
                                 placeholder="e.g., 20 or 50. Leave blank for default."
                                 min="1"
                                 max="150"
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <!-- Only the account holder can see what a model actually bills,
+                                 so cost is a note rather than something fetched. It shows up
+                                 next to the model in every image dropdown, alongside the
+                                 measured average speed. -->
+                            <label for="image-cost-note" class="label">Cost per image (note, optional)</label>
+                            <input
+                                type="text"
+                                id="image-cost-note"
+                                class="input"
+                                placeholder="e.g. $0.04 — shown next to this model when choosing one"
+                                maxlength="20"
                             />
                         </div>
 

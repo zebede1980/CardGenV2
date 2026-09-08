@@ -370,7 +370,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       loading.style.display = "block";
       if (modalTitle) modalTitle.innerHTML = "🖼️ Choose an Image Option";
 
-      const model = this.config.get("api.image.model") || (this.config.get("api.image.models") || [])[0] || "";
+      const model = this.config.get("api.image.model") || firstImageModelWithCapability("generate", this.config);
       if (!model) {
         loading.style.display = "none";
         this.showNotification("No active image model selected", "warning");
@@ -1323,17 +1323,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         );
 
         container.innerHTML = models
-          .map(
-            (m) => `
-              <div class="image-model-row" style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;">
-                <label style="display:flex;align-items:center;gap:0.5rem;flex:1;cursor:pointer;">
-                  <input type="checkbox" class="image-model-checkbox" value="${escapeHtml(m.id)}" ${currentSelected.has(m.id) ? "checked" : ""}>
-                  ${escapeHtml(m.id)}
-                </label>
-                <button type="button" class="image-model-delete-btn" data-model="${escapeHtml(m.id)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:0 0.25rem;font-size:1rem;line-height:1;">&times;</button>
-              </div>
-          `,
-          )
+          .map((m) => renderImageModelRow(m.id, currentSelected.has(m.id), this.config))
           .join("");
 
         const searchInput = document.getElementById("image-model-search");
@@ -1341,7 +1331,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
         statusEl.textContent = `Found ${models.length} models`;
         statusEl.style.color = "var(--success)";
-        this.updateActiveModelsDropdown();
+        this.refreshImageModelDropdowns();
       } else {
         container.innerHTML =
           '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">No models returned from API.</p>';
@@ -1355,31 +1345,45 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  // Every dropdown whose contents depend on the model list or on the per-model
+  // capability marks. Called after any change to either, so ticking "✨ Edit"
+  // on a model in Settings puts it in the Playground's Edit list immediately
+  // instead of on the next page load.
+  refreshImageModelDropdowns() {
+    this.updateActiveModelsDropdown();
+    populateImageModelSelect(
+      document.getElementById("image-edit-model"),
+      "edit",
+      "api.image.editModel",
+      this.config,
+    );
+    this._updatePlaygroundGenerateModelDropdown?.();
+    this._updatePlaygroundEditModelDropdown?.();
+    this._updatePlaygroundCombineModelDropdown?.();
+  },
+
+  // The Character Generator's portrait model. Filtered to models marked
+  // 🪄 Generate: this is a pure text-to-image call (api-image.js generateImage),
+  // so an image-to-image model picked here doesn't fail — it quietly produces a
+  // portrait that ignores half of what it was asked for. Falls back to listing
+  // everything, flagged, when nothing is marked, same as every other dropdown.
   updateActiveModelsDropdown() {
     const select = document.getElementById("active-image-model");
     if (!select) return;
 
-    const models = this.config.get("api.image.models") || [];
-    const currentModel = this.config.get("api.image.model") || "";
-
-    if (models.length === 0) {
-      select.innerHTML = '<option value="">Default Model</option>';
-      if (currentModel && !models.includes(currentModel)) {
-        select.innerHTML += `<option value="${currentModel}" selected>${currentModel}</option>`;
-      }
-    } else {
-      select.innerHTML = models
-        .map(
-          (model) =>
-            `<option value="${escapeHtml(model)}" ${model === currentModel ? "selected" : ""}>${escapeHtml(model)}</option>`,
-        )
-        .join("");
-
-      if (!models.includes(currentModel) && models.length > 0) {
-        this.config.set("api.image.model", models[0]);
-        select.value = models[0];
-      }
-    }
+    const result = populateImageModelSelect(
+      select,
+      "generate",
+      "api.image.model",
+      this.config,
+      { emptyOptionLabel: "Default Model" },
+    );
+    renderImageModelHint(
+      document.getElementById("active-image-model-hint"),
+      "generate",
+      result,
+      this.config,
+    );
   },
 
   // ── History helpers ────────────────────────────────────────────────────────

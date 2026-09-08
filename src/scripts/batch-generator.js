@@ -308,10 +308,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
 
-          if (this.config.get("api.image.models") && this.config.get("api.image.models").length > 0) {
-            this.config.set("api.image.model", this.config.get("api.image.models")[0]);
+          // First model marked 🪄 Generate, not just the first model in the
+          // list — this is a text-to-image portrait, and an image-to-image
+          // model here produces a portrait with no source image to work from.
+          const defaultImageModel = firstImageModelWithCapability("generate", this.config);
+          if (defaultImageModel) {
+            this.config.set("api.image.model", defaultImageModel);
             const activeImageModelSelect = document.getElementById("active-image-model");
-            if (activeImageModelSelect) activeImageModelSelect.value = this.config.get("api.image.models")[0];
+            if (activeImageModelSelect) activeImageModelSelect.value = defaultImageModel;
           }
           this.config.set("api.image.style", "realistic");
           const styleSelect = document.getElementById("image-style");
