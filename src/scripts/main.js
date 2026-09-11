@@ -1253,11 +1253,14 @@ class CharacterGeneratorApp {
       }
 
       this.showStreamMessage("\n\n💬 Generating example messages...\n");
-      await this.handleGenerateExampleMessages(true);
+      // The player's own words, carried into the follow-up steps so play-style
+      // requirements survive even if the card itself didn't capture them.
+      const brief = generationMode === "search" ? searchScenario : concept;
+      await this.handleGenerateExampleMessages(true, brief);
 
       this.showStreamMessage("✍️ Generating creator's notes...\n");
       try {
-        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter);
+        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter, "", brief);
         if (notes) {
           this.currentCharacter.creatorNotes = notes;
         }
@@ -1267,7 +1270,7 @@ class CharacterGeneratorApp {
 
       this.showStreamMessage("📜 Generating post-history instructions...\n");
       try {
-        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter, "", brief);
         if (postHistory) {
           this.currentCharacter.postHistoryInstructions = postHistory;
         }

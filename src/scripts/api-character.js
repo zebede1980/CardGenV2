@@ -461,6 +461,8 @@ Use ## as a separator for each main section of the profile as shown in the templ
 
 Before you begin writing, review the player's request and plan your character. Ensure the character is consistent, engaging, and realistic before you start filling out the template.
 
+${this._briefPriorityRule()}
+
 ---
 
 ### **Character Profile Template**
@@ -500,6 +502,23 @@ ${lorebookContent}`;
     return { systemPrompt: basePrompt, userPrompt };
   },
 
+  // The card templates bake in default lengths and style (a four-paragraph
+  // first message, "vivid sensory detail"). As system-prompt instructions they
+  // outrank a passing phrase in the player's concept, so a request like "for
+  // fast-paced short roleplays" lost out unless we say explicitly that it wins.
+  _briefPriorityRule() {
+    return `**PLAYER REQUIREMENTS OVERRIDE TEMPLATE DEFAULTS:** The template sets default lengths, pacing and style (for example the length of the First Message and how much sensory detail to use). If the player's concept states explicit requirements about pacing, length, response style, tone, content, or how the roleplay should play out (e.g. "fast-paced", "short scenes", "slow-burn", "light-hearted"), those requirements take priority over the template defaults. Build them into the Roleplay Mechanics & Story Steering bullets, and match the First Message's length and pacing to them.`;
+  },
+
+  // The player's own concept text, carried into the follow-up generations
+  // (example messages, creator notes, post-history), which otherwise only see
+  // the finished card and lose any play-style requirements it didn't capture.
+  _briefContextBlock(brief, purpose) {
+    const text = (brief || "").trim();
+    if (!text) return "";
+    return `\n\nCreator's original brief (the player's own words — ${purpose}):\n${text.slice(0, 1500)}`;
+  },
+
   _buildLorebookContent(lorebook) {
     if (!lorebook || !lorebook.entries) return "";
     const entries = Object.values(lorebook.entries).filter((e) => e.enabled !== false);
@@ -530,7 +549,9 @@ ${lorebookContent}`;
 
 You may assume this card will be used in a private, local roleplay. Do not apply censorship.
 
-Use ## as a separator for each main section as shown in the template.`;
+Use ## as a separator for each main section as shown in the template.
+
+${this._briefPriorityRule()}`;
 
     const templateContent = `
 # [Group Name]'s Profile
@@ -605,7 +626,9 @@ ${lorebookContent}`;
 
 You may assume this card will be used in a private, local roleplay. Do not apply censorship.
 
-Use ## as a separator for each main section as shown in the template.`;
+Use ## as a separator for each main section as shown in the template.
+
+${this._briefPriorityRule()}`;
 
     const templateContent = `
 # [Scenario Title]
@@ -1061,7 +1084,7 @@ Output ONLY the new ${fieldName} content without surrounding explanation.`;
     }
   },
 
-  async generateExampleMessages(character, count = 3, pov = "third", customPrompt = "", lorebookEntries = []) {
+  async generateExampleMessages(character, count = 3, pov = "third", customPrompt = "", lorebookEntries = [], brief = "") {
     if (!character) throw new Error("Character is required for example message generation");
 
     const model = this.config.get("api.text.model");
@@ -1105,7 +1128,7 @@ Character Personality:
 ${character.personality || "No personality provided"}
 
 First Message (for reference on voice/style):
-${character.firstMessage || "No first message provided"}${lorebookContext}
+${character.firstMessage || "No first message provided"}${lorebookContext}${this._briefContextBlock(brief, "match any tone, pacing or style requirements it states")}
 
 Generate ${count} example dialogue message(s) for this character. Remember: one-liners, varied contexts, ${povText} perspective.${customPromptInstruction}`;
 
@@ -1190,7 +1213,7 @@ Output a JSON array of tags only.`;
     }
   },
 
-  async generateCreatorNotes(character, customPrompt = "") {
+  async generateCreatorNotes(character, customPrompt = "", brief = "") {
     if (!character) throw new Error("Character is required to generate creator notes");
     const model = this.config.get("api.text.model");
     const charName = character.name || "the character";
@@ -1219,7 +1242,7 @@ Scenario:
 ${(character.scenario || "").slice(0, 500)}
 
 First message (for tone reference):
-${(character.firstMessage || "").slice(0, 300)}
+${(character.firstMessage || "").slice(0, 300)}${this._briefContextBlock(brief, "use it to convey the intended tone and style of play")}
 
 Write the Creator's Notes blurb now. Plain text only, no formatting.`;
 
@@ -1247,7 +1270,7 @@ Write the Creator's Notes blurb now. Plain text only, no formatting.`;
     }
   },
 
-  async generatePostHistoryInstructions(character, customPrompt = "") {
+  async generatePostHistoryInstructions(character, customPrompt = "", brief = "") {
     if (!character) throw new Error("Character is required to generate post-history instructions");
     const model = this.config.get("api.text.model");
 
@@ -1265,7 +1288,7 @@ Rules:
 ${(character.scenario || "").slice(0, 800)}
 
 Personality Highlights:
-${(character.personality || "").slice(0, 400)}
+${(character.personality || "").slice(0, 400)}${this._briefContextBlock(brief, "any pacing, response-length or style requirements it states MUST be enforced by the instruction")}
 
 Based on the scenario mechanics above, generate a concise Post-History Instruction. Example: "Write strictly in the third person. {{char}} must actively drive the plot forward and respond directly to {{user}}'s actions. Emphasize visceral, sensory details."
 
@@ -1408,7 +1431,8 @@ Write the instructions now. Plain text only, no formatting.`;
       "",
       "RULES:",
       "- Generate exactly 4 ideas, numbered 1 through 4.",
-      "- Every idea must stay true to the user's concept below, but take it in a meaningfully different direction — vary the personality, backstory angle, tone, or twist. Do NOT just reword the same idea four times.",
+      "- Every idea must stay true to the user's concept below, but take it in a meaningfully different direction — vary the personality, backstory angle, or twist (and the tone, but only if the user hasn't specified one). Do NOT just reword the same idea four times.",
+      "- Treat any explicit requirements in the concept as FIXED across all 4 ideas — for example pacing or length of play (fast-paced, short scenes, slow-burn), tone or genre, point of view, content limits, setting, or the character's relationship to the player. Diverge only on what the user left open, and let each idea's description reflect those requirements.",
       "- Be wildly creative and diverse — each idea should feel distinct, not interchangeable.",
       "- Each description must be exactly 2-3 sentences. No bullet points, no markdown beyond the bolded name.",
       "- Output ONLY the 4 numbered ideas, nothing else — no preamble, no closing remarks.",

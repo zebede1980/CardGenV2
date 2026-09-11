@@ -147,7 +147,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const memo = document.getElementById("inspire-memo")?.value?.trim() || "";
 
     // Build the effective concept from chosen idea + memo
-    const effectiveConcept = `${chosenIdea.name}: ${chosenIdea.description}${memo ? `\n\nAdditional guidance: ${memo}` : ""}`;
+    const effectiveConcept = `${chosenIdea.name}: ${chosenIdea.description}${memo ? `\n\nPLAYER'S REQUIREMENTS (authoritative — honour these, including any pacing, length, tone or style requirements):\n${memo}` : ""}`;
     const characterName = document.getElementById("character-name").value.trim();
     const pov = document.getElementById("pov-select").value;
     const cardType = document.getElementById("card-type-select")?.value || "single";
@@ -214,11 +214,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       this.showStreamMessage("\n\n💬 Generating example messages...\n");
-      await this.handleGenerateExampleMessages(true);
+      await this.handleGenerateExampleMessages(true, memo);
 
       this.showStreamMessage("✍️ Generating creator's notes...\n");
       try {
-        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter);
+        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter, "", memo);
         if (notes) { this.currentCharacter.creatorNotes = notes; }
       } catch (notesError) {
         console.warn("Creator notes generation failed (non-fatal):", notesError);
@@ -226,7 +226,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       this.showStreamMessage("📜 Generating post-history instructions...\n");
       try {
-        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter, "", memo);
         if (postHistory) { this.currentCharacter.postHistoryInstructions = postHistory; }
       } catch (phError) {
         console.warn("Post-History Instructions generation failed (non-fatal):", phError);

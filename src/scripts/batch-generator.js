@@ -198,8 +198,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const pov = document.getElementById("pov-select").value;
     const cardType = document.getElementById("card-type-select")?.value || "single";
 
+    // The picked idea is short and concrete, so the model anchors on it; the
+    // player's brief must be marked as the authority or requirements in it
+    // (pacing, length, style) get dropped in favour of the idea.
     let effectiveConcept = concept
-      ? `${concept}\n\nSpecific direction to take: ${idea.name} — ${idea.description}`
+      ? `\n\nPLAYER'S BRIEF (authoritative — honour every requirement in it, including any pacing, length, tone or style requirements):\n${concept}\n\nCHOSEN DIRECTION (use this to shape the character's identity and story; where it conflicts with the brief, the brief wins):\n${idea.name} — ${idea.description}`
       : `${idea.name}: ${idea.description}`;
     if (referenceImageDescription) {
       effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
@@ -268,11 +271,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       this.showStreamMessage("\n\n💬 Generating example messages...\n");
-      await this.handleGenerateExampleMessages(true);
+      await this.handleGenerateExampleMessages(true, concept);
 
       this.showStreamMessage("✍️ Generating creator's notes...\n");
       try {
-        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter);
+        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter, "", concept);
         if (notes) { this.currentCharacter.creatorNotes = notes; }
       } catch (notesError) {
         console.warn("Creator notes generation failed (non-fatal):", notesError);
@@ -280,7 +283,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       this.showStreamMessage("📜 Generating post-history instructions...\n");
       try {
-        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter);
+        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter, "", concept);
         if (postHistory) { this.currentCharacter.postHistoryInstructions = postHistory; }
       } catch (phError) {
         console.warn("Post-History Instructions generation failed (non-fatal):", phError);

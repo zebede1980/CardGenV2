@@ -455,7 +455,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
-  async handleGenerateExampleMessages(skipDiff = false) {
+  async handleGenerateExampleMessages(skipDiff = false, brief = "") {
     if (!this.currentCharacter) return;
 
     const count = parseInt(
@@ -482,6 +482,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         pov,
         customPrompt,
         this.lorebookEntries,
+        brief,
       );
 
       const revised = JSON.parse(JSON.stringify(this.currentCharacter));
