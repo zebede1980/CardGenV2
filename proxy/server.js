@@ -1085,8 +1085,8 @@ app.post("/api/storage/cards/:id/gallery", requireAuth, async (req, res) => {
     const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
     if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
     await Promise.all([
-      fsPromises.writeFile(path.join(imgDir, `${cardId}_gallery_${row.id}.img`), Buffer.from(match[2], "base64")),
-      fsPromises.writeFile(path.join(imgDir, `${cardId}_gallery_${row.id}.mime`), match[1]),
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_gallery_${row.id}.img`), Buffer.from(parsed.base64, "base64")),
+      fsPromises.writeFile(path.join(imgDir, `${cardId}_gallery_${row.id}.mime`), parsed.mime),
     ]);
 
     res.json({ id: row.id, order: row.order_index, url: `/api/storage/cards/${cardId}/gallery/${row.id}/image` });
