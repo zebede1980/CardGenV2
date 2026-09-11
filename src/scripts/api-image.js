@@ -890,12 +890,26 @@ BEGIN PROMPT:`;
         },
       ],
       temperature: 0.3,
-      max_tokens: 500,
+      // Vision models that think first (Gemini Flash) spend part of the budget
+      // on reasoning before writing anything; at 500 a longer think used it all
+      // up, so roughly one analysis in three came back cut off or empty.
+      max_tokens: 2048,
       stream: false,
     };
 
     const response = await this.makeRequest("/chat/completions", data, false, false);
-    return this.processNormalResponse(response).trim();
+    return this._visionTextOrThrow(response, "Image analysis");
+  },
+
+  // A cut-off vision reply is either empty or half a sentence (or, via the
+  // reasoning_content fallback, the model's thinking) — none of which should
+  // land in a description field as if it were a result.
+  _visionTextOrThrow(response, label) {
+    const text = (this.processNormalResponse(response) || "").trim();
+    if (this.lastFinishReason === "length" || !text) {
+      throw new Error(`${label} was cut off before the model finished — please try again.`);
+    }
+    return text;
   },
 
   async extractStyleFromImage(imageDataUrl) {
@@ -920,12 +934,12 @@ BEGIN PROMPT:`;
         },
       ],
       temperature: 0.3,
-      max_tokens: 200,
+      max_tokens: 2048,
       stream: false,
     };
 
     const response = await this.makeRequest("/api/text/chat/completions", data, false, false);
-    return this.processNormalResponse(response).trim();
+    return this._visionTextOrThrow(response, "Style extraction");
   },
 
   // Local image generation via WebUI Forge — called directly from the browser,
