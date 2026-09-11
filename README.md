@@ -2,7 +2,7 @@
 
 <img width="1374" height="1104" alt="image" src="https://github.com/user-attachments/assets/dabf24ec-7b8b-459a-9cc9-63e122569f76" />
 
-A self-hosted workspace for generating, editing, and exporting SillyTavern character cards (Spec V2 `.png` / `.json`) — and for actually *using* them: a multi-character Roleplay Chat with memory and mobile-safe generation, a chapter-by-chapter Story Writer with narrated TTS, and a choice-driven Adventure mode.
+A self-hosted workspace for generating, editing, and exporting SillyTavern character cards (Spec V2 `.png` / `.json`) — and for actually *using* them: a multi-character Roleplay Chat with memory and mobile-safe generation, a chapter-by-chapter Story Writer with narrated TTS, and a choice-driven Adventure mode. An Image Playground and per-character image galleries round it out for everything image-related.
 
 Cards are designed as **concise AI-guidance** — clear behavioural direction and character description that an AI can use to portray the character, not prose fiction. The generation prompts, revision tools, and card-quality tools all enforce this principle.
 
@@ -24,6 +24,8 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - [Usage](#usage)
   - [Classic Mode](#classic-mode)
   - [Web Search Mode](#web-search-mode)
+  - [Inspire Me Mode](#inspire-me-mode)
+  - [Image Playground Workflow](#image-playground-workflow)
   - [Roleplay Chat Workflow](#roleplay-chat-workflow)
   - [Adventure Mode Workflow](#adventure-mode-workflow)
   - [SillyTavern Bridge Workflow](#sillytavern-bridge-workflow)
@@ -42,6 +44,10 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Generate a full character card from a free-text concept description.
 - **Card Type**: Single Character, Group/Party, or Scenario/Location.
 - Optional fixed character name, or let the AI generate one grounded in the character's background and time period.
+- **🎲 Name Generator** — pick gender, character type, time period and optional guidance, then choose from 10 culturally varied suggestions. Recently used names and cultural styles are remembered (shared with auto-naming) so the same names don't keep coming back.
+- **💡 Inspire Me** — a third generation mode alongside Classic and Web Search: set Gender, Orientation, Content Rating, Genre/Setting and optional Theme/Trope/Guidance filters, get 4 idea sparks, and generate a full card from the one you pick.
+- **Your concept is authoritative** — explicit requirements written into the concept (e.g. "for fast-paced short roleplays") override the card template's defaults and are carried through every follow-up step (example messages, creator notes, post-history instructions), not just the first pass.
+- **🆕 Clear / New** — on the Character Generation Inputs header (visible even when that section is collapsed); fully resets the screen to start a fresh character.
 - **First-person** (`I am...`) or **third-person** (`She is...`) POV templates.
 - Optional lorebook (SillyTavern World Info JSON) uploaded as grounding context at generation time.
 - Optional reference image upload — auto-described by a vision model if configured, or manually entered as text.
@@ -67,10 +73,10 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - **🌐 Import from URL** — paste a JannyAI (jannyai.com) character page URL to scrape and convert to Spec V2.
 
 ### Batch Generation
-- Click **🎲 Generate 4** to create four character variants from one concept in parallel.
-- Results are displayed in a side-by-side comparison grid.
-- Click **⭐ Pick This** on any variant to load it into the editor.
-- The first variant streams live; the other three generate silently in the background.
+- Click **🎲 Generate 4** (Classic mode only) to brainstorm four deliberately different directions for your concept in a single quick AI call.
+- Each idea is shown as a full paragraph in a comparison grid, so you can read enough to choose.
+- Pick one and a single full character generation runs for that idea — the same pipeline as **Generate 1**, so it streams, can be stopped, and survives a dropped mobile connection.
+- Explicit requirements in your concept stay fixed across all four ideas; only the creative direction varies.
 
 ### AI Revision Tools
 - **Revise Card with AI** — apply a free-text instruction to rewrite the whole card (e.g. "make her more guarded and less verbose").
@@ -109,22 +115,50 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - **Style Preset** (12 options: Realistic/Photography, Cinematic, Digital Art, Anime, 2.5D Realistic Anime, 3D Render, Fantasy Art, Sci-Fi, Comic Book, Oil Painting, Watercolor, or a Custom Style — including extracting a style from a reference image you upload).
 - **Mood/Vibe** preset (13 options — Bright & Cheerful, Dark & Gothic, Romantic & Soft, Mysterious & Eerie, Epic & Heroic, Neon Cyberpunk, and more).
 - **Aspect Ratio** selector (1:1, 9:16, 16:9, 3:4, 4:3).
-- **Generate 4 (Models)** — one image per saved model, for a side-by-side style comparison.
-- **Generate 4 (Prompts)** — four prompt variations from the active model.
+- **🖼️ Gen 4 (Prompts)** — four images from the active model using slight prompt variations.
+- **Image Model** dropdown lists only models marked as text-to-image capable (see [Image model capabilities](#image-model-capabilities)).
 - Per-model tuning (Steps, CFG Scale, Prompt Length preference, "Is Flux Model") saved independently for each model you've added.
 - **Free image generation via Pollinations.ai** — no API key required.
 - **🔧 Local WebUI Forge** — generate locally against your own Forge/Automatic1111-compatible instance instead of a cloud API (browser connects directly, so it works even though the proxy itself can't reach a private/LAN Forge host).
 
 **Editing an existing image**
 - **✨ Edit Current Image** (collapsed by default) — send the current portrait plus a plain-language instruction (change outfit, change pose, convert anime → photoreal, etc.) to an **image-to-image** model, aiming to keep the character's likeness while changing what you ask for.
-  - Model is configurable in Settings → Image API → **Image Edit Model** (defaults to `flux-2-pro-image-to-image`; try `flux-2-max-image-to-image` or `flux-kontext` too — nano-gpt-style aggregators expose more of these than show up in a plain model list).
+  - Model is chosen in Settings → Image API → **Image Edit Model**, a dropdown of your ✨ Edit-capable models (defaults to `flux-2-pro-image-to-image`; try `flux-2-max-image-to-image` or `flux-kontext` too — nano-gpt-style aggregators expose more of these than show up in a plain model list).
   - **Use Local Forge (flux-1-dev) instead of cloud** checkbox routes the same edit through your local Forge install with an adjustable **Denoising Strength**, for free local experimentation. Note: a base checkpoint like Flux-1-dev isn't a dedicated edit model — in testing it barely followed clothing/pose instructions and lost facial likeness at higher denoising, so treat it as a sandbox, not a substitute for a real edit model.
   - Some cloud edit models silently return a solid-black image instead of an error when their safety filter rejects the source — the app detects this and surfaces a real error message instead of showing you a blank picture.
 - **✂️ Crop** — crop, rotate, and flip, with aspect-ratio presets (Free, 1:1, 3:4, 9:16, 4:3).
 - **📁 Upload** your own image, **📋 Paste** one from the clipboard, or **🌐 Search Web** for one to use as the portrait.
-- **Image History** — browse and restore previously generated images for the current card.
-- **Image Gallery / Lightbox** — click any generated image to view full-screen with zoom and previous/next navigation.
+- **Image History** — browse and restore previously generated images for the current card, or **Move to Gallery** to keep an old version as a gallery extra.
+- **Lightbox** — click any generated image to view full-screen with zoom and previous/next navigation.
+- Reference images can be cropped or edited before generating, and are auto-described by the vision model; a cut-off or empty vision reply is reported as an error rather than written into the description.
+- Image generation and editing are resumable — see [Mobile Reliability](#mobile-reliability).
 - CORS-bypass proxy routes all image requests through the backend to avoid browser restrictions.
+
+**Character Gallery** (saved cards only)
+- A set of extra images linked to each card, stored alongside it without touching the single SillyTavern-compatible portrait.
+- **Generate** runs image-to-image from the card's current portrait, so additions look like the same character. Choose a Count of 1, 2 or 4 — each image gets its own instruction box, so one run can produce four different poses or scenes.
+- Candidates can be opened full-size in the lightbox before you **Add** or **Discard** them.
+- **Upload** or paste an image straight into the gallery.
+- The **⭐** button on a thumbnail (Set as main portrait) swaps that gallery image into the portrait slot and moves the old portrait into the gallery, so nothing is lost.
+- On an unsaved card the gallery explains why it's locked and offers an inline **Save to Library** button.
+- Gallery images are browsable from Roleplay Chat (avatar clicks and the card viewer).
+
+<a id="image-model-capabilities"></a>**Image model capabilities**
+- Image providers don't say what each model can do, and the wrong kind fails silently (a text-to-image model handed a source image just ignores it). In Settings → Image API, each model has checkboxes for **🪄 Generate / ✨ Edit / 🔀 Combine / ⬆️ Enhance**.
+- Every image-model dropdown in the app (Character Generator, Edit, Gallery, Story Writer, Roleplay scene images, all Playground tools) lists only models marked for that job.
+- Unmarked models fall back to a name-based guess, and if nothing is marked for a job the dropdown shows every model flagged ⚠️ rather than going empty — so existing setups keep working before you tick anything.
+
+### 🖼️ Image Playground
+A standalone image workspace with no card involved. Tools are tabs under the working image:
+- **🪄 Generate** — text-to-image from a prompt alone (the default tab); the result becomes the working image.
+- **✂️ Crop** — crop, rotate and flip.
+- **✨ Edit** — prompt-based image-to-image edit, cloud or Local Forge.
+- **⬆️ Enhance** — re-render at 1.5×, 2×, 3× or 4×; quality depends heavily on the model.
+- **🔀 Combine** — merge the working image with a second image from an instruction (e.g. "put the outfit from Image 2 on the character in Image 1").
+- **📚 Library** — images saved to your account on the server, so an image made on your phone shows up on your desktop. View, download, delete, reopen as the working image, or **turn one into a new character** (clears the Character Generator, sets it as the reference image and starts the vision description).
+- Every version is kept in a non-destructive history strip (capped at 15, always keeping the original). Each entry records its tool, model and prompt, and ↻ puts those settings back without re-running.
+- Built-in and custom prompt presets per tool, and per-model speed (measured from your own runs) plus a cost note shown in each model dropdown.
+- Each tool has its own model dropdown, filtered by capability.
 
 ### Story Writer & TTS Narration
 - A dedicated workspace to write continuous stories with your generated characters.
@@ -134,9 +168,10 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - Sticky mobile toolbar for jumping between story segments without losing your place while scrolling a long story.
 - **Text-to-Speech (TTS) Narration**: read story segments aloud seamlessly, with pause/resume, skip, stop, and a playback-speed slider.
 - **Script Mode**: writes in `Name: Dialogue` screenplay format and assigns a distinct TTS voice per character (with a separate "Narrator" voice for non-dialogue text).
+- **Cached speaker attribution**: who-says-what is worked out in the background after each segment is generated and stored with it, so Play starts immediately and replays cost no tokens. Editing a segment clears its cache. If attribution genuinely fails, the narration status says so instead of silently using one voice.
 - **Auto Mode**: pipelined background generation automatically requests and narrates the next chunk for hands-free listening (auto-disables if TTS is off).
 - **Multiple TTS Providers**:
-  - **Local Kokoro-82M TTS**: runs entirely locally via an optional Docker container (free, private, high quality).
+  - **Local Kokoro-82M TTS**: runs entirely locally via an optional Docker container (free, private, high quality). The voice list comes from the Kokoro server itself, grouped by language with readable names (e.g. "Bella · Female · American English"), older v0 voices marked as legacy, and blended voices supported.
   - **Google Cloud TTS**: Standard and Premium (Neural2 / WaveNet) voices via a Google API key.
   - **nano-gpt.com**: cloud voices including ElevenLabs-quality models, billed through your nano-gpt.com key.
 - **Mobile/iOS Native Support**: integrates with the HTML5 Media Session API for uninterrupted background audio and lock-screen controls (Pause, Skip, Stop).
@@ -146,15 +181,17 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 - **Immersive Multi-Character Sessions**: create chat sessions containing one or multiple characters simultaneously.
 - **Dialogue Auto-Routing**: in group chats, the AI automatically routes responses to the most appropriate character based on the conversation context, or you can manually select the next speaker using the dropdown.
 - **Dynamic Context Window Management**:
-  - **Auto-Summarization**: older chat history is periodically compiled in the background into a running "Story Summary" to conserve context space and prevent memory drift.
-  - **Auto-Fact Extraction (Memory Book)**: an AI background task scans history every 10 messages to maintain a checklist of permanent facts (items gained/lost, locations, relationship shifts), injecting them into future turns.
+  - **Auto-Summarization**: older chat history is compiled in the background into a running "Story Summary" once it actually approaches the chat's configured input-token budget — so a large-context model keeps full-fidelity history much longer than a small one.
+  - **Auto-Fact Extraction (Memory Book)**: an AI background task scans history every 6 messages to maintain a checklist of facts (items gained/lost, locations, relationship shifts, and current worn/held/physical state), injecting them into future turns so things like removed clothing don't snap back to the card's defaults.
+- **Dialogue vs. private thought**: quoted speech is treated as heard by other characters; unquoted narration of a character's true feelings or hidden intent is not, so characters don't react to things they couldn't have perceived.
 - **User Personas**: roleplay using a custom text-based persona, or pick an existing character card from your library to represent yourself.
 - **Steering & Impersonation**:
   - **OOC Notes**: inline Out-of-Character director notes let you guide character actions, tone, or scene progression.
   - **Impersonate Mode**: have the AI write a draft response for you, which streams directly into your input area for editing before sending.
 - **Writing Style presets** — 12 tone presets (Rich & Descriptive, Fast-Paced & Action-Oriented, Dark & Gritty, Witty & Sarcastic, Gothic & Foreboding, Cyberpunk & Tech-Grime, Sensual & Erotic, and more), set at chat creation and changeable later in chat settings.
+- **Response Length preset** — Short (1–2 paragraphs), Medium (3–5), Long (6–8) or Default (no limit). A soft instruction rather than a hard token cap, so replies come out shorter instead of being cut off mid-sentence. New chats default to Medium.
 - **Chain-of-Thought reasoning** — the model plans each reply in five hidden steps (setting, character knowledge, intent, draft, self-correction) before writing the visible reply, for more consistent in-character responses. Toggleable per-chat in ⚙️ Global Settings ("Enable Chain of Thought") — on by default. A "Filter out Chinese/Korean characters" option is also available there as a workaround for certain models' language bleed.
-- **Character card viewer** — a quick-reference modal (📇 icon) showing every linked character's avatar, description, personality, scenario, first message, and tags without leaving the chat.
+- **Character card viewer** — a quick-reference modal (📇 icon) showing every linked character's avatar, description, personality, scenario, first message, and tags without leaving the chat. Clicking a character's avatar (here or in the timeline) opens their Character Gallery.
 - **Faded background portrait** — the active chat's character portrait renders as a subtle, theme-matched backdrop behind the message timeline (first character's portrait in group chats).
 - **Inline Scene Image Generation**: generate visual scene illustrations directly in the chat. The system analyzes recent context and character cards to create prompts and displays generated images inline.
 - **Rich UI Component Rendering**: supports interactive graphical elements rendered beautifully in the timeline:
@@ -382,8 +419,8 @@ All settings are saved server-side to `proxy/data/config.json` via `POST /api/co
 |---|---|
 | Image API Base URL | OpenAI-compatible images endpoint root. Leave blank to use the free Pollinations.ai tier |
 | Image API Key | Optional; required if your image provider needs authentication |
-| Image Models | Multi-select checklist — tick one or more models. All ticked models are used when you click **Generate 4 (Models)** |
-| Image Edit Model | Model used by **✨ Edit Current Image** (image-to-image editing). Defaults to `flux-2-pro-image-to-image` if left blank; also try `flux-2-max-image-to-image` or `flux-kontext` |
+| Image Models | The models available to the app — **Fetch from API** or add manually. Each row has **🪄 Generate / ✨ Edit / 🔀 Combine / ⬆️ Enhance** checkboxes that decide which dropdowns it appears in (see [Image model capabilities](#image-model-capabilities)) |
+| Image Edit Model | Dropdown of ✨ Edit-capable models, used by **✨ Edit Current Image** and Character Gallery Generate. Defaults to `flux-2-pro-image-to-image` if left blank; also try `flux-2-max-image-to-image` or `flux-kontext` |
 | Image Size | e.g. `1024x1024`, `768x1024` — used as a fallback when Aspect Ratio isn't set |
 | Image Style / Mood | Optional preset hints forwarded to the image prompt (see [Image Handling](#image-handling)) |
 | Enable Image Generation | Toggle to show/hide all image controls |
@@ -408,6 +445,7 @@ Configured directly within the **⚙️ Generation Settings** panel in the Story
 | Enable Chain of Thought | Model plans each reply in 5 hidden steps before writing the visible response. On by default; toggle in ⚙️ Global Settings (Roleplay Chat) or the Adventure global settings modal |
 | Filter CJK characters | Workaround checkbox for some models bleeding Chinese/Korean characters into English output |
 | Writing Style | 12 tone presets, set at creation and changeable later per chat |
+| Response Length | Roleplay Chat only — Short / Medium / Long / Default (no limit); new chats default to Medium |
 | Modular System Prompts | Drag-and-drop, editable prompt segments combined into the system prompt for new sessions |
 
 #### SillyTavern Bridge
@@ -447,18 +485,18 @@ The **🔍 Search Web for Details** feature uses the Brave Search API to look up
 
 ### Choosing a Mode
 
-Use the **⏺ Classic Mode / 🔍 Web Search Mode** radio buttons at the top of the Character Generation Inputs section to switch between two workflows.
+Use the **⏺ Classic Mode / 🔍 Web Search Mode / 💡 Inspire Me** radio buttons at the top of the Character Generation Inputs section to switch between three workflows. **🆕 Clear / New** on the same header resets everything for a fresh character.
 
 ### Classic Mode
 
 1. Open **API Settings** (gear icon) and configure your text API endpoint, key, and model.
 2. Enter a **Character Concept** in the text box. Be as detailed or as brief as you like.
-3. Optionally set a **Character Name** (or leave blank for the AI to generate one).
+3. Optionally set a **Character Name**, pick one from the **🎲 Name Generator**, or leave it blank for the AI to generate one.
 4. Choose **Card Type** (Single Character, Group/Party, or Scenario/Location) and **POV** (first- or third-person).
 5. Optionally upload a **Lorebook JSON** (World Info) as grounding context for generation.
 6. Optionally upload a **Reference Image** — it will be auto-described if a vision model is set.
 7. Click **✨ Generate 1** and watch the card stream in. Click **⏹ Stop** at any time to halt generation.
-8. Or click **🎲 Generate 4** to create four variants and pick your favourite from the comparison grid.
+8. Or click **🎲 Generate 4** to brainstorm four different directions, then pick one to generate in full.
 9. Edit any field directly in the text areas. Use **Redo** to regenerate a single section with optional instruction, or **Reset** to revert to the last generated/imported baseline.
 10. Use the **Revision Tools** to refine the card:
     - **Reduce Bloat** to move lore to the lorebook and strip prose padding.
@@ -468,9 +506,10 @@ Use the **⏺ Classic Mode / 🔍 Web Search Mode** radio buttons at the top of 
 11. Open the **Lorebook Manager** to add world-building entries, or let the AI suggest and generate them.
 12. Open **Alternate Greetings** to add alternative opening scenes.
 13. Generate **Example Messages** — they are embedded in the exported card automatically.
-14. Open the **Image** panel to draft a prompt, pick a Style/Mood/Aspect Ratio, and generate a portrait — or crop, in-fill, or image-edit an existing one.
-15. Optionally click **Snapshot to History** to save the current state as a named checkpoint.
-16. Click **Download Character Card (PNG)** to export, or use **Download as JSON** if you don't need an image.
+14. Open the **Image** panel to draft a prompt, pick a Style/Mood/Aspect Ratio, and generate a portrait — or crop or image-edit an existing one.
+15. Once the card is saved, add extra images to its **Character Gallery** (generated from the portrait, uploaded, or pasted).
+16. Optionally click **Snapshot to History** to save the current state as a named checkpoint.
+17. Click **Download Character Card (PNG)** to export, or use **Download as JSON** if you don't need an image.
 
 ### Web Search Mode
 
@@ -484,6 +523,23 @@ Use this when you want an accurate card based on a real person or an established
 6. The app runs 5 targeted Brave Search queries for biography, personality, physical appearance, and encyclopedia/fandom data.
 7. Search results are injected into the LLM prompt as verified ground truth, while your scenario sets the roleplay context.
 8. If the search fails or returns nothing, the app silently falls back to normal LLM-only generation using your scenario as a concept.
+
+### Inspire Me Mode
+
+Use this when you don't have a concept yet:
+
+1. Select **💡 Inspire Me** at the top of the inputs section.
+2. Set **Gender**, **Sexual Orientation**, **Content Rating**, and **Genre / Setting**, plus optional **Theme / Concept**, **Trope / Archetype**, and **Extra Guidance**.
+3. Click **✨ Generate 1** — the AI proposes 4 idea sparks in a picker.
+4. Choose one and the full card is generated from it.
+
+### Image Playground Workflow
+
+1. Click the **🖼️ Playground** tab.
+2. Start from nothing on the **🪄 Generate** tab, or upload/paste an image into the drop zone.
+3. Switch between **Crop / Edit / Enhance / Combine** — each result becomes the new working image and is added to the history strip, so you can always step back.
+4. Click **💾** (on the working image or a history thumbnail) to save to your server-side **📚 Library**.
+5. From the Library, reopen an image to keep working on it, or turn it into a new character.
 
 ### Roleplay Chat Workflow
 
@@ -551,7 +607,7 @@ The **Reduce Bloat** and **Scan for Lorebook Content** tools help you bring impo
 
 ## Mobile Reliability
 
-Roleplay Chat, Story Writer, and Adventure Mode are all built to survive the realities of using this on a phone: the screen locking mid-reply, the browser backgrounding or discarding the tab under memory pressure, or a flaky connection dropping the stream.
+Roleplay Chat, Story Writer, Adventure Mode, and image generation/editing (including the Playground's Combine) are all built to survive the realities of using this on a phone: the screen locking mid-reply, the browser backgrounding or discarding the tab under memory pressure, or a flaky connection dropping the stream.
 
 - **Screen Wake Lock**: while a generation is running, the app requests a reference-counted Screen Wake Lock to keep the screen on, releasing it automatically when generation finishes (with a 20-minute safety cutoff so it never pins the screen on indefinitely).
 - **Server-side job registry**: the proxy keeps generating and buffering output even if the client disconnects — a dropped socket no longer aborts the request. When the app reconnects (tab refocused, page reloaded, or even after the tab was fully discarded and relaunched), it resumes streaming from where it left off instead of starting over or losing the output. Tunable via the `JOB_*` environment variables (see [Environment Variables](#environment-variables)).
@@ -601,7 +657,8 @@ Then ensure the `app-network` entry is listed under both the `frontend` and `pro
 | `./proxy/data/config.json` | API keys, model names, and all in-app settings (auto-created, per user) |
 | `./proxy/data/cards.json` | Saved card library (auto-created, per user) |
 | `./proxy/data/prompts.json` | Saved prompt library (auto-created, per user) |
-| `./proxy/data/*/card-images/` | Uploaded/generated card portrait images (per user) |
+| `./proxy/data/*/card-images/` | Card portraits and Character Gallery images (per user) |
+| `./proxy/data/*/playground-images/` | Image Playground library images (per user; metadata lives in PostgreSQL) |
 | `./storywriterbackend-db-data/` | PostgreSQL data directory — chats, stories, adventures, settings |
 
 Back up these directories before upgrading or rebuilding containers.
@@ -639,6 +696,9 @@ src/
     image-generator.js           — Image prompt generation logic
     image-gallery.js             — Full-screen lightbox for generated images
     image-cropper.js             — Crop/rotate/flip modal for card portraits
+    image-playground.js          — Image Playground tab (Generate/Crop/Edit/Enhance/Combine, history, presets)
+    playground-library.js        — Image Playground server-side Library tab
+    character-gallery-panel.js   — Per-character image gallery (generate, upload, set as main)
     st-handler.js                — SillyTavern bridge (browse, load, push characters)
     chat-handler.js              — Roleplay Chat frontend controller and state manager
     chat-character-cards.js      — Character card quick-reference viewer (shared with Story Writer)
@@ -663,7 +723,7 @@ proxy/
   data/                          — Runtime data directory (gitignored, per-user subfolders)
 storywriterbackend/               — Story Writer / Roleplay Chat / Adventure Mode backend (Python/FastAPI)
   app/
-    routers/                     — chat.py, adventure.py, generation.py, stories.py, cards.py, settings.py, auth.py
+    routers/                     — chat.py, adventure.py, generation.py, stories.py, cards.py, gallery.py, playground.py, personas.py, settings.py, proxy_data.py, auth.py
     services/                    — LLM service, context manager, card parser
 ```
 
