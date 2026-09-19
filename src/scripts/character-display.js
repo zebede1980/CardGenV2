@@ -283,6 +283,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   showNamePickerModal() {
     const modal = document.getElementById("name-picker-modal");
+    const originSelect = document.getElementById("name-picker-origin");
     const genderSelect = document.getElementById("name-picker-gender");
     const typeSelect = document.getElementById("name-picker-type");
     const periodSelect = document.getElementById("name-picker-period");
@@ -301,6 +302,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     genderSelect.value = "any";
     typeSelect.value = "any";
     periodSelect.value = "any";
+    // Starts from the app-wide cultural default, overridable per roll.
+    if (originSelect) originSelect.value = window.config?.get("app.characterCulture") || "western";
 
     // Accumulate all shown names across rerolls so we can ban them from the next roll
     let seenNames = [];
@@ -325,6 +328,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const type = typeSelect.value;
       const timePeriod = periodSelect.value;
       const guidance = guidanceInput.value.trim();
+      const origin = originSelect ? originSelect.value : null;
 
       grid.innerHTML = "";
       statusEl.textContent = seenNames.length > 0
@@ -334,16 +338,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
       generateBtn.textContent = "Generating…";
 
       try {
-        const names = await window.apiHandler.generateNameOptions(
-          this.currentCharacter, gender, type, timePeriod, guidance, seenNames
+        const result = await window.apiHandler.generateNameOptions(
+          this.currentCharacter, gender, type, timePeriod, guidance, seenNames, origin
         );
+        const names = result.names;
 
         // Accumulate seen names so the next reroll avoids them
         seenNames = [...seenNames, ...names];
 
-        statusEl.textContent = seenNames.length > 10
-          ? `Click a name to use it — or adjust options and generate again for a completely fresh set:`
-          : "Click a name to use it:";
+        // Say where the names came from: most rolls are answered from the local
+        // name data with no API call, and that is worth knowing.
+        const tail = seenNames.length > 10
+          ? "lick a name to use it, or generate again for a completely fresh set:"
+          : "lick a name to use it:";
+        statusEl.textContent = result.note ? `${result.note} · c${tail}` : `C${tail}`;
 
         grid.innerHTML = names.map((name) =>
           `<button class="name-picker-option" data-name="${name.replace(/"/g, "&quot;")}">${name}</button>`

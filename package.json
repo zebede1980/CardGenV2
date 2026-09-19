@@ -10,7 +10,9 @@
     "dev": "concurrently \"npm run server\" \"npm run dev-frontend\"",
     "dev-frontend": "npx http-server . -p 2427 -c-1 -o --proxy http://localhost:2426",
     "build": "echo 'No build process needed for this static site'",
-    "serve": "python -m http.server 2427"
+    "serve": "python -m http.server 2427",
+    "build:names": "python3 tools/build-name-bank.py",
+    "check:names": "node tools/check-name-bank.js"
   },
   "keywords": [
     "sillytavern",

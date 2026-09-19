@@ -650,6 +650,17 @@ class CharacterGeneratorApp {
       });
     }
 
+    // Cultural default — save immediately on change, like the toggles above, so
+    // the next generation picks it up without needing the Save button.
+    const characterCultureSelect = document.getElementById("character-culture");
+    if (characterCultureSelect) {
+      characterCultureSelect.addEventListener("change", (e) => {
+        this.config.loadFromForm();
+        this.config.saveConfig();
+        console.log(`🎭 Character cultural default: ${e.target.value}`);
+      });
+    }
+
     // Local Forge toggle + URL — save immediately on change so config is persisted
     const localForgeEnabledToggle = document.getElementById("local-forge-enabled");
     if (localForgeEnabledToggle) {

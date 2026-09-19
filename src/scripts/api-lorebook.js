@@ -263,9 +263,25 @@ Output only the lorebook entry content.`;
     const model = this.config.get("api.text.model");
     const charName = character.name || "{{char}}";
     
-    const nameInstruction = optionalName 
-      ? `The character's name is "${optionalName}".` 
-      : `You must invent a fitting name for this character based on their role and setting.`;
+    // Same problem as the main card: left to itself the model gives every
+    // supporting character the same handful of names. Hand it a real one drawn
+    // from the name bank unless the user named them, or unless the app is in
+    // "Any culture" mode, where there is no bank to draw from.
+    let nameInstruction;
+    if (optionalName) {
+      nameInstruction = `The character's name is "${optionalName}".`;
+    } else if (typeof CultureSteer !== "undefined" && CultureSteer.usesBank()) {
+      const drawn = NameBank.draw({
+        origin: CultureSteer.mode(),
+        count: 1,
+        exclude: alreadyGeneratedNames || [],
+      }).names[0];
+      nameInstruction = drawn
+        ? `Name this character "${drawn}" — a real name drawn for them. Use a different name only if the main character's setting makes it clearly wrong (a different country, culture or historical period), in which case pick one that fits that setting.`
+        : `You must invent a fitting name for this character based on their role and setting.`;
+    } else {
+      nameInstruction = `You must invent a fitting name for this character based on their role and setting.`;
+    }
 
     const excludeNamesInstruction = (alreadyGeneratedNames && alreadyGeneratedNames.length > 0)
       ? `- Do NOT use any of these names (they are already taken): ${alreadyGeneratedNames.join(", ")}`

@@ -2660,22 +2660,24 @@
 
         <script src="src/scripts/auth.js?v=20260515"></script>
         <script src="src/scripts/sanitize.js?v=20260512"></script>
-        <script src="src/scripts/config.js?v=20260908-modelcaps"></script>
+        <script src="src/scripts/config.js?v=20260919-namebank"></script>
         <script src="src/scripts/wake-lock.js?v=20260804-resilience"></script>
         <script src="src/scripts/resumable-jobs.js?v=20260804-resilience"></script>
         <script src="src/scripts/api.js?v=20260908-modelcaps"></script>
-        <script src="src/scripts/api-character.js?v=20260911-brief"></script>
+        <script src="src/scripts/name-bank-data.js?v=20260919-namebank"></script>
+        <script src="src/scripts/name-bank.js?v=20260919-namebank"></script>
+        <script src="src/scripts/api-character.js?v=20260919-namebank"></script>
         <script src="src/scripts/character-search.js?v=20260526"></script>
         <script src="src/scripts/api-image.js?v=20260911-visioncap"></script>
-        <script src="src/scripts/api-lorebook.js?v=20260804-sampling"></script>
+        <script src="src/scripts/api-lorebook.js?v=20260919-namebank"></script>
         <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260218"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260908-modelcaps"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
-        <script src="src/scripts/main.js?v=20260911-brief"></script>
+        <script src="src/scripts/main.js?v=20260919-namebank"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
-        <script src="src/scripts/character-display.js?v=20260911-brief"></script>
+        <script src="src/scripts/character-display.js?v=20260919-namebank"></script>
         <script src="src/scripts/image-handler.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/image-cropper.js?v=20260825-cleanup"></script>
         <script src="src/scripts/image-playground.js?v=20260908-modelcaps"></script>
@@ -3027,6 +3029,24 @@
 
                     <hr style="border-color: var(--border); margin: 1.5rem 0;" />
 
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">🎭 Character Generation</h3>
+                    <div class="form-group">
+                        <label for="character-culture" class="label">Cultural Default</label>
+                        <select id="character-culture" class="input">
+                            <option value="western">Western — British Isles, Europe, North America, Australasia</option>
+                            <option value="anglo">Anglo only — British Isles, North America, Australasia</option>
+                            <option value="global">Any culture — draw from every tradition worldwide</option>
+                        </select>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">
+                            💡 Steers names, nationality and setting for generated characters. Your concept
+                            always wins — ask for "a Tokyo chef" or "a Lagos detective" and you'll get one.
+                            Names come from real published name data (ONS, US SSA, CSO Ireland, US Census)
+                            rather than being invented by the AI, except under "Any culture".
+                        </p>
+                    </div>
+
+                    <hr style="border-color: var(--border); margin: 1.5rem 0;" />
+
                     <h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">🪪 Card Metadata</h3>
                     <div class="form-group">
                         <label for="creator-name" class="label">Creator Name</label>
@@ -3312,7 +3332,17 @@
                     <button id="name-picker-cancel-btn" class="modal-close">×</button>
                 </div>
                 <div class="modal-body" style="padding: 1.25rem 1.5rem 1.5rem;">
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
+                    <!-- auto-fit rather than a fixed 4 columns: four selects side by
+                         side are unusable at phone width, and this wraps them to two. -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Origin</label>
+                            <select id="name-picker-origin" class="content-box" style="width: 100%; padding: 0.45rem 0.5rem; font-size: 0.875rem;">
+                                <option value="western">Western</option>
+                                <option value="anglo">Anglo only</option>
+                                <option value="global">Any culture</option>
+                            </select>
+                        </div>
                         <div>
                             <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-secondary);">Gender</label>
                             <select id="name-picker-gender" class="content-box" style="width: 100%; padding: 0.45rem 0.5rem; font-size: 0.875rem;">

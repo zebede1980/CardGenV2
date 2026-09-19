@@ -289,6 +289,14 @@ class Config {
         debugMode: false,
         enableImageGeneration: true,
         creator: "",
+        // Cultural default for generated characters — names, nationality and
+        // setting. "western" (the default) is Anglo-led with continental
+        // Western Europe in the mix; "anglo" narrows to the British Isles,
+        // North America and Australasia; "global" restores the old behaviour of
+        // drawing from every culture. A concept that names a place, culture,
+        // era or real person always overrides this — see CultureSteer in
+        // api-character.js.
+        characterCulture: "western",
       },
       st: {
         baseUrl: "",
@@ -459,6 +467,9 @@ class Config {
     )?.checked;
     if (enableImageGeneration !== undefined)
       this.config.app.enableImageGeneration = enableImageGeneration;
+
+    const characterCulture = document.getElementById("character-culture")?.value;
+    if (characterCulture) this.config.app.characterCulture = characterCulture;
 
     // Load Local Forge settings
     const forgeUrl = document.getElementById("local-forge-url")?.value?.trim();
@@ -637,6 +648,10 @@ class Config {
     if (enableImageGeneration)
       enableImageGeneration.checked =
         this.config.app.enableImageGeneration !== false;
+
+    const characterCultureEl = document.getElementById("character-culture");
+    if (characterCultureEl)
+      characterCultureEl.value = this.config.app.characterCulture || "western";
 
     // Save Local Forge settings to form
     const forgeUrlEl = document.getElementById("local-forge-url");

@@ -1,23 +1,23 @@
 // Character generation methods — extends APIHandler via prototype
 
-// Shared naming data + lightweight persistent history, used by every name
-// generation path (full-card auto-name, single-name regenerate, and the
-// Name Generator modal) so bans/history don't drift out of sync across them
-// and repeats aren't limited to a single in-memory session.
+// Naming support for the paths where the *model* still picks the name: "Any
+// culture" mode, non-human name styles, and eras the name bank's sources don't
+// reach. Everywhere else the name comes from NameBank (src/scripts/name-bank.js),
+// which draws real names from published name data — see the comment there for
+// why. History and the overused-name ban list live in NameBank so both kinds of
+// path share one copy and can't drift apart.
 const NameGenShared = (() => {
-  const WESTERN_TRADITIONS = [
+  // Every Western naming tradition now comes from NameBank (see
+  // src/scripts/name-bank.js), which draws real names from published name
+  // data. This list is only used in "Any culture" mode, where the model is
+  // asked to name the character itself and a tradition is assigned to it to
+  // stop it defaulting to the same Anglo-American picks every time.
+  const WORLD_TRADITIONS = [
     "English or British (including classic English surnames and given names)",
     "Irish (Gaelic and anglicised Irish names)",
     "Scottish (Highland and Lowland traditions)",
     "North American (classic American or Canadian names)",
     "Australian or New Zealand",
-  ];
-
-  // Deliberately excludes Western traditions — injected into the full-card
-  // and single-name prompts specifically to break the AI's tendency to
-  // default to Anglo names. The modal (which has an explicit gender/type
-  // picker aimed at users who may want an English name) adds these back.
-  const NON_WESTERN_TRADITIONS = [
     "Eastern European — Polish, Czech, Slovak, or Romanian",
     "Slavic — Russian, Ukrainian, Bulgarian, or Serbian",
     "Scandinavian — Norwegian, Swedish, Danish, or Icelandic",
@@ -50,11 +50,6 @@ const NameGenShared = (() => {
     "Indigenous Mesoamerican — Nahuatl or Maya inspired",
   ];
 
-  const BANNED_NAMES_BLOCK = `- Surnames: Voss, Mercer, Drake, Kane, Vale, Stone, Cross, Hart, Crane, Black, Grey, White, Storm, Rowe, Quinn, Pierce, Hayes, Cole, Fox, Grant, Ward, Shaw, Reid, Ash, Dusk, Hale, Mace, Reed, Price, Blair
-- Female first names: Aria, Elara, Lyra, Luna, Seraphine, Lily, Nova, Aurora, Celeste, Iris, Zara, Ember, Vivienne, Scarlett, Isolde, Evelyn, Clara, Selene, Freya, Nyx, Raven
-- Male first names: Cael, Rael, Zael, Theron, Oryn, Aiden, Caden, Brayden
-- Any two-syllable name ending in "-ael", "-iel", or "-yn" unless the concept is explicitly high fantasy`;
-
   // Stops the model inventing plausible-sounding-but-fake names when asked
   // for a tradition it has thin training data on (Sami, Breton, Basque,
   // Baltic, Mesoamerican, etc.) instead of guessing wrong.
@@ -64,9 +59,7 @@ const NameGenShared = (() => {
   // for a given culture every time (e.g. always "Yuki Tanaka" for Japanese).
   const AVOID_DEFAULT_GUARD = `**AVOID YOUR DEFAULT PICK:** Don't reach for the single most common or stereotypical name you'd normally produce for this tradition. Choose something you'd consider a distinctive, less-obvious choice while staying authentic.`;
 
-  const NAME_HISTORY_KEY = "cardgenv2_recent_names";
   const STYLE_HISTORY_KEY = "cardgenv2_recent_styles";
-  const NAME_HISTORY_MAX = 40;
   const STYLE_HISTORY_MAX = 6;
 
   function readList(key) {
@@ -78,35 +71,19 @@ const NameGenShared = (() => {
     }
   }
 
-  function writeList(key, arr, max) {
+  function recordStyle(style) {
     try {
-      localStorage.setItem(key, JSON.stringify(arr.slice(-max)));
+      localStorage.setItem(STYLE_HISTORY_KEY,
+        JSON.stringify([...readList(STYLE_HISTORY_KEY), style].slice(-STYLE_HISTORY_MAX)));
     } catch {
       // localStorage unavailable/full — history just won't persist this run
     }
   }
 
-  function recentNames() {
-    return readList(NAME_HISTORY_KEY);
-  }
-
-  function recordNames(names) {
-    if (!names || !names.length) return;
-    writeList(NAME_HISTORY_KEY, [...readList(NAME_HISTORY_KEY), ...names], NAME_HISTORY_MAX);
-  }
-
-  function recentStyles() {
-    return readList(STYLE_HISTORY_KEY);
-  }
-
-  function recordStyle(style) {
-    writeList(STYLE_HISTORY_KEY, [...readList(STYLE_HISTORY_KEY), style], STYLE_HISTORY_MAX);
-  }
-
   // Picks a style while avoiding whichever styles were picked most recently,
   // so the same cultural tradition can't repeat back-to-back across calls.
   function pickStyle(pool) {
-    const recent = recentStyles();
+    const recent = readList(STYLE_HISTORY_KEY);
     const available = pool.filter((s) => !recent.includes(s));
     const choices = available.length ? available : pool;
     const choice = choices[Math.floor(Math.random() * choices.length)];
@@ -114,16 +91,75 @@ const NameGenShared = (() => {
     return choice;
   }
 
+  // The Western subsets, for the model-driven paths that still have to honour
+  // the cultural default — a medieval or far-future character, or a demon, gets
+  // no help from the name bank but should still be Western when that's the
+  // setting.
+  const ANGLO_TRADITIONS = WORLD_TRADITIONS.slice(0, 5);
+  const WESTERN_TRADITIONS = [
+    ...ANGLO_TRADITIONS,
+    ...WORLD_TRADITIONS.filter((t) => /^(Scandinavian|Celtic|Iberian|Italian|Greek|Dutch|German|French)/.test(t)),
+  ];
+
+  function traditionsFor(mode) {
+    if (mode === "anglo") return [...ANGLO_TRADITIONS];
+    if (mode === "western") return [...WESTERN_TRADITIONS];
+    return [...WORLD_TRADITIONS];
+  }
+
   return {
+    WORLD_TRADITIONS,
+    ANGLO_TRADITIONS,
     WESTERN_TRADITIONS,
-    NON_WESTERN_TRADITIONS,
-    BANNED_NAMES_BLOCK,
+    traditionsFor,
     AUTHENTICITY_GUARD,
     AVOID_DEFAULT_GUARD,
-    recentNames,
-    recordNames,
+    // The recently-generated-name history and the overused-name ban list both
+    // live in NameBank so the local and model-driven paths share one copy.
+    get BANNED_NAMES_BLOCK() { return NameBank.BANNED_NAMES_BLOCK; },
+    recentNames: (...args) => NameBank.recentNames(...args),
+    recordNames: (...args) => NameBank.recordNames(...args),
     pickStyle,
   };
+})();
+
+// Where the character's culture comes from, and how it reaches the prompts.
+//
+// The app defaults to Western characters because that is what its owner
+// generates; a concept that names a country, culture, era, language or real
+// person overrides it completely, which is what makes the default safe to apply
+// everywhere. "Any culture" turns the steer off and restores the old behaviour
+// of assigning a random world tradition on every generation.
+const CultureSteer = (() => {
+  const REGIONS = {
+    western: "Britain and Ireland, continental Western and Northern Europe, North America, or Australia and New Zealand",
+    anglo: "Britain and Ireland, North America, or Australia and New Zealand",
+  };
+
+  function mode() {
+    const value = window.config?.get("app.characterCulture");
+    return value === "anglo" || value === "global" ? value : "western";
+  }
+
+  function usesBank() {
+    return mode() !== "global";
+  }
+
+  /** The setting/nationality steer. Empty string in "Any culture" mode. */
+  function block() {
+    const current = mode();
+    if (current === "global") return "";
+    return `**CULTURAL SETTING — DEFAULT:** Unless the player's concept says otherwise, set this character in the Western world — ${REGIONS[current]} — and give them a nationality, cultural background and frame of reference to match. This is a default, not a restriction: if the concept names a country, city, culture, language, historical period or real person, follow the concept exactly and ignore this default. Never add an exotic cultural background the concept didn't ask for just for variety's sake.`;
+  }
+
+  /** Same steer, phrased for the idea-brainstorming prompts. */
+  function ideasBlock() {
+    const current = mode();
+    if (current === "global") return "";
+    return `- Setting default: unless the user's input points elsewhere, set the ideas in the Western world — ${REGIONS[current]}. If the user names a place, culture or era, follow them instead. Vary genre, tone and premise freely — the default is about where characters are from, not about telling the same story four times.`;
+  }
+
+  return { mode, usesBank, block, ideasBlock, REGIONS };
 })();
 
 Object.assign(APIHandler.prototype, {
@@ -302,12 +338,55 @@ Object.assign(APIHandler.prototype, {
   },
 
   /**
-   * Picks a cultural naming tradition on each call, avoiding whichever
-   * traditions were picked most recently (see NameGenShared) so the same
-   * style can't land twice in a row across generations.
+   * The name instruction for a full character card.
+   *
+   * In Western/Anglo mode the app draws a shortlist of real names from NameBank
+   * and asks the model to pick one, because the model cannot be relied on to
+   * pick a *different* name each time — left to itself it returns the same
+   * handful however the prompt is worded. The model still chooses which name,
+   * since only it knows the character's gender from the concept.
+   *
+   * In "Any culture" mode there is no bank to draw from, so it falls back to
+   * assigning a world naming tradition and letting the model name the
+   * character, with the anti-repetition guards that path needs.
    */
-  _pickNameStyle() {
-    return NameGenShared.pickStyle(NameGenShared.NON_WESTERN_TRADITIONS);
+  _buildNameInstruction() {
+    const recent = NameGenShared.recentNames();
+    const recentBan = recent.length
+      ? `\n- Also avoid reusing any of these recently-generated names: ${recent.slice(-15).join(", ")}`
+      : "";
+
+    if (!CultureSteer.usesBank()) {
+      const nameStyle = NameGenShared.pickStyle(NameGenShared.WORLD_TRADITIONS);
+      return `**NAME — CULTURAL DIVERSITY REQUIRED:** For this character's name, draw from a **${nameStyle}** naming tradition. Use authentic first names and surnames (or single names where culturally appropriate) from that tradition. Exception: if the player's concept explicitly places the character in a clearly different culture or time period, use whatever is most historically and geographically accurate for that context.
+
+${NameGenShared.AUTHENTICITY_GUARD}
+
+${NameGenShared.AVOID_DEFAULT_GUARD}
+
+**BANNED — do NOT use any of the following overused AI-generated names:**
+${NameGenShared.BANNED_NAMES_BLOCK}${recentBan}`;
+    }
+
+    const shortlist = NameBank.shortlist({ origin: CultureSteer.mode(), per: 6 });
+    const lines = [
+      `- If the character is female: ${shortlist.female.join(", ")}`,
+      `- If the character is male: ${shortlist.male.join(", ")}`,
+    ];
+    if (shortlist.neutral.length) {
+      lines.push(`- If the character is non-binary or you want an androgynous name: ${shortlist.neutral.join(", ")}`);
+    }
+
+    return `**NAME — USE ONE OF THESE:** These are real, era-appropriate names drawn at random for this generation. Pick the ONE that best fits the character you are creating, matching their gender:
+
+${lines.join("\n")}
+
+You may mix a first name from one line with a surname from another if that suits the character better, but do not invent a different name.
+
+**THE ONE EXCEPTION:** if the player's concept requires a specific name — a named real person, an established fictional character, a culture or historical period where these names would be wrong — use the name the concept requires instead and ignore this list. Do not override the list merely because you prefer a different name.
+
+**If and only if you name the character yourself under that exception, avoid these overused AI-generated names:**
+${NameGenShared.BANNED_NAMES_BLOCK}${recentBan}`;
   },
 
   buildCharacterPrompt(concept, characterName, pov = "third", lorebook = null, cardType = "single") {
@@ -315,11 +394,10 @@ Object.assign(APIHandler.prototype, {
     if (cardType === "group") return this._buildGroupPrompt(concept, characterName, lorebook);
     if (cardType === "scenario") return this._buildScenarioPrompt(concept, characterName, lorebook);
 
-    const nameStyle = this._pickNameStyle();
-    const recentNames = NameGenShared.recentNames();
-    const recentNamesBan = recentNames.length
-      ? `\n- Also avoid reusing any of these recently-generated names: ${recentNames.slice(-15).join(", ")}`
-      : "";
+    const nameInstruction = this._buildNameInstruction();
+    // Empty in "Any culture" mode; the trailing newlines go with it so the
+    // prompt doesn't gain a stray blank gap.
+    const cultureSection = CultureSteer.block() ? `${CultureSteer.block()}\n\n` : "";
     let povInstruction = "";
     let templateInstruction = "";
     let templateContent = "";
@@ -442,14 +520,7 @@ You may assume the character you create will be used in a private, local rolepla
 
 ${povInstruction}
 
-**NAME — CULTURAL DIVERSITY REQUIRED:** For this character's name, draw from a **${nameStyle}** naming tradition. Use authentic first names and surnames (or single names where culturally appropriate) from that tradition. Exception: if the player's concept explicitly places the character in a clearly different culture or time period, use whatever is most historically and geographically accurate for that context — but in either case do NOT fall back to generic Anglo-American defaults.
-
-${NameGenShared.AUTHENTICITY_GUARD}
-
-${NameGenShared.AVOID_DEFAULT_GUARD}
-
-**BANNED — do NOT use any of the following overused AI-generated names:**
-${NameGenShared.BANNED_NAMES_BLOCK}${recentNamesBan}
+${cultureSection}${nameInstruction}
 
 Use this actual name ONLY in the "# [Character Name]'s Profile" header and the first introduction sentence.
 
@@ -532,8 +603,28 @@ ${lorebookContent}`;
     return lorebookContent;
   },
 
+  /**
+   * A pool of real names for cards with several people in them (groups, and the
+   * NPCs on a scenario card). Same reasoning as the single-character shortlist:
+   * left to itself the model gives every group the same four names.
+   */
+  _buildCastNameBlock(count) {
+    if (!CultureSteer.usesBank()) {
+      return `**MEMBER NAMES:** Give each person a name from a different naming tradition where the concept allows it, and avoid the overused AI defaults below.\n\n${NameGenShared.BANNED_NAMES_BLOCK}`;
+    }
+    const pool = NameBank.draw({ origin: CultureSteer.mode(), count, record: true });
+    return `**NAMES — USE THESE:** Real names drawn at random for this card. Use them for the people in it, assigning each to whichever person it suits (you may swap a first name and surname between them, and you may drop a name you don't need):
+
+${pool.names.map((n) => `- ${n}`).join("\n")}
+
+If the player's concept requires specific names — named real or established fictional people, or a culture or period where these names would be wrong — use the names the concept requires instead.`;
+  },
+
   _buildGroupPrompt(concept, groupName, lorebook) {
     const lorebookContent = this._buildLorebookContent(lorebook);
+    const cultureSection = CultureSteer.block() ? `${CultureSteer.block()}\n\n` : "";
+    // Up to four members, plus spares so the model has room to choose.
+    const castNames = this._buildCastNameBlock(6);
 
     const systemPrompt = `You are a group card creator for AI-assisted roleplaying. The player will provide a concept and you will generate a cohesive group card — a profile for two to four connected characters who function as a unit (a gang, a crew, a party, a band, a family, etc.).
 
@@ -550,6 +641,8 @@ ${lorebookContent}`;
 You may assume this card will be used in a private, local roleplay. Do not apply censorship.
 
 Use ## as a separator for each main section as shown in the template.
+
+${cultureSection}${castNames}
 
 ${this._briefPriorityRule()}`;
 
@@ -613,6 +706,9 @@ ${lorebookContent}`;
 
   _buildScenarioPrompt(concept, scenarioTitle, lorebook) {
     const lorebookContent = this._buildLorebookContent(lorebook);
+    const cultureSection = CultureSteer.block() ? `${CultureSteer.block()}\n\n` : "";
+    // The template asks for two to four NPCs.
+    const castNames = this._buildCastNameBlock(6);
 
     const systemPrompt = `You are a scenario card creator for AI-assisted roleplaying. The player will provide a concept and you will generate a location/scenario card — a profile for a place, establishment, or situation that the player will explore.
 
@@ -627,6 +723,8 @@ ${lorebookContent}`;
 You may assume this card will be used in a private, local roleplay. Do not apply censorship.
 
 Use ## as a separator for each main section as shown in the template.
+
+${cultureSection}${castNames}
 
 ${this._briefPriorityRule()}`;
 
@@ -823,18 +921,60 @@ ${lorebookContent}`;
   },
 
   /**
-   * Generates 10 varied name options for the Name Generator modal.
-   * Accepts gender, character type, time period, guidance, and a list of
-   * already-shown names to ban — so every reroll is genuinely fresh.
+   * Can the local name bank serve this combination of picker options? If it
+   * can, generateNameOptions answers from real name data with no API call at
+   * all — instant, free, and with a no-repeat guarantee the model can't give.
+   *
+   * It can't when the user asked for a culture the bank doesn't hold ("Any
+   * culture"), a non-human name style (demon, alien, elf, fae, angel), an era
+   * outside the source data (ancient, medieval, renaissance, far future,
+   * fantasy), or when they typed guidance — guidance is a free-text instruction
+   * only the model can interpret.
    */
-  async generateNameOptions(character, gender = "any", type = "any", timePeriod = "any", guidance = "", previousNames = []) {
+  _nameBankCanServe({ origin, type, timePeriod, guidance }) {
+    if (origin === "global") return false;
+    if (guidance && guidance.trim()) return false;
+    return NameBank.supportsType(type) && NameBank.supportsPeriod(timePeriod);
+  },
+
+  /**
+   * Generates 10 varied name options for the Name Generator modal.
+   *
+   * Returns { names, source, note } — `source` is "bank" when the names came
+   * from the local data and "model" when the model generated them, so the UI
+   * can tell the user which they're looking at.
+   */
+  async generateNameOptions(character, gender = "any", type = "any", timePeriod = "any", guidance = "", previousNames = [], origin = null) {
     if (!character) throw new Error("Character is required to generate name options");
+
+    const cultureMode = origin || CultureSteer.mode();
+
+    if (this._nameBankCanServe({ origin: cultureMode, type, timePeriod, guidance })) {
+      const { names, detail } = NameBank.draw({
+        gender,
+        period: timePeriod,
+        origin: cultureMode,
+        count: 10,
+        exclude: previousNames,
+      });
+      if (names.length) {
+        // Which traditions actually came up, so the list isn't a black box.
+        const regions = [...new Set(detail.map((d) => NameBank.regionLabel(d.region)))];
+        return {
+          names,
+          source: "bank",
+          note: `Real names — ${regions.join(", ")}`,
+        };
+      }
+      // Pools exhausted against the exclusion list: fall through to the model
+      // rather than returning nothing.
+    }
 
     const model = this.config.get("api.text.model");
 
-    // Base cultural traditions pool — includes English/Western options, unlike
-    // the full-card/single-name paths (see NameGenShared).
-    const basePool = [...NameGenShared.WESTERN_TRADITIONS, ...NameGenShared.NON_WESTERN_TRADITIONS];
+    // Cultural traditions pool for the model-driven path, narrowed to the
+    // Western subset unless the user asked for any culture.
+    const basePool = NameGenShared.traditionsFor(cultureMode);
 
     // Supplementary pool for supernatural types
     const supernaturalPool = [
@@ -922,7 +1062,14 @@ ${lorebookContent}`;
       ? `\n\nAdditional guidance from user: "${guidance}" — this is your PRIMARY instruction. If it specifies a cultural style, use that style for all 10 names.`
       : "";
 
-    const systemPrompt = `You are an expert in names from cultures around the world. Generate exactly 10 character names.${typeInstruction}${periodInstruction}
+    // The cultural default applies to human names only: a demon or an alien is
+    // supposed to be named from ancient or invented phonetics, and telling the
+    // model "British Isles only" in the same breath would contradict that.
+    const cultureNote = (cultureMode === "global" || !NameBank.supportsType(type))
+      ? ""
+      : `\n\n**CULTURAL DEFAULT:** Unless the user's guidance says otherwise, all names must come from ${CultureSteer.REGIONS[cultureMode]}. If the user's guidance names a different culture, the guidance wins.`;
+
+    const systemPrompt = `You are an expert in names from cultures around the world. Generate exactly 10 character names.${typeInstruction}${periodInstruction}${cultureNote}
 
 ${genderInstruction}
 
@@ -987,7 +1134,7 @@ Generate exactly 10 names as a JSON array. Make each name as different from the 
         .filter(Boolean);
 
       NameGenShared.recordNames(names);
-      return names;
+      return { names, source: "model", note: "AI-generated names" };
     } catch (error) {
       console.error("=== NAME OPTIONS GENERATION FAILED ===", error);
       throw error;
@@ -1378,6 +1525,7 @@ Write the instructions now. Plain text only, no formatting.`;
       `- Sexual/romantic orientation: ${orientationMap[filters.orientation] || orientationMap.any}. IMPORTANT — this is separate from gender identity. The character's orientation determines who they are attracted to, not their own gender.`,
       `- ${nsfwMap[filters.nsfw] || "No content restrictions."}`,
       filters.genre !== "any" ? `- Genre / setting: ${filters.genre}.` : "- No particular genre restriction.",
+      CultureSteer.ideasBlock(),
       filters.trope ? `- Consider the trope/archetype direction: ${filters.trope}.` : "",
       "- Be wildly creative and diverse — each idea should feel distinct in tone, setting, and concept.",
       "- Avoid cliches unless using them in an intentionally fresh or subversive way.",
@@ -1434,9 +1582,10 @@ Write the instructions now. Plain text only, no formatting.`;
       "- Every idea must stay true to the user's concept below, but take it in a meaningfully different direction — vary the personality, backstory angle, or twist (and the tone, but only if the user hasn't specified one). Do NOT just reword the same idea four times.",
       "- Treat any explicit requirements in the concept as FIXED across all 4 ideas — for example pacing or length of play (fast-paced, short scenes, slow-burn), tone or genre, point of view, content limits, setting, or the character's relationship to the player. Diverge only on what the user left open, and let each idea's description reflect those requirements.",
       "- Be wildly creative and diverse — each idea should feel distinct, not interchangeable.",
+      CultureSteer.ideasBlock(),
       "- Each description must be exactly 2-3 sentences. No bullet points, no markdown beyond the bolded name.",
       "- Output ONLY the 4 numbered ideas, nothing else — no preamble, no closing remarks.",
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 
     let userPrompt = concept
       ? `Character concept: ${concept}`
