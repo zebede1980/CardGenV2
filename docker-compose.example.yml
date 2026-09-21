@@ -47,6 +47,12 @@ services:
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       # Internal URL for the local Kokoro-82M TTS service (Story Writer narration)
       - KOKORO_TTS_URL=${KOKORO_TTS_URL:-http://kokoro-tts:8880}
+      # Optional: local ComfyUI (Qwen-Image 2.1) on your own GPU, reached via an
+      # authenticating nginx on that machine. Leave empty to disable.
+      - COMFYUI_URL=${COMFYUI_URL:-}
+      - COMFYUI_API_KEY=${COMFYUI_API_KEY:-}
+      - COMFYUI_EDIT_MEGAPIXELS=${COMFYUI_EDIT_MEGAPIXELS:-1.0}
+      - COMFYUI_MAX_MEGAPIXELS=${COMFYUI_MAX_MEGAPIXELS:-2.0}
     volumes:
       - ./proxy/data:/app/data
     networks:

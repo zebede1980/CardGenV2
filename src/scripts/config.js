@@ -32,6 +32,11 @@ const IMAGE_EDIT_NAME_MARKERS = ["image-to-image", "img2img", "-edit", "edit-", 
 // and is purely a user decision.
 function guessImageModelCapabilities(modelId) {
   const id = (modelId || "").toLowerCase();
+  // The proxy's local ComfyUI model is known exactly rather than guessed: one
+  // Qwen-Image 2.1 workflow does both text-to-image and single-image edits. Not
+  // Enhance: the proxy pins edit output to COMFYUI_EDIT_MEGAPIXELS, so it can't
+  // return the larger image an upscale asks for.
+  if (id.startsWith("local/qwen-image")) return { generate: true, edit: true, combine: false, upscale: false };
   const looksEdit = IMAGE_EDIT_NAME_MARKERS.some(marker => id.includes(marker));
   // Enhance is an image-to-image job, so anything edit-shaped is a fair
   // starting guess — how *well* a given model upscales is something only the

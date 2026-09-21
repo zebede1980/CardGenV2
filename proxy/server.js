@@ -2682,6 +2682,282 @@ app.post("/api/image/forge", requireAuth, async (req, res) => {
   }
 });
 
+// ── Local ComfyUI (Qwen-Image 2.1 on the owner's own GPU) ────────────────────
+//
+// Unlike Forge above, this is called server-side: the GPU sits on a home PC the
+// browser usually can't reach, but the proxy can — over a private tunnel, to an
+// nginx on that PC which checks COMFYUI_API_KEY and only lets through the
+// handful of ComfyUI endpoints used here. ComfyUI itself has no auth at all, so
+// that nginx is what stands between this and arbitrary code on the PC.
+//
+// Selected by model id from the ordinary /api/image/generations route, so
+// generate, edit, enhance and resumable jobs all work without the frontend
+// knowing the model is local. One model covers both text-to-image and editing:
+// a request carrying `image` is an edit, anything else is a fresh generation.
+
+const LOCAL_COMFY = {
+  url: (process.env.COMFYUI_URL || "").replace(/\/$/, ""),
+  apiKey: process.env.COMFYUI_API_KEY || "",
+  // 1MP edits take ~18s on a 16GB card; 4MP spills out of VRAM and takes minutes.
+  editMegapixels: parseFloat(process.env.COMFYUI_EDIT_MEGAPIXELS) || 1.0,
+  maxMegapixels: parseFloat(process.env.COMFYUI_MAX_MEGAPIXELS) || 2.0,
+  maxImageBytes: 20 * 1024 * 1024,
+  runTimeoutMs: 10 * 60 * 1000,
+};
+
+const LOCAL_COMFY_MODELS = ["local/qwen-image-2.1"];
+
+function isLocalComfyModel(model) {
+  return LOCAL_COMFY_MODELS.includes(model);
+}
+
+// Carries an HTTP status and a message fit to show the user, so the route's
+// catch can tell "your PC is off" apart from a genuine proxy bug.
+class LocalComfyError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function localComfyFetch(pathAndQuery, options = {}) {
+  let response;
+  try {
+    response = await fetch(`${LOCAL_COMFY.url}${pathAndQuery}`, {
+      timeout: 30000,
+      ...options,
+      headers: { ...(options.headers || {}), "X-API-Key": LOCAL_COMFY.apiKey },
+    });
+  } catch (err) {
+    // The detail names the tunnel address — log it, don't hand it to the browser.
+    console.error("[comfy] unreachable:", err.message);
+    throw new LocalComfyError(503, "Local GPU is offline or unreachable — is the PC on and ComfyUI running?");
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new LocalComfyError(502, "Local GPU rejected the proxy's API key — check COMFYUI_API_KEY on both ends");
+  }
+  return response;
+}
+
+function roundTo32(n) {
+  return Math.max(256, Math.round(n / 32) * 32);
+}
+
+// Text-to-image size: honour the requested aspect ratio but cap the area, since
+// generation time grows much faster than linearly once VRAM runs out.
+function localComfyDims(body) {
+  let width = parseInt(body.width, 10);
+  let height = parseInt(body.height, 10);
+  if (!(width > 0 && height > 0) && typeof body.size === "string") {
+    [width, height] = body.size.split("x").map((n) => parseInt(n, 10));
+  }
+  if (!(width > 0 && height > 0)) [width, height] = [896, 1152];
+
+  const maxPixels = LOCAL_COMFY.maxMegapixels * 1024 * 1024;
+  if (width * height > maxPixels) {
+    const scale = Math.sqrt(maxPixels / (width * height));
+    width *= scale;
+    height *= scale;
+  }
+  return { width: roundTo32(width), height: roundTo32(height) };
+}
+
+function parseImageDataUri(dataUri) {
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/s.exec(dataUri || "");
+  if (!match) {
+    throw new LocalComfyError(400, "The local model needs the source image as a PNG, JPEG or WebP data URI");
+  }
+  const buffer = Buffer.from(match[2], "base64");
+  if (buffer.length > LOCAL_COMFY.maxImageBytes) {
+    throw new LocalComfyError(413, "Source image is too large for the local model (20MB max)");
+  }
+  return { mime: match[1], buffer };
+}
+
+async function uploadLocalComfyImage({ mime, buffer }) {
+  const boundary = `----cardgen${randomUUID()}`;
+  const ext = mime.split("/")[1].replace("jpeg", "jpg");
+  const filename = `cardgen_${randomUUID()}.${ext}`;
+  const body = Buffer.concat([
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="${filename}"\r\n` +
+      `Content-Type: ${mime}\r\n\r\n`,
+    ),
+    buffer,
+    Buffer.from(
+      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="subfolder"\r\n\r\ncardgen` +
+      `\r\n--${boundary}--\r\n`,
+    ),
+  ]);
+
+  const response = await localComfyFetch("/upload/image", {
+    method: "POST",
+    headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+    body,
+    timeout: 60000,
+  });
+  if (!response.ok) {
+    throw new LocalComfyError(502, `Local GPU refused the image upload (${response.status})`);
+  }
+  const { name, subfolder } = await response.json();
+  return subfolder ? `${subfolder}/${name}` : name;
+}
+
+// API-format workflow, built from Comfy's official Qwen-Image 2.1 templates.
+// Node ids are arbitrary but kept equal to the template's so the two can be
+// compared side by side when the template changes.
+function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage }) {
+  const graph = {
+    37: { class_type: "UNETLoader", inputs: { unet_name: "qwen_image_2.1_int8_convrot.safetensors", weight_dtype: "default" } },
+    38: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3vl_8b_int8_convrot.safetensors", type: "qwen_image", device: "default" } },
+    39: { class_type: "VAELoader", inputs: { vae_name: "qwen_image_2.1_vae_bf16.safetensors" } },
+    64: {
+      class_type: "TextEncodeQwenImage21",
+      inputs: { clip: ["38", 0], vae: ["39", 0], prompt, negative_prompt: "", resolution: 1024 },
+    },
+    3: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["37", 0], positive: ["64", 0], negative: ["64", 1], latent_image: ["62", 0],
+        seed, steps, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    8: { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["39", 0] } },
+    56: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/qwen" } },
+  };
+
+  if (sourceImage) {
+    // Edit: output keeps the source's aspect ratio. The second resize snaps to
+    // the multiple of 32 the model needs; resolution 0 tells the encoder to
+    // take the reference at that size rather than rescaling it again.
+    Object.assign(graph, {
+      78: { class_type: "LoadImage", inputs: { image: sourceImage } },
+      79: {
+        class_type: "ResizeImageMaskNode",
+        inputs: { input: ["78", 0], resize_type: "scale total pixels", "resize_type.megapixels": LOCAL_COMFY.editMegapixels, scale_method: "area" },
+      },
+      77: {
+        class_type: "ResizeImageMaskNode",
+        inputs: { input: ["79", 0], resize_type: "scale to multiple", "resize_type.multiple": 32, scale_method: "bicubic" },
+      },
+      76: { class_type: "GetImageSize", inputs: { image: ["77", 0] } },
+      62: { class_type: "EmptyLatentImage", inputs: { width: ["76", 0], height: ["76", 1], batch_size: 1 } },
+    });
+    graph[64].inputs.resolution = 0;
+    graph[64].inputs["images.image_1"] = ["77", 0];
+  } else {
+    graph[62] = { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } };
+  }
+  return graph;
+}
+
+async function waitForLocalComfyResult(promptId) {
+  const deadline = Date.now() + LOCAL_COMFY.runTimeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const response = await localComfyFetch(`/history/${encodeURIComponent(promptId)}`, { timeout: 15000 });
+    if (!response.ok) continue;
+    const entry = (await response.json())[promptId];
+    if (!entry || entry.status?.completed === undefined) continue;
+
+    if (entry.status.status_str !== "success") {
+      const failure = (entry.status.messages || []).find(([type]) => type === "execution_error");
+      const detail = failure?.[1]?.exception_message || "unknown error";
+      throw new LocalComfyError(502, `Local GPU failed to generate the image: ${detail.trim()}`);
+    }
+    const image = entry.outputs?.["56"]?.images?.[0];
+    if (!image) throw new LocalComfyError(502, "Local GPU finished but produced no image");
+    return image;
+  }
+  throw new LocalComfyError(504, "Local GPU took too long — it may be busy with another job");
+}
+
+// Returns the same { data: [{ url }] } shape nano-gpt does, so every existing
+// caller's response handling works unchanged. The url is a data URI, which the
+// frontend already handles everywhere a result can land.
+async function runLocalComfyImage(body) {
+  if (!LOCAL_COMFY.url || !LOCAL_COMFY.apiKey) {
+    throw new LocalComfyError(503, "The local GPU isn't configured on this server (COMFYUI_URL / COMFYUI_API_KEY)");
+  }
+  const prompt = (body.prompt || "").trim();
+  if (!prompt) throw new LocalComfyError(400, "A prompt is required");
+
+  // Fail fast with a clear message rather than queueing into a PC that's off.
+  const health = await localComfyFetch("/system_stats", { timeout: 5000 });
+  if (!health.ok) throw new LocalComfyError(503, `Local GPU is not responding (${health.status})`);
+
+  const sourceImage = body.image ? await uploadLocalComfyImage(parseImageDataUri(body.image)) : null;
+  const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed : Math.floor(Math.random() * 2147483647);
+  const steps = Math.min(50, Math.max(8, parseInt(body.steps, 10) || 25));
+
+  const graph = buildQwenImageGraph({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, ...localComfyDims(body) });
+  const submit = await localComfyFetch("/prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: graph, client_id: "cardgen-proxy" }),
+  });
+  if (!submit.ok) {
+    const detail = await submit.text().catch(() => "");
+    console.error("[comfy] prompt rejected:", submit.status, detail.slice(0, 2000));
+    throw new LocalComfyError(502, `Local GPU rejected the workflow (${submit.status}) — are the Qwen-Image 2.1 models installed?`);
+  }
+  const { prompt_id: promptId } = await submit.json();
+  console.log(`[comfy] queued ${sourceImage ? "edit" : "generation"} ${promptId}`);
+
+  const image = await waitForLocalComfyResult(promptId);
+  const query = new URLSearchParams({ filename: image.filename, subfolder: image.subfolder || "", type: image.type || "output" });
+  const view = await localComfyFetch(`/view?${query}`, { timeout: 60000 });
+  if (!view.ok) throw new LocalComfyError(502, `Couldn't fetch the finished image from the local GPU (${view.status})`);
+
+  const contentType = view.headers.get("content-type") || "image/png";
+  const buffer = await view.buffer();
+  return { created: Math.floor(Date.now() / 1000), data: [{ url: `data:${contentType};base64,${buffer.toString("base64")}` }] };
+}
+
+// The local-GPU half of /api/image/generations. Same resumable-job contract as
+// the nano-gpt path: the image finishes into the job whether or not the client
+// is still connected, and a returning client collects it from /api/jobs.
+async function handleLocalComfyImage(req, res) {
+  const { resumable, clientRef } = req.body;
+  let job = null;
+  let clientGone = false;
+  res.on("close", () => {
+    clientGone = true;
+  });
+
+  try {
+    if (resumable) {
+      if (countRunningJobsForUser(req.user.userId) >= JOB_LIMITS.MAX_RUNNING_PER_USER) {
+        return res.status(429).json({
+          error: { code: "429", message: `Too many generations in flight (limit ${JOB_LIMITS.MAX_RUNNING_PER_USER}). Wait for one to finish.` },
+        });
+      }
+      job = createGenerationJob(req.user.userId, new AbortController(), clientRef);
+    }
+
+    const data = await runLocalComfyImage(req.body);
+    if (job) {
+      job.result = data;
+      finishGenerationJob(job, "done", { finishReason: "stop" });
+    }
+    if (!res.writableEnded && !clientGone) res.json(data);
+  } catch (error) {
+    const status = error instanceof LocalComfyError ? error.status : 500;
+    console.error("[comfy]", status, error.message);
+    if (job) finishGenerationJob(job, "error", { error: error.message });
+    if (res.writableEnded || clientGone) return;
+    res.status(status).json({ error: { code: String(status), message: error.message } });
+  }
+}
+
+// Which local models this server can run, for Settings' "Fetch models" to merge
+// into the provider's list. Empty when no local GPU is configured, so the option
+// never appears on a deployment that can't serve it.
+app.get("/api/image/local-models", requireAuth, (req, res) => {
+  const configured = !!(LOCAL_COMFY.url && LOCAL_COMFY.apiKey);
+  res.json({ data: configured ? LOCAL_COMFY_MODELS.map((id) => ({ id, owned_by: "local" })) : [] });
+});
+
 // Proxy endpoint for image API
 app.post("/api/image/generations", requireAuth, async (req, res) => {
   // Set when the caller opts into resumable buffering; see the job registry
@@ -2694,6 +2970,8 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
   let clientGone = false;
   try {
     const { model, prompt, size, resumable, clientRef } = req.body;
+
+    if (isLocalComfyModel(model)) return handleLocalComfyImage(req, res);
 
     const apiKey = req.headers["x-api-key"];
     const apiUrl = req.headers["x-api-url"];

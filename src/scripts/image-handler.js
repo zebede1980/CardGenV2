@@ -1317,6 +1317,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.config.loadFromForm();
       const models = await this.apiHandler.fetchModels("image");
 
+      // Models the proxy runs on the owner's own GPU aren't in the provider's
+      // list, so a fetch would otherwise drop them. Best-effort: a proxy
+      // without a local GPU configured just returns none.
+      try {
+        const localRes = await (window.authFetch || fetch)("/api/image/local-models");
+        if (localRes.ok) models.unshift(...((await localRes.json()).data || []));
+      } catch (e) {
+        console.warn("Couldn't list local GPU models:", e);
+      }
+
       if (models && models.length > 0) {
         const currentSelected = new Set(
           this.config.get("api.image.models") || [],
