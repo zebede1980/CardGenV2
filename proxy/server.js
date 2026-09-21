@@ -2855,9 +2855,21 @@ async function waitForLocalComfyResult(promptId) {
   const deadline = Date.now() + LOCAL_COMFY.runTimeoutMs;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    const response = await localComfyFetch(`/history/${encodeURIComponent(promptId)}`, { timeout: 15000 });
-    if (!response.ok) continue;
-    const entry = (await response.json())[promptId];
+    // ComfyUI's web server stalls for seconds at a time while it swaps the
+    // text encoder and diffusion model through VRAM (together they don't fit
+    // in 16GB). A poll that fails mid-swap says nothing about the job, which
+    // is still running — so keep polling and let only the deadline end it.
+    // Treating one failed poll as fatal abandoned live jobs, and the retries
+    // queued behind them until every request timed out.
+    let entry;
+    try {
+      const response = await localComfyFetch(`/history/${encodeURIComponent(promptId)}`, { timeout: 30000 });
+      if (!response.ok) continue;
+      entry = (await response.json())[promptId];
+    } catch (err) {
+      if (err instanceof LocalComfyError && err.status === 503) continue;
+      throw err;
+    }
     if (!entry || entry.status?.completed === undefined) continue;
 
     if (entry.status.status_str !== "success") {
@@ -2872,6 +2884,22 @@ async function waitForLocalComfyResult(promptId) {
   throw new LocalComfyError(504, "Local GPU took too long — it may be busy with another job");
 }
 
+// Best-effort: take a job we've given up on off the GPU, so it can't sit in
+// ComfyUI's queue delaying every request after it. Deleting only affects a job
+// still waiting; interrupt (scoped to this prompt id) stops one already running.
+async function cancelLocalComfyJob(promptId) {
+  const post = (path, body) =>
+    localComfyFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      timeout: 10000,
+    }).catch((err) => console.error(`[comfy] cancel ${path} failed:`, err.message));
+  await post("/queue", { delete: [promptId] });
+  await post("/interrupt", { prompt_id: promptId });
+  console.log(`[comfy] cancelled abandoned job ${promptId}`);
+}
+
 // Returns the same { data: [{ url }] } shape nano-gpt does, so every existing
 // caller's response handling works unchanged. The url is a data URI, which the
 // frontend already handles everywhere a result can land.
@@ -2883,7 +2911,9 @@ async function runLocalComfyImage(body) {
   if (!prompt) throw new LocalComfyError(400, "A prompt is required");
 
   // Fail fast with a clear message rather than queueing into a PC that's off.
-  const health = await localComfyFetch("/system_stats", { timeout: 5000 });
+  // A PC that's off fails in milliseconds (refused / unreachable); the long
+  // timeout only matters when ComfyUI is up but mid model-swap.
+  const health = await localComfyFetch("/system_stats", { timeout: 15000 });
   if (!health.ok) throw new LocalComfyError(503, `Local GPU is not responding (${health.status})`);
 
   const sourceImage = body.image ? await uploadLocalComfyImage(parseImageDataUri(body.image)) : null;
@@ -2904,7 +2934,13 @@ async function runLocalComfyImage(body) {
   const { prompt_id: promptId } = await submit.json();
   console.log(`[comfy] queued ${sourceImage ? "edit" : "generation"} ${promptId}`);
 
-  const image = await waitForLocalComfyResult(promptId);
+  let image;
+  try {
+    image = await waitForLocalComfyResult(promptId);
+  } catch (err) {
+    await cancelLocalComfyJob(promptId);
+    throw err;
+  }
   const query = new URLSearchParams({ filename: image.filename, subfolder: image.subfolder || "", type: image.type || "output" });
   const view = await localComfyFetch(`/view?${query}`, { timeout: 60000 });
   if (!view.ok) throw new LocalComfyError(502, `Couldn't fetch the finished image from the local GPU (${view.status})`);
