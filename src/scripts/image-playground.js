@@ -435,23 +435,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const useLocalForge = document.getElementById("playground-edit-use-forge")?.checked;
-    const denoisingStrength = parseFloat(document.getElementById("playground-edit-denoising")?.value) || 0.55;
-
-    let editModel;
-    if (useLocalForge) {
-      editModel = `local-forge (denoise ${denoisingStrength})`;
-    } else {
-      const imageApiBase = this.config.get("api.image.baseUrl");
-      const imageApiKey = this.config.get("api.image.apiKey");
-      if (!imageApiBase || !imageApiKey) {
-        this.showNotification("Please configure image API settings first", "warning");
-        return;
-      }
-      editModel = document.getElementById("playground-edit-model")?.value
-        || this.config.get("api.image.editModel")
-        || "flux-2-pro-image-to-image";
+    const imageApiBase = this.config.get("api.image.baseUrl");
+    const imageApiKey = this.config.get("api.image.apiKey");
+    if (!imageApiBase || !imageApiKey) {
+      this.showNotification("Please configure image API settings first", "warning");
+      return;
     }
+    const editModel = document.getElementById("playground-edit-model")?.value
+      || this.config.get("api.image.editModel")
+      || "flux-2-pro-image-to-image";
 
     const actionBtn = document.getElementById("edit-playground-image-btn");
     const statusEl = document.getElementById("playground-edit-status");
@@ -464,9 +456,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     try {
       const imageBase64 = this.playgroundImageUrl;
 
-      const resultUrl = useLocalForge
-        ? await window.apiHandler.editForgeImage({ imageBase64, instruction, denoisingStrength })
-        : await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
+      const resultUrl = await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
 
       const dataUrl = await this._urlToDataUrl(resultUrl);
 
@@ -475,10 +465,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       this._addPlaygroundHistoryEntry(dataUrl, `Edited (${editModel})`, {
         tool: "edit",
-        model: useLocalForge ? "" : editModel,
+        model: editModel,
         prompt: instruction,
-        useLocalForge: !!useLocalForge,
-        denoisingStrength,
       });
 
       this.showNotification("Image updated!", "success");
@@ -504,8 +492,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // a version durable; this strip is only a short undo trail.
   _PLAYGROUND_HISTORY_MAX: 15,
 
-  // `meta` records what actually produced this version — { tool, model, prompt }
-  // and, for a Local Forge edit, its denoising strength. Without it the strip
+  // `meta` records what actually produced this version — { tool, model, prompt }.
+  // Without it the strip
   // was a row of pictures with no way to tell what made any of them, and no way
   // to run the same instruction again against a different model.
   _addPlaygroundHistoryEntry(url, label, meta = null) {
@@ -631,9 +619,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } else if (meta.tool === "edit") {
       setValue("playground-edit-instruction", meta.prompt);
       setValue("playground-edit-model", meta.model);
-      const forgeToggle = document.getElementById("playground-edit-use-forge");
-      if (forgeToggle) forgeToggle.checked = !!meta.useLocalForge;
-      setValue("playground-edit-denoising", meta.denoisingStrength);
       this._setPlaygroundToolTab("edit");
     } else if (meta.tool === "combine") {
       setValue("playground-combine-instruction", meta.prompt);

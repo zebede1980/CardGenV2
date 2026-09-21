@@ -452,24 +452,6 @@
                                         💡 Sends the reference image plus your instruction to an image-to-image model, aiming to keep the likeness while changing what you ask for — a whole-image makeover before you even generate a card. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
                                     </p>
 
-                                    <div class="form-group checkbox-group" style="margin-top: 0.75rem; margin-bottom: 0;">
-                                        <input type="checkbox" id="reference-image-edit-use-forge" class="checkbox">
-                                        <label for="reference-image-edit-use-forge" style="margin: 0; font-size: 0.875rem;">🔧 Use Local Forge (flux-1-dev) instead of cloud</label>
-                                    </div>
-                                    <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
-                                        <label for="reference-image-edit-denoising" class="label" style="font-size: 0.8rem;">Denoising Strength (Local Forge only)</label>
-                                        <input
-                                            type="number"
-                                            id="reference-image-edit-denoising"
-                                            class="input"
-                                            value="0.55"
-                                            min="0.1"
-                                            max="0.95"
-                                            step="0.05"
-                                            style="max-width: 120px;"
-                                        >
-                                    </div>
-
                                     <button
                                         type="button"
                                         id="edit-reference-image-btn"
@@ -1622,27 +1604,6 @@
                                         💡 Sends the current image plus your instruction to an image-to-image model, aiming to keep the character consistent while changing what you ask for. Uses the "Image Edit Model" set in ⚙️ Settings → Image API. Costs API credits per attempt and may take a moment.
                                     </p>
 
-                                    <div class="form-group checkbox-group" style="margin-top: 0.75rem; margin-bottom: 0;">
-                                        <input type="checkbox" id="image-edit-use-forge" class="checkbox">
-                                        <label for="image-edit-use-forge" style="margin: 0; font-size: 0.875rem;">🔧 Use Local Forge (flux-1-dev) instead of cloud</label>
-                                    </div>
-                                    <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
-                                        <label for="image-edit-denoising" class="label" style="font-size: 0.8rem;">Denoising Strength (Local Forge only)</label>
-                                        <input
-                                            type="number"
-                                            id="image-edit-denoising"
-                                            class="input"
-                                            value="0.55"
-                                            min="0.1"
-                                            max="0.95"
-                                            step="0.05"
-                                            style="max-width: 120px;"
-                                        >
-                                        <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.25rem;">
-                                            Lower = closer to the original image but ignores your instruction more. Higher = follows the instruction more but the character's identity drifts. In testing, flux-1-dev img2img struggled to do both at once — worth experimenting yourself.
-                                        </p>
-                                    </div>
-
                                     <button
                                         id="edit-image-btn"
                                         class="btn-small"
@@ -1682,10 +1643,7 @@
                                      text-to-image roll — so gallery additions stay recognizably
                                      the same character. A fixed consistency clause (see
                                      GALLERY_CONSISTENCY_INSTRUCTION in character-gallery-panel.js)
-                                     is always prepended to whatever's typed below. No Local Forge
-                                     option: flux-1-dev loses facial likeness even on small edits
-                                     (see cardgenv2-image-edit-feature memory), which defeats the
-                                     point of this feature.
+                                     is always prepended to whatever's typed below.
 
                                      One instruction box per image in Count below — each is its
                                      own independent edit call, so a batch of 4 can be 4 different
@@ -2418,31 +2376,6 @@
                                     ✨ Edit Image
                                 </button>
                                 <p id="playground-edit-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
-
-                                <details style="margin-top: 0.75rem;">
-                                    <summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-secondary); user-select: none;">
-                                        ⚙️ Advanced — use Local Forge instead of cloud
-                                    </summary>
-                                    <div style="margin-top: 0.5rem; padding-left: 0.25rem;">
-                                        <div class="form-group checkbox-group" style="margin-bottom: 0;">
-                                            <input type="checkbox" id="playground-edit-use-forge" class="checkbox">
-                                            <label for="playground-edit-use-forge" style="margin: 0; font-size: 0.875rem;">🔧 Use Local Forge (flux-1-dev) instead of cloud</label>
-                                        </div>
-                                        <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
-                                            <label for="playground-edit-denoising" class="label" style="font-size: 0.8rem;">Denoising Strength (Local Forge only)</label>
-                                            <input
-                                                type="number"
-                                                id="playground-edit-denoising"
-                                                class="input"
-                                                value="0.55"
-                                                min="0.1"
-                                                max="0.95"
-                                                step="0.05"
-                                                style="max-width: 120px;"
-                                            >
-                                        </div>
-                                    </div>
-                                </details>
                             </div>
 
                             <!-- Upscale / clean up, without changing the content. Driven by

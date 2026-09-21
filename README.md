@@ -125,7 +125,7 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 **Editing an existing image**
 - **✨ Edit Current Image** (collapsed by default) — send the current portrait plus a plain-language instruction (change outfit, change pose, convert anime → photoreal, etc.) to an **image-to-image** model, aiming to keep the character's likeness while changing what you ask for.
   - Model is chosen in Settings → Image API → **Image Edit Model**, a dropdown of your ✨ Edit-capable models (defaults to `flux-2-pro-image-to-image`; try `flux-2-max-image-to-image` or `flux-kontext` too — nano-gpt-style aggregators expose more of these than show up in a plain model list).
-  - **Use Local Forge (flux-1-dev) instead of cloud** checkbox routes the same edit through your local Forge install with an adjustable **Denoising Strength**, for free local experimentation. Note: a base checkpoint like Flux-1-dev isn't a dedicated edit model — in testing it barely followed clothing/pose instructions and lost facial likeness at higher denoising, so treat it as a sandbox, not a substitute for a real edit model.
+  - **`local/qwen-image-2.1`** runs edits (and text-to-image) free on your own GPU via ComfyUI, when the server has `COMFYUI_URL` / `COMFYUI_API_KEY` set — see `.env.example`. It appears in the model list after Settings → Image API → **Fetch models**, pre-marked 🪄 Generate and ✨ Edit.
   - Some cloud edit models silently return a solid-black image instead of an error when their safety filter rejects the source — the app detects this and surfaces a real error message instead of showing you a blank picture.
 - **✂️ Crop** — crop, rotate, and flip, with aspect-ratio presets (Free, 1:1, 3:4, 9:16, 4:3).
 - **📁 Upload** your own image, **📋 Paste** one from the clipboard, or **🌐 Search Web** for one to use as the portrait.
@@ -153,7 +153,7 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 A standalone image workspace with no card involved. Tools are tabs under the working image:
 - **🪄 Generate** — text-to-image from a prompt alone (the default tab); the result becomes the working image.
 - **✂️ Crop** — crop, rotate and flip.
-- **✨ Edit** — prompt-based image-to-image edit, cloud or Local Forge.
+- **✨ Edit** — prompt-based image-to-image edit, with any ✨ Edit-capable model (cloud or your local GPU).
 - **⬆️ Enhance** — re-render at 1.5×, 2×, 3× or 4×; quality depends heavily on the model.
 - **🔀 Combine** — merge the working image with a second image from an instruction (e.g. "put the outfit from Image 2 on the character in Image 1").
 - **📚 Library** — images saved to your account on the server, so an image made on your phone shows up on your desktop. View, download, delete, reopen as the working image, or **turn one into a new character** (clears the Character Generator, sets it as the reference image and starts the vision description).
@@ -425,7 +425,7 @@ All settings are saved server-side to `proxy/data/config.json` via `POST /api/co
 | Image Size | e.g. `1024x1024`, `768x1024` — used as a fallback when Aspect Ratio isn't set |
 | Image Style / Mood | Optional preset hints forwarded to the image prompt (see [Image Handling](#image-handling)) |
 | Enable Image Generation | Toggle to show/hide all image controls |
-| Local WebUI Forge — Enable / URL | Toggle + host URL (e.g. `http://127.0.0.1:7860`) for local text-to-image and image-editing generation. The browser connects to this directly, not the proxy — so a private/LAN Forge instance works even though the Docker proxy container couldn't reach it itself |
+| Local WebUI Forge — Enable / URL | Toggle + host URL (e.g. `http://127.0.0.1:7860`) for local text-to-image generation. The browser connects to this directly, not the proxy — so a private/LAN Forge instance works even though the Docker proxy container couldn't reach it itself |
 
 #### TTS Narration (Story Writer)
 
@@ -680,7 +680,7 @@ src/
     app-ui.js                    — UI helpers (notifications, streaming, state buttons)
     api.js                       — APIHandler base (request, streaming, retry, abort, model fetch)
     api-character.js             — Character generation, revision, and field-regeneration prompts
-    api-image.js                 — Image generation, image-to-image editing, and Local Forge methods
+    api-image.js                 — Image generation, image-to-image editing, and Local Forge generation
     api-lorebook.js              — Lorebook/alt-greeting/consistency/card-scan API methods
     auth.js                      — Client-side authentication
     config.js                    — Config management (localStorage + server sync)

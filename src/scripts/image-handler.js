@@ -631,21 +631,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const useLocalForge = document.getElementById("image-edit-use-forge")?.checked;
-    const denoisingStrength = parseFloat(document.getElementById("image-edit-denoising")?.value) || 0.55;
-
-    let editModel;
-    if (useLocalForge) {
-      editModel = `local-forge (denoise ${denoisingStrength})`;
-    } else {
-      const imageApiBase = this.config.get("api.image.baseUrl");
-      const imageApiKey = this.config.get("api.image.apiKey");
-      if (!imageApiBase || !imageApiKey) {
-        this.showNotification("Please configure image API settings first", "warning");
-        return;
-      }
-      editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
+    const imageApiBase = this.config.get("api.image.baseUrl");
+    const imageApiKey = this.config.get("api.image.apiKey");
+    if (!imageApiBase || !imageApiKey) {
+      this.showNotification("Please configure image API settings first", "warning");
+      return;
     }
+    const editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
 
     this.openImageOptionsModal();
     const modalTitle = document.querySelector("#image-options-modal .modal-title");
@@ -668,9 +660,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         reader.readAsDataURL(sourceBlob);
       });
 
-      const resultUrl = useLocalForge
-        ? await window.apiHandler.editForgeImage({ imageBase64, instruction, denoisingStrength })
-        : await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
+      const resultUrl = await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
 
       // Convert remote result to a blob URL via proxy for CORS-safe display
       let blobUrl = resultUrl;
@@ -757,21 +747,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const useLocalForge = document.getElementById("reference-image-edit-use-forge")?.checked;
-    const denoisingStrength = parseFloat(document.getElementById("reference-image-edit-denoising")?.value) || 0.55;
-
-    let editModel;
-    if (useLocalForge) {
-      editModel = `local-forge (denoise ${denoisingStrength})`;
-    } else {
-      const imageApiBase = this.config.get("api.image.baseUrl");
-      const imageApiKey = this.config.get("api.image.apiKey");
-      if (!imageApiBase || !imageApiKey) {
-        this.showNotification("Please configure image API settings first", "warning");
-        return;
-      }
-      editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
+    const imageApiBase = this.config.get("api.image.baseUrl");
+    const imageApiKey = this.config.get("api.image.apiKey");
+    if (!imageApiBase || !imageApiKey) {
+      this.showNotification("Please configure image API settings first", "warning");
+      return;
     }
+    const editModel = this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
 
     this.openImageOptionsModal();
     const modalTitle = document.querySelector("#image-options-modal .modal-title");
@@ -790,9 +772,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const imageBase64 = this.referenceImageDataUrl;
       const originalUrl = this.referenceImageDataUrl;
 
-      const resultUrl = useLocalForge
-        ? await window.apiHandler.editForgeImage({ imageBase64, instruction, denoisingStrength })
-        : await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
+      const resultUrl = await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
 
       let blobUrl = resultUrl;
       if (!resultUrl.startsWith("blob:") && !resultUrl.startsWith("data:")) {
