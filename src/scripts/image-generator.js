@@ -308,18 +308,15 @@ class ImageGenerator {
       throw new Error("File must be an image");
     }
 
-    // Check file size (max 10MB for most APIs)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // No API-sized limit or format whitelist here: every caller re-encodes the
+    // file through a canvas (prepareReferenceImageForVision, max 1024px JPEG)
+    // before it goes anywhere. A pasted screenshot arrives as a raw PNG well
+    // over 10MB and ends up a few hundred KB. This cap only stops a file big
+    // enough to stall the tab while it decodes; a format the browser can't
+    // decode fails there with its own error.
+    const maxSize = 100 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new Error("Image file too large. Maximum size is 10MB.");
-    }
-
-    // Check supported formats
-    const supportedFormats = ["image/jpeg", "image/png", "image/webp"];
-    if (!supportedFormats.includes(file.type)) {
-      throw new Error(
-        "Unsupported image format. Please use JPEG, PNG, or WebP.",
-      );
+      throw new Error("Image file too large. Maximum size is 100MB.");
     }
 
     return true;

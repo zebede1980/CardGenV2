@@ -1258,7 +1258,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const img = await new Promise((resolve, reject) => {
       const image = new Image();
       image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error("Failed to process image"));
+      image.onerror = () => reject(new Error("Couldn't decode this image. The browser may not support its format; try JPEG, PNG or WebP"));
       image.src = sourceDataUrl;
     });
 
