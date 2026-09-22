@@ -1312,6 +1312,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
           this.config.get("api.image.models") || [],
         );
 
+        // A fetch adds to the list, never removes from it. Models added by hand,
+        // or ones the provider has stopped listing, stay at the top, still
+        // ticked. Otherwise the next save drops them and prunes their marks.
+        const fetchedIds = new Set(models.map((m) => m.id));
+        const kept = [...currentSelected]
+          .filter((id) => !fetchedIds.has(id))
+          .map((id) => ({ id }));
+        models.unshift(...kept);
+
         container.innerHTML = models
           .map((m) => renderImageModelRow(m.id, currentSelected.has(m.id), this.config))
           .join("");
@@ -1323,15 +1332,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
         statusEl.style.color = "var(--success)";
         this.refreshImageModelDropdowns();
       } else {
-        container.innerHTML =
-          '<p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">No models returned from API.</p>';
+        // The container is left alone: its rows are the saved model list, and
+        // replacing them with a message means the next save stores an empty one.
         statusEl.textContent = "No models found";
         statusEl.style.color = "var(--warning)";
       }
     } catch (error) {
-      statusEl.textContent = "Failed to fetch";
+      statusEl.textContent = `Failed to fetch: ${error.message}`;
       statusEl.style.color = "var(--error)";
-      container.innerHTML = `<p style="font-size: 0.8rem; color: var(--error); margin: 0;">Error: ${escapeHtml(error.message)}</p>`;
     }
   },
 

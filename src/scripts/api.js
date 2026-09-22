@@ -695,21 +695,29 @@ class APIHandler {
 
     if (!baseUrl) throw new Error("API Base URL is required to fetch models");
 
-    let endpoint = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    if (!endpoint.endsWith('/v1') && !endpoint.includes('/models')) {
-        // Attempt to guess correct endpoint if it doesn't seem explicitly provided
-    }
-    const url = `${endpoint}/models`;
+    const endpoint = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    const headers = {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+    };
 
     try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json"
+        // nano-gpt's /models is its text catalogue; image models are listed
+        // separately at /image-models. Providers without that endpoint (OpenAI
+        // and friends) 404 it and fall through to plain /models.
+        let response = null;
+        if (type === 'image') {
+            try {
+                response = await fetch(`${endpoint}/image-models`, { method: 'GET', headers });
+                if (!response.ok) response = null;
+            } catch (e) {
+                response = null;
             }
-        });
-        
+        }
+        if (!response) {
+            response = await fetch(`${endpoint}/models`, { method: 'GET', headers });
+        }
+
         if (!response.ok) {
             let errorMsg = response.statusText;
             try {
