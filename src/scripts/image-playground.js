@@ -4,6 +4,11 @@
 // image-handler.js's handleEditReferenceImage) via a third 'playground'
 // target, working on this.playgroundImageUrl instead of a card's portrait or
 // the pre-generation reference image.
+
+// Uploaded/pasted Playground images are resized to this before use. 2048px
+// keeps the detail edits and Enhance need; JPEG keeps a Combine request (two
+// images, base64'd) inside nginx's 12MB body limit.
+const PLAYGROUND_IMAGE_ENCODING = { maxSide: 2048, quality: 0.92 };
 // Prompt presets. The built-ins ship with the app and cannot be deleted — they
 // exist so the feature is useful the first time it is opened rather than after
 // the user has curated a list. Anything the user saves lives in config under
@@ -375,10 +380,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async processPlaygroundImageFile(file) {
     try {
       this.imageGenerator.validateImageFile(file);
-      // prepareReferenceImageForVision is really just a generic "resize to
-      // max 1024px, return a JPEG data URL" helper despite its name — no
-      // vision-specific behavior, safe to reuse here.
-      const dataUrl = await this.prepareReferenceImageForVision(file);
+      // prepareReferenceImageForVision is really just a generic "resize and
+      // return a JPEG data URL" helper despite its name. Larger than its
+      // 1024px default, since this is the image being edited.
+      const dataUrl = await this.prepareReferenceImageForVision(file, PLAYGROUND_IMAGE_ENCODING);
 
       this.playgroundImageUrl = dataUrl;
       this.updatePlaygroundImagePreview(dataUrl);
@@ -788,7 +793,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async _processCombineImage2File(file) {
     try {
       this.imageGenerator.validateImageFile(file);
-      const dataUrl = await this.prepareReferenceImageForVision(file);
+      const dataUrl = await this.prepareReferenceImageForVision(file, PLAYGROUND_IMAGE_ENCODING);
       this.combineImage2Url = dataUrl;
 
       const preview = document.getElementById("combine-image2-preview");

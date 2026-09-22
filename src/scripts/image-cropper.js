@@ -529,8 +529,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       if (this._cropTarget === 'playground') {
         // Playground path: no card, no vision description to keep in sync — just
-        // update the working image and its preview.
-        const dataUrl = cropCanvas.toDataURL("image/png");
+        // update the working image and its preview. JPEG, not PNG: a 2048px
+        // PNG can pass 8MB once base64'd, and nginx caps requests at 12MB.
+        const dataUrl = cropCanvas.toDataURL("image/jpeg", 0.92);
         this.playgroundImageUrl = dataUrl;
         if (typeof this.updatePlaygroundImagePreview === "function") {
           this.updatePlaygroundImagePreview(dataUrl);

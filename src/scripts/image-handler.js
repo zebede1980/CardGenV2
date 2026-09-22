@@ -1246,7 +1246,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showNotification("Reference image description generated", "success");
   },
 
-  async prepareReferenceImageForVision(file) {
+  // Defaults suit the vision model, which gains nothing past 1024px. The
+  // Playground passes larger values: its image is what gets edited and
+  // enhanced, so detail lost here is lost for good.
+  async prepareReferenceImageForVision(file, { maxSide = 1024, quality = 0.82 } = {}) {
     const sourceDataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target.result);
@@ -1262,7 +1265,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
       image.src = sourceDataUrl;
     });
 
-    const maxSide = 1024;
     const ratio = Math.min(maxSide / img.width, maxSide / img.height, 1);
     const targetWidth = Math.max(1, Math.round(img.width * ratio));
     const targetHeight = Math.max(1, Math.round(img.height * ratio));
@@ -1273,7 +1275,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-    return canvas.toDataURL("image/jpeg", 0.82);
+    return canvas.toDataURL("image/jpeg", quality);
   },
 
   updateReferenceImagePreview(dataUrl) {

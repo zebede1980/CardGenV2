@@ -309,7 +309,7 @@ class ImageGenerator {
     }
 
     // No API-sized limit or format whitelist here: every caller re-encodes the
-    // file through a canvas (prepareReferenceImageForVision, max 1024px JPEG)
+    // file through a canvas (prepareReferenceImageForVision, a resized JPEG)
     // before it goes anywhere. A pasted screenshot arrives as a raw PNG well
     // over 10MB and ends up a few hundred KB. This cap only stops a file big
     // enough to stall the tab while it decodes; a format the browser can't
