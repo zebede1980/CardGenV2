@@ -2,9 +2,9 @@
 const LOCAL_STORAGE_KEY = "charGeneratorConfig";
 
 // ── Image-model capabilities ────────────────────────────────────────────────
-// Which of the three image jobs a given model can actually do. Providers don't
-// report this — nano-gpt's model list returns bare ids with no capability
-// field — so the app used to guess from the name alone (_looksEditCapable in
+// Which of the image jobs a given model can actually do. Most providers don't
+// report this (nano-gpt's /image-models reports input types, which is used for
+// the defaults, but nothing about Combine), so the app used to guess from the name alone (_looksEditCapable in
 // image-playground.js), which is unreliable: a plain text-to-image model
 // silently ignores a source image rather than erroring, so a wrong guess
 // costs a credit and returns something with no resemblance to the original.
@@ -24,13 +24,18 @@ const IMAGE_CAPABILITY_META = {
 // Same markers _looksEditCapable used. Kept deliberately conservative: it only
 // decides the starting state of the checkboxes, and being wrong is now a tick
 // away from fixed rather than a mystery about why an edit did nothing.
-const IMAGE_EDIT_NAME_MARKERS = ["image-to-image", "img2img", "-edit", "edit-", "kontext", "inpaint", "instruct"];
+const IMAGE_EDIT_NAME_MARKERS = ["image-to-image", "img2img", "-edit", "edit-", "/edit", "kontext", "inpaint", "instruct"];
 
 // There is no equivalent naming convention for "accepts multiple reference
 // images" — qwen-image-3-pro, reve/2.1/remix and xai/…/edit all support it with
 // nothing in common in their names — so Combine defaults to off for everything
 // and is purely a user decision.
-function guessImageModelCapabilities(modelId) {
+//
+// `apiModel` is the model's entry from the provider's model list, when there is
+// one. nano-gpt's /image-models says which inputs each model takes, which beats
+// guessing from the name: an edit model takes text + image, a text-to-image
+// model text only, and a background remover or upscaler an image only.
+function guessImageModelCapabilities(modelId, apiModel) {
   const id = (modelId || "").toLowerCase();
   // The proxy's local ComfyUI model is known exactly rather than guessed: one
   // Qwen-Image 2.1 workflow does both text-to-image and single-image edits. Not
@@ -42,18 +47,32 @@ function guessImageModelCapabilities(modelId) {
   // starting guess — how *well* a given model upscales is something only the
   // user can judge, which is exactly why it is a separate tickbox.
   const looksUpscale = looksEdit || ["upscal", "enhance", "restor", "super-res", "superres"].some(m => id.includes(m));
-  return { generate: !looksEdit, edit: looksEdit, combine: false, upscale: looksUpscale };
+  const byName = { generate: !looksEdit, edit: looksEdit, combine: false, upscale: looksUpscale };
+
+  const inputs = apiModel?.architecture?.input_modalities;
+  const apiCaps = apiModel?.capabilities;
+  if (!Array.isArray(inputs) && !apiCaps) return byName;
+  const takesText = Array.isArray(inputs) ? inputs.includes("text") : true;
+  const takesImage = !!apiCaps?.image_to_image || (Array.isArray(inputs) && inputs.includes("image"));
+  return {
+    // Plenty of text+image models (seedream, hidream) also generate from text
+    // alone, so an image input only rules out Generate when the name says edit.
+    generate: takesText && (!takesImage || !looksEdit),
+    edit: takesText && takesImage,
+    combine: false,
+    upscale: takesImage && looksUpscale,
+  };
 }
 
 // The stored marks for one model, falling back to the name guess. Model ids
 // contain dots and slashes (`reve/2.1/remix`), so the map is read whole and
 // indexed — never via config.get("api.image.modelCapabilities." + id), which
 // would split the id on its own dots.
-function getImageModelCapabilities(modelId, configInstance) {
+function getImageModelCapabilities(modelId, configInstance, apiModel) {
   const cfg = configInstance || window.config;
   const stored = (cfg?.get("api.image.modelCapabilities") || {})[modelId];
-  if (!stored) return guessImageModelCapabilities(modelId);
-  const guess = guessImageModelCapabilities(modelId);
+  const guess = guessImageModelCapabilities(modelId, apiModel);
+  if (!stored) return guess;
   // Merge rather than replace: a capability added to the app after this model
   // was marked has no stored value and should still get its guessed default.
   return IMAGE_MODEL_CAPABILITIES.reduce((out, cap) => {
@@ -216,8 +235,8 @@ function populateImageModelSelect(selectEl, capability, configKey, configInstanc
 // rather than inline at each call site because three separate places render
 // this row — saveToForm below, handleFetchImageModels (image-handler.js) and
 // the manual "Add" button (main.js) — and they drifted apart before.
-function renderImageModelRow(modelId, isChecked, configInstance) {
-  const caps = getImageModelCapabilities(modelId, configInstance);
+function renderImageModelRow(modelId, isChecked, configInstance, apiModel) {
+  const caps = getImageModelCapabilities(modelId, configInstance, apiModel);
   const capBoxes = IMAGE_MODEL_CAPABILITIES.map(cap => {
     const meta = IMAGE_CAPABILITY_META[cap];
     return `

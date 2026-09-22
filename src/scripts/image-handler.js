@@ -1322,7 +1322,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         models.unshift(...kept);
 
         container.innerHTML = models
-          .map((m) => renderImageModelRow(m.id, currentSelected.has(m.id), this.config))
+          .map((m) => renderImageModelRow(m.id, currentSelected.has(m.id), this.config, m))
           .join("");
 
         const searchInput = document.getElementById("image-model-search");
