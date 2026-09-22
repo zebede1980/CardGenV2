@@ -1087,23 +1087,47 @@ class CharacterGeneratorApp {
             cardgenConfig = importedConfig.cardgen;
             swConfig = importedConfig.storywriter;
         }
-        
+
+        // Any JSON file would otherwise be merged in as if it were settings.
+        if (!this.config.isObject(cardgenConfig) || !this.config.isObject(cardgenConfig.api)) {
+            this.showNotification("That file isn't a CardGen config backup.", "error");
+            e.target.value = "";
+            return;
+        }
+
         this.config.config = this.config.deepMerge(this.config.config, cardgenConfig);
-        this.config.saveConfig();
-        
+        // Awaited: the reload below reads the server copy, which overrides
+        // localStorage. Reloading before this POST lands brings the old config
+        // straight back.
+        const configSaved = await this.config.saveConfig();
+
+        let swSaved = true;
         if (swConfig && Object.keys(swConfig).length > 0) {
             try {
-                await (window.authFetch || fetch)("/api/sw/settings/", {
+                const swRes = await (window.authFetch || fetch)("/api/sw/settings/", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(swConfig)
                 });
+                swSaved = swRes.ok;
             } catch (e) {
                 console.error("Failed to restore Storywriter settings:", e);
+                swSaved = false;
             }
         }
-        
-        this.showNotification("Configuration restored successfully! Reloading page...", "success");
+
+        if (!configSaved) {
+            this.showNotification("Restore failed: the server didn't save the configuration. Nothing was reloaded.", "error");
+            e.target.value = "";
+            return;
+        }
+
+        this.showNotification(
+            swSaved
+                ? "Configuration restored successfully! Reloading page..."
+                : "Configuration restored, but Story Writer settings failed. Reloading page...",
+            swSaved ? "success" : "warning",
+        );
         setTimeout(() => window.location.reload(), 1000);
       } catch (error) {
         this.showNotification("Failed to parse configuration file.", "error");

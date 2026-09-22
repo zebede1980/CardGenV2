@@ -533,20 +533,28 @@ class Config {
     this.saveConfig();
   }
 
+  // Resolves true once the server has stored the config. Most callers fire and
+  // forget; a restore awaits it, because it reloads the page straight after and
+  // the server copy wins over localStorage on load.
   saveConfig() {
     if (!this.isLoaded) {
       console.warn("Attempted to save config before it was fully loaded. Ignoring save to prevent data loss.");
-      return;
+      return Promise.resolve(false);
     }
 
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.config));
 
     // Also save to server for persistence across devices/sessions
-    (window.authFetch || fetch)("/api/config", {
+    return (window.authFetch || fetch)("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(this.config)
-    }).catch(e => console.error("Failed to sync config to server", e));
+    })
+      .then(res => res.ok)
+      .catch(e => {
+        console.error("Failed to sync config to server", e);
+        return false;
+      });
   }
 
   saveToForm() {
