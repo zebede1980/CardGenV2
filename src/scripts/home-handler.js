@@ -361,13 +361,12 @@ class HomeHandler {
             }
 
             tile.innerHTML = `
-                <div style="position: relative; width: 100%; aspect-ratio: 1/1; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;">
+                <div class="home-card-image" title="${this.escapeHtml(cardName)} — click to view the full card" style="position: relative; width: 100%; aspect-ratio: 1/1; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer;">
                     <img src="${imgSrc}" alt="${this.escapeHtml(cardName)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width: 100%; height: 100%; object-fit: cover;">
-                    <button class="delete-card-btn" style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 2.2rem; height: 2.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(220,50,50,0.9)'" onmouseout="this.style.background='rgba(0,0,0,0.6)'" title="Delete Character">🗑️</button>
                 </div>
                 <h3 style="margin: 0; font-size: 1.2rem; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(cardName)}">${this.escapeHtml(cardName)}</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; width: 100%; margin-top: auto;">
-                    <button class="btn-small btn-outline info-btn" style="border-radius: 0.4rem; padding: 0.5rem;">ℹ️ Info</button>
+                    <button class="btn-small btn-outline delete-card-btn" style="border-radius: 0.4rem; padding: 0.5rem;" title="Delete this character">🗑️ Delete</button>
                     <button class="btn-small btn-outline edit-btn" style="border-radius: 0.4rem; padding: 0.5rem;">✏️ Edit</button>
                     <button class="btn-small btn-primary story-btn" style="border-radius: 0.4rem; padding: 0.5rem;">📖 Story</button>
                     <button class="btn-small btn-primary chat-btn" style="border-radius: 0.4rem; padding: 0.5rem;">💬 Chat</button>
@@ -379,8 +378,10 @@ class HomeHandler {
                 this.showDeleteConfirmation('card', card, imgSrc);
             });
 
-            // Info Button: Uses existing gallery mode info modal
-            tile.querySelector('.info-btn').addEventListener('click', (e) => {
+            // Clicking the portrait opens the card's details — the obvious gesture
+            // when you spot a card you want to look at. Replaces the old Info button,
+            // whose slot in the button grid is now Delete.
+            tile.querySelector('.home-card-image').addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (window.cardGallery) window.cardGallery.showInfo(card);
             });

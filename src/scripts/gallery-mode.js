@@ -44,6 +44,9 @@ class CardGallery {
                     <button id="card-gallery-info-close" class="modal-close">×</button>
                 </div>
                 <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
+                    <div id="gallery-info-image-wrap" style="display: none; justify-content: center; margin-bottom: 1.25rem;">
+                        <img id="gallery-info-image" alt="" style="max-width: 100%; max-height: 45vh; border-radius: 0.5rem; background: var(--bg-tertiary, #1e1e2e); object-fit: contain;">
+                    </div>
                     <div id="gallery-info-content" style="white-space: pre-wrap; line-height: 1.6;"></div>
                 </div>
             </div>
@@ -92,6 +95,26 @@ class CardGallery {
         this.renderGrid(filtered);
     }
 
+    // Placeholder shown when a card has no image at all
+    get fallbackSvg() {
+        return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%232d2d3d'/><text x='50' y='50' font-family='Arial' font-size='14' fill='%23888' text-anchor='middle' dominant-baseline='middle'>No Image</text></svg>`;
+    }
+
+    // Works out where a card's picture lives. Returns null when there isn't one,
+    // so callers can decide between a placeholder and hiding the image entirely.
+    resolveImageSrc(card) {
+        if (!card) return null;
+        if (card.avatar && String(card.avatar).startsWith('data:')) return card.avatar;
+        if (card.imageUrl) return card.imageUrl;
+        if (card.image) return card.image;
+        if (card.id) {
+            const authToken = window.cardgenAuth?.getToken() || "";
+            const tStamp = new Date(card.updatedAt || card.createdAt || 0).getTime();
+            return `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? '&token=' + encodeURIComponent(authToken) : ''}&_t=${tStamp}`;
+        }
+        return null;
+    }
+
     renderGrid(cards) {
         const grid = document.getElementById('card-gallery-grid');
         grid.innerHTML = '';
@@ -122,18 +145,7 @@ class CardGallery {
                 
                 const cardName = card.characterName || (card.character && card.character.name) || card.name || 'Unknown Character';
 
-                // Image resolution logic
-                let imgSrc = fallbackSvg;
-                if (card.avatar && card.avatar.startsWith('data:')) {
-                    imgSrc = card.avatar;
-                } else if (card.imageUrl) {
-                    imgSrc = card.imageUrl;
-                } else if (card.image) {
-                    imgSrc = card.image;
-                } else if (card.id) {
-                    const tStamp = new Date(card.updatedAt || card.createdAt || 0).getTime();
-                    imgSrc = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(card.id)}${authToken ? '&token=' + encodeURIComponent(authToken) : ''}&_t=${tStamp}`;
-                }
+                const imgSrc = this.resolveImageSrc(card) || fallbackSvg;
 
                 tile.innerHTML = `
                     <div style="width: 100%; aspect-ratio: 1/1; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary, #1e1e2e); display: flex; align-items: center; justify-content: center;">
@@ -171,10 +183,27 @@ class CardGallery {
         document.body.style.overflow = '';
     }
 
-    showInfo(card) {
+    // imageSrc is optional: callers that hold a picture the card object doesn't
+    // know about (e.g. the freshly generated CardGen image) can pass it in.
+    showInfo(card, imageSrc = null) {
         const charObj = card.character || card;
         const cardName = card.characterName || charObj.name || 'Unknown Character';
         document.getElementById('gallery-info-title').textContent = cardName;
+
+        const imgWrap = document.getElementById('gallery-info-image-wrap');
+        const imgEl = document.getElementById('gallery-info-image');
+        const resolved = imageSrc || this.resolveImageSrc(card) || this.resolveImageSrc(charObj);
+        if (imgWrap && imgEl) {
+            if (resolved) {
+                imgEl.src = resolved;
+                imgEl.alt = cardName;
+                imgEl.onerror = () => { imgWrap.style.display = 'none'; };
+                imgWrap.style.display = 'flex';
+            } else {
+                imgEl.removeAttribute('src');
+                imgWrap.style.display = 'none';
+            }
+        }
         
         let contentHtml = '';
         if (charObj.description) contentHtml += `<div style="margin-bottom: 1rem;"><strong>Description:</strong><br>${this.escapeHtml(charObj.description)}</div>`;
