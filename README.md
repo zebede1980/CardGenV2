@@ -147,6 +147,7 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 <a id="image-model-capabilities"></a>**Image model capabilities**
 - Image providers don't say what each model can do, and the wrong kind fails silently (a text-to-image model handed a source image just ignores it). In Settings → Image API, each model has checkboxes for **🪄 Generate / ✨ Edit / 🔀 Combine / ⬆️ Enhance**.
 - Every image-model dropdown in the app (Character Generator, Edit, Gallery, Story Writer, Roleplay scene images, all Playground tools) lists only models marked for that job.
+- **Fetch models** asks the provider's `/image-models` list first (falling back to `/models`), so text models don't end up in the image list. Where the provider reports what a model accepts (nano-gpt's `input_modalities` / `image_to_image`), the checkboxes are pre-ticked from that; ticks you've already saved still win. Previously selected models the provider no longer lists are kept, and a failed or empty fetch leaves your saved list alone.
 - Unmarked models fall back to a name-based guess, and if nothing is marked for a job the dropdown shows every model flagged ⚠️ rather than going empty — so existing setups keep working before you tick anything.
 
 ### 🖼️ Image Playground
@@ -160,6 +161,7 @@ A standalone image workspace with no card involved. Tools are tabs under the wor
 - Every version is kept in a non-destructive history strip (capped at 15, always keeping the original). Each entry records its tool, model and prompt, and ↻ puts those settings back without re-running.
 - Built-in and custom prompt presets per tool, and per-model speed (measured from your own runs) plus a cost note shown in each model dropdown.
 - Each tool has its own model dropdown, filtered by capability.
+- Uploaded and pasted images (and Combine's second image) are kept at up to 2048px, so edits and enhances start from a sharp source.
 
 ### Story Writer & TTS Narration
 - A dedicated workspace to write continuous stories with your generated characters.
@@ -224,6 +226,7 @@ A standalone image workspace with no card involved. Tools are tabs under the wor
 - **Server-side library** — prompts and cards are auto-saved to `proxy/data/` after every generation and revision. A manual **Save to Library** button is also available.
 - **Snapshot to History** — save the current card state as a named history entry at any point (visible while a card is loaded); useful for tracking incremental changes.
 - Load or delete any saved prompt or card from the Library tab in the UI.
+- On the **Home screen**, click a character's portrait to open its details popup (image plus every card field); each tile's button grid has **🗑️ Delete**, **✏️ Edit**, **📖 Story** and **💬 Chat**.
 - Concurrent writes are serialised with a per-file mutex to prevent data corruption.
 - Data persists across restarts when using Docker volumes.
 
@@ -340,6 +343,10 @@ Create a `.env` file in the project root (next to `docker-compose.yml`) to overr
 | `BRAVE_SEARCH_API_KEY` | *(empty)* | Your Brave Search API key — enables the Web Search feature |
 | `BRAVE_SEARCH_ENABLED` | `true` | Set to `false` to disable search even if a key is configured |
 | `KOKORO_TTS_URL` | `http://kokoro-tts:8880` | Internal URL the proxy calls for local Kokoro TTS. Only needed if you're running Kokoro somewhere other than the bundled `kokoro-tts` Compose service |
+| `COMFYUI_URL` | *(empty)* | Optional. URL of an authenticating nginx in front of a ComfyUI on your own GPU; enables the `local/qwen-image-2.1` image model. Leave empty to disable. See `.env.example` for the endpoints the nginx must allow |
+| `COMFYUI_API_KEY` | *(empty)* | Sent as `X-API-Key` to that nginx (ComfyUI itself has no auth). Generate with `openssl rand -hex 32` |
+| `COMFYUI_EDIT_MEGAPIXELS` | `1.0` | Resolution local edits run at (~18s per edit on a 16GB GPU at 1MP) |
+| `COMFYUI_MAX_MEGAPIXELS` | `2.0` | Cap on local generation size — above ~2MP the model spills out of VRAM and slows sharply |
 
 **Job registry tuning** (mobile-resilience feature — long-running generations survive a dropped connection; see [Mobile Reliability](#mobile-reliability)). These have sane defaults and rarely need changing:
 
@@ -687,6 +694,8 @@ src/
     storage.js                   — Server-side library storage (cards and prompts)
     character-generator.js       — Character prompt templates and response parsing
     character-search.js          — Web search orchestration (Brave Search API)
+    name-bank.js                 — Draws character names from the local name bank (cultural default, repeat history)
+    name-bank-data.js            — Generated name data (built by tools/build-name-bank.py — don't edit by hand)
     character-display.js         — Field display, edit, reset, import, remaster, tags
     revision-handler.js          — AI revision, reduce bloat, consistency check/auto-fix
     alt-greetings-handler.js     — Alternate greetings CRUD and AI generation
@@ -726,6 +735,10 @@ storywriterbackend/               — Story Writer / Roleplay Chat / Adventure M
   app/
     routers/                     — chat.py, adventure.py, generation.py, stories.py, cards.py, gallery.py, playground.py, personas.py, settings.py, proxy_data.py, auth.py
     services/                    — LLM service, context manager, card parser
+tools/                           — Build-time scripts (see tools/README.md)
+  build-name-bank.py             — Rebuilds name-bank-data.js from published name data (`npm run build:names`)
+  check-name-bank.js             — Asserts the name bank's invariants (`npm run check:names`)
+  name_sources.py                — Download + parse helpers for the name bank's source datasets
 ```
 
 ---
