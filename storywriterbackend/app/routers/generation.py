@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from fastapi.responses import StreamingResponse
 import json
 import re
+import time
+from collections import defaultdict
 
 from app.database import get_db
 from app.models import Story, StorySegment, Settings, SteeringInstruction, User
@@ -12,6 +14,22 @@ from app.services.context_manager import ContextManager
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/generate", tags=["generation"])
+
+# In-memory sliding-window rate limiter for compute-intensive generation
+# endpoints, to prevent uncontrolled resource consumption (CWE-770).
+_RATE_LIMIT_MAX_REQUESTS = 10
+_RATE_LIMIT_WINDOW_SECONDS = 60
+_generation_request_log: dict[int, list[float]] = defaultdict(list)
+
+
+def rate_limited_user(current_user: User = Depends(get_current_user)) -> User:
+    now = time.time()
+    timestamps = _generation_request_log[current_user.id]
+    timestamps[:] = [t for t in timestamps if now - t < _RATE_LIMIT_WINDOW_SECONDS]
+    if len(timestamps) >= _RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(status_code=429, detail="Too many generation requests. Please slow down and try again shortly.")
+    timestamps.append(now)
+    return current_user
 
 
 def _trim_to_sentence(text: str) -> str:
@@ -33,7 +51,7 @@ def get_or_create_settings(db: Session, user_id: int) -> Settings:
     return settings
 
 @router.post("/")
-async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_db), current_user: User = Depends(rate_limited_user)):
     story = db.query(Story).filter(Story.id == req.story_id, Story.user_id == current_user.id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
@@ -187,7 +205,7 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
 @router.post("/summarize")
-async def summarize_story(story_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def summarize_story(story_id: int, db: Session = Depends(get_db), current_user: User = Depends(rate_limited_user)):
     story = db.query(Story).filter(Story.id == story_id, Story.user_id == current_user.id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
@@ -236,7 +254,7 @@ async def summarize_story(story_id: int, db: Session = Depends(get_db), current_
 async def generate_image_prompt(
     req: ImagePromptRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(rate_limited_user),
 ):
     """Generate a concise image-generation prompt describing the scene in a story segment."""
     story = db.query(Story).filter(Story.id == req.story_id, Story.user_id == current_user.id).first()
