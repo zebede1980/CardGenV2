@@ -10,6 +10,17 @@ from app.models import Settings
 # They must NOT inherit the user's creative temperature.
 UTILITY_TEMPERATURE = 0.3
 
+# Providers known to accept the OpenRouter-style `reasoning: {"enabled": true}`
+# request flag. OpenAI itself rejects unknown params with a 400, so the flag is
+# only ever sent to these.
+REASONING_FLAG_HOSTS = ("nano-gpt.com", "openrouter.ai")
+
+
+class ReasoningChunk(str):
+    """A streamed piece of the model's native reasoning (delta.reasoning /
+    delta.reasoning_content), as opposed to its visible reply. Only yielded
+    when generate() is called with yield_reasoning=True."""
+
 
 class LLMService:
     def __init__(self, settings: Settings):
@@ -31,7 +42,11 @@ class LLMService:
         )
 
 
-    async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None, top_p: float = None) -> AsyncGenerator[str, None]:
+    async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None, top_p: float = None, request_reasoning: bool = False, yield_reasoning: bool = False) -> AsyncGenerator[str, None]:
+        """request_reasoning: ask the provider to switch on the model's native
+        reasoning (only sent to REASONING_FLAG_HOSTS).
+        yield_reasoning: stream that reasoning back as ReasoningChunk items
+        instead of discarding it (streaming only)."""
         url = f"{self.api_base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -54,6 +69,8 @@ class LLMService:
             payload["top_p"] = effective_top_p
         if repetition_penalty is not None and repetition_penalty != 1.0:
             payload["repetition_penalty"] = repetition_penalty
+        if request_reasoning and any(h in self.api_base_url for h in REASONING_FLAG_HOSTS):
+            payload["reasoning"] = {"enabled": True}
         if stream:
             # NOTE: Do NOT add stream_options here. It is an OpenAI-specific
             # extension that many compatible APIs (Nano-GPT, GLM, etc.) do not
@@ -83,6 +100,10 @@ class LLMService:
                                 if fr:
                                     self.finish_reason = fr
                                 delta = choice.get("delta", {})
+                                if yield_reasoning:
+                                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                                    if reasoning:
+                                        yield ReasoningChunk(reasoning)
                                 content = delta.get("content", "")
                                 if content:
                                     yield content

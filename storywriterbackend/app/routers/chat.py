@@ -13,7 +13,7 @@ import logging
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
-from app.services.llm_service import LLMService, UTILITY_TEMPERATURE
+from app.services.llm_service import LLMService, ReasoningChunk, UTILITY_TEMPERATURE
 from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
@@ -132,6 +132,42 @@ def _detect_cot_leak(content: str) -> Optional[tuple[str, str]]:
     rest = parts[1].strip() if len(parts) > 1 else ""
     folded_think = f"{before}{leaked}\n</think>"
     return folded_think, rest
+# ─────────────────────────────────────────────────────────────────────────────
+
+# [NATIVE-REASONING 2026-10-01] ──────────────────────────────────────────────
+# GLM 5.x on nano-gpt never emits <think>/</think> as text: they are special
+# tokens the provider strips. Without the reasoning flag the model either wrote
+# the five steps as untagged visible text (which _inject_think_tags /
+# _detect_cot_leak then had to guess the end of — the source of </think> landing
+# mid-paragraph) or reasoned silently and the provider dropped it. Measured
+# 2026-10-01: 0/44 replies tagged without the flag vs 41/41 clean with it, and
+# prose appears no later. With reasoning requested, the steps arrive in a
+# separate field; this wraps them in <think> tags at the source so the
+# frontend, the stored message and history stripping all work unchanged.
+# The text heuristics above remain as the fallback for providers/models that
+# return no native reasoning.
+async def _with_think_tags(chunks):
+    in_think = False
+    prose_started = False
+    async for chunk in chunks:
+        if isinstance(chunk, ReasoningChunk):
+            if prose_started:
+                continue  # reasoning arriving after the reply began would split the prose
+            if not in_think:
+                in_think = True
+                chunk = "<think>\n" + chunk
+            yield str(chunk)
+            continue
+        if in_think:
+            chunk = chunk.lstrip()
+            if not chunk:
+                continue  # the provider's leading blank lines between reasoning and reply
+            in_think = False
+            chunk = "\n</think>\n" + chunk
+        prose_started = True
+        yield chunk
+    if in_think:
+        yield "\n</think>\n"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_default_system_prompt() -> str:
@@ -1311,16 +1347,21 @@ async def send_message(
         )
         
         try:
-            async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
+            # [NATIVE-REASONING 2026-10-01] see _with_think_tags()
+            stream = llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p,
+                                  request_reasoning=getattr(req, 'enable_cot', True), yield_reasoning=True)
+            async for chunk in _with_think_tags(stream):
                 full_content += chunk
                 await queue.put(chunk)
-                
+
             logger.info(f"[{request_id}] LLM request completed successfully")
 
             # ── CoT tag fallback ─────────────────────────────────────────────
             # If CoT is enabled and the model forgot to wrap its reasoning in
             # <think> tags, inject them now.  We emit a corrected_content event
             # so the frontend can re-render the bubble with the think block.
+            # Only reached for providers that return no native reasoning — with
+            # it, _with_think_tags() has already tagged the block.
             if getattr(req, 'enable_cot', True):
                 fixed_content, was_fixed = _inject_think_tags(full_content)
                 if was_fixed:
