@@ -6,17 +6,28 @@ import asyncio
 import json
 import uuid
 import logging
+import re
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
-from app.services.llm_service import LLMService, UTILITY_TEMPERATURE
+from app.services.llm_service import LLMService, UTILITY_TEMPERATURE, with_think_tags, strip_think, needs_prose, prose_after_reasoning, supports_reasoning_flag
 from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])
 
-def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None, enable_cot: bool = True):
+ADVENTURE_NATIVE_COT_PROMPT = (
+    "CHAIN OF THOUGHT (5-Phase Logic):\n"
+    "Before writing, think privately through the 5-Phase Logic: "
+    "1) Ground Truth (setting, time, current reality), 2) NPC Knowledge (what the characters know and don't), "
+    "3) Intent (goal for this turn), 4) Draft (plan the action/dialogue), "
+    "5) Self-Correct (persona fit, avoid repetition). "
+    "Your visible response is only the story section followed by the four [OPTION] choices."
+)
+
+
+def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None, enable_cot: bool = True, native_reasoning: bool = False):
     messages = []
     history_messages = []
     
@@ -50,8 +61,16 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if session_data.summary:
         system_parts.append(f"Story Summary:\n{session_data.summary}")
         
-    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning. You must wrap your entire reasoning process within <think> and </think> tags. Inside the <think> block, strictly follow this 5-Phase Logic:\n- Phase 1: Build Ground Truth (Establish the physical setting, time, and current reality)\n- Phase 2: Map NPC Knowledge (Determine exactly what your character(s) know and don't know right now)\n- Phase 3: Identify Intent (Decide the goal or motivation for this specific turn)\n- Phase 4: Draft the Action/Dialogue (Plan what the character will do or say)\n- Phase 5: Self-Correct (Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character)\n\nOnly after closing the </think> tag should you write the actual prose for the user."
+    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning. You must wrap your entire reasoning process within <think> and </think> tags. Inside the <think> block, strictly follow this 5-Phase Logic:\n- Phase 1: Build Ground Truth (Establish the physical setting, time, and current reality)\n- Phase 2: Map NPC Knowledge (Determine exactly what your character(s) know and don't know right now)\n- Phase 3: Identify Intent (Decide the goal or motivation for this specific turn)\n- Phase 4: Draft the Action/Dialogue (Plan what the character will do or say)\n- Phase 5: Self-Correct (Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character)\n\nOnly after closing the </think> tag should you write the actual prose for the user. Closing </think> is NOT the end of your response: the story section and the four [OPTION] choices must always follow it."
     
+    # [NATIVE-REASONING 2026-10-01] When the provider returns the model's own
+    # reasoning, the phases go there instead. Telling such a model to *start its
+    # response* with <think> made it treat the reasoning as the whole turn and
+    # stop: measured 6/6 needing a follow-up call (median 31s) vs 0/6 (17s) with
+    # this wording. The tag-based wording stays for providers without it.
+    if native_reasoning:
+        cot_prompt = ADVENTURE_NATIVE_COT_PROMPT
+
     sys_prompt = getattr(session_data, "system_prompt", "") or ""
     # [ADVENTURE-CRASH-FIX 2026-08-12] Was `if request and request.enable_cot:`
     # — `request` was never defined anywhere in this file (not a parameter, not
@@ -111,7 +130,9 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
         # If assistant generated story
         elif action.role == "assistant":
             # We must include the options it generated so it knows the context of the user's next choice
-            content = action.content
+            # Reasoning is dropped: it's transient planning, and keeping it in
+            # context makes models echo it outside the tags (same as chat.py).
+            content = strip_think(action.content)
             if action.options:
                 try:
                     options_list = json.loads(action.options)
@@ -141,10 +162,42 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
         
-    if enable_cot and ("CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt):
-        messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the story prose/actions after closing the </think> tag."})
+    if enable_cot and not native_reasoning and ("CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt):
+        messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the story prose/actions after closing the </think> tag. "
+            "Finishing the 5 phases is not the end of your turn — the story section and the four [OPTION] choices must always follow."})
         
     return messages
+
+# Follow-up instruction when a generation stopped after its plan with no story.
+ADVENTURE_CONTINUE_INSTRUCTION = (
+    "Continue directly from your plan above. Write ONLY the next story section now — "
+    "no reasoning, no tags, no restating the plan — then end with exactly 4 choices "
+    "in the [OPTION 1] … [OPTION 4] format."
+)
+
+
+def split_adventure_options(full_content: str) -> tuple[str, list]:
+    """Pull the trailing [OPTION 1..4] choices out of a generated turn.
+    Returns (story text to store, options). Options are only looked for after
+    the reasoning: the Draft phase often sketches candidate [OPTION n] lines
+    that aren't the final ones. The <think> block is kept on the stored story
+    so it stays viewable, and stripped wherever the text is fed back to a model."""
+    close_idx = full_content.rfind("</think>")
+    think_part = full_content[:close_idx + len("</think>")] if close_idx >= 0 else ""
+    story_part = full_content[close_idx + len("</think>"):] if close_idx >= 0 else full_content
+    options = []
+    cleaned_story = story_part
+    for i in range(1, 5):
+        pattern = rf"\[OPTION {i}\](.*?)(?=\[OPTION|$)"
+        match = re.search(pattern, story_part, re.IGNORECASE | re.DOTALL)
+        if match:
+            options.append(match.group(1).strip())
+            cleaned_story = re.sub(rf"\[OPTION {i}\].*?(?=\[OPTION|$)", "", cleaned_story, flags=re.IGNORECASE | re.DOTALL)
+    cleaned_story = cleaned_story.strip()
+    if cleaned_story and think_part:
+        cleaned_story = f"{think_part}\n{cleaned_story}"
+    return cleaned_story, options
+
 
 # [ADVENTURE-CONTEXT-SCALING 2026-08-12] ─────────────────────────────────────
 # Same fix as chat.py's summarize_chat_task (this function was a deliberate
@@ -211,7 +264,7 @@ async def summarize_adventure_task(session_id: str, user_id: int, max_input_toke
             if a.role == "user":
                 text_parts.append(f"User direction: {a.content}")
             else:
-                text_parts.append(f"Narrator: {a.content}")
+                text_parts.append(f"Narrator: {strip_think(a.content)}")
         combined_text = "\n".join(text_parts)
         
         prompt = (
@@ -324,7 +377,8 @@ async def send_action(
         next_order_index += 1
         db.commit()
     
-    prompt_messages = build_adventure_prompt(session_data, db, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True))
+    prompt_messages = build_adventure_prompt(session_data, db, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True),
+                                             native_reasoning=supports_reasoning_flag(settings.api_base_url))
     
     assistant_action = models.AdventureAction(
         session_id=session_id,
@@ -366,9 +420,19 @@ async def send_action(
         logger.info(f"[{request_id}] LLM request started for adventure {session_id}, action {assistant_action_id}")
         
         try:
-            async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
+            # [NATIVE-REASONING 2026-10-01] see with_think_tags() in llm_service
+            stream = llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p,
+                                  request_reasoning=getattr(req, 'enable_cot', True), yield_reasoning=True)
+            async for chunk in with_think_tags(stream):
                 full_content += chunk
                 await queue.put(chunk)
+
+            # Reasoning but no reply after it — ask for the reply on its own.
+            if needs_prose(full_content):
+                logger.info(f"[{request_id}] Reasoning with no prose — requesting the reply")
+                async for chunk in prose_after_reasoning(llm, prompt_messages, full_content, ADVENTURE_CONTINUE_INSTRUCTION, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
+                    full_content += chunk
+                    await queue.put(chunk)
                 
             logger.info(f"[{request_id}] LLM request completed successfully")
             
@@ -392,18 +456,7 @@ async def send_action(
         finally:
             # Post-processing: extract the options from the text
             # Options format: [OPTION 1] Text ...
-            import re
-            options = []
-            cleaned_story = full_content
-            for i in range(1, 5):
-                pattern = f"\[OPTION {i}\](.*?)(?=\[OPTION|$)"
-                match = re.search(pattern, full_content, re.IGNORECASE | re.DOTALL)
-                if match:
-                    options.append(match.group(1).strip())
-                    # remove from cleaned story
-                    cleaned_story = re.sub(f"\[OPTION {i}\].*?(?=\[OPTION|$)", "", cleaned_story, flags=re.IGNORECASE | re.DOTALL)
-            
-            cleaned_story = cleaned_story.strip()
+            cleaned_story, options = split_adventure_options(full_content)
             if not cleaned_story:
                 cleaned_story = "[Generation failed]"
                 

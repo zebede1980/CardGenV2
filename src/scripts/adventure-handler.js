@@ -785,8 +785,19 @@ class AdventureHandler {
                             // Update UI dynamically but hide the [OPTION X] markers if they start appearing
                             // Actually, they only appear at the very end.
                             let displayText = accumulatedText;
-                            if (displayText.includes('[OPTION')) {
-                                displayText = displayText.split('[OPTION')[0];
+                            // The model's reasoning streams first as an open <think> block.
+                            // Keep it (and the '...' placeholder) out of view until it closes,
+                            // rather than letting formatStory show it as story text.
+                            const openIdx = displayText.search(/<think>/i);
+                            const closeIdx = displayText.search(/<\/think>/i);
+                            if (openIdx >= 0 && closeIdx < 0) {
+                                displayText = displayText.slice(0, openIdx);
+                                if (!displayText.trim()) continue;
+                            }
+                            // Options only count after the reasoning — it may sketch drafts of them.
+                            const optIdx = displayText.indexOf('[OPTION', Math.max(closeIdx, 0));
+                            if (optIdx >= 0) {
+                                displayText = displayText.slice(0, optIdx);
                             }
                             segmentDiv.innerHTML = this.formatStory(displayText);
                             this.scrollToBottom();
