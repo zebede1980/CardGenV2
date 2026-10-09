@@ -37,11 +37,15 @@ const IMAGE_EDIT_NAME_MARKERS = ["image-to-image", "img2img", "-edit", "edit-", 
 // model text only, and a background remover or upscaler an image only.
 function guessImageModelCapabilities(modelId, apiModel) {
   const id = (modelId || "").toLowerCase();
-  // The proxy's local ComfyUI model is known exactly rather than guessed: one
-  // Qwen-Image 2.1 workflow does both text-to-image and single-image edits. Not
-  // Enhance: the proxy pins edit output to COMFYUI_EDIT_MEGAPIXELS, so it can't
-  // return the larger image an upscale asks for.
-  if (id.startsWith("local/qwen-image")) return { generate: true, edit: true, combine: false, upscale: false };
+  // The proxy's local ComfyUI models are known exactly rather than guessed: the
+  // proxy's /api/image/local-models says what each workflow does. Without that
+  // entry (a model added by hand), only Qwen-Image edits. Never Combine (one
+  // source image at most) or Enhance: the proxy pins edit output to
+  // COMFYUI_EDIT_MEGAPIXELS, so it can't return the larger image an upscale asks for.
+  if (id.startsWith("local/")) {
+    const local = apiModel?.local_capabilities || { generate: true, edit: id.startsWith("local/qwen-image") };
+    return { generate: !!local.generate, edit: !!local.edit, combine: false, upscale: false };
+  }
   const looksEdit = IMAGE_EDIT_NAME_MARKERS.some(marker => id.includes(marker));
   // Enhance is an image-to-image job, so anything edit-shaped is a fair
   // starting guess — how *well* a given model upscales is something only the

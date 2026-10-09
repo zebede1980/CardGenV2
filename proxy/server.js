@@ -2682,7 +2682,7 @@ app.post("/api/image/forge", requireAuth, async (req, res) => {
   }
 });
 
-// ── Local ComfyUI (Qwen-Image 2.1 on the owner's own GPU) ────────────────────
+// ── Local ComfyUI (image models on the owner's own GPU) ──────────────────────
 //
 // Unlike Forge above, this is called server-side: the GPU sits on a home PC the
 // browser usually can't reach, but the proxy can — over a private tunnel, to an
@@ -2692,8 +2692,9 @@ app.post("/api/image/forge", requireAuth, async (req, res) => {
 //
 // Selected by model id from the ordinary /api/image/generations route, so
 // generate, edit, enhance and resumable jobs all work without the frontend
-// knowing the model is local. One model covers both text-to-image and editing:
-// a request carrying `image` is an edit, anything else is a fresh generation.
+// knowing the model is local. Each model is one workflow in LOCAL_COMFY_MODELS;
+// for one that edits, a request carrying `image` is an edit and anything else
+// is a fresh generation.
 
 const LOCAL_COMFY = {
   url: (process.env.COMFYUI_URL || "").replace(/\/$/, ""),
@@ -2705,10 +2706,37 @@ const LOCAL_COMFY = {
   runTimeoutMs: 10 * 60 * 1000,
 };
 
-const LOCAL_COMFY_MODELS = ["local/qwen-image-2.1"];
+// Every workflow saves through a SaveImage with this node id, which is where
+// the result is read back from.
+const LOCAL_COMFY_OUTPUT_NODE = "56";
+
+// To add a model: put its files in the PC's ComfyUI models folders, write a
+// buildGraph from the model's official ComfyUI template, and add an entry
+// here. `capabilities` is sent to the browser as the starting state of the
+// model's Settings tickboxes; `edit` also decides whether `image` is accepted.
+const LOCAL_COMFY_MODELS = {
+  "local/qwen-image-2.1": {
+    name: "Qwen-Image 2.1",
+    capabilities: { generate: true, edit: true },
+    steps: { default: 25, min: 8, max: 50 },
+    buildGraph: buildQwenImageGraph,
+  },
+  "local/z-image-turbo": {
+    name: "Z-Image-Turbo",
+    capabilities: { generate: true, edit: false },
+    steps: { default: 8, min: 4, max: 20 },
+    buildGraph: buildZImageTurboGraph,
+  },
+  "local/krea-2-turbo": {
+    name: "Krea-2 Turbo",
+    capabilities: { generate: true, edit: false },
+    steps: { default: 8, min: 4, max: 20 },
+    buildGraph: buildKrea2TurboGraph,
+  },
+};
 
 function isLocalComfyModel(model) {
-  return LOCAL_COMFY_MODELS.includes(model);
+  return Object.hasOwn(LOCAL_COMFY_MODELS, model);
 }
 
 // Carries an HTTP status and a message fit to show the user, so the route's
@@ -2823,7 +2851,7 @@ function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage }
       },
     },
     8: { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["39", 0] } },
-    56: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/qwen" } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/qwen" } },
   };
 
   if (sourceImage) {
@@ -2849,6 +2877,50 @@ function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage }
     graph[62] = { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } };
   }
   return graph;
+}
+
+// From Comfy's "Z-Image-Turbo: Text to Image" template (bf16 model).
+function buildZImageTurboGraph({ prompt, seed, steps, width, height }) {
+  return {
+    28: { class_type: "UNETLoader", inputs: { unet_name: "z_image_turbo_bf16.safetensors", weight_dtype: "default" } },
+    30: { class_type: "CLIPLoader", inputs: { clip_name: "qwen_3_4b.safetensors", type: "lumina2", device: "default" } },
+    29: { class_type: "VAELoader", inputs: { vae_name: "ae.safetensors" } },
+    11: { class_type: "ModelSamplingAuraFlow", inputs: { model: ["28", 0], shift: 3 } },
+    27: { class_type: "CLIPTextEncode", inputs: { clip: ["30", 0], text: prompt } },
+    33: { class_type: "ConditioningZeroOut", inputs: { conditioning: ["27", 0] } },
+    13: { class_type: "EmptySD3LatentImage", inputs: { width, height, batch_size: 1 } },
+    3: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["11", 0], positive: ["27", 0], negative: ["33", 0], latent_image: ["13", 0],
+        seed, steps, cfg: 1.0, sampler_name: "res_multistep", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    8: { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["29", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/zimage" } },
+  };
+}
+
+// From Comfy's "Krea-2 Int8: Text to Image" template, minus its optional style
+// LoRA and LLM prompt-rewriting branches (both off by default there).
+function buildKrea2TurboGraph({ prompt, seed, steps, width, height }) {
+  return {
+    10: { class_type: "UNETLoader", inputs: { unet_name: "krea2_turbo_int8_convrot.safetensors", weight_dtype: "default" } },
+    11: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3vl_4b_fp8_scaled.safetensors", type: "krea2", device: "default" } },
+    12: { class_type: "VAELoader", inputs: { vae_name: "qwen_image_vae.safetensors" } },
+    6: { class_type: "CLIPTextEncode", inputs: { clip: ["11", 0], text: prompt } },
+    13: { class_type: "ConditioningZeroOut", inputs: { conditioning: ["6", 0] } },
+    5: { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
+    3: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["10", 0], positive: ["6", 0], negative: ["13", 0], latent_image: ["5", 0],
+        seed, steps, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    8: { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["12", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/krea2" } },
+  };
 }
 
 async function waitForLocalComfyResult(promptId) {
@@ -2877,7 +2949,7 @@ async function waitForLocalComfyResult(promptId) {
       const detail = failure?.[1]?.exception_message || "unknown error";
       throw new LocalComfyError(502, `Local GPU failed to generate the image: ${detail.trim()}`);
     }
-    const image = entry.outputs?.["56"]?.images?.[0];
+    const image = entry.outputs?.[LOCAL_COMFY_OUTPUT_NODE]?.images?.[0];
     if (!image) throw new LocalComfyError(502, "Local GPU finished but produced no image");
     return image;
   }
@@ -2907,8 +2979,14 @@ async function runLocalComfyImage(body) {
   if (!LOCAL_COMFY.url || !LOCAL_COMFY.apiKey) {
     throw new LocalComfyError(503, "The local GPU isn't configured on this server (COMFYUI_URL / COMFYUI_API_KEY)");
   }
+  const spec = LOCAL_COMFY_MODELS[body.model];
   const prompt = (body.prompt || "").trim();
   if (!prompt) throw new LocalComfyError(400, "A prompt is required");
+  // A text-to-image model would silently ignore the source and return an
+  // unrelated picture, so refuse instead.
+  if (body.image && !spec.capabilities.edit) {
+    throw new LocalComfyError(400, `${spec.name} can't edit images — pick an edit model`);
+  }
 
   // Fail fast with a clear message rather than queueing into a PC that's off.
   // A PC that's off fails in milliseconds (refused / unreachable); the long
@@ -2918,9 +2996,9 @@ async function runLocalComfyImage(body) {
 
   const sourceImage = body.image ? await uploadLocalComfyImage(parseImageDataUri(body.image)) : null;
   const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed : Math.floor(Math.random() * 2147483647);
-  const steps = Math.min(50, Math.max(8, parseInt(body.steps, 10) || 25));
+  const steps = Math.min(spec.steps.max, Math.max(spec.steps.min, parseInt(body.steps, 10) || spec.steps.default));
 
-  const graph = buildQwenImageGraph({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, ...localComfyDims(body) });
+  const graph = spec.buildGraph({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, ...localComfyDims(body) });
   const submit = await localComfyFetch("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2929,10 +3007,10 @@ async function runLocalComfyImage(body) {
   if (!submit.ok) {
     const detail = await submit.text().catch(() => "");
     console.error("[comfy] prompt rejected:", submit.status, detail.slice(0, 2000));
-    throw new LocalComfyError(502, `Local GPU rejected the workflow (${submit.status}) — are the Qwen-Image 2.1 models installed?`);
+    throw new LocalComfyError(502, `Local GPU rejected the workflow (${submit.status}) — are the ${spec.name} models installed?`);
   }
   const { prompt_id: promptId } = await submit.json();
-  console.log(`[comfy] queued ${sourceImage ? "edit" : "generation"} ${promptId}`);
+  console.log(`[comfy] queued ${spec.name} ${sourceImage ? "edit" : "generation"} ${promptId}`);
 
   let image;
   try {
@@ -2991,7 +3069,12 @@ async function handleLocalComfyImage(req, res) {
 // never appears on a deployment that can't serve it.
 app.get("/api/image/local-models", requireAuth, (req, res) => {
   const configured = !!(LOCAL_COMFY.url && LOCAL_COMFY.apiKey);
-  res.json({ data: configured ? LOCAL_COMFY_MODELS.map((id) => ({ id, owned_by: "local" })) : [] });
+  const models = Object.entries(LOCAL_COMFY_MODELS).map(([id, spec]) => ({
+    id,
+    owned_by: "local",
+    local_capabilities: spec.capabilities,
+  }));
+  res.json({ data: configured ? models : [] });
 });
 
 // Proxy endpoint for image API

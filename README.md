@@ -125,7 +125,7 @@ Cards are designed as **concise AI-guidance** — clear behavioural direction an
 **Editing an existing image**
 - **✨ Edit Current Image** (collapsed by default) — send the current portrait plus a plain-language instruction (change outfit, change pose, convert anime → photoreal, etc.) to an **image-to-image** model, aiming to keep the character's likeness while changing what you ask for.
   - Model is chosen in Settings → Image API → **Image Edit Model**, a dropdown of your ✨ Edit-capable models (defaults to `flux-2-pro-image-to-image`; try `flux-2-max-image-to-image` or `flux-kontext` too — nano-gpt-style aggregators expose more of these than show up in a plain model list).
-  - **`local/qwen-image-2.1`** runs edits (and text-to-image) free on your own GPU via ComfyUI, when the server has `COMFYUI_URL` / `COMFYUI_API_KEY` set — see `.env.example`. It appears in the model list after Settings → Image API → **Fetch models**, pre-marked 🪄 Generate and ✨ Edit.
+  - **`local/qwen-image-2.1`** runs edits (and text-to-image) free on your own GPU via ComfyUI, when the server has `COMFYUI_URL` / `COMFYUI_API_KEY` set — see `.env.example`. **`local/z-image-turbo`** and **`local/krea-2-turbo`** run text-to-image only, in 8 steps. They appear in the model list after Settings → Image API → **Fetch models**, pre-marked with what each can do. To add another local model, add a workflow to `LOCAL_COMFY_MODELS` in `proxy/server.js`.
   - Some cloud edit models silently return a solid-black image instead of an error when their safety filter rejects the source — the app detects this and surfaces a real error message instead of showing you a blank picture.
 - **✂️ Crop** — crop, rotate, and flip, with aspect-ratio presets (Free, 1:1, 3:4, 9:16, 4:3).
 - **📁 Upload** your own image, **📋 Paste** one from the clipboard, or **🌐 Search Web** for one to use as the portrait.
@@ -343,7 +343,7 @@ Create a `.env` file in the project root (next to `docker-compose.yml`) to overr
 | `BRAVE_SEARCH_API_KEY` | *(empty)* | Your Brave Search API key — enables the Web Search feature |
 | `BRAVE_SEARCH_ENABLED` | `true` | Set to `false` to disable search even if a key is configured |
 | `KOKORO_TTS_URL` | `http://kokoro-tts:8880` | Internal URL the proxy calls for local Kokoro TTS. Only needed if you're running Kokoro somewhere other than the bundled `kokoro-tts` Compose service |
-| `COMFYUI_URL` | *(empty)* | Optional. URL of an authenticating nginx in front of a ComfyUI on your own GPU; enables the `local/qwen-image-2.1` image model. Leave empty to disable. See `.env.example` for the endpoints the nginx must allow |
+| `COMFYUI_URL` | *(empty)* | Optional. URL of an authenticating nginx in front of a ComfyUI on your own GPU; enables the `local/*` image models (Qwen-Image 2.1, Z-Image-Turbo, Krea-2 Turbo). Leave empty to disable. See `.env.example` for the endpoints the nginx must allow |
 | `COMFYUI_API_KEY` | *(empty)* | Sent as `X-API-Key` to that nginx (ComfyUI itself has no auth). Generate with `openssl rand -hex 32` |
 | `COMFYUI_EDIT_MEGAPIXELS` | `1.0` | Resolution local edits run at (~18s per edit on a 16GB GPU at 1MP) |
 | `COMFYUI_MAX_MEGAPIXELS` | `2.0` | Cap on local generation size — above ~2MP the model spills out of VRAM and slows sharply |
