@@ -278,6 +278,8 @@ class CharacterGeneratorApp {
 
     const generateFourPromptsBtn = document.getElementById("generate-four-prompts-btn");
     if (generateFourPromptsBtn) generateFourPromptsBtn.addEventListener("click", () => this.handleGenerateFourPrompts());
+    const compareModelsBtn = document.getElementById("compare-models-btn");
+    if (compareModelsBtn) compareModelsBtn.addEventListener("click", () => this.handleCompareModels());
 
     // Local Forge button
     const localForgeBtn = document.getElementById("local-forge-btn");

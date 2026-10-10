@@ -503,6 +503,232 @@ Object.assign(CharacterGeneratorApp.prototype, {
     };
   },
 
+  // ⚔️ Compare Models: the same character drawn by several models side by
+  // side, so the user can pick a winner. Each model gets a prompt written to
+  // its own Settings preferences (Prompt Length, Flux) — models that share
+  // those preferences share one prompt, so where prompts can be equal the
+  // comparison is between models rather than between prompts.
+  async handleCompareModels() {
+    if (!this.currentCharacter) {
+      this.showNotification("Please generate a character first", "warning");
+      return;
+    }
+
+    const candidates = getImageModelsWithCapability("generate", this.config);
+    if (candidates.length < 2) {
+      this.showNotification("Mark at least two models 🪄 Generate in ⚙️ Settings → Image API to compare them.", "warning", 6000);
+      return;
+    }
+
+    // Last run's picks, else the local GPU models (free to run), else the first three.
+    const saved = (this.config.get("api.image.compareModels") || []).filter(m => candidates.includes(m));
+    const local = candidates.filter(m => m.startsWith("local/"));
+    const preselected = new Set(saved.length >= 2 ? saved : local.length >= 2 ? local : candidates.slice(0, 3));
+    const MAX_MODELS = 4;
+    const modelSettings = this.config.get("api.image.modelSettings") || {};
+    const lengthPrefOf = (model) => modelSettings[model]?.promptLengthPref || "detailed";
+
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    if (modalTitle) modalTitle.innerHTML = "⚔️ Compare Models";
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    loading.style.display = "none";
+    grid.innerHTML = "";
+
+    const panel = document.createElement("div");
+    panel.style.cssText = "grid-column:1 / -1;display:flex;flex-direction:column;gap:1rem;padding:1.5rem;background:var(--surface-color);border-radius:0.5rem;border:1px solid var(--border);";
+    panel.innerHTML = `
+      <p style="margin:0;color:var(--text-primary);font-weight:500;">Pick up to ${MAX_MODELS} models to draw this character:</p>
+      <div class="compare-models-list" style="display:flex;flex-direction:column;gap:0.4rem;max-height:40vh;overflow-y:auto;"></div>
+      <p style="margin:0;font-size:0.8rem;color:var(--text-secondary);">Each model's prompt follows its Prompt Length in ⚙️ Settings → Image API. An edited prompt in the prompt box is used as the starting point.</p>
+      <button class="btn-primary compare-models-start" style="align-self:flex-start;padding:0.5rem 2rem;">Generate</button>
+    `;
+    const list = panel.querySelector(".compare-models-list");
+    candidates.forEach(model => {
+      const row = document.createElement("label");
+      row.style.cssText = "display:flex;align-items:center;gap:0.6rem;cursor:pointer;color:var(--text-primary);";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = model;
+      cb.checked = preselected.has(model);
+      const name = document.createElement("span");
+      name.style.cssText = "font-family:monospace;overflow-wrap:anywhere;";
+      name.textContent = model;
+      const pref = document.createElement("span");
+      pref.style.cssText = "font-size:0.75rem;color:var(--text-secondary);white-space:nowrap;";
+      pref.textContent = `${lengthPrefOf(model)} prompt`;
+      row.append(cb, name, pref);
+      list.appendChild(row);
+    });
+    grid.appendChild(panel);
+
+    panel.querySelector(".compare-models-start").onclick = () => {
+      const chosen = [...list.querySelectorAll("input:checked")].map(cb => cb.value);
+      if (chosen.length < 2) {
+        this.showNotification("Pick at least two models to compare.", "warning");
+        return;
+      }
+      if (chosen.length > MAX_MODELS) {
+        this.showNotification(`Pick at most ${MAX_MODELS} models.`, "warning");
+        return;
+      }
+      this.config.set("api.image.compareModels", chosen);
+      this._runModelComparison(chosen);
+    };
+  },
+
+  async _runModelComparison(models) {
+    const character = this.currentCharacter;
+    const modal = document.getElementById("image-options-modal");
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    const grid = document.getElementById("image-options-grid");
+    if (modalTitle) modalTitle.innerHTML = "⚔️ Compare Models — click the winner";
+    grid.innerHTML = "";
+    // Side by side even on a phone — comparing means seeing them together;
+    // 🔍 opens any one full size. closeImageOptionsModal puts the columns back.
+    if (!grid.dataset.defaultColumns) grid.dataset.defaultColumns = grid.style.gridTemplateColumns;
+    grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(min(120px, 100%), 1fr))";
+
+    const cardType = character.cardType || document.getElementById("card-type-select")?.value || "single";
+    const referenceImageDescription = document.getElementById("reference-image-description")?.value?.trim();
+    const description = referenceImageDescription
+      ? `${character.description}\n\nReference image details:\n${referenceImageDescription}`
+      : character.description;
+    const guidance = this._getGuidance();
+    const basePrompt = document.getElementById("custom-image-prompt")?.value?.trim() || "";
+    const modelSettings = this.config.get("api.image.modelSettings") || {};
+
+    // Results that have landed, shared by reference with the keep-current card
+    // and _pendingCandidateUrls, so closing the modal or keeping the current
+    // image archives whatever has finished so far.
+    const landedUrls = [];
+    const landed = [];
+    this._pendingCandidateUrls = landedUrls;
+
+    const cards = new Map(models.map(model => {
+      const card = document.createElement("div");
+      card.style.cssText = "border:2px solid transparent;border-radius:0.5rem;overflow:hidden;transition:border-color 0.2s;background:var(--surface-color);position:relative;display:flex;flex-direction:column;";
+      card.innerHTML = `
+        <div class="compare-body" style="min-height:12rem;display:flex;align-items:center;justify-content:center;padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">⏳ Writing prompt…</div>
+        <div class="compare-label" style="padding:0.5rem;text-align:center;font-size:0.8rem;color:var(--text-secondary);background:rgba(0,0,0,0.1);border-top:1px solid var(--border);font-family:monospace;overflow-wrap:anywhere;"></div>
+      `;
+      card.querySelector(".compare-label").textContent = model;
+      grid.appendChild(card);
+      return [model, card];
+    }));
+    this._insertCurrentImageCard(grid, landedUrls);
+
+    // A result only goes into the grid while this comparison is still the one
+    // on screen; once the user has picked, kept, closed, or moved on, it goes
+    // to the card's history instead (or is dropped if the card has changed).
+    const isLive = (card) => this._pendingCandidateUrls === landedUrls && card.isConnected && modal?.classList.contains("show");
+    const archiveLate = (url) => {
+      if (this._pendingCandidateUrls === landedUrls) this._pendingCandidateUrls = null;
+      if (this.currentCharacter !== character) return;
+      this._addToHistory(url);
+      this.saveCardToLibrary().then(() => this.refreshLibraryViews()).catch(e => console.warn("Saving a late comparison image to history failed:", e));
+    };
+    const setStatus = (model, text) => {
+      const body = cards.get(model)?.querySelector(".compare-body");
+      if (body) body.textContent = text;
+    };
+
+    // One prompt per distinct set of prompt preferences.
+    const groupKey = (model) => `${modelSettings[model]?.promptLengthPref || "detailed"}|${modelSettings[model]?.isFlux ? 1 : 0}`;
+    const groups = new Map();
+    models.forEach(model => {
+      const key = groupKey(model);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(model);
+    });
+    const prompts = new Map();
+    await Promise.all([...groups.values()].map(async (groupModels) => {
+      const [first] = groupModels;
+      const isShort = (modelSettings[first]?.promptLengthPref || "detailed") === "short";
+      let prompt = null;
+      try {
+        if (basePrompt) {
+          prompt = isShort ? await window.apiHandler.truncateImagePrompt(basePrompt) : basePrompt;
+        } else {
+          prompt = await window.apiHandler.generateImagePrompt(description, character.name, cardType, guidance, undefined, undefined, first);
+        }
+      } catch (err) {
+        console.error(`Compare Models: prompt for ${groupModels.join(", ")} failed:`, err);
+        groupModels.forEach(model => setStatus(model, `❌ Prompt failed: ${err.message}`));
+      }
+      groupModels.forEach(model => prompts.set(model, prompt));
+    }));
+
+    // Every image request goes out together: a single local GPU queues them
+    // anyway, and they all clear its health check before the first model load
+    // starts stalling it.
+    await Promise.all(models.map(async (model) => {
+      const prompt = prompts.get(model);
+      const card = cards.get(model);
+      // Closed or replaced while the prompts were being written: don't spend a
+      // generation nobody is waiting for.
+      if (!prompt || !isLive(card)) return;
+      setStatus(model, "🎨 Generating…");
+      try {
+        const imageUrl = await window.apiHandler.generateImage(description, character.name, prompt, model, cardType, undefined, guidance);
+        const url = await this._fetchAsDisplayUrl(imageUrl);
+        if (!isLive(card)) {
+          archiveLate(url);
+          return;
+        }
+        const result = { url, prompt, model, label: model };
+        landed.push(result);
+        landedUrls.push(url);
+
+        card.style.cursor = "pointer";
+        card.onmouseenter = () => (card.style.border = "2px solid var(--accent)");
+        card.onmouseleave = () => (card.style.border = "2px solid transparent");
+        card.onclick = () => this.selectImageOption(url, prompt, model, landed);
+        const body = card.querySelector(".compare-body");
+        body.style.cssText = "";
+        body.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = model;
+        img.style.cssText = "width:100%;height:auto;display:block;";
+        body.appendChild(img);
+        card.querySelector(".compare-label").textContent = `${model} · ${groupKey(model).split("|")[0]} prompt (${prompt.length} chars)`;
+
+        const zoomBtn = document.createElement("button");
+        zoomBtn.className = "gallery-zoom-trigger";
+        zoomBtn.innerHTML = "🔍";
+        zoomBtn.title = "View in gallery";
+        zoomBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openGallery(landed, landed.indexOf(result));
+        });
+        card.appendChild(zoomBtn);
+      } catch (err) {
+        console.error(`Compare Models: ${model} failed:`, err);
+        if (isLive(card)) setStatus(model, `❌ ${err.message}`);
+      }
+    }));
+
+    if (this._pendingCandidateUrls === landedUrls && modal?.classList.contains("show")) {
+      if (landed.length === 0) {
+        if (modalTitle) modalTitle.innerHTML = "⚔️ Compare Models — every model failed";
+        this.showNotification("Every model failed — see each card for why.", "error", 6000);
+      } else {
+        this.showNotification(`${landed.length} of ${models.length} models finished — click the winner.`, "success");
+      }
+    }
+  },
+
+  // A generated image as something the browser can show without a remote
+  // round-trip: remote URLs are fetched through the proxy into a blob URL.
+  async _fetchAsDisplayUrl(imageUrl) {
+    if (!imageUrl || imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")) return imageUrl;
+    const response = await (window.authFetch || fetch)(`/api/proxy-image?url=${encodeURIComponent(imageUrl)}`);
+    if (!response.ok) return imageUrl;
+    return URL.createObjectURL(await response.blob());
+  },
+
   async handleForgeImage() {
     if (!this.currentCharacter) {
       this.showNotification("Please generate a character first", "warning");
@@ -919,6 +1145,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       modal.classList.remove("show");
       document.body.style.overflow = "";
     }
+    const grid = document.getElementById("image-options-grid");
+    if (grid?.dataset.defaultColumns) grid.style.gridTemplateColumns = grid.dataset.defaultColumns;
 
     // If candidate images were generated and modal closed without selection,
     // archive them to history so nothing is lost!
