@@ -166,7 +166,18 @@ class LLMService:
         if repetition_penalty is not None and repetition_penalty != 1.0:
             payload["repetition_penalty"] = repetition_penalty
         if request_reasoning and supports_reasoning_flag(self.api_base_url):
-            payload["reasoning"] = {"enabled": True}
+            # [GLM-5.3 2026-10-12] GLM 5.3 cannot switch reasoning off and
+            # defaults to a "low" tier, where 12/50 Roleplay replies reasoned
+            # only "Follow format." and then either skipped the plan or wrote
+            # it into the visible reply. Asking for "high" cut that to 2/105,
+            # and GLM 5.2 behaves as it did with the old flag. The effort must
+            # replace {"enabled": True} rather than join it: sent together, 5.3
+            # reasoned about a fifth as much (median ~270 chars vs ~1700).
+            # OpenRouter keeps the old flag — the effort field is untested there.
+            if "nano-gpt.com" in self.api_base_url:
+                payload["reasoning_effort"] = "high"
+            else:
+                payload["reasoning"] = {"enabled": True}
         if stream:
             # NOTE: Do NOT add stream_options here. It is an OpenAI-specific
             # extension that many compatible APIs (Nano-GPT, GLM, etc.) do not

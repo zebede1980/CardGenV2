@@ -13,7 +13,7 @@ import logging
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
-from app.services.llm_service import LLMService, UTILITY_TEMPERATURE, with_think_tags, strip_think, needs_prose, prose_after_reasoning
+from app.services.llm_service import LLMService, UTILITY_TEMPERATURE, with_think_tags, strip_think, needs_prose, prose_after_reasoning, supports_reasoning_flag
 from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
@@ -53,6 +53,24 @@ _COT_PROMPT_TEXT = (
     "4. The </think> tag MUST be closed only after ALL FIVE steps, including step 5, are written.\n"
     "5. Step 5 is NOT the end of your turn. After </think>, you MUST still write the full story "
     "prose — reaching step 5 is not a stopping point."
+)
+
+# [NATIVE-REASONING 2026-10-12] Wording for providers that return the model's
+# own reasoning (see with_think_tags() in llm_service) — the Roleplay twin of
+# ADVENTURE_NATIVE_COT_PROMPT. Telling such a model to *open its response* with
+# <think> made it write the five steps into the visible reply as well as (or
+# instead of) its reasoning: GLM 5.3 7/99 replies, GLM 5.2 5/88. With this
+# wording and no per-turn <think> reminder: 0/125 and 0/75. The tag-based
+# wording above stays for providers without native reasoning.
+_NATIVE_COT_PROMPT_TEXT = (
+    "CHAIN OF THOUGHT (5-Step Logic):\n"
+    "Before writing, think privately through these five steps: "
+    "1) Ground Truth (the exact physical setting, time, and immediate situation), "
+    "2) NPC Knowledge (what your character knows, believes, and does NOT know right now), "
+    "3) Intent (your character's concrete goal for this turn), "
+    "4) Draft (a brief rough sketch of what they will say or do), "
+    "5) Self-Correct (persona fit, avoid repetition). "
+    "Your visible response is only the story prose."
 )
 
 # Shared instruction distinguishing spoken dialogue (perceivable by other
@@ -313,14 +331,19 @@ RESPONSE_LENGTH_PRESETS = {
     }
 }
 
-def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None, enable_cot: bool = True):
+def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None, enable_cot: bool = True, native_reasoning: bool = False):
     messages = []
-    
+
     system_parts = []
 
     # 1. System Prompt (user-authored)
-    if chat.system_prompt:
-        system_parts.append(chat.system_prompt)
+    system_prompt = chat.system_prompt or ""
+    if enable_cot and native_reasoning:
+        # A chat created without its own system prompt stored the default one,
+        # which embeds the tag-based wording; the native wording replaces it below.
+        system_prompt = system_prompt.replace(_COT_PROMPT_TEXT, "").strip()
+    if system_prompt:
+        system_parts.append(system_prompt)
 
     # Writing Style Guidelines
     if getattr(chat, 'writing_style', None) and chat.writing_style in WRITING_STYLE_PRESETS:
@@ -383,8 +406,8 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     #    the freshest, most prominent instruction before the conversation history.
     #    Positioning it early (e.g. position 2) causes it to be buried under
     #    character cards and persona text, reducing adherence.
-    if enable_cot and (not chat.system_prompt or "CHAIN OF THOUGHT" not in chat.system_prompt):
-        system_parts.append(_COT_PROMPT_TEXT)
+    if enable_cot and "CHAIN OF THOUGHT" not in system_prompt:
+        system_parts.append(_NATIVE_COT_PROMPT_TEXT if native_reasoning else _COT_PROMPT_TEXT)
 
     if system_parts:
         messages.append({"role": "system", "content": "\n\n".join(system_parts)})
@@ -464,7 +487,7 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if post_history_parts:
         messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
     
-    if enable_cot:
+    if enable_cot and not native_reasoning:
         # ── Per-turn CoT format reminder ─────────────────────────────────────
         # This message is the very last thing the model sees before it generates.
         # It re-anchors the <think> requirement with a concrete numbered template
@@ -1257,7 +1280,8 @@ async def send_message(
         db.commit()
     
     # 2. Build Prompt Context (Ensuring strict caching order)
-    prompt_messages = build_chat_prompt(chat, db, speaker_name, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True))
+    prompt_messages = build_chat_prompt(chat, db, speaker_name, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True),
+                                        native_reasoning=supports_reasoning_flag(settings.api_base_url))
     
     # 3. Create Placeholder Assistant Message
     assistant_msg = models.ChatMessage(
