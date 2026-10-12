@@ -477,14 +477,16 @@ Object.assign(APIHandler.prototype, {
     }
   },
 
-  async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "", styleOverride = undefined, moodOverride = undefined) {
+  // `modelOverride` writes the prompt to that model's length/Flux preferences
+  // instead of the active model's — Compare Models drafts one per model.
+  async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "", styleOverride = undefined, moodOverride = undefined, modelOverride = null) {
     if (!characterDescription || !characterName) {
       throw new Error("Character description and name are required to generate an image prompt");
     }
 
     const style = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
     const mood = moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood");
-    const imageModel = this.config.get("api.image.model");
+    const imageModel = modelOverride || this.config.get("api.image.model");
     const modelSettings = this.config.get("api.image.modelSettings") || {};
     const settings = modelSettings[imageModel] || {};
     const lengthPref = settings.promptLengthPref || "detailed";
