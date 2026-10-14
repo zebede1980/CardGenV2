@@ -1110,7 +1110,11 @@ Generate exactly 10 names as a JSON array. Make each name as different from the 
       ],
       // Must emit a clean JSON array; 1.0 risked commentary and format drift.
       temperature: 0.85,
-      max_tokens: 350,
+      // The answer is ~100 tokens, but GLM 5.3 always reasons first and the
+      // reasoning counts against this cap: one live roll spent 1,634 tokens
+      // thinking. The old 350 left an empty reply, which surfaced as
+      // "Could not parse name list".
+      max_tokens: 4096,
       stream: false,
     };
 
