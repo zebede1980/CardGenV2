@@ -592,7 +592,9 @@ ${lorebookContent}`;
 
   _buildLorebookContent(lorebook) {
     if (!lorebook || !lorebook.entries) return "";
-    const entries = Object.values(lorebook.entries).filter((e) => e.enabled !== false);
+    // Uploaded files may be character books (`keys`, `enabled`) or SillyTavern
+    // world files (`key`, `disable`).
+    const entries = Object.values(lorebook.entries).filter((e) => e && e.enabled !== false && !e.disable);
     if (!entries.length) return "";
     let lorebookContent = "\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the content in its specific universe. Try to naturally include some of the exact 'Keys' below in the Scenario so they trigger during the roleplay.\n\n";
     entries.forEach((entry) => {

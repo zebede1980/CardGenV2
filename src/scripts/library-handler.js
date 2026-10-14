@@ -577,6 +577,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
                 Date.now().toString() + Math.random().toString().slice(2, 5),
               keys: e.keys || [],
               content: e.content || "",
+              topic: e.comment || "",
               enabled: e.enabled !== false,
             }),
           );

@@ -2606,33 +2606,33 @@
         <script src="src/scripts/api.js?v=20261014-finish2"></script>
         <script src="src/scripts/name-bank-data.js?v=20260919-namebank"></script>
         <script src="src/scripts/name-bank.js?v=20260919-namebank"></script>
-        <script src="src/scripts/api-character.js?v=20261014-finish"></script>
+        <script src="src/scripts/api-character.js?v=20261014-lore"></script>
         <script src="src/scripts/character-search.js?v=20260526"></script>
         <script src="src/scripts/api-image.js?v=20260911-visioncap"></script>
-        <script src="src/scripts/api-lorebook.js?v=20260919-namebank"></script>
+        <script src="src/scripts/api-lorebook.js?v=20261014-lore"></script>
         <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260922-imagefixes"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260908-modelcaps"></script> 
-        <script src="src/scripts/lorebook-generator.js?v=20260218-ex1"></script>
-        <script src="src/scripts/main.js?v=20261014-finish"></script>
+        <script src="src/scripts/lorebook-generator.js?v=20261014-lore"></script>
+        <script src="src/scripts/main.js?v=20261014-lore"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
-        <script src="src/scripts/character-display.js?v=20261014-finish"></script>
+        <script src="src/scripts/character-display.js?v=20261014-lore"></script>
         <script src="src/scripts/image-handler.js?v=20261014-finish"></script>
         <script src="src/scripts/image-cropper.js?v=20260922-imagefixes"></script>
         <script src="src/scripts/image-playground.js?v=20260922-imagefixes"></script>
         <script src="src/scripts/playground-library.js?v=20260908-modelcaps"></script>
-        <script src="src/scripts/lorebook-handler.js?v=20260218-ex1"></script>
+        <script src="src/scripts/lorebook-handler.js?v=20261014-lore"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
-        <script src="src/scripts/library-handler.js?v=20260514"></script>
-        <script src="src/scripts/revision-handler.js?v=20261014-finish"></script>
+        <script src="src/scripts/library-handler.js?v=20261014-lore"></script>
+        <script src="src/scripts/revision-handler.js?v=20261014-lore"></script>
         <script src="src/scripts/chat-ui.js?v=20260512"></script>
         <script src="src/scripts/rich-element-parser.js"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
         <script src="src/scripts/batch-generator.js?v=20261014-finish"></script>
         <script src="src/scripts/image-gallery.js?v=20260907-imagelibrary"></script>
         <script src="src/scripts/character-gallery-panel.js?v=20260905-gallerylock"></script>
-        <script src="src/scripts/url-import.js?v=20260518"></script>
+        <script src="src/scripts/url-import.js?v=20261014-lore"></script>
         <script src="src/scripts/storywriter.js?v=20260908-voices"></script>
         <script src="src/scripts/adventure-handler.js?v=1"></script>
         <script src="src/scripts/inspire-me.js?v=20261014-finish"></script>
@@ -3119,16 +3119,15 @@
                             <textarea id="lorebook-entry-content" class="textarea" rows="8" placeholder="Describe the topic in detail..."></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="lorebook-entry-hint" class="label">AI Generation Hint (Optional)</label>
-                            <input type="text" id="lorebook-entry-hint" class="input" placeholder="e.g., Focus on its dark history, write in a mysterious tone...">
+                            <label for="lorebook-entry-hint" class="label">AI Prompt (Optional)</label>
+                            <input type="text" id="lorebook-entry-hint" class="input" placeholder="e.g., Focus on its dark history, or: add their rivalry with the king">
                             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem;">
-                                Instructions for the AI on how to format or stylize this specific entry.
+                                Empty Content box: the AI writes a new entry from the keys. Content already there: the AI improves that text following this prompt and keeps its facts.
                             </p>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                                 <button id="generate-lorebook-content-btn" class="btn-small" title="Generate the entry content with AI using the Keys you have entered and the optional hint below. The character card is used as context. WARNING: This replaces any existing content.">🔄 Generate with AI</button>
-                                 <button id="update-lorebook-content-btn" class="btn-small" style="display: none;" title="Revise the existing entry content using the AI Generation Hint as an update instruction. The current content is preserved and modified — not replaced from scratch.">✏️ Update with AI</button>
+                                 <button id="generate-lorebook-content-btn" class="btn-small" title="Write a new entry from the Keys, using the character card as context and the AI Prompt if you've entered one.">🔄 Generate with AI</button>
                              </div>
                             <div>
                                 <button id="save-lorebook-entry-btn" class="btn-primary">Save Entry</button>
@@ -3138,13 +3137,13 @@
                     </div>
 
                     <div style="text-align: center; margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.5rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; align-items: center;">
-                        <button id="inject-lorebook-btn" class="btn-outline" title="Ask the AI to rewrite the character's Scenario so it naturally includes the trigger keywords from your lorebook entries — helping ensure entries activate correctly during roleplay.">
+                        <button id="inject-lorebook-btn" class="btn-outline" title="Find entries whose trigger keywords the card never mentions, and have the AI work them into the Scenario (and the First Message where they fit). Only those two fields change.">
                             ✨ Inject Keys into Card
                         </button>
                         <button id="download-lorebook-btn" class="btn-secondary" title="Export the lorebook as a standalone SillyTavern World Info JSON file. You can import this separately into SillyTavern if you prefer to manage it outside the character card.">Download Lorebook (.json)</button>
                     </div>
                     <p style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; margin-top: 0.75rem;">
-                        💡 <strong>Tip:</strong> Click "Inject Keys" to have the AI automatically weave your new keywords into the character's scenario.
+                        💡 <strong>Tip:</strong> An entry only loads when one of its keywords comes up in the chat. "Inject Keys" makes sure the card mentions each entry, so the AI knows to bring it up.
                     </p>
                 </div>
             </div>

@@ -85,6 +85,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     
     let generatedCount = 0;
     let alreadyGeneratedNames = [];
+    const newEntries = [];
     
     try {
       for (const castMember of castToGenerate) {
@@ -102,21 +103,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
             alreadyGeneratedNames.push(result.name);
           }
           
-          // Use name and role as trigger keys, as requested by user
-          const triggerKeys = [result.name];
-          if (result.role) {
-              triggerKeys.push(result.role);
-          }
-          
-          // Create the lorebook entry
-          const entry = {
-            id: Date.now() + Math.random(),
-            keys: triggerKeys,
-            content: result.content,
-            topic: result.name + " (" + result.role + ")"
-          };
-          
+          const entry = this._castLorebookEntry(result);
           this.lorebookEntries.push(entry);
+          newEntries.push(entry);
           generatedCount++;
         } catch (err) {
           console.error(`Failed to generate cast member: ${castMember.description}`, err);
@@ -127,10 +116,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.updateLorebookEntryCount();
       this.showNotification(`Successfully generated ${generatedCount} supporting cast members.`, "success");
       this.closeSupportingCastModal();
+      if (newEntries.length === 0) return;
       
-      // Attempt to inject them into the main card
-      this.showNotification("Injecting new cast members into the scenario...", "info");
-      await this._executeInjectLorebookKeys();
+      // Name them in the card so the AI knows they exist. If that edit is
+      // rejected or fails, the new entries are still kept and saved.
+      this.showNotification("Adding the new cast members to the card...", "info");
+      const approved = await this._executeInjectLorebookKeys(false, { entries: newEntries, mode: "cast" });
+      if (!approved) await this.saveCardToLibrary();
       
     } catch (error) {
       console.error("Error generating supporting cast:", error);
@@ -152,8 +144,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         return;
       }
 
-      let generatedCount = 0;
       let alreadyGeneratedNames = [];
+      const newEntries = [];
       for (const desc of suggestions) {
         this.showStreamMessage(`Generating cast member: ${desc}...\\n`);
         try {
@@ -163,20 +155,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
             alreadyGeneratedNames.push(result.name);
           }
           
-          const triggerKeys = [result.name];
-          if (result.role) {
-              triggerKeys.push(result.role);
-          }
-          
-          const entry = {
-            id: Date.now() + Math.random(),
-            keys: triggerKeys,
-            content: result.content,
-            topic: result.name + " (" + result.role + ")"
-          };
-          
+          const entry = this._castLorebookEntry(result);
           this.lorebookEntries.push(entry);
-          generatedCount++;
+          newEntries.push(entry);
         } catch (err) {
           console.error(`Failed to generate auto cast member: ${desc}`, err);
           this.showStreamMessage(`⚠️ Skipped cast member due to error: ${desc}\\n`);
@@ -184,13 +165,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       this.updateLorebookEntryCount();
-      if (generatedCount > 0) {
-        await this._executeInjectLorebookKeys(true);
+      if (newEntries.length > 0) {
+        await this._executeInjectLorebookKeys(true, { entries: newEntries, mode: "cast" });
       }
     } catch (error) {
       console.error("Auto-generate cast error:", error);
       throw error;
     }
+  },
+
+  /** A unique id for a new lorebook entry (several can be made in the same millisecond). */
+  _newLorebookId() {
+    return Date.now().toString() + Math.random().toString(36).slice(2, 8);
+  },
+
+  /** Turn a generated supporting-cast member into a lorebook entry keyed on their name and role. */
+  _castLorebookEntry(result) {
+    const keys = [result.name];
+    if (result.role && result.role.toLowerCase() !== String(result.name).toLowerCase()) keys.push(result.role);
+    return {
+      id: this._newLorebookId(),
+      keys,
+      content: result.content,
+      topic: result.role ? `${result.name} (${result.role})` : result.name,
+      enabled: true,
+    };
   },
 
   openLorebookManager() {
@@ -289,8 +288,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const hintInput = document.getElementById("lorebook-entry-hint");
     if (hintInput) hintInput.value = "";
     document.getElementById("cancel-lorebook-edit-btn").style.display = "none";
-    const updateBtn = document.getElementById("update-lorebook-content-btn");
-    if (updateBtn) updateBtn.style.display = "none";
+    this.updateLorebookGenerateButton();
+  },
+
+  /**
+   * One AI button: it writes a new entry when the Content box is empty and
+   * improves the existing text when it isn't. The label says which it will do.
+   */
+  updateLorebookGenerateButton() {
+    const btn = document.getElementById("generate-lorebook-content-btn");
+    const contentTextarea = document.getElementById("lorebook-entry-content");
+    if (!btn || !contentTextarea || btn.disabled) return;
+    const enhancing = !!contentTextarea.value.trim();
+    btn.textContent = enhancing ? "✨ Enhance with AI" : "🔄 Generate with AI";
+    btn.title = enhancing
+      ? "Improve the text already in the Content box, following the AI Prompt if you've entered one. Its facts are kept unless the prompt says otherwise."
+      : "Write a new entry from the Keys, using the character card as context and the AI Prompt if you've entered one.";
   },
 
   async handleSuggestLorebookTopics() {
@@ -307,6 +320,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     try {
       const topics = await this.lorebookGenerator.suggestTopics(
         this.currentCharacter,
+        this.lorebookEntries,
       );
       if (topics && topics.length > 0) {
         suggestionsContainer.innerHTML = topics
@@ -336,52 +350,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const keysInput = document.getElementById("lorebook-entry-keys");
     const contentTextarea = document.getElementById("lorebook-entry-content");
     const hintInput = document.getElementById("lorebook-entry-hint");
+    const idInput = document.getElementById("lorebook-entry-id");
     if (!this.currentCharacter || !btn || !keysInput || !contentTextarea) return;
 
     const keys = keysInput.value.trim();
-    const hint = hintInput ? hintInput.value.trim() : "";
-    if (!keys) {
-      this.showNotification(
-        "Please provide at least one key for the entry.",
-        "warning",
-      );
-      return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = "Generating...";
-    contentTextarea.value = "Generating content with AI...";
-
-    try {
-      const content = await this.lorebookGenerator.generateEntryContent(
-        this.currentCharacter,
-        keys,
-        hint,
-      );
-      contentTextarea.value = content;
-    } catch (error) {
-      this.showNotification(
-        `Failed to generate content: ${error.message}`,
-        "error",
-      );
-      contentTextarea.value = `Error: ${error.message}`;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "🔄 Generate with AI";
-    }
-  },
-
-  async handleUpdateLorebookContent() {
-    const btn = document.getElementById("update-lorebook-content-btn");
-    const keysInput = document.getElementById("lorebook-entry-keys");
-    const contentTextarea = document.getElementById("lorebook-entry-content");
-    const hintInput = document.getElementById("lorebook-entry-hint");
-    if (!this.currentCharacter || !btn || !keysInput || !contentTextarea) return;
-
-    const keys = keysInput.value.trim();
-    const existingContent = contentTextarea.value.trim();
     const instruction = hintInput ? hintInput.value.trim() : "";
-
+    const existingContent = contentTextarea.value.trim();
+    const enhancing = !!existingContent;
     if (!keys) {
       this.showNotification(
         "Please provide at least one key for the entry.",
@@ -389,45 +364,44 @@ Object.assign(CharacterGeneratorApp.prototype, {
       );
       return;
     }
-    if (!existingContent) {
-      this.showNotification(
-        "There is no existing content to update. Use \"Generate with AI\" instead.",
-        "warning",
-      );
-      return;
-    }
-    if (!instruction) {
-      this.showNotification(
-        "Please enter an update instruction in the AI Generation Hint field (e.g. \"Make it darker\" or \"Add a detail about their rivalry with the king\").",
-        "warning",
-      );
-      return;
-    }
 
+    // The current text stays in the box until a result arrives, so a failed
+    // or stopped call never costs the user what they had.
     btn.disabled = true;
-    btn.textContent = "Updating...";
-    const generateBtn = document.getElementById("generate-lorebook-content-btn");
-    if (generateBtn) generateBtn.disabled = true;
+    btn.textContent = enhancing ? "Enhancing..." : "Generating...";
+    contentTextarea.readOnly = true;
 
     try {
-      const updated = await this.lorebookGenerator.updateEntryContent(
+      const content = await this.lorebookGenerator.writeEntryContent(
         this.currentCharacter,
         keys,
-        existingContent,
-        instruction,
+        {
+          existingContent,
+          instruction,
+          otherEntries: this.lorebookEntries,
+          excludeId: idInput?.value || null,
+        },
       );
-      contentTextarea.value = updated;
+      if (!content) throw new Error("The AI returned an empty entry.");
+      contentTextarea.value = content;
+      // Cleared so a second click doesn't apply the same prompt twice.
       if (hintInput) hintInput.value = "";
-      this.showNotification("Entry updated successfully!", "success");
-    } catch (error) {
       this.showNotification(
-        `Failed to update content: ${error.message}`,
-        "error",
+        enhancing ? "Entry enhanced — review it, then Save Entry." : "Entry generated — review it, then Save Entry.",
+        "success",
       );
+    } catch (error) {
+      const wasStoppedByUser = error.message?.includes("Generation stopped by user");
+      if (!wasStoppedByUser) {
+        this.showNotification(
+          `Failed to ${enhancing ? "enhance" : "generate"} content: ${error.message}`,
+          "error",
+        );
+      }
     } finally {
+      contentTextarea.readOnly = false;
       btn.disabled = false;
-      btn.textContent = "✏️ Update with AI";
-      if (generateBtn) generateBtn.disabled = false;
+      this.updateLorebookGenerateButton();
     }
   },
 
@@ -443,10 +417,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const keysArray = keys
-      .split(",")
-      .map((k) => k.trim())
-      .filter(Boolean);
+    const keysArray = [...new Set(
+      keys
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean),
+    )];
 
     if (id) {
       const index = this.lorebookEntries.findIndex((e) => e.id == id);
@@ -459,7 +435,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
     } else {
       this.lorebookEntries.push({
-        id: Date.now().toString(),
+        id: this._newLorebookId(),
         keys: keysArray,
         content,
         enabled: true,
@@ -486,9 +462,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (hintInput) hintInput.value = "";
     document.getElementById("cancel-lorebook-edit-btn").style.display =
       "inline-block";
-    // Show the "Update with AI" button when editing an existing entry
-    const updateBtn = document.getElementById("update-lorebook-content-btn");
-    if (updateBtn) updateBtn.style.display = "inline-block";
+    this.updateLorebookGenerateButton();
     document
       .getElementById("lorebook-entry-editor")
       .scrollIntoView({ behavior: "smooth" });
@@ -516,18 +490,22 @@ Object.assign(CharacterGeneratorApp.prototype, {
       token_budget: 500,
       recursive_scanning: false,
       extensions: {},
+      // `enabled` must be a real boolean: SillyTavern imports an entry with
+      // `disable: !entry.enabled`, so a missing flag arrives switched off.
+      // Ids are sequential because SillyTavern keys entries by id, and the
+      // old parseInt of a timestamp-based id could give two entries the same one.
       entries: this.lorebookEntries.map((entry, index) => ({
         keys: entry.keys,
         content: entry.content,
         extensions: {},
-        enabled: entry.enabled,
+        enabled: entry.enabled !== false,
         insertion_order: 50,
         case_sensitive: false,
         use_regex: false,
-        name: entry.keys[0] || "",
+        name: entry.topic || entry.keys[0] || "",
         priority: 10,
-        id: parseInt(entry.id) || Date.now() + index,
-        comment: "",
+        id: index + 1,
+        comment: entry.topic || "",
         selective: false,
         secondary_keys: [],
         constant: false,
@@ -546,44 +524,120 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
+    const missing = this.apiHandler.findUncoveredLorebookEntries(this.currentCharacter, this.lorebookEntries);
+    if (missing.length === 0) {
+      this.showNotification("Every entry already has a trigger keyword in the card — nothing to inject.", "info");
+      return;
+    }
+
+    const names = missing.map((e) => e.keys[0]).join(", ");
     if (
       confirm(
-        "This will update the Scenario and First Message to mention your Lorebook trigger keywords naturally.\n\n⚠️ Warning: Any manual edits you've made to these fields will be overwritten. Proceed?",
+        `${missing.length} ${missing.length === 1 ? "entry has" : "entries have"} no trigger keyword in the card yet: ${names}\n\nThe AI will work them into the Scenario, and into the First Message where they fit. Nothing else changes, and you'll review the edit before it's applied. Proceed?`,
       )
     ) {
       this.closeLorebookManager();
-      this._executeInjectLorebookKeys();
+      this._executeInjectLorebookKeys(false, { entries: missing });
     }
   },
 
-  async _executeInjectLorebookKeys(silent = false) {
-    const allKeys = [...new Set(this.lorebookEntries.flatMap((e) => e.keys.filter(Boolean)))];
-    if (allKeys.length === 0) return;
+  /** Short description of each entry for the card-edit prompts: primary key, other keys, opening of the text. */
+  _describeEntriesForCardEdit(entries) {
+    return entries.map((e) => {
+      const [primary, ...others] = e.keys.filter(Boolean);
+      const text = String(e.content || "").replace(/\s+/g, " ").trim();
+      const gist = text.length > 140 ? text.slice(0, 140) + "…" : text;
+      return `- "${primary}"${others.length ? ` (also: ${others.join(", ")})` : ""} — ${gist}`;
+    }).join("\n");
+  },
 
-    const keyList = allKeys.join(", ");
-    const instruction =
-      `The following supporting characters have been moved to the lorebook. Their trigger keywords are: ${keyList}\n\n` +
-      `Update the Description, Scenario, and First Message fields with these STRICT RULES:\n` +
-      `- Remove any in-depth details, backstory, or physical descriptions of these characters from the card body (e.g. Description field). Replace them with a brief, passing mention to save tokens, since their full details are now in the lorebook.\n` +
-      `- Ensure each trigger keyword is mentioned at least once naturally in the Scenario so the lorebooks can trigger during play.\n` +
-      `- Weave the keywords in organically — do NOT list them or dump them in bulk.\n` +
-      `- Do NOT copy or paraphrase the lorebook content back into the card.`;
+  _keyWeaveInstruction(entries) {
+    return (
+      `These lorebook entries have no trigger keyword in the card yet. A keyword only loads its entry when it comes up in the chat, so the card needs to mention each one — that is how the AI knows the topic exists and brings it up.\n\n` +
+      `For each entry below:\n` +
+      `- Work its first keyword into the Scenario, exactly as written, in one natural phrase.\n` +
+      `- Also mention it in the First Message if it fits naturally there (a mention in the opening message loads the entry straight away). Don't force it.\n` +
+      `- Weave keywords in organically — never as a list or a block of names.\n` +
+      `- Add the minimum text needed and keep all existing text. Don't add the entries' details: the lorebook supplies them.\n\n` +
+      `Entries:\n${this._describeEntriesForCardEdit(entries)}`
+    );
+  },
+
+  _castInstruction(entries) {
+    return (
+      `These supporting characters have just been added to the lorebook, which now holds their full details:\n${this._describeEntriesForCardEdit(entries)}\n\n` +
+      `Update the card:\n` +
+      `- If the Description or Scenario describes any of them in depth (appearance, backstory), cut that to a brief passing mention by name.\n` +
+      `- Where the card refers to one of them vaguely (e.g. "the bartender"), use their name instead.\n` +
+      `- Make sure each name appears at least once in the Scenario, woven in naturally. Mention them in the First Message only where it fits.\n` +
+      `- Never copy their lorebook details into the card. Leave all other text as it is.`
+    );
+  },
+
+  /**
+   * After a card edit, check that every entry in `entries` still has a trigger
+   * key somewhere in the card. Anything missing gets one targeted retry on the
+   * Scenario; whatever is still missing after that is returned for a warning.
+   */
+  async _ensureKeyCoverage(card, entries, pov) {
+    let missing = this.apiHandler.findUncoveredLorebookEntries(card, entries);
+    if (missing.length === 0) return { card, missing };
+
+    console.log("Lorebook keys missing after card edit, retrying:", missing.map((e) => e.keys[0]));
+    try {
+      card = await this.apiHandler.editCardForLorebook(card, this._keyWeaveInstruction(missing), ["scenario"], pov);
+    } catch (error) {
+      if (error.message?.includes("Generation stopped by user")) throw error;
+      console.warn("Keyword retry failed:", error);
+    }
+    missing = this.apiHandler.findUncoveredLorebookEntries(card, entries);
+    return { card, missing };
+  },
+
+  _warnUncoveredEntries(missing) {
+    if (!missing || missing.length === 0) return;
+    const names = missing.map((e) => e.keys[0]).join(", ");
+    this.showNotification(
+      `No trigger keyword in the card for: ${names}. ${missing.length === 1 ? "It" : "These"} will only load if someone happens to say a keyword — try ✨ Inject Keys in the Lorebook Manager.`,
+      "warning",
+    );
+  },
+
+  /**
+   * Edit the card so it mentions the given entries' keywords.
+   * mode "keys": weave keywords into the Scenario (and First Message where natural).
+   * mode "cast": also trim in-depth descriptions of new supporting characters.
+   * Returns true if the edit was applied.
+   */
+  async _executeInjectLorebookKeys(silent = false, { entries = null, mode = "keys" } = {}) {
+    const targets = (entries || this.lorebookEntries).filter(
+      (e) => e.enabled !== false && Array.isArray(e.keys) && e.keys.some(Boolean),
+    );
+    if (targets.length === 0) return false;
 
     const pov = document.getElementById("pov-select")?.value || "third";
     const before = this._captureCardSnapshot();
+    const isCast = mode === "cast";
 
-    this.showNotification("Injecting lorebook keys into scenario and first message…", "info");
+    if (!silent) this.showNotification("Adding lorebook keywords to the card…", "info");
 
     try {
-      const revised = await this.apiHandler.reviseCharacter(
+      this.currentCharacter.character_book = this.buildCharacterBook();
+      let revised = await this.apiHandler.editCardForLorebook(
         this.currentCharacter,
-        instruction,
+        isCast ? this._castInstruction(targets) : this._keyWeaveInstruction(targets),
+        isCast ? ["description", "scenario", "firstMessage"] : ["scenario", "firstMessage"],
         pov,
       );
+      const coverage = await this._ensureKeyCoverage(revised, targets, pov);
+      revised = coverage.card;
 
       if (silent) {
         this.currentCharacter = revised;
         this.originalCharacter = JSON.parse(JSON.stringify(revised));
+        if (coverage.missing.length && typeof this.showStreamMessage === "function") {
+          this.showStreamMessage(`⚠️ No trigger keyword in the card for: ${coverage.missing.map((e) => e.keys[0]).join(", ")}\n`);
+        }
         return true;
       }
 
@@ -594,16 +648,27 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.originalCharacter = JSON.parse(JSON.stringify(revised));
         this.displayCharacter();
         await this.saveCardToLibrary();
-        this.showNotification("Lorebook keys injected into Scenario and First Message!", "success");
-      } else {
-        this.showNotification("Lorebook key injection discarded.", "info");
+        if (coverage.missing.length) this._warnUncoveredEntries(coverage.missing);
+        else this.showNotification("Lorebook keywords added to the card!", "success");
+        return true;
       }
+      this.showNotification("Card edit discarded.", "info");
+      return false;
     } catch (error) {
       console.error("Inject lorebook keys failed:", error);
       const wasStoppedByUser = error.message?.includes("Generation stopped by user");
-      if (!wasStoppedByUser) {
-        this.showNotification(`Failed to inject keys: ${error.message}`, "error");
+      if (silent) {
+        // The entries themselves were made fine, so this isn't a cast failure.
+        if (wasStoppedByUser) throw error;
+        if (typeof this.showStreamMessage === "function") {
+          this.showStreamMessage(`⚠️ Couldn't add the new entries to the card: ${error.message}\n`);
+        }
+        return false;
       }
+      if (!wasStoppedByUser) {
+        this.showNotification(`Failed to add keywords to the card: ${error.message}`, "error");
+      }
+      return false;
     }
   },
 
@@ -622,13 +687,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
       extensions: {},
       entries: this.lorebookEntries.map((entry, index) => ({
         keys: entry.keys,
-        comment: `Entry for ${entry.keys[0]}`,
+        comment: entry.topic || `Entry for ${entry.keys[0]}`,
         content: entry.content,
         insertion_order: (index + 1) * 10,
-        enabled: entry.enabled,
+        enabled: entry.enabled !== false,
         case_sensitive: false,
         priority: 100,
-        id: entry.id,
+        id: index + 1,
         constant: false,
         selective: false,
         secondary_keys: [],
@@ -765,89 +830,115 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  /** The moved-topics section of the card-edit prompt: what to cut, and what the lorebook now holds. */
+  _elevationTopicsText(candidates) {
+    return candidates.map((c) => {
+      const source = c.source ? `Text in the card that covers it (copied from the card; it may be in any field):\n"${c.source}"\n` : "";
+      return `### ${c.topic} (keywords: ${c.keys.join(", ")})\n${source}What the lorebook entry now holds:\n${c.content}`;
+    }).join("\n\n");
+  },
+
   /**
    * Core elevation logic shared between standalone scan and Reduce Bloat.
-   * Creates lorebook entries for selectedCandidates, then calls reviseCharacter
-   * with an instruction to remove those topics from the card and/or reduce bloat.
+   * Creates lorebook entries for selectedCandidates, then edits the card to
+   * cut those topics down to a passing reference (and, for Reduce Bloat,
+   * rewrites the whole card to be concise).
+   *
+   * The new entries are rolled back if the edit is rejected, fails or is stopped.
    *
    * @param {Array} selectedCandidates - candidates the user confirmed
    * @param {boolean} alsoReduceBloat  - whether to also strip bloat from the card
    */
   async executeLoreElevation(selectedCandidates, alsoReduceBloat = false) {
+    if (selectedCandidates.length === 0 && !alsoReduceBloat) return true; // Nothing to do
+
     const pov = document.getElementById("pov-select")?.value || "third";
     const before = this._captureCardSnapshot();
     const oldLorebookEntries = JSON.parse(JSON.stringify(this.lorebookEntries));
-
-    // 1. Create lorebook entries for selected candidates — with enrichment pass
-    if (selectedCandidates.length > 0) {
-      this.showNotification(`Enriching ${selectedCandidates.length} lorebook entr${selectedCandidates.length === 1 ? 'y' : 'ies'}…`, "info");
-      for (let i = 0; i < selectedCandidates.length; i++) {
-        const candidate = selectedCandidates[i];
-        if (selectedCandidates.length > 1) {
-          this.showNotification(`Enriching lorebook entries (${i + 1}/${selectedCandidates.length}): ${candidate.topic}…`, "info");
-        }
-        let enrichedContent = candidate.content;
-        try {
-          enrichedContent = await this.apiHandler.enrichLorebookEntry(this.currentCharacter, candidate);
-        } catch (enrichErr) {
-          console.warn(`Enrichment failed for "${candidate.topic}", using scan content:`, enrichErr);
-        }
-        this.lorebookEntries.push({
-          id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-          keys: candidate.keys,
-          content: enrichedContent,
-          enabled: true,
-        });
-      }
-      this.renderLorebookEntries();
-      this.updateLorebookEntryCount();
-      this.currentCharacter.character_book = this.buildCharacterBook();
-    }
-
-    // 2. Build revision instruction
-    let instruction = "";
-    if (selectedCandidates.length > 0) {
-      const topicList = selectedCandidates.map(c => `"${c.topic}"`).join(", ");
-      instruction += `The following topics have been moved to the lorebook: ${topicList}. Remove the detailed descriptions of these topics from the card body — replace each with at most one brief reference sentence so the card stays anchored in reality without carrying the full lore weight.`;
-
-      // Collect ALL lorebook trigger keys (existing + newly elevated) for scenario injection
-      const allLorebookKeys = this.lorebookEntries.flatMap(e => e.keys.filter(Boolean));
-      const uniqueKeys = [...new Set(allLorebookKeys)];
-      if (uniqueKeys.length > 0) {
-        instruction += `\n\nLOREBOOK COHESION: Ensure the Scenario field naturally mentions each of the following trigger keywords at least once so the entries activate during roleplay. Weave them into the existing scenario text organically — do NOT list them, and do NOT copy or paraphrase lorebook entry content into the card. Just ensure each keyword appears naturally. Keywords: ${uniqueKeys.join(", ")}.`;
-      }
-    }
-    if (alsoReduceBloat) {
-      if (instruction) instruction += "\n\n";
-      instruction += "Additionally, rewrite the entire card to be extremely concise and token-efficient. Remove all flowery prose, purple language, and repetition. Every sentence must serve a direct behavioural or descriptive purpose. Bullet points for traits and behaviours; short factual prose only for backstory and scenario. Keep only the absolute core facts that an AI needs to portray this character — make every word count.";
-    }
-
-    if (!instruction) return true; // Nothing to do
-
-    this.syncAltGreetingsToCharacter();
-    this.showNotification("Applying changes to card...", "info");
-
-    const revised = await this.apiHandler.reviseCharacter(
-      this.currentCharacter,
-      instruction,
-      pov,
-    );
-
-    const approved = await this.promptCardDiffApproval(before, revised);
-
-    if (approved) {
-      this.currentCharacter = revised;
-      this.originalCharacter = JSON.parse(JSON.stringify(revised));
-      this.displayCharacter();
-      await this.saveCardToLibrary();
-      await this.refreshLibraryViews();
-      return true;
-    } else {
+    const restoreLorebook = () => {
       this.lorebookEntries = oldLorebookEntries;
       this.renderLorebookEntries();
       this.updateLorebookEntryCount();
       this.currentCharacter.character_book = this.buildCharacterBook();
+    };
+
+    // Entries whose keywords the card already mentions — the edit must not
+    // lose those mentions (a full bloat rewrite easily can).
+    const alreadyCovered = this.lorebookEntries.filter(
+      (e) => e.enabled !== false && !this.apiHandler.findUncoveredLorebookEntries(this.currentCharacter, [e]).length,
+    );
+
+    // 1. Create lorebook entries for the selected candidates. The scan has
+    //    already written them to lorebook standard, so they go in as-is.
+    const newEntries = selectedCandidates.map((c) => ({
+      id: this._newLorebookId(),
+      keys: c.keys,
+      content: c.content,
+      topic: c.topic,
+      enabled: true,
+    }));
+    if (newEntries.length > 0) {
+      this.lorebookEntries.push(...newEntries);
+      this.renderLorebookEntries();
+      this.updateLorebookEntryCount();
+      this.currentCharacter.character_book = this.buildCharacterBook();
+    }
+
+    try {
+      // 2. Edit the card
+      this.syncAltGreetingsToCharacter();
+      this.showNotification("Applying changes to card...", "info");
+
+      const topicsText = this._elevationTopicsText(selectedCandidates);
+      const keepKeys = alreadyCovered.map((e) => e.keys[0]).filter(Boolean);
+      let revised;
+
+      if (alsoReduceBloat) {
+        let instruction = "";
+        if (selectedCandidates.length > 0) {
+          instruction += `These topics have just been moved out of the card into lorebook entries:\n\n${topicsText}\n\n` +
+            `Cut each topic's detailed description from the card down to at most one short reference sentence that names it by its first keyword. Keep anything about how {{char}} personally feels about or relates to it — that is character guidance. Make sure the Scenario mentions each topic's first keyword.\n\n`;
+        }
+        if (keepKeys.length > 0) {
+          instruction += `The card currently mentions these lorebook keywords — keep at least one mention of each, exactly as written: ${keepKeys.join(", ")}.\n\n`;
+        }
+        instruction += "Additionally, rewrite the entire card to be extremely concise and token-efficient. Remove all flowery prose, purple language, and repetition. Every sentence must serve a direct behavioural or descriptive purpose. Bullet points for traits and behaviours; short factual prose only for backstory and scenario. Keep only the absolute core facts that an AI needs to portray this character — make every word count.";
+        revised = await this.apiHandler.reviseCharacter(this.currentCharacter, instruction, pov);
+      } else {
+        const instruction =
+          `These topics have just been moved out of the card into lorebook entries:\n\n${topicsText}\n\n` +
+          `For each topic:\n` +
+          `- Find where the card describes it in detail (the quoted text is a guide) and cut that down to at most one short reference sentence that names it by its first keyword.\n` +
+          `- Keep anything about how {{char}} personally feels about or relates to it — that is character guidance and belongs in the card.\n` +
+          `- Make sure the Scenario mentions each topic's first keyword at least once, woven in naturally.\n` +
+          `- Do not touch any other text.`;
+        revised = await this.apiHandler.editCardForLorebook(
+          this.currentCharacter, instruction, ["description", "personality", "scenario", "firstMessage"], pov,
+        );
+      }
+
+      // 3. Check every new or previously-mentioned entry still has a keyword in the card
+      const coverage = await this._ensureKeyCoverage(revised, [...newEntries, ...alreadyCovered], pov);
+      revised = coverage.card;
+
+      const approved = await this.promptCardDiffApproval(before, revised);
+
+      if (approved) {
+        this.currentCharacter = revised;
+        this.originalCharacter = JSON.parse(JSON.stringify(revised));
+        this.displayCharacter();
+        await this.saveCardToLibrary();
+        await this.refreshLibraryViews();
+        this._warnUncoveredEntries(coverage.missing);
+        return true;
+      }
+      restoreLorebook();
       return false;
+    } catch (error) {
+      // Without this the new entries stayed while the card still held the
+      // same lore, duplicating it.
+      restoreLorebook();
+      throw error;
     }
   },
 
@@ -870,7 +961,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     try {
       this.showNotification("Scanning card for lorebook candidates...", "info");
-      const candidates = await this.apiHandler.scanCardForLorebookCandidates(this.currentCharacter);
+      const candidates = await this.apiHandler.scanCardForLorebookCandidates(this.currentCharacter, this.lorebookEntries);
 
       if (!candidates || candidates.length === 0) {
         this.showNotification("No lorebook candidates found in the card.", "info");

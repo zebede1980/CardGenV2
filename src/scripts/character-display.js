@@ -760,6 +760,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           id: e.id || Date.now().toString() + Math.random().toString().slice(2, 5),
           keys: e.keys || [],
           content: e.content || "",
+          topic: e.comment || "",
           enabled: e.enabled !== false,
         }));
       } else {

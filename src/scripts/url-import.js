@@ -143,17 +143,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (imported.character_book) {
         this.lorebookData = imported.character_book;
         const entries = [];
-        if (Array.isArray(imported.character_book.entries)) {
-          for (const e of imported.character_book.entries) {
-            entries.push({
-              id: e.id || Date.now() + Math.random(),
-              keys: Array.isArray(e.keys) ? e.keys : (e.key ? [e.key] : []),
-              content: e.content || "",
-              comment: e.comment || (Array.isArray(e.keys) ? e.keys.join(", ") : ""),
-              disable: false,
-            });
-          }
-        }
+        // Character books store entries as an array; SillyTavern world files
+        // as an object keyed by uid, with `key` and `disable` instead.
+        const raw = imported.character_book.entries;
+        const list = Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : []);
+        list.forEach((e, i) => {
+          const keys = Array.isArray(e.keys) ? e.keys : Array.isArray(e.key) ? e.key : (e.key ? [e.key] : []);
+          entries.push({
+            id: String(e.id ?? e.uid ?? `${Date.now()}${i}`),
+            keys,
+            content: e.content || "",
+            topic: e.comment || "",
+            enabled: e.enabled !== undefined ? e.enabled !== false : !e.disable,
+          });
+        });
         this.lorebookEntries = entries;
       }
       this.updateLorebookEntryCount();

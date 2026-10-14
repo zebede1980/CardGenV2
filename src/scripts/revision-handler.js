@@ -82,7 +82,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       let selectedCandidates = [];
       try {
-        const candidates = await this.apiHandler.scanCardForLorebookCandidates(this.currentCharacter);
+        const candidates = await this.apiHandler.scanCardForLorebookCandidates(this.currentCharacter, this.lorebookEntries);
         if (candidates && candidates.length > 0) {
           // Temporarily release the revision lock so the modal is usable
           this.setRevisionState(false);
