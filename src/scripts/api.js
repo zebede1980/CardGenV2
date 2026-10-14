@@ -82,13 +82,16 @@ class APIHandler {
       } catch (error) {
         lastError = error;
 
-        // Do not retry if the user explicitly requested to stop, auth failed, or bad request
+        // Do not retry if the user explicitly requested to stop, auth failed, or bad request.
+        // Nor when the local GPU is unavailable: the proxy has already waited on its
+        // own health check, and a retry only delays the hosted-model fallback.
         if (
           this.userStopRequested ||
           error.message.includes("Generation stopped by user") ||
           error.message.includes("Authorization Error") ||
           error.message.includes("401") ||
-          error.message.includes("400")
+          error.message.includes("400") ||
+          error.message.includes("Local GPU")
         ) {
           if (resumable) window.ResumableJobs.remove(clientRef);
           throw error;
