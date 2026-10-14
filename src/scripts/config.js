@@ -106,6 +106,36 @@ function firstImageModelWithCapability(capability, configInstance) {
   return (cfg?.get("api.image.models") || [])[0] || "";
 }
 
+// Models served by ComfyUI on the owner's own PC (LOCAL_COMFY_MODELS in
+// proxy/server.js). They are unavailable whenever that PC is off.
+function isLocalImageModel(model) {
+  return String(model || "").startsWith("local/");
+}
+
+// Settings' "If the local GPU is unavailable" dropdown: hosted 🪄 models only,
+// because falling back from one local model to another would fail the same
+// way. Never set (undefined) defaults to z-image-turbo when it's listed, the
+// hosted twin of the local Z-Image-Turbo. An empty string is a deliberate
+// "no fallback" and is left alone.
+function populateLocalFallbackSelect(selectEl, configInstance) {
+  if (!selectEl) return;
+  const cfg = configInstance || window.config;
+  const hosted = getImageModelsWithCapability("generate", cfg).filter((m) => !isLocalImageModel(m));
+  let current = cfg?.get("api.image.localFallbackModel");
+  if (current === undefined) {
+    current = hosted.includes("z-image-turbo") ? "z-image-turbo" : hosted[0] || "";
+    if (current) cfg.set("api.image.localFallbackModel", current);
+  }
+  const listed = current && !hosted.includes(current) ? [current, ...hosted] : hosted;
+  selectEl.innerHTML = [`<option value="">No fallback (show the error)</option>`]
+    .concat(listed.map((model) => {
+      const costSpeed = describeImageModelCostSpeed(model, cfg);
+      const label = costSpeed ? `${model} · ${costSpeed}` : model;
+      return `<option value="${escapeHtml(model)}" ${model === current ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    }))
+    .join("");
+}
+
 // The "nothing is marked for this job" note shown under a filtered dropdown.
 // Shared so the Character Generator, the Playground and anything added later
 // explain an unfiltered list the same way.
@@ -427,6 +457,7 @@ class Config {
     const imageApiKey = document.getElementById("image-api-key")?.value?.trim();
     const imageSize = document.getElementById("image-size")?.value?.trim();
     const imageEditModel = document.getElementById("image-edit-model")?.value?.trim();
+    const imageLocalFallback = document.getElementById("image-local-fallback-model")?.value;
     const imageSteps = document.getElementById("image-steps")?.value?.trim();
     const imageCfgScale = document.getElementById("image-cfg-scale")?.value?.trim();
     const imagePromptLengthPref = document.getElementById("image-prompt-length-pref")?.value;
@@ -473,7 +504,8 @@ class Config {
     if (imageApiKey !== undefined) this.config.api.image.apiKey = imageApiKey;
     if (imageSize !== undefined) this.config.api.image.size = imageSize;
     if (imageEditModel !== undefined) this.config.api.image.editModel = imageEditModel;
-    
+    if (imageLocalFallback !== undefined) this.config.api.image.localFallbackModel = imageLocalFallback;
+
     if (imageModelSettingsSelector) {
         if (!this.config.api.image.modelSettings) this.config.api.image.modelSettings = {};
         this.config.api.image.modelSettings[imageModelSettingsSelector] = {
@@ -594,6 +626,7 @@ class Config {
     // used to surface as an opaque API error at edit time. Anything not in the
     // list can still be added via "Available Image Models" → Add.
     if (imageEditModel) populateImageModelSelect(imageEditModel, "edit", "api.image.editModel", this);
+    populateLocalFallbackSelect(document.getElementById("image-local-fallback-model"), this);
     if (imageStyle) {
         imageStyle.value = this.config.api.image.style || "";
         if (customStyleContainer) customStyleContainer.style.display = imageStyle.value === "custom" ? "block" : "none";

@@ -594,7 +594,7 @@ class CharacterGeneratorApp {
     apiStatus.addEventListener("click", () => this.handleAPIConfig());
     apiStatus.style.cursor = "pointer";
 
-    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-edit-model, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref, #image-is-flux, #image-cost-note")
+    document.querySelectorAll("#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-size, #image-edit-model, #image-local-fallback-model, #image-style, #creator-name, #image-steps, #image-cfg-scale, #image-prompt-length-pref, #image-is-flux, #image-cost-note")
       .forEach((input) => input.addEventListener("change", () => {
           this.saveAPISettings();
           const status = document.getElementById("model-settings-status");
@@ -1329,21 +1329,7 @@ class CharacterGeneratorApp {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
           
-          // Apply sensible defaults for a brand new character
-          // First model marked 🪄 Generate, not just the first model in the
-          // list — this is a text-to-image portrait, and an image-to-image
-          // model here produces a portrait with no source image to work from.
-          const defaultImageModel = firstImageModelWithCapability("generate", this.config);
-          if (defaultImageModel) {
-            this.config.set("api.image.model", defaultImageModel);
-            const activeImageModelSelect = document.getElementById("active-image-model");
-            if (activeImageModelSelect) activeImageModelSelect.value = defaultImageModel;
-          }
-          this.config.set("api.image.style", "realistic");
-          const styleSelect = document.getElementById("image-style");
-          if (styleSelect) styleSelect.value = "realistic";
-          
-          await this.generateImage(true);
+          await this.generateNewCharacterImage();
           this.showStreamMessage("✅ Image generation complete!\n");
         } catch (imageError) {
           console.error("Image generation error:", imageError);

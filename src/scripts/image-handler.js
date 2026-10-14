@@ -73,6 +73,51 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  _setActiveImageModel(model) {
+    if (!model) return;
+    this.config.set("api.image.model", model);
+    const activeImageModelSelect = document.getElementById("active-image-model");
+    if (activeImageModelSelect) activeImageModelSelect.value = model;
+  },
+
+  /**
+   * The portrait step of creating a new character, shared by Generate,
+   * Generate 4 and Inspire Me. Uses the first model marked 🪄 Generate. If that
+   * is a local ComfyUI model and the attempt fails (usually because the PC is
+   * off), it tries once more with the hosted fallback from Settings. The retry
+   * reuses the prompt already written, so the text model isn't asked twice.
+   */
+  async generateNewCharacterImage({ resetStyle = true } = {}) {
+    // A text-to-image job, so the first 🪄 model rather than the first model
+    // in the list, which could be image-to-image and have no source to work from.
+    const preferred = firstImageModelWithCapability("generate", this.config);
+    this._setActiveImageModel(preferred);
+    if (resetStyle) {
+      this.config.set("api.image.style", "realistic");
+      const styleSelect = document.getElementById("image-style");
+      if (styleSelect) styleSelect.value = "realistic";
+    }
+    if (window.apiHandler) window.apiHandler.lastGeneratedImagePrompt = null;
+
+    try {
+      await this.generateImage(true);
+    } catch (error) {
+      const fallback = this.config.get("api.image.localFallbackModel");
+      const stopped = window.apiHandler?.userStopRequested || error.message?.includes("Generation stopped by user");
+      if (!isLocalImageModel(preferred) || !fallback || isLocalImageModel(fallback) || stopped) throw error;
+
+      console.warn(`[image] ${preferred} failed, falling back to ${fallback}:`, error.message);
+      this.showStreamMessage(`🖥️ Local GPU unavailable — using ${fallback} instead...\n`);
+      const prompt = window.apiHandler?.lastGeneratedImagePrompt;
+      const customPromptTextarea = document.getElementById("custom-image-prompt");
+      if (prompt && customPromptTextarea && !customPromptTextarea.value.trim()) {
+        customPromptTextarea.value = prompt;
+      }
+      this._setActiveImageModel(fallback);
+      await this.generateImage(true);
+    }
+  },
+
   async handleRegenerateImage() {
     if (!this.currentCharacter) {
       this.showNotification("Please generate a character first", "warning");
@@ -1585,6 +1630,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       "api.image.editModel",
       this.config,
     );
+    populateLocalFallbackSelect(document.getElementById("image-local-fallback-model"), this.config);
     this._updatePlaygroundGenerateModelDropdown?.();
     this._updatePlaygroundEditModelDropdown?.();
     this._updatePlaygroundCombineModelDropdown?.();

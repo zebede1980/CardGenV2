@@ -237,7 +237,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       } else if (imageApiBase && imageApiKey && enableImageGeneration) {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
-          await this.generateImage(true);
+          await this.generateNewCharacterImage({ resetStyle: false });
           this.showStreamMessage("✅ Image generation complete!\n");
         } catch (imageError) {
           console.error("Image generation error:", imageError);
