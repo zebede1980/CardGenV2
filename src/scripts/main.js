@@ -1289,31 +1289,11 @@ class CharacterGeneratorApp {
         if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
       }
 
-      this.showStreamMessage("\n\n💬 Generating example messages...\n");
+      this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
       // The player's own words, carried into the follow-up steps so play-style
       // requirements survive even if the card itself didn't capture them.
       const brief = generationMode === "search" ? searchScenario : concept;
-      await this.handleGenerateExampleMessages(true, brief);
-
-      this.showStreamMessage("✍️ Generating creator's notes...\n");
-      try {
-        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter, "", brief);
-        if (notes) {
-          this.currentCharacter.creatorNotes = notes;
-        }
-      } catch (notesError) {
-        console.warn("Creator notes generation failed (non-fatal):", notesError);
-      }
-
-      this.showStreamMessage("📜 Generating post-history instructions...\n");
-      try {
-        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter, "", brief);
-        if (postHistory) {
-          this.currentCharacter.postHistoryInstructions = postHistory;
-        }
-      } catch (phError) {
-        console.warn("Post-History Instructions generation failed (non-fatal):", phError);
-      }
+      await this.fillFinishingFields(this.currentCharacter, { brief });
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 

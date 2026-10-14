@@ -29,6 +29,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
         pov,
       );
 
+      // Rewrite the derived fields to match the revised card, so the edit is
+      // reviewed and accepted as a whole in the diff below.
+      this.showNotification("Updating example messages, creator's notes and post-history...", "info");
+      await this.fillFinishingFields(revised, { revisionNote: revisionInstruction });
+
       const approved = await this.promptCardDiffApproval(before, revised);
 
       if (approved) {
@@ -235,6 +240,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       scenario: c.scenario || "",
       firstMessage: c.firstMessage || "",
       mesExample: c.mesExample || "",
+      creatorNotes: c.creatorNotes || "",
+      postHistoryInstructions: c.postHistoryInstructions || "",
     };
   },
 
@@ -453,6 +460,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       { key: "scenario", label: "Scenario" },
       { key: "firstMessage", label: "First Message" },
       { key: "mesExample", label: "Example Messages" },
+      { key: "creatorNotes", label: "Creator's Notes" },
+      { key: "postHistoryInstructions", label: "Post-History Instructions" },
     ];
 
     const changedFields = fields.filter((f) => (before[f.key] || "") !== (after[f.key] || ""));

@@ -270,24 +270,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
       }
 
-      this.showStreamMessage("\n\n💬 Generating example messages...\n");
-      await this.handleGenerateExampleMessages(true, concept);
-
-      this.showStreamMessage("✍️ Generating creator's notes...\n");
-      try {
-        const notes = await this.apiHandler.generateCreatorNotes(this.currentCharacter, "", concept);
-        if (notes) { this.currentCharacter.creatorNotes = notes; }
-      } catch (notesError) {
-        console.warn("Creator notes generation failed (non-fatal):", notesError);
-      }
-
-      this.showStreamMessage("📜 Generating post-history instructions...\n");
-      try {
-        const postHistory = await this.apiHandler.generatePostHistoryInstructions(this.currentCharacter, "", concept);
-        if (postHistory) { this.currentCharacter.postHistoryInstructions = postHistory; }
-      } catch (phError) {
-        console.warn("Post-History Instructions generation failed (non-fatal):", phError);
-      }
+      this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
+      await this.fillFinishingFields(this.currentCharacter, { brief: concept });
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 

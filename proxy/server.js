@@ -664,6 +664,8 @@ function translateDbCard(c) {
     character_version: c.character_version || "",
     alternateGreetings: altGreetings,
     system_prompt: c.system_prompt || "",
+    // The editor reads and writes the camelCase key; saving reads either.
+    postHistoryInstructions: c.post_history_instructions || "",
     post_history_instructions: c.post_history_instructions || "",
     character_book: charBook,
   };
@@ -919,7 +921,7 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
       character_version: char.character_version || "",
       alternate_greetings: Array.isArray(char.alternateGreetings) ? JSON.stringify(char.alternateGreetings) : (char.alternateGreetings || "[]"),
       system_prompt: char.system_prompt || "",
-      post_history_instructions: char.post_history_instructions || "",
+      post_history_instructions: char.postHistoryInstructions || char.post_history_instructions || "",
       character_book: typeof char.character_book === "object" && char.character_book
         ? JSON.stringify(char.character_book)
         : (char.character_book || ""),
@@ -1493,7 +1495,7 @@ app.post("/api/storage/migrate-cards", requireAuth, async (req, res) => {
             ? JSON.stringify(ch.alternateGreetings)
             : (ch.alternateGreetings || "[]"),
           system_prompt: ch.system_prompt || "",
-          post_history_instructions: ch.post_history_instructions || "",
+          post_history_instructions: ch.postHistoryInstructions || ch.post_history_instructions || "",
           character_book: typeof ch.character_book === "object" && ch.character_book
             ? JSON.stringify(ch.character_book)
             : (ch.character_book || ""),

@@ -1465,6 +1465,143 @@ Write the instructions now. Plain text only, no formatting.`;
     }
   },
 
+  /* ── Finishing fields — one call after the card is written ─────────────── */
+
+  /**
+   * Write example messages, Creator's Notes and Post-History Instructions in a
+   * single call, once the main card fields exist. Used after creation and after
+   * an AI edit, so the derived fields always match the card.
+   *
+   * This replaces three separate calls. Each call cost its own round trip and,
+   * with GLM 5.3 (which always reasons), its own reasoning pass. This one also
+   * runs as a resumable job, so a phone locking part way through does not lose
+   * it. The single-field generators above still serve the Redo buttons, and
+   * act as the fallback for any section this reply leaves out.
+   *
+   * Returns { mesExample, creatorNotes, postHistoryInstructions }. A section
+   * the model omitted or left empty comes back as "".
+   */
+  async generateFinishingFields(character, {
+    count = 3, pov = "third", brief = "", revisionNote = "", exampleStyle = "", lorebookEntries = [],
+  } = {}) {
+    if (!character) throw new Error("Character is required to generate the finishing fields");
+    const model = this.config.get("api.text.model");
+    const povText = pov === "third" ? "third-person" : "first-person";
+
+    const systemPrompt = `You write the finishing fields of a SillyTavern character card, after the main card is complete: example dialogue messages, Creator's Notes, and Post-History Instructions.
+
+Write all three, each inside its own tag, in exactly this order and format, with nothing outside the tags:
+
+<example_messages>
+...
+</example_messages>
+<creator_notes>
+...
+</creator_notes>
+<post_history>
+...
+</post_history>
+
+## <example_messages> — how the character speaks
+Generate exactly ${count} example dialogue message(s) in ${povText} perspective. These examples help define how a character speaks and behaves. Each example must:
+1. Be a ONE-LINER: a single line of dialogue with minimal prose/action if needed
+2. Show the character's unique voice, speech patterns, and personality
+3. Include {{char}}'s spoken dialogue, optionally with brief action/description
+4. Use <START> tags as separators, exactly like this:
+<START>
+{{char}}: [dialogue with optional brief action]
+<START>
+{{char}}: [different dialogue showing another aspect of personality]
+- Vary the contexts. Keep the character's name as {{char}}. No explanations or headers.
+
+## <creator_notes> — the hook for card-sharing sites
+A short, punchy blurb that must instantly hook a reader.
+- 2–4 sentences max. No more.
+- Use the character's ACTUAL name (not {{char}} or {{user}}).
+- Open with who the character is — make it intriguing, not bland.
+- Mention the core scenario or hook.
+- End with a light tease of what interacting with them offers (tension, romance, mystery, humour, etc.).
+- Write in present tense, third person, active voice.
+- No hashtags, no lists, no headers — just plain compelling prose.
+- Do NOT start with "Meet" or "Introducing". Be more creative.
+
+## <post_history> — operational steering for the roleplay AI
+This text acts as a persistent system prompt injected immediately before the AI's generation.
+- Write 1-2 concise, direct sentences.
+- Focus ONLY on enforcing the core mechanics or style of the scenario.
+- Use the exact string \`{{char}}\` instead of the character's actual name.
+- Use the exact string \`{{user}}\` instead of the player's name.
+- Use imperative mood (e.g. "Write strictly in the third-person...", "Focus on sensory details...").
+- Do NOT provide background lore or personality traits here. This is ONLY for steering the AI's immediate output behavior.
+
+Plain text inside every tag: no markdown formatting.`;
+
+    const revisionBlock = revisionNote && revisionNote.trim()
+      ? `\n\nThe card was just revised with this request — make all three fields reflect the revised character:\n${revisionNote.trim().slice(0, 1500)}`
+      : "";
+    const styleBlock = exampleStyle && exampleStyle.trim()
+      ? `\n\nCRITICAL INSTRUCTION FOR THE EXAMPLE MESSAGES: The user has requested this specific style/tone: "${exampleStyle.trim()}". Ensure the examples strongly reflect this request.`
+      : "";
+
+    const userPrompt = `Character name: ${character.name || "{{char}}"}
+
+Description:
+${character.description || "No description provided"}
+
+Personality:
+${character.personality || "No personality provided"}
+
+Scenario:
+${character.scenario || "No scenario provided"}
+
+First message (for voice, tone and style):
+${character.firstMessage || "No first message provided"}${this.formatLorebookKeysContext(lorebookEntries)}${this._briefContextBlock(brief, "match any tone, pacing, response-length or style requirements it states; the post-history instruction MUST enforce them")}${revisionBlock}${styleBlock}
+
+Write the three tagged sections now.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.8,
+      // ~1,500 tokens of answer plus room for reasoning models' thinking.
+      max_tokens: 4096,
+      stream: true,
+      // Held server-side, so a phone locking mid-call collects it on return.
+      resumable: true,
+      __jobLabel: "Card finishing fields",
+    };
+
+    const response = await this.makeRequest("/chat/completions", data, false, true);
+    const output = await this.handleStreamResponse(response, () => {});
+    return this.parseFinishingFields(output, { truncated: this.lastFinishReason === "length" });
+  },
+
+  /**
+   * Split the tagged reply into fields. A missing closing tag is tolerated when
+   * the next section's opening tag follows, or at the very end of a reply that
+   * finished normally. A section left open by a reply cut off at the token
+   * limit is dropped rather than saved half-written.
+   */
+  parseFinishingFields(output, { truncated = false } = {}) {
+    const text = String(output || "");
+    const section = (tag) => {
+      const m = text.match(new RegExp(
+        `<${tag}>([\\s\\S]*?)(</${tag}>|(?=<(?:example_messages|creator_notes|post_history)>)|$)`,
+      ));
+      if (!m) return "";
+      const runsToEnd = m[2] === "" && m.index + m[0].length === text.length;
+      return truncated && runsToEnd ? "" : m[1].trim();
+    };
+    return {
+      mesExample: section("example_messages"),
+      creatorNotes: section("creator_notes"),
+      postHistoryInstructions: section("post_history"),
+    };
+  },
+
   /* ── Inspire Me — Idea Generation ──────────────────────────────────────── */
 
   /**
