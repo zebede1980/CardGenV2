@@ -806,7 +806,9 @@ class APIHandler {
     this.lastFinishReason = finishReason || null;
     if (finishReason !== "length") return;
 
-    const msg = `${context} hit the token limit and was cut off. Increase Max Tokens in API Settings, or shorten the input.`;
+    // Character Gen budgets are fixed per call (there is no setting for them),
+    // so do not send the user looking for one.
+    const msg = `${context} hit the token limit and was cut off. Try again, or shorten the input.`;
     console.warn("[api] truncated generation:", context);
     try {
       window.app?.showNotification?.(msg, "warning");

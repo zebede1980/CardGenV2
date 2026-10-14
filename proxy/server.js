@@ -1947,6 +1947,15 @@ const TEXT_PASSTHROUGH_PARAMS = [
 // writes conditioned on that token. Callers may override by sending their own.
 const DEFAULT_TEXT_TOP_P = 0.95;
 
+// Lowest max_tokens sent upstream. Reasoning models count their hidden
+// thinking against max_tokens, and GLM 5.3 always reasons (nano-gpt rejects
+// `reasoning.enabled: false` for it). Measured on the post-history call: the
+// reasoning used the whole 150-token cap, leaving the reply empty with
+// finish_reason "length". It used between 0 and 1,600 reasoning tokens on calls
+// whose answer is under 150. The cap is only a ceiling, so a higher floor costs
+// nothing when the model stops early. Callers' prompts still set the length.
+const MIN_TEXT_MAX_TOKENS = envInt("MIN_TEXT_MAX_TOKENS", 4096);
+
 // Upper bound on a single upstream text generation. Streaming replies with
 // long reasoning can legitimately run for minutes, so this is deliberately
 // generous — it exists to stop a black-holed connection hanging forever.
@@ -2346,7 +2355,7 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     const requestBody = {
       model,
       messages,
-      max_tokens: max_tokens ?? 1000,
+      max_tokens: Math.max(max_tokens ?? 1000, MIN_TEXT_MAX_TOKENS),
       temperature: temperature ?? 0.7,
       stream: stream ?? false,
     };
