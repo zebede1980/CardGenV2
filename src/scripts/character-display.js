@@ -846,9 +846,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this._renderTags([]);
 
     const cardTypeSelect = document.getElementById("card-type-select");
-    if (cardTypeSelect) cardTypeSelect.value = "single";
+    if (cardTypeSelect) {
+      cardTypeSelect.value = "single";
+      // Runs the card-type constraints, which re-enable the POV select that a
+      // group/scenario card left locked.
+      cardTypeSelect.dispatchEvent(new Event("change"));
+    }
+    // Back to the page's default (Third Person), not options[0]: First Person
+    // is listed first, so that silently switched every new card to it.
     const povSelect = document.getElementById("pov-select");
-    if (povSelect) povSelect.value = povSelect.options[0]?.value || "";
+    if (povSelect) {
+      povSelect.value = [...povSelect.options].find((o) => o.defaultSelected)?.value || "third";
+    }
 
     const imageContainer = document.getElementById("image-content");
     if (imageContainer) {
