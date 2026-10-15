@@ -74,6 +74,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._updatePlaygroundEditModelDropdown();
       this._updatePlaygroundCombineModelDropdown();
       this._updatePlaygroundUpscaleModelDropdown();
+      this._restorePlaygroundGenerateCount();
     });
 
     otherTabs.forEach(btn => {
@@ -137,6 +138,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     const generateBtn = document.getElementById("generate-playground-image-btn");
     if (generateBtn) generateBtn.addEventListener("click", () => this.handleGeneratePlaygroundImage());
+    const generateCountSelect = document.getElementById("playground-generate-count");
+    if (generateCountSelect) {
+      this._restorePlaygroundGenerateCount();
+      generateCountSelect.addEventListener("change", (e) => this.config.set("api.image.generateCount", parseInt(e.target.value, 10) || 1));
+    }
 
     const saveBtn = document.getElementById("save-playground-image-btn");
     if (saveBtn) {
@@ -309,10 +315,24 @@ Object.assign(CharacterGeneratorApp.prototype, {
     );
   },
 
+  // Remembered per account like the model choice, so asking for 4 once sticks.
+  _restorePlaygroundGenerateCount() {
+    const select = document.getElementById("playground-generate-count");
+    if (!select) return;
+    const saved = String(this.config.get("api.image.generateCount") || 1);
+    if ([...select.options].some(o => o.value === saved)) select.value = saved;
+  },
+
   // Generates a fresh image from a prompt alone and makes it the working
   // image — same as an upload/paste, including resetting history (a newly
-  // generated image is unrelated to whatever was there before) and handing
-  // off to the Edit tab afterward, matching processPlaygroundImageFile.
+  // generated image is unrelated to whatever was there before). Stays on the
+  // Generate tab afterwards so another go is one tap away.
+  //
+  // Asking for more than one runs that many separate calls in parallel rather
+  // than one call with `n`: not every nano-gpt model honours `n`, and separate
+  // calls each get their own seed and their own resumable job, so a phone
+  // locking mid-batch loses none of them. The first to land becomes the
+  // working image; the rest fill a grid to pick from.
   async handleGeneratePlaygroundImage() {
     const promptEl = document.getElementById("playground-generate-prompt");
     const prompt = promptEl?.value?.trim();
@@ -329,36 +349,141 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
+    const count = parseInt(document.getElementById("playground-generate-count")?.value, 10) || 1;
+
     const btn = document.getElementById("generate-playground-image-btn");
     const statusEl = document.getElementById("playground-generate-status");
     if (btn) btn.disabled = true;
-    if (statusEl) {
+    const setStatus = (done) => {
+      if (!statusEl) return;
       statusEl.style.display = "block";
-      statusEl.textContent = `🪄 Generating with ${model}… this may take a minute.`;
-    }
+      statusEl.textContent = count > 1
+        ? `🪄 Generating ${count} with ${model}… ${done}/${count} done, this may take a minute.`
+        : `🪄 Generating with ${model}… this may take a minute.`;
+    };
+    setStatus(0);
+
+    // One slot per requested image; null while pending, { url } or { error } once settled.
+    this._pgGenerateResults = count > 1 ? Array.from({ length: count }, () => null) : [];
+    this._renderPlaygroundGenerateResults();
+
+    let first = true;
+    let done = 0;
+    const runOne = async (index) => {
+      try {
+        const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model });
+        const dataUrl = await this._urlToDataUrl(resultUrl);
+        if (count > 1) this._pgGenerateResults[index] = { url: dataUrl, model, prompt };
+
+        if (first) {
+          first = false;
+          this.playgroundImageUrl = dataUrl;
+          this.updatePlaygroundImagePreview(dataUrl);
+          if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+          this.playgroundHistory = [];
+          this._addPlaygroundHistoryEntry(dataUrl, `Generated (${model})`, {
+            tool: "generate", model, prompt,
+          });
+        }
+      } catch (error) {
+        console.error("Playground generate error:", error);
+        if (count > 1) this._pgGenerateResults[index] = { error: error.message };
+        throw error;
+      } finally {
+        done++;
+        setStatus(done);
+        this._renderPlaygroundGenerateResults();
+      }
+    };
 
     try {
-      const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model });
-      const dataUrl = await this._urlToDataUrl(resultUrl);
-
-      this.playgroundImageUrl = dataUrl;
-      this.updatePlaygroundImagePreview(dataUrl);
-      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-
-      this.playgroundHistory = [];
-      this._addPlaygroundHistoryEntry(dataUrl, `Generated (${model})`, {
-        tool: "generate", model, prompt,
-      });
-
-      this.showNotification("Image generated!", "success");
-      this._setPlaygroundToolTab("edit");
-    } catch (error) {
-      console.error("Playground generate error:", error);
-      this.showNotification(`Failed: ${error.message}`, "error", 6000);
+      const outcomes = await Promise.allSettled(
+        Array.from({ length: count }, (_, i) => runOne(i)),
+      );
+      const failures = outcomes.filter(o => o.status === "rejected");
+      if (failures.length === count) {
+        this.showNotification(`Failed: ${failures[0].reason?.message || "unknown error"}`, "error", 6000);
+      } else if (failures.length) {
+        this.showNotification(
+          `${count - failures.length} of ${count} generated — ${failures.length} failed: ${failures[0].reason?.message || "unknown error"}`,
+          "warning", 6000,
+        );
+      } else {
+        this.showNotification(count > 1 ? `${count} images generated — tap one to pick it` : "Image generated!", "success");
+      }
     } finally {
       if (btn) btn.disabled = false;
       if (statusEl) statusEl.style.display = "none";
     }
+  },
+
+  // The pick-one grid under the Generate button. Hidden for single-image runs —
+  // the preview above already shows the only result.
+  _renderPlaygroundGenerateResults() {
+    const grid = document.getElementById("playground-generate-results");
+    if (!grid) return;
+
+    const results = this._pgGenerateResults || [];
+    if (results.length < 2) {
+      grid.style.display = "none";
+      grid.innerHTML = "";
+      return;
+    }
+
+    grid.style.display = "grid";
+    grid.innerHTML = "";
+
+    results.forEach((result, index) => {
+      const tile = document.createElement("div");
+      const isActive = !!result?.url && result.url === this.playgroundImageUrl;
+      tile.style.cssText = `
+        position: relative; aspect-ratio: 1 / 1; border-radius: 0.5rem; overflow: hidden;
+        background: var(--bg-secondary, rgba(0,0,0,0.15));
+        border: 3px solid ${isActive ? "var(--accent)" : "var(--border)"};
+        display: flex; align-items: center; justify-content: center; text-align: center;
+        font-size: 0.75rem; color: var(--text-soft); padding: ${result?.url ? "0" : "0.5rem"};
+      `;
+
+      if (!result) {
+        tile.textContent = "⏳ Generating…";
+      } else if (result.error) {
+        tile.title = result.error;
+        tile.textContent = "❌ Failed";
+      } else {
+        tile.style.cursor = "pointer";
+        tile.title = isActive ? "This is the working image" : "Tap to make this the working image";
+        tile.innerHTML = `
+          <img src="${result.url}" alt="Option ${index + 1}" style="width: 100%; height: 100%; object-fit: contain; display: block;">
+          <span style="position:absolute; top:0; left:0; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; padding:0.15rem 0.35rem; border-bottom-right-radius:0.4rem;">${isActive ? "✓ " : ""}${index + 1}</span>
+          <button type="button" data-save title="Save this one to your image library"
+            style="position:absolute; bottom:0; right:0; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:0.85rem; line-height:1; padding:0.35rem 0.45rem; cursor:pointer;"
+          >💾</button>
+        `;
+        tile.querySelector("[data-save]").addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.savePlaygroundImageToLibrary(result.url, `Generated (${result.model})`, result.prompt);
+        });
+        tile.addEventListener("click", () => this._pickPlaygroundGenerateResult(index));
+      }
+      grid.appendChild(tile);
+    });
+  },
+
+  // Adds the pick to the history strip rather than resetting it, so swapping
+  // between options — or back to one already edited — never throws work away.
+  _pickPlaygroundGenerateResult(index) {
+    const result = this._pgGenerateResults?.[index];
+    if (!result?.url || result.url === this.playgroundImageUrl) return;
+
+    this.playgroundImageUrl = result.url;
+    this.updatePlaygroundImagePreview(result.url);
+    if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+    this._addPlaygroundHistoryEntry(result.url, `Generated (${result.model})`, {
+      tool: "generate", model: result.model, prompt: result.prompt,
+    });
+    // _addPlaygroundHistoryEntry skips a duplicate of the last entry and so
+    // doesn't always re-render; the highlight must move regardless.
+    this._renderPlaygroundHistory();
   },
 
   async handlePlaygroundImageUpload(event) {
@@ -517,6 +642,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   _renderPlaygroundHistory() {
+    // The Generate pick grid highlights the working image too, and every
+    // change of working image ends up here.
+    this._renderPlaygroundGenerateResults();
+
     const strip = document.getElementById("playground-history-strip");
     if (!strip) return;
 
