@@ -1,4 +1,29 @@
 // API Handler for OpenAI-compatible endpoints with streaming support
+
+// Prepended to the system prompt of every text call that goes through
+// makeRequest, which is all of the card tooling: card writing, finishing
+// fields, revisions, lorebooks, image prompts, Inspire Me. It sits here rather
+// than in each prompt so no new prompt can miss it. Reasoning models without
+// this spent their whole token budget weighing explicit concepts and wrote
+// nothing (GLM 5.3, 2026-10-15). The adult-only line is what makes the rest
+// credible: it gives the model a clear boundary instead of leaving it to
+// invent one, and it is a line the app means.
+const CARD_CONTENT_CONTEXT = `**CONTENT CONTEXT:** This is a private creative-writing tool. An adult author uses it to build characters for interactive fiction. Everything you write is fiction: invented characters in an invented story, read only by the adult who asked for it. Mature themes are in scope when the concept calls for them: horror, violence, dark romance, explicit sex, and monster or non-human characters. Write them with the same craft and directness as any other genre. Don't add disclaimers or warnings, don't moralise, and don't water the concept down.
+**The one firm line:** every character in a sexual context is an adult (18+), and the card states this plainly. Never sexualise minors or characters given childlike traits. If a concept implies that, make the characters adults rather than refusing.`;
+
+/** Return `messages` with the content context leading the system prompt. */
+function withContentContext(messages) {
+  if (!Array.isArray(messages) || !messages.length) return messages;
+  const [first, ...rest] = messages;
+  if (first.role === "system") {
+    // Multimodal system content is left alone rather than reshaped.
+    if (typeof first.content !== "string") return messages;
+    if (first.content.includes("**CONTENT CONTEXT:**")) return messages;
+    return [{ ...first, content: `${CARD_CONTENT_CONTEXT}\n\n${first.content}` }, ...rest];
+  }
+  return [{ role: "system", content: CARD_CONTENT_CONTEXT }, ...messages];
+}
+
 class APIHandler {
   constructor() {
     this.config = window.config;
@@ -6,6 +31,14 @@ class APIHandler {
     this.currentAbortController = null; // Store current abort controller for stopping generation
     this.currentReader = null; // Store current stream reader for cancellation
     this.userStopRequested = false;
+    // Bumped on every Stop. Unlike userStopRequested, nothing resets it, so a
+    // multi-step generation can tell a Stop happened even if it landed between
+    // two requests (each new request clears userStopRequested).
+    this.stopSerial = 0;
+    // Client refs of resumable text generations in flight, so Stop can cancel
+    // them server-side as well as dropping the connection.
+    this.activeClientRefs = new Set();
+    this.lastStreamStats = null;
     this.requestLogs = []; // Rolling log of recent API interactions
     this.lastFinishReason = null; // Why the last generation stopped ("length" = truncated)
   }
@@ -50,7 +83,6 @@ class APIHandler {
   }
 
   async makeRequest(endpoint, data, isImageRequest = false, stream = false) {
-    let lastError;
     let delay = this.config.get("app.retryDelay") || 1000;
     const maxRetries = this.config.get("app.maxRetries") || 3;
 
@@ -58,14 +90,31 @@ class APIHandler {
     // the request goes out. Without it, a socket that dies during the initial
     // upstream wait leaves a generation running server-side that the browser
     // cannot name — and the retry below would silently start a second one.
+    if (!isImageRequest && Array.isArray(data.messages)) {
+      data = { ...data, messages: withContentContext(data.messages) };
+    }
+
     const resumable = !!data.resumable && !!window.ResumableJobs;
     let clientRef = null;
     if (resumable) {
       clientRef = window.ResumableJobs.newRef();
       data = { ...data, clientRef };
       window.ResumableJobs.add({ clientRef, label: data.__jobLabel || "Generation" });
+      if (!isImageRequest) this.activeClientRefs.add(clientRef);
     }
+    // Streams hand the ref to handleStreamResponse, which releases it there.
+    let handedOff = false;
+    try {
+      return await this._makeRequestAttempts(endpoint, data, isImageRequest, stream, {
+        resumable, clientRef, maxRetries, delay, onHandOff: () => { handedOff = true; },
+      });
+    } finally {
+      if (clientRef && !handedOff) this.activeClientRefs.delete(clientRef);
+    }
+  }
 
+  async _makeRequestAttempts(endpoint, data, isImageRequest, stream, { resumable, clientRef, maxRetries, delay, onHandOff }) {
+    let lastError;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const response = await this._doMakeRequest(endpoint, data, isImageRequest, stream);
@@ -74,6 +123,7 @@ class APIHandler {
             // handleStreamResponse owns the entry from here — it clears it once
             // the stream terminates, having used it to reconnect if needed.
             response._clientRef = clientRef;
+            onHandOff();
           } else {
             window.ResumableJobs.remove(clientRef);
           }
@@ -105,6 +155,7 @@ class APIHandler {
             const resumed = await this._tryResumeByClientRef(clientRef);
             if (resumed) {
               console.warn(`[API] Attempt ${attempt} failed (${error.message}) — resuming existing generation instead of regenerating`);
+              onHandOff();
               return resumed;
             }
           } else {
@@ -537,7 +588,10 @@ class APIHandler {
                 continue;
               }
 
-              const content = parsed.choices?.[0]?.delta?.content || "";
+              const delta = parsed.choices?.[0]?.delta;
+              const content = delta?.content || "";
+              const reasoning = delta?.reasoning || delta?.reasoning_content;
+              if (reasoning) state.reasoningChars += reasoning.length;
 
               if (content) {
                 state.fullContent += content;
@@ -598,12 +652,19 @@ class APIHandler {
     });
   }
 
-  async handleStreamResponse(response, onStream) {
+  /**
+   * `warnOnTruncation: false` lets a caller that checks the outcome itself
+   * (see lastStreamStats) give a more specific message than the generic one.
+   */
+  async handleStreamResponse(response, onStream, { warnOnTruncation = true } = {}) {
     const logEntry = response._logEntry;
     const startTime = response._startTime || performance.now();
+    const stopMark = this.stopSerial;
+    const stopped = () => this.stopSerial !== stopMark;
 
     const state = {
       fullContent: "",
+      reasoningChars: 0,
       clientRef: response._clientRef || null,
       jobId: response._resumedJobId || null,
       finishReason: null,
@@ -626,7 +687,7 @@ class APIHandler {
       while (
         !state.complete &&
         state.clientRef &&
-        !this.userStopRequested &&
+        !stopped() &&
         attempts < 20
       ) {
         attempts++;
@@ -661,14 +722,15 @@ class APIHandler {
         window.ResumableJobs?.remove(state.clientRef);
       }
 
+      // Checked before anything else: Stop cancels the reader, which ends the
+      // stream cleanly, and a half-written reply must not then pass as whole.
+      if (stopped() && !state.complete) throw new Error("Generation stopped by user.");
+
       if (state.error) throw new Error(state.error);
 
       // Nothing recoverable and the socket died — surface the original failure
       // rather than handing back a half-built character as if it were whole.
-      if (!state.complete && state.interrupted) {
-        if (this.userStopRequested) throw new Error("Generation stopped by user.");
-        throw state.interrupted;
-      }
+      if (!state.complete && state.interrupted) throw state.interrupted;
 
       if (logEntry) {
         logEntry.status = 200;
@@ -676,7 +738,13 @@ class APIHandler {
         logEntry.response = state.fullContent;
       }
 
-      this.noteFinishReason(state.finishReason);
+      this.lastStreamStats = {
+        finishReason: state.finishReason,
+        contentChars: state.fullContent.length,
+        reasoningChars: state.reasoningChars,
+      };
+      if (warnOnTruncation) this.noteFinishReason(state.finishReason);
+      else this.lastFinishReason = state.finishReason || null;
 
       return state.fullContent;
     } catch (error) {
@@ -684,6 +752,7 @@ class APIHandler {
       throw error;
     } finally {
       this.currentReader = null;
+      if (state.clientRef) this.activeClientRefs.delete(state.clientRef);
       // Ownership was passed from _doMakeRequest when the stream began.
       if (response._wakeLockHeld) {
         response._wakeLockHeld = false;
@@ -883,8 +952,36 @@ class APIHandler {
     }
   }
 
+  /** Snapshot to compare against later with throwIfStopped(). */
+  stopMark() {
+    return this.stopSerial;
+  }
+
+  /**
+   * For multi-step flows: throw if Stop was pressed since `mark` was taken.
+   * Needed because a Stop between two requests has nothing in flight to abort,
+   * and the next request would otherwise carry on as if it never happened.
+   */
+  throwIfStopped(mark) {
+    if (this.stopSerial !== mark) throw new Error("Generation stopped by user.");
+  }
+
+  /** Abort resumable jobs on the server; dropping the socket leaves them running. */
+  _cancelServerJobs() {
+    const refs = Array.from(this.activeClientRefs);
+    if (!refs.length) return;
+    for (const ref of refs) window.ResumableJobs?.remove(ref);
+    (window.authFetch || fetch)("/api/jobs/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this._authHeaders() },
+      body: JSON.stringify({ clientRefs: refs }),
+    }).catch((err) => console.warn("[API] job cancel failed:", err?.message || err));
+  }
+
   stopGeneration() {
     this.userStopRequested = true;
+    this.stopSerial++;
+    this._cancelServerJobs();
     if (this.currentAbortController) {
       this.currentAbortController.abort();
       this.currentAbortController = null;

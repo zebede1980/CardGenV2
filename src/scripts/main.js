@@ -1206,6 +1206,9 @@ class CharacterGeneratorApp {
 
     this.isGenerating = true;
     this.setGeneratingState(true);
+    // A Stop between two requests has nothing in flight to abort, so each step
+    // below checks this mark before carrying on.
+    const stopMark = window.apiHandler.stopMark();
 
     // Generating a fresh character — clear any ST source link
     this.stSourceAvatar = null;
@@ -1281,6 +1284,7 @@ class CharacterGeneratorApp {
           pov, this.lorebookData, cardType,
         );
       }
+      window.apiHandler.throwIfStopped(stopMark);
 
       // Stamp cardType on the character and auto-tag non-single types
       this.currentCharacter.cardType = cardType;
@@ -1294,6 +1298,7 @@ class CharacterGeneratorApp {
       // requirements survive even if the card itself didn't capture them.
       const brief = generationMode === "search" ? searchScenario : concept;
       await this.fillFinishingFields(this.currentCharacter, { brief });
+      window.apiHandler.throwIfStopped(stopMark);
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 
@@ -1308,6 +1313,7 @@ class CharacterGeneratorApp {
           console.error("Auto-generate cast failed:", castError);
           this.showStreamMessage(`⚠️ Supporting cast generation failed: ${castError.message}\n`);
         }
+        window.apiHandler.throwIfStopped(stopMark);
       }
 
       this.showStreamMessage("\n✅ Character generation complete!\n");

@@ -535,7 +535,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
    * `target` with one finishing call (see generateFinishingFields). Any section
    * the reply leaves out falls back to its single-field generator, so one weak
    * reply never leaves a field blank. Failures are non-fatal: the card keeps
-   * whatever it had. A user Stop skips the fallbacks.
+   * whatever it had. A user Stop is rethrown, so the caller stops too rather
+   * than carrying on to display and save a card the user abandoned.
    */
   async fillFinishingFields(target = this.currentCharacter, { brief = "", revisionNote = "" } = {}) {
     if (!target) return;
@@ -550,7 +551,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         count, pov, brief, revisionNote, exampleStyle, lorebookEntries,
       });
     } catch (error) {
-      if (error.message?.includes("Generation stopped by user")) return;
+      if (error.message?.includes("Generation stopped by user")) throw error;
       console.warn("Finishing-fields call failed; falling back to single-field calls:", error);
     }
 
@@ -566,7 +567,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         try {
           value = ((await fallback()) || "").trim();
         } catch (error) {
-          if (error.message?.includes("Generation stopped by user")) return;
+          if (error.message?.includes("Generation stopped by user")) throw error;
           console.warn(`${key} generation failed (non-fatal):`, error);
         }
       }

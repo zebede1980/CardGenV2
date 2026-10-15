@@ -154,6 +154,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Follow the same pattern as handleGenerate()
     this.isGenerating = true;
+    const stopMark = window.apiHandler.stopMark();
     this.setGeneratingState(true);
 
     this.stSourceAvatar = null;
@@ -205,6 +206,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         (token, fullContent) => this.handleCharacterStream(token, fullContent),
         pov, this.lorebookData, cardType,
       );
+      window.apiHandler.throwIfStopped(stopMark);
 
       // Stamp cardType
       this.currentCharacter.cardType = cardType;
@@ -215,6 +217,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
       await this.fillFinishingFields(this.currentCharacter, { brief: memo });
+      window.apiHandler.throwIfStopped(stopMark);
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 

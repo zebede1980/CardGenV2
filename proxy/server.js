@@ -2043,9 +2043,59 @@ function createGenerationJob(userId, abortController, clientRef = null) {
     subscribers: 1, // the request that created it is already attached
     listeners: new Set(), // fn(event) for clients tailing this job live
     abort: abortController,
+    // Diagnostics only — the reasoning is never replayed to the client.
+    reasoningChars: 0,
+    reasoningTail: "",
+    usage: null,
   };
   generationJobs.set(job.id, job);
   return job;
+}
+
+const REASONING_TAIL_CHARS = 2000;
+
+/** Keep a running count and the last stretch of the model's hidden reasoning. */
+function noteJobReasoning(job, text) {
+  if (!text) return;
+  job.reasoningChars += text.length;
+  job.reasoningTail = (job.reasoningTail + text).slice(-REASONING_TAIL_CHARS);
+}
+
+/**
+ * One log line per finished text job. A reply that is empty after a long
+ * reasoning run also logs the end of that reasoning: "hit the token limit" and
+ * "the model talked itself out of answering" look identical to the client,
+ * and the reasoning is the only place the difference shows.
+ */
+function logTextJobOutcome(job, clientGone) {
+  const u = job.usage || {};
+  const reasoningTokens = u.completion_tokens_details?.reasoning_tokens ?? u.reasoning_tokens;
+  console.log(
+    `[jobs] job ${job.id} complete (${job.content.length} chars, ` +
+    `reasoning ${job.reasoningChars} chars, finish ${job.finishReason || "?"}` +
+    (u.completion_tokens != null
+      ? `, completion ${u.completion_tokens} tokens` +
+        (reasoningTokens != null ? ` of which reasoning ${reasoningTokens}` : "")
+      : "") +
+    `, ${clientGone ? "client had detached" : "client attached"})`,
+  );
+  if (job.content.trim().length < 50 && job.reasoningChars > 0) {
+    console.log(`[jobs] job ${job.id} wrote no answer; end of its reasoning:\n${job.reasoningTail}`);
+  }
+}
+
+// Stop requests that arrive before their generation has registered a job
+// (the request is still in flight to the proxy). Keyed by user + clientRef.
+const CANCELLED_REF_TTL_MS = 2 * 60 * 1000;
+const cancelledClientRefs = new Map();
+
+function wasCancelledEarly(userId, clientRef) {
+  if (!clientRef) return false;
+  const key = `${userId}:${clientRef}`;
+  const at = cancelledClientRefs.get(key);
+  if (at == null) return false;
+  cancelledClientRefs.delete(key);
+  return Date.now() - at < CANCELLED_REF_TTL_MS;
 }
 
 function emitToJobListeners(job, event) {
@@ -2095,7 +2145,7 @@ function finishGenerationJob(job, status, { finishReason, error } = {}) {
  * content* rather than raw bytes is what lets a resume offset survive differing
  * chunk boundaries between the original stream and the replayed one.
  */
-function makeSseContentExtractor({ onContent, onFinishReason }) {
+function makeSseContentExtractor({ onContent, onFinishReason, onReasoning, onUsage }) {
   let buffer = "";
   // Multi-byte UTF-8 characters can straddle a chunk boundary; decoding each
   // chunk independently would corrupt them.
@@ -2116,10 +2166,15 @@ function makeSseContentExtractor({ onContent, onFinishReason }) {
 
       try {
         const parsed = JSON.parse(payload);
-        const content = parsed.choices?.[0]?.delta?.content;
+        const delta = parsed.choices?.[0]?.delta;
+        const content = delta?.content;
         if (content) onContent(content);
+        // nano-gpt puts GLM's thinking in `reasoning`; others use `reasoning_content`.
+        const reasoning = delta?.reasoning || delta?.reasoning_content;
+        if (reasoning && onReasoning) onReasoning(reasoning);
         const reason = parsed.choices?.[0]?.finish_reason;
         if (reason) onFinishReason(reason);
+        if (parsed.usage && onUsage) onUsage(parsed.usage);
       } catch (_) {
         /* keep-alive comments and non-JSON frames are not errors */
       }
@@ -2146,6 +2201,9 @@ function sseErrorFrame(message) {
 
 const jobSweeper = setInterval(() => {
   const now = Date.now();
+  for (const [key, at] of cancelledClientRefs) {
+    if (now - at > CANCELLED_REF_TTL_MS) cancelledClientRefs.delete(key);
+  }
   for (const [id, job] of generationJobs) {
     if (!jobIsExpired(job, now)) continue;
     if (job.status === "running") {
@@ -2270,6 +2328,36 @@ app.get("/api/jobs/:jobId/result", requireAuth, (req, res) => {
 });
 
 /**
+ * The user pressed Stop. Resumable jobs deliberately outlive a dropped socket
+ * (a locked phone), so closing the connection is not enough to stop one: the
+ * upstream would keep generating, and billing, into the buffer. This aborts it.
+ *
+ * Body: { clientRefs: string[] }. A ref with no job yet is remembered briefly,
+ * so a request still on its way to the proxy is refused when it lands.
+ */
+app.post("/api/jobs/cancel", requireAuth, (req, res) => {
+  const refs = Array.isArray(req.body?.clientRefs)
+    ? req.body.clientRefs.filter((r) => typeof r === "string").slice(0, 20)
+    : [];
+  const userId = req.user.userId;
+  let cancelled = 0;
+  for (const ref of refs) {
+    let found = false;
+    for (const job of generationJobs.values()) {
+      if (job.userId !== userId || job.clientRef !== ref.slice(0, 100)) continue;
+      found = true;
+      if (job.status !== "running") continue;
+      finishGenerationJob(job, "error", { error: "Generation stopped by user." });
+      if (job.abort && !job.abort.signal.aborted) job.abort.abort();
+      cancelled++;
+      console.log(`[jobs] job ${job.id} cancelled by user`);
+    }
+    if (!found) cancelledClientRefs.set(`${userId}:${ref.slice(0, 100)}`, Date.now());
+  }
+  res.json({ cancelled });
+});
+
+/**
  * List the caller's live jobs. The safety net for when Safari discards the tab
  * entirely, or the stored jobId turns out to be stale.
  *
@@ -2383,6 +2471,11 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
           },
         });
       }
+      if (wasCancelledEarly(req.user.userId, clientRef)) {
+        return res.status(409).json({
+          error: { code: "409", message: "Generation stopped by user." },
+        });
+      }
       job = createGenerationJob(req.user.userId, upstreamAbort, clientRef);
     }
 
@@ -2468,6 +2561,10 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
           onFinishReason: (reason) => {
             job.finishReason = reason;
           },
+          onReasoning: (text) => noteJobReasoning(job, text),
+          onUsage: (usage) => {
+            job.usage = usage;
+          },
         });
       }
 
@@ -2524,12 +2621,9 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       });
 
       response.body.on("end", () => {
-        if (job) {
+        if (job && job.status === "running") {
           finishGenerationJob(job, "done", { finishReason: job.finishReason || "stop" });
-          console.log(
-            `[jobs] job ${job.id} complete (${job.content.length} chars, ` +
-            `${clientGone ? "client had detached" : "client attached"})`,
-          );
+          logTextJobOutcome(job, clientGone);
         }
         if (!res.writableEnded) res.end();
       });
@@ -2539,6 +2633,10 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
         const message = data.choices?.[0]?.message;
         job.content = message?.content || message?.reasoning_content || "";
         job.result = data;
+        noteJobReasoning(job, message?.reasoning || message?.reasoning_content || "");
+        job.usage = data.usage || null;
+        job.finishReason = data.choices?.[0]?.finish_reason || null;
+        logTextJobOutcome(job, clientGone);
         finishGenerationJob(job, "done", {
           finishReason: data.choices?.[0]?.finish_reason || "stop",
         });

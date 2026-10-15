@@ -200,23 +200,65 @@ Object.assign(APIHandler.prototype, {
       // not lose the character (and does not silently regenerate a new one).
       data.resumable = true;
       const response = await this.makeRequest("/chat/completions", data, false, true);
-      return this.handleStreamResponse(response, onStream);
+      const output = await this.handleStreamResponse(response, onStream, { warnOnTruncation: false });
+      return this._checkCardWritten(output, this.lastStreamStats);
     } else {
+      let response;
       try {
         // Full character generations are expensive; hold the result server-side
         // so a dropped connection collects it rather than paying twice.
         data.resumable = true;
-        const response = await this.makeRequest("/chat/completions", data, false, false);
-        return this.processNormalResponse(response);
+        response = await this.makeRequest("/chat/completions", data, false, false);
       } catch (error) {
         if (error.message.includes("401") || error.message.includes("Authorization")) {
           this.config.log("Trying alternative auth methods...");
-          const response = await this.tryAlternativeAuth("/chat/completions", data);
-          return this.processNormalResponse(response);
+          response = await this.tryAlternativeAuth("/chat/completions", data);
+        } else {
+          throw error;
         }
-        throw error;
       }
+      const message = response?.choices?.[0]?.message || {};
+      const stats = {
+        finishReason: response?.choices?.[0]?.finish_reason || null,
+        reasoningChars: (message.reasoning || message.reasoning_content || "").length,
+      };
+      // Not processNormalResponse: it would fall back to returning the
+      // reasoning as if it were the card.
+      return this._checkCardWritten(message.content || "", stats);
     }
+  },
+
+  /**
+   * The main card call is the one everything else builds on. An empty reply
+   * used to flow on into the finishing calls, which then dressed up a blank
+   * card; and GLM 5.3 reasoning until it ran out of tokens surfaced only as a
+   * vague "hit the token limit". Stop here and say what actually happened.
+   */
+  _checkCardWritten(output, { finishReason = null, reasoningChars = 0 } = {}) {
+    const text = (output || "").trim();
+    const model = this.config.get("api.text.model") || "The model";
+
+    if (text.length >= 50 && (/^#/m.test(text) || text.length > 600)) {
+      this.noteFinishReason(finishReason, "The character card");
+      return output;
+    }
+    this.lastFinishReason = finishReason || null;
+
+    if (!text && finishReason === "length" && reasoningChars > 0) {
+      throw new Error(
+        `${model} used its whole token budget thinking and wrote no card. ` +
+        `This usually means it was hesitating over the content rather than running out of room. ` +
+        `Try again, or switch to a different model.`,
+      );
+    }
+    if (!text) {
+      throw new Error(
+        `${model} returned an empty reply${finishReason ? ` (finish: ${finishReason})` : ""}. ` +
+        `Try again, or switch to a different model.`,
+      );
+    }
+    // Short and with no card headings: almost always a refusal. Show it.
+    throw new Error(`${model} didn't write a card. It said: "${text.slice(0, 300)}"`);
   },
 
   // Silent (non-streaming) character generation for batch use
@@ -256,22 +298,31 @@ Object.assign(APIHandler.prototype, {
       // not lose the character (and does not silently regenerate a new one).
       data.resumable = true;
       const response = await this.makeRequest("/chat/completions", data, false, true);
-      return this.handleStreamResponse(response, onStream);
+      const output = await this.handleStreamResponse(response, onStream, { warnOnTruncation: false });
+      return this._checkCardWritten(output, this.lastStreamStats);
     } else {
+      let response;
       try {
         // Full character generations are expensive; hold the result server-side
         // so a dropped connection collects it rather than paying twice.
         data.resumable = true;
-        const response = await this.makeRequest("/chat/completions", data, false, false);
-        return this.processNormalResponse(response);
+        response = await this.makeRequest("/chat/completions", data, false, false);
       } catch (error) {
         if (error.message.includes("401") || error.message.includes("Authorization")) {
           this.config.log("Trying alternative auth methods...");
-          const response = await this.tryAlternativeAuth("/chat/completions", data);
-          return this.processNormalResponse(response);
+          response = await this.tryAlternativeAuth("/chat/completions", data);
+        } else {
+          throw error;
         }
-        throw error;
       }
+      const message = response?.choices?.[0]?.message || {};
+      const stats = {
+        finishReason: response?.choices?.[0]?.finish_reason || null,
+        reasoningChars: (message.reasoning || message.reasoning_content || "").length,
+      };
+      // Not processNormalResponse: it would fall back to returning the
+      // reasoning as if it were the card.
+      return this._checkCardWritten(message.content || "", stats);
     }
   },
 
@@ -512,11 +563,9 @@ The name's [Character Name]. You want to know about me? Fine. Let's get this ove
 
 Your primary goal is to create a realistic, multifaceted character. Characters should have virtues and flaws, strengths and weaknesses. The goal is literary realism — not literary padding.
 
-**CARD PURPOSE:** This card is operational guidance for an AI that will play the character, not a piece of fiction. Every sentence must serve a direct behavioural or descriptive function. Do not pad, poeticize, or repeat information. Use short prose for backstory and scenario; use clear, direct bullet points for personality traits and behaviours.
+**CARD PURPOSE:** This card is operational guidance for an AI that will play the character, not prose to be read. Every sentence must serve a direct behavioural or descriptive function. Do not pad, poeticize, or repeat information. Use short prose for backstory and scenario; use clear, direct bullet points for personality traits and behaviours.
 
 **NO DIALOGUE RULE:** Do NOT include example dialogues, conversational quotes, or <START> tags in the Description, Personality, or Scenario sections. The only place where dialogue is allowed is the "First Message" section. Example dialogues for the character will be generated in a separate step. Describe how they speak, but do not provide examples of them speaking.
-
-You may assume the character you create will be used in a private, local roleplay. Do not bother with censorship.
 
 ${povInstruction}
 
@@ -640,8 +689,6 @@ If the player's concept requires specific names — named real or established fi
 
 **MACRO RULE FOR {{user}}:** Use {{user}} for the player character. Do not assign pronouns or a name to {{user}}.
 
-You may assume this card will be used in a private, local roleplay. Do not apply censorship.
-
 Use ## as a separator for each main section as shown in the template.
 
 ${cultureSection}${castNames}
@@ -721,8 +768,6 @@ ${lorebookContent}`;
 **PERSPECTIVE:** Write the entire card in the third-person perspective. Use {{char}} as the placeholder for the scenario's title/name (e.g. "The Haunted Lighthouse") everywhere except the profile header and the opening paragraph.
 
 **{{char}} MACRO:** {{char}} = the scenario/location title. An AI playing this card will narrate events AS the scenario, voicing NPCs by name as they appear. Use {{user}} for the player character.
-
-You may assume this card will be used in a private, local roleplay. Do not apply censorship.
 
 Use ## as a separator for each main section as shown in the template.
 
