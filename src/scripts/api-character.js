@@ -6,6 +6,13 @@
 // which draws real names from published name data — see the comment there for
 // why. History and the overused-name ban list live in NameBank so both kinds of
 // path share one copy and can't drift apart.
+// Token cap for calls that write a whole card: the main card call (plain and
+// web-search) and AI Revise, which returns the full card as JSON. GLM 5.3 always
+// reasons and the reasoning counts against this: on 2026-10-15 one card used
+// ~24,500 characters of reasoning plus a ~10,000-character card, close to the
+// old 8192. It is only a ceiling, so the headroom costs nothing unless used.
+const MAIN_CARD_MAX_TOKENS = 16384;
+
 const NameGenShared = (() => {
   // Every Western naming tradition now comes from NameBank (see
   // src/scripts/name-bank.js), which draws real names from published name
@@ -191,7 +198,7 @@ Object.assign(APIHandler.prototype, {
         { role: "user", content: characterPrompt.userPrompt },
       ],
       temperature: 0.8,
-      max_tokens: 8192,
+      max_tokens: MAIN_CARD_MAX_TOKENS,
       stream: !!onStream,
     };
 
@@ -289,7 +296,7 @@ Object.assign(APIHandler.prototype, {
         { role: "user", content: characterPrompt.userPrompt },
       ],
       temperature: 0.8,
-      max_tokens: 8192,
+      max_tokens: MAIN_CARD_MAX_TOKENS,
       stream: !!onStream,
     };
 
@@ -927,7 +934,7 @@ ${lorebookContent}`;
         },
       ],
       temperature: 0.7,
-      max_tokens: 8192,
+      max_tokens: MAIN_CARD_MAX_TOKENS,
       stream: true,
     };
 
