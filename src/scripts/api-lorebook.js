@@ -94,6 +94,34 @@ Output ONLY the message content.`;
   },
 
   /**
+   * Run a lorebook JSON call as a stream and return its text and finish reason.
+   *
+   * These used to wait for the whole reply. GLM 5.3 can think for over a
+   * minute first, and an iPhone drops a request that has received nothing for
+   * 60 seconds, then quietly re-sends it, so one scan was paid for twice and
+   * still failed. A stream keeps data arriving while the model thinks.
+   *
+   * `what` names the output for the error when the model writes nothing.
+   */
+  async _streamLoreJson(data, what) {
+    const response = await this.makeRequest("/chat/completions", data, false, true);
+    const output = await this.handleStreamResponse(response, () => {}, { warnOnTruncation: false });
+    const { finishReason = null, reasoningChars = 0 } = this.lastStreamStats || {};
+    if (!String(output || "").trim()) {
+      const model = this.config.get("api.text.model") || "The model";
+      if (finishReason === "length" && reasoningChars > 0) {
+        throw new Error(
+          `${model} used its whole token budget thinking and wrote no ${what}. Try again, or switch to a different model.`,
+        );
+      }
+      throw new Error(
+        `${model} returned an empty reply${finishReason ? ` (finish: ${finishReason})` : ""}. Try again, or switch to a different model.`,
+      );
+    }
+    return { output, finishReason };
+  },
+
+  /**
    * A compact index of the lorebook: each entry's keys plus the start of its
    * text. Given to the AI so it doesn't re-suggest topics that already have an
    * entry, and doesn't contradict them when it writes a new one.
@@ -168,14 +196,15 @@ Output a JSON array of strings with your suggestions.`;
       ],
       temperature: 0.2,
       max_tokens: 500,
-      stream: false,
+      stream: true,
+      resumable: true,
+      __jobLabel: "Lorebook topics",
       response_format: { type: "json_object" },
     };
 
     try {
       console.log("=== STARTING LOREBOOK TOPIC SUGGESTION ===");
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      const output = this.processNormalResponse(response);
+      const { output } = await this._streamLoreJson(data, "topic list");
 
       let parsed = this._parseJsonRobust(output);
       
@@ -360,14 +389,15 @@ Generate the supporting cast member JSON now.`;
       ],
       temperature: 0.7,
       max_tokens: 1000,
-      stream: false,
+      stream: true,
+      resumable: true,
+      __jobLabel: "Supporting cast member",
       response_format: { type: "json_object" },
     };
 
     try {
       console.log(`=== STARTING SUPPORTING CAST GENERATION: ${roleDescription} ===`);
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      const output = this.processNormalResponse(response);
+      const { output } = await this._streamLoreJson(data, "cast member");
       
       let parsed = this._parseJsonRobust(output);
       
@@ -422,14 +452,15 @@ Extract or invent the supporting cast members and return the JSON now.`;
       // Was 500, which could truncate mid-array when the model returns the
       // full 8 suggestions — truncation here becomes a hard parse failure.
       max_tokens: 1200,
-      stream: false,
+      stream: true,
+      resumable: true,
+      __jobLabel: "Supporting cast ideas",
       response_format: { type: "json_object" },
     };
 
     try {
       console.log("=== STARTING SUPPORTING CAST SUGGESTION ===");
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      const output = this.processNormalResponse(response);
+      const { output } = await this._streamLoreJson(data, "cast list");
       const parsed = this._parseJsonRobust(output);
       
       if (!parsed || !Array.isArray(parsed.cast)) {
@@ -504,6 +535,8 @@ Character guidance that MUST stay in the card: personality traits, behavioural p
 
 Skip anything that already has a lorebook entry (you will be given the list).
 
+The author reviews every candidate and picks which ones to apply, and sees each source passage before anything is trimmed from the card. So you don't need to settle borderline cases: if a section is plausibly lore, include it and let the author decide. Make each call once and move on.
+
 PART 2 — WRITE: For each lore item identified, write a properly formatted lorebook entry. Lorebook entries are instructions read by an AI roleplay model — write them accordingly:
 
 LOREBOOK WRITING RULES:
@@ -562,8 +595,11 @@ Return a JSON array of lorebook candidates. Return [] if none found.`;
         { role: "user", content: userPrompt },
       ],
       temperature: 0.2,
-      max_tokens: 6000,
-      stream: false,
+      // GLM 5.3 reasons first and the reasoning counts against this. On
+      // 2026-10-15 a lore-heavy card used all of the old 6000 on reasoning and
+      // wrote nothing, twice. It is only a ceiling, so headroom costs nothing.
+      max_tokens: 16384,
+      stream: true,
       // Held server-side, so a phone locking mid-scan collects it on return.
       resumable: true,
       __jobLabel: "Lorebook scan",
@@ -571,8 +607,7 @@ Return a JSON array of lorebook candidates. Return [] if none found.`;
 
     try {
       console.log("=== STARTING LOREBOOK CARD SCAN ===");
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      const output = this.processNormalResponse(response);
+      const { output, finishReason } = await this._streamLoreJson(data, "lorebook entries");
 
       let parsed = this._parseJsonRobust(output);
 
@@ -581,9 +616,11 @@ Return a JSON array of lorebook candidates. Return [] if none found.`;
       // reported a broken response as a clean, successful scan.
       if (!parsed) {
         console.error("Failed to parse scanCardForLorebookCandidates output:", output);
+        if (finishReason === "length") {
+          throw new Error("The lorebook scan was cut off at the token limit before it finished. Try again.");
+        }
         throw new Error(
-          "Could not read the lorebook scan results — the AI returned malformed output. " +
-          "This often means the response was cut off; try again.",
+          "Could not read the lorebook scan results — the AI returned malformed output. Try again.",
         );
       }
 
@@ -657,6 +694,7 @@ RULES:
 - Keep the \`{{char}}\` and \`{{user}}\` macros exactly as they are. Refer to the main character as \`{{char}}\`, never by name.
 - Keep the existing ${povText} point of view and formatting (markdown, bullet points, line breaks).
 - Never copy or paraphrase lorebook entry content into the card beyond what the request allows.
+- Plan the edits briefly. Don't write the fields out while thinking: write them once, in the JSON.
 
 Return strict JSON only, with exactly these keys: ${fields.join(", ")}. Each value is the complete text of that field after your edit. Escape newlines inside strings as \\n.`;
 
@@ -683,7 +721,10 @@ ${JSON.stringify(card, null, 2)}`;
         { role: "user", content: userPrompt },
       ],
       temperature: 0.4,
-      max_tokens: 8192,
+      // The reply is up to three whole fields, and GLM 5.3's reasoning counts
+      // against this too. On 2026-10-16 a cast edit drafted the fields in its
+      // reasoning and used all of the old 8192 before writing any JSON.
+      max_tokens: 16384,
       stream: true,
       // Held server-side, so a phone locking mid-call collects it on return.
       resumable: true,
@@ -691,9 +732,8 @@ ${JSON.stringify(card, null, 2)}`;
     };
 
     console.log("=== STARTING LOREBOOK CARD EDIT ===", fields);
-    const response = await this.makeRequest("/chat/completions", data, false, true);
-    const output = await this.handleStreamResponse(response, () => {});
-    if (this.lastFinishReason === "length") {
+    const { output, finishReason } = await this._streamLoreJson(data, "card edit");
+    if (finishReason === "length") {
       throw new Error("The card edit was cut off at the token limit, so it wasn't applied. Try again.");
     }
     const parsed = this.parseJsonFromModelOutput(output);
