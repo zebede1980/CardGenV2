@@ -154,9 +154,25 @@ Output ONLY the message content.`;
       .toLowerCase();
     return (entries || []).filter((e) => {
       if (!e || e.enabled === false || !Array.isArray(e.keys)) return false;
-      const keys = e.keys.map((k) => String(k || "").trim().toLowerCase()).filter(Boolean);
+      const keys = this._coverageKeys(e).map((k) => k.toLowerCase());
       return keys.length > 0 && !keys.some((k) => text.includes(k));
     });
+  },
+
+  /**
+   * The keys whose presence in the card counts as mentioning the entry.
+   *
+   * Supporting cast entries are keyed on name and role ("Ada Vance",
+   * "Bartender"). "The bartender" in the card doesn't tell the AI which
+   * bartender, so for those only the name counts. They're recognised by the
+   * topic the cast flow gives them, "Ada Vance (Bartender)", which survives a
+   * save where an extra flag on the entry would not.
+   */
+  _coverageKeys(entry) {
+    const keys = entry.keys.map((k) => String(k || "").trim()).filter(Boolean);
+    const topic = String(entry.topic || "").trim().toLowerCase();
+    const isCast = keys.length >= 2 && topic === `${keys[0]} (${keys[1]})`.toLowerCase();
+    return isCast ? [keys[0]] : keys;
   },
 
   async suggestLorebookTopics(character, existingEntries = []) {

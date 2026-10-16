@@ -665,9 +665,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
         return false;
       }
-      if (!wasStoppedByUser) {
-        this.showNotification(`Failed to add keywords to the card: ${error.message}`, "error");
+      if (wasStoppedByUser) return false;
+      // The cast entries are already saved, and ✨ Inject Keys can't stand in
+      // for this edit: it only touches the Scenario and First Message, so it
+      // would skip trimming the new characters out of the Description.
+      if (isCast) {
+        const retry = confirm(
+          `Couldn't add the new cast members to the card: ${error.message}\n\n` +
+          `The cast entries are saved. Try the card edit again?`,
+        );
+        if (retry) return this._executeInjectLorebookKeys(false, { entries: targets, mode });
+        this.showNotification("Card left unchanged. The new cast entries are saved in the lorebook.", "info");
+        return false;
       }
+      this.showNotification(`Failed to add keywords to the card: ${error.message}`, "error");
       return false;
     }
   },
