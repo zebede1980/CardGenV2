@@ -27,6 +27,27 @@ function getRatioDims(model, ratio) {
   return map[ratio];
 }
 
+// Nano Banana (Google, via NanoGPT) takes a resolution tier ("1k"/"2k") plus a
+// named aspect ratio, and rejects any pixel size with a 400 ("Nano Banana 2.1
+// supports 1K or 2K resolution"). Leaving the tier unset uses the model's own
+// default, which differs per variant (fast starts at 2k, ultra at 4k).
+function usesResolutionTiers(model) {
+  return /nano-banana/i.test(model || "");
+}
+
+// Sets whichever size fields the model understands for the chosen ratio.
+function applyImageRatio(data, model, ratio) {
+  if (!ratio) return;
+  data.aspect_ratio = ratio;
+  if (usesResolutionTiers(model)) return;
+  const dims = getRatioDims(model, ratio);
+  if (dims) {
+    data.width = dims.width;
+    data.height = dims.height;
+    data.size = `${dims.width}x${dims.height}`;
+  }
+}
+
 Object.assign(APIHandler.prototype, {
 
   async generateImage(
@@ -127,17 +148,8 @@ Object.assign(APIHandler.prototype, {
     const imageCfgScale = settings.cfgScale;
 
     if (imageAspectRatio && imageAspectRatio.trim() !== "") {
-      const ratio = imageAspectRatio.trim();
-      data.aspect_ratio = ratio;
-
-      // Provide explicit width, height, and size for compatibility with NanoGPT / OpenRouter Flux models
-      const dims = getRatioDims(model, ratio);
-      if (dims) {
-        data.width = dims.width;
-        data.height = dims.height;
-        data.size = `${dims.width}x${dims.height}`;
-      }
-    } else if (imageSize && imageSize.trim() !== "") {
+      applyImageRatio(data, model, imageAspectRatio.trim());
+    } else if (imageSize && imageSize.trim() !== "" && !usesResolutionTiers(model)) {
       data.size = imageSize.trim();
     }
     
@@ -202,14 +214,7 @@ Object.assign(APIHandler.prototype, {
       seed: Math.floor(Math.random() * 2147483647),
     };
 
-    const ratio = aspectRatio || this.config.get("api.image.aspectRatio");
-    const dims = ratio && getRatioDims(generateModel, ratio);
-    if (dims) {
-      data.aspect_ratio = ratio;
-      data.width = dims.width;
-      data.height = dims.height;
-      data.size = `${dims.width}x${dims.height}`;
-    }
+    applyImageRatio(data, generateModel, aspectRatio || this.config.get("api.image.aspectRatio"));
 
     console.log("=== SENDING PLAYGROUND GENERATE REQUEST ===");
     console.log("Generate model:", generateModel);
@@ -293,6 +298,13 @@ Object.assign(APIHandler.prototype, {
       resumable: true,
       __jobLabel: "Image enhance",
     };
+    // Tier models reject pixel sizes; 2k is the step up from their 1k default.
+    if (usesResolutionTiers(upscaleModel)) {
+      delete data.width;
+      delete data.height;
+      delete data.size;
+      data.resolution = "2k";
+    }
 
     console.log("=== SENDING IMAGE UPSCALE REQUEST ===");
     console.log("Upscale model:", upscaleModel, `${width}x${height} -> ${targetWidth}x${targetHeight}`);
@@ -358,14 +370,7 @@ Object.assign(APIHandler.prototype, {
       seed: Math.floor(Math.random() * 2147483647),
     };
 
-    const ratio = aspectRatio || this.config.get("api.image.aspectRatio");
-    const dims = ratio && getRatioDims(editModel, ratio);
-    if (dims) {
-      data.aspect_ratio = ratio;
-      data.width = dims.width;
-      data.height = dims.height;
-      data.size = `${dims.width}x${dims.height}`;
-    }
+    applyImageRatio(data, editModel, aspectRatio || this.config.get("api.image.aspectRatio"));
 
     console.log("=== SENDING IMAGE EDIT REQUEST ===");
     console.log("Edit model:", editModel);
