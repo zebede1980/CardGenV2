@@ -75,6 +75,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._updatePlaygroundCombineModelDropdown();
       this._updatePlaygroundUpscaleModelDropdown();
       this._restorePlaygroundGenerateCount();
+      this._restorePlaygroundGenerateRatio();
     });
 
     otherTabs.forEach(btn => {
@@ -142,6 +143,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (generateCountSelect) {
       this._restorePlaygroundGenerateCount();
       generateCountSelect.addEventListener("change", (e) => this.config.set("api.image.generateCount", parseInt(e.target.value, 10) || 1));
+    }
+    const generateRatioSelect = document.getElementById("playground-generate-ratio");
+    if (generateRatioSelect) {
+      this._restorePlaygroundGenerateRatio();
+      generateRatioSelect.addEventListener("change", (e) => this.config.set("api.image.generateAspectRatio", e.target.value));
     }
 
     const saveBtn = document.getElementById("save-playground-image-btn");
@@ -323,6 +329,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if ([...select.options].some(o => o.value === saved)) select.value = saved;
   },
 
+  // Until this had its own setting, Playground used Character Gen's Aspect
+  // Ratio, so an unsaved choice starts from that rather than changing shape
+  // under someone who never touched it.
+  _restorePlaygroundGenerateRatio() {
+    const select = document.getElementById("playground-generate-ratio");
+    if (!select) return;
+    const saved = this.config.get("api.image.generateAspectRatio") || this.config.get("api.image.aspectRatio") || "1:1";
+    if ([...select.options].some(o => o.value === saved)) select.value = saved;
+  },
+
   // Generates a fresh image from a prompt alone and makes it the working
   // image — same as an upload/paste, including resetting history (a newly
   // generated image is unrelated to whatever was there before). Stays on the
@@ -350,6 +366,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     const count = parseInt(document.getElementById("playground-generate-count")?.value, 10) || 1;
+    const aspectRatio = document.getElementById("playground-generate-ratio")?.value || "1:1";
 
     const btn = document.getElementById("generate-playground-image-btn");
     const statusEl = document.getElementById("playground-generate-status");
@@ -371,7 +388,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     let done = 0;
     const runOne = async (index) => {
       try {
-        const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model });
+        const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model, aspectRatio });
         const dataUrl = await this._urlToDataUrl(resultUrl);
         if (count > 1) this._pgGenerateResults[index] = { url: dataUrl, model, prompt };
 
