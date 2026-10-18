@@ -95,6 +95,16 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   localStorage (`cardgen.promptBuilder.v1`). Closing mid-write lets it finish; a toast says when.
   ■ Stop only abandons the write, because `stopGeneration()` cancels every running job.
 - **Playground host:** ✨ Build beside the Generate box (maxlength now 4000), ↩ Restore my idea.
+- **"From your cards" looks** (18, `group: "cards"` in `STARTER_LOOKS`), one per distinct style among
+  the user's favourite cards (account "zebede"). Skipped as near-duplicates: Avril Downing (= Analog
+  cyberpunk photo), Adaeze Okonkwo (= Lumi), Sigrid Vinter (merged with Phan Thị Kiều). Some carry
+  signature props as materials (Kurokawa's irezumi and red rope, Tzipporah's face runes, Lithia's
+  chains), which do show up on any subject; remove the chip for style only.
+- **First real-model test (2026-10-18):** writer instructions built by the real code, sent to GLM 5.3
+  on nano-gpt (6 calls, ~5.6k tokens): fragments format, two blocks and every look choice honoured;
+  `### TAKE` output parsed. Prompts drawn on MOSS via `buildMossGraph`: Kurokawa and Lithia transfer
+  strongly; Tzipporah and Phan/Sigrid were tuned once (more contrast and stare; magenta kept to one
+  accent) and then matched well.
 - **🖼️ Match an image** opens a picker inside the sheet: 🧙 Characters (Library cards, portrait from
   `/api/storage/cards/thumbnail`) and 🧪 Library (Playground images), with a name filter, plus
   📁 Upload from this device. Lists load once per opening of the sheet. Only the picture's *style*

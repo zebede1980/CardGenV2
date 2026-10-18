@@ -245,7 +245,8 @@
           ${opt("", "None — AI decides")}
           ${s.lookId === "custom" ? opt("custom", "Custom look (not saved)") : ""}
           ${saved.length ? `<optgroup label="Your looks">${saved.map(l => opt(`saved:${l.id}`, `★ ${l.name}`)).join("")}</optgroup>` : ""}
-          <optgroup label="Starter looks">${PL.STARTER_LOOKS.map(l => opt(l.id, l.name)).join("")}</optgroup>
+          <optgroup label="Starter looks">${PL.STARTER_LOOKS.filter(l => !l.group).map(l => opt(l.id, l.name)).join("")}</optgroup>
+          <optgroup label="From your cards">${PL.STARTER_LOOKS.filter(l => l.group === "cards").map(l => opt(l.id, l.name)).join("")}</optgroup>
           ${this.presetLooks().length ? `<optgroup label="Style presets">${this.presetLooks().map(l => opt(l.id, l.name)).join("")}</optgroup>` : ""}
         </select>`;
 

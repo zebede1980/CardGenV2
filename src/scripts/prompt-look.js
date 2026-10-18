@@ -230,6 +230,103 @@
     { id: "builtin:studio-portrait", name: "Clean studio portrait", picks: {
       medium: ["Studio portrait photo"], framing: ["Head & shoulders"], angle: ["Eye level"], lighting: ["Studio softbox"],
       lens: ["85mm portrait"], focus: ["Shallow depth of field"], background: ["Plain backdrop"] } },
+
+    // ── From the user's own cards (2026-10-18) ──
+    // Each one reads the style of that card's portrait: medium, light, palette,
+    // finish and setting, never the character (the card supplies who). Pose
+    // and expression are left to the AI. Skipped as near-duplicates: Avril
+    // Downing (= Analog cyberpunk photo), Adaeze Okonkwo (= Lumi), Sigrid
+    // Vinter (merged with Phan Thị Kiều).
+    { id: "builtin:card-sandra", group: "cards", name: "Sunlit lifestyle photo (Sandra McIntyre)", picks: {
+      medium: ["Digital photo"], lighting: ["Golden hour", "Backlit"], lens: ["35mm"], focus: ["Shallow depth of field"],
+      finish: ["Slight overexposure"], palette: ["warm cream and honey tones"], background: ["sunlit modern apartment"], mood: ["Cosy & warm"] },
+      extra: "candid lifestyle photography, natural window light, relaxed at-home realism" },
+    { id: "builtin:card-angharad", group: "cards", name: "Low-key gothic mist (Angharad Bowen)", picks: {
+      medium: ["2.5D semi-realistic anime"], framing: ["Three-quarter length"], lighting: ["Chiaroscuro", "Soft rim light"],
+      finish: ["High contrast", "Matte"], materials: ["Lace", "Velvet"], palette: ["Black", "cold silver-grey"],
+      background: ["misty dark forest at night"], mood: ["Dark & gothic"] },
+      extra: "low-key near-black frame lit by cold moonlight, drifting mist, delicate fine detail" },
+    { id: "builtin:card-greer", group: "cards", name: "Tropical glossy 2.5D (Greer Mundy)", picks: {
+      medium: ["2.5D semi-realistic anime"], framing: ["Full body"], angle: ["Low angle"], composition: ["Centred"],
+      lighting: ["Hard midday sun"], finish: ["Glossy", "High contrast"], materials: ["Specular highlights"],
+      palette: ["saturated tropical greens and blues"], background: ["tropical beach with palm trees"], mood: ["Bright & cheerful"] },
+      extra: "vivid saturated colour, crisp shadows, glossy highlights on skin" },
+    { id: "builtin:card-michelle", group: "cards", name: "Neon cyber 2.5D (Michelle Darr)", picks: {
+      medium: ["2.5D semi-realistic anime"], framing: ["Full body"], angle: ["Eye level"], composition: ["Symmetrical frontal"],
+      lighting: ["Neon", "Soft rim light"], finish: ["Glossy", "High contrast"], materials: ["Ceramic", "Specular highlights"],
+      palette: ["electric blue and red"], background: ["high-tech lab with holographic screens and cables"] },
+      extra: "wet reflective floor, glowing interface panels, sleek bodysuit sheen" },
+    { id: "builtin:card-catriona", group: "cards", name: "Candlelit boudoir realism (Catriona MacLeod)", picks: {
+      medium: ["Cinematic film still"], framing: ["Three-quarter length"], lighting: ["Candlelight", "Chiaroscuro"],
+      lens: ["85mm portrait"], focus: ["Shallow depth of field"], finish: ["Fine film grain", "Matte"],
+      materials: ["sheer linen"], palette: ["Earth tones"], background: ["candlelit old stone room"], mood: ["Romantic & soft"] },
+      extra: "warm amber glow, soft painterly realism, dusty intimate atmosphere" },
+    { id: "builtin:card-stephanie", group: "cards", name: "Soft high-key photo (Stephanie Engler)", picks: {
+      medium: ["Digital photo"], framing: ["Full body"], angle: ["Eye level"], composition: ["Centred"],
+      lighting: ["Overcast daylight", "Creamy soft key"], lens: ["50mm"], finish: ["Slight overexposure", "Soft pastel grade"],
+      palette: ["White", "soft pastels"], background: ["white bedroom with white sheets and a pale wall"], mood: ["Romantic & soft"] },
+      extra: "bright high-key image, airy and clean, minimal props" },
+    { id: "builtin:card-moxie", group: "cards", name: "Carnival latex glamour (Moxie Crimson)", picks: {
+      medium: ["Digital photo"], framing: ["Three-quarter length"], lighting: ["Golden hour", "Soft rim light"],
+      lens: ["85mm portrait"], focus: ["Extreme bokeh"], finish: ["Glossy"], materials: ["latex", "Specular highlights"],
+      palette: ["Crimson & gold"], background: ["vintage fairground with a carousel"], mood: ["Energetic"] },
+      extra: "retro pin-up glamour photography, saturated warm colour, shiny latex" },
+    { id: "builtin:card-vivienne", group: "cards", name: "Bioluminescent ethereal (Vivienne Fisher)", picks: {
+      medium: ["Digital painting"], framing: ["Waist-up"], angle: ["Three-quarter view"], lighting: ["Backlit", "Volumetric haze"],
+      finish: ["Glossy", "Soft pastel grade"], materials: ["translucent iridescent skin", "bioluminescent filaments"],
+      palette: ["Pastel purple", "magenta and cyan glow"], background: ["cosmic nebula haze"], mood: ["Dreamy"] },
+      extra: "otherworldly alien beauty, glowing translucent textures, drifting sparkles" },
+    { id: "builtin:card-tzila", group: "cards", name: "Neon rim-lit anime (Tzila Mizrahi)", picks: {
+      medium: ["Anime illustration"], framing: ["Three-quarter length"], lighting: ["Neon", "Soft rim light"],
+      finish: ["High contrast"], palette: ["Black", "neon green and electric blue"], background: ["pure black void"], mood: ["Mysterious"] },
+      extra: "glowing neon outlines tracing hair and clothing against a black background, goth streetwear" },
+    { id: "builtin:card-jocosa", group: "cards", name: "Pastoral anime (Jocosa Pettifer)", picks: {
+      medium: ["Anime illustration"], framing: ["Full body"], angle: ["Eye level"], composition: ["Rule of thirds"],
+      lighting: ["Overcast daylight"], finish: ["Soft pastel grade", "Matte"], palette: ["Sage & cream"],
+      background: ["rolling meadow with wildflowers and distant hills"], mood: ["Bright & cheerful"] },
+      extra: "painterly Ghibli-like landscape, soft cel shading, a gentle breeze" },
+    { id: "builtin:card-lumi", group: "cards", name: "Glossy anime pin-up (Lumi Dlamini)", picks: {
+      medium: ["Anime illustration"], framing: ["Three-quarter length"], lighting: ["Creamy soft key", "Soft rim light"],
+      finish: ["Glossy", "High contrast"], materials: ["Specular highlights", "latex"], mood: ["Seductive"] },
+      extra: "high-gloss anime render, wet-look shine on skin and clothes, bold clean line art, detailed eyes" },
+    { id: "builtin:card-eirene", group: "cards", name: "Gothic cathedral painting (Eirene Katsaros)", picks: {
+      medium: ["Digital painting"], framing: ["Full body"], angle: ["Low angle"], lighting: ["Chiaroscuro", "Backlit"],
+      finish: ["High contrast"], materials: ["Leather"], palette: ["deep blue and crimson"],
+      background: ["gothic cathedral with stained-glass windows"], mood: ["Dark & gothic"] },
+      extra: "textured painterly dark fantasy, stained-glass glow, cinematic scale" },
+    { id: "builtin:card-lithia", group: "cards", name: "Crimson gothic anime (Lithia)", picks: {
+      medium: ["Anime illustration"], framing: ["Waist-up"], lighting: ["Backlit", "Soft rim light"], finish: ["High contrast"],
+      materials: ["Leather", "chains and buckles"], palette: ["Black", "blood red"], background: ["city street at night under red lamplight"] },
+      extra: "detailed anime illustration, gothic punk styling with chains, belts and red accents" },
+    { id: "builtin:card-phan-sigrid", group: "cards", name: "Monochrome, magenta accent (Phan Thị Kiều / Sigrid Vinter)", picks: {
+      medium: ["3D render"], framing: ["Three-quarter length"], lighting: ["Volumetric haze", "Soft rim light"],
+      finish: ["High contrast", "Matte"], materials: ["ornate engraved armour"], palette: ["Monochrome", "a single neon magenta accent"],
+      background: ["misty out-of-focus city lights"], mood: ["Mysterious"] },
+      extra: "silver-grey black-and-white image; the magenta is one small glowing accent only (eyes, a gem or a blade edge), never a wash over the scene; intricate dark fantasy detail" },
+    { id: "builtin:card-nane", group: "cards", name: "Biomechanical render (Nane Petrosyan)", picks: {
+      medium: ["3D render"], framing: ["Full body"], angle: ["Low angle"], lighting: ["Soft rim light", "Volumetric haze"],
+      finish: ["Glossy", "High contrast"], materials: ["Brushed metal", "biomechanical ribbed plating", "glowing cores"],
+      palette: ["Teal & orange"], background: ["dark industrial factory"] },
+      extra: "Giger-inspired biomechanical anatomy fused with sleek armour, hyper-detailed metal" },
+    { id: "builtin:card-liao", group: "cards", name: "Crimson night portrait (Liao Wěixīn)", picks: {
+      medium: ["Digital photo"], framing: ["Three-quarter length"], lighting: ["Neon", "Backlit"], lens: ["85mm portrait"],
+      focus: ["Extreme bokeh"], finish: ["High contrast", "Fine film grain"], palette: ["crimson and black"],
+      background: ["city lights at night"], mood: ["Mysterious"] },
+      extra: "red light carving the figure out of black, glowing night bokeh, moody fashion editorial" },
+    // Tuned after a test render: soft key and a plain backdrop came out as a
+    // flat, friendly photo; the original's power is contrast and the stare.
+    { id: "builtin:card-tzipporah", group: "cards", name: "Ritual detail close-up (Tzipporah bat Azriel)", picks: {
+      medium: ["Digital painting"], framing: ["Close-up"], angle: ["Eye level"], composition: ["Symmetrical frontal"],
+      expression: ["Intense stare"], lighting: ["Chiaroscuro", "Soft rim light"], finish: ["High contrast"],
+      materials: ["intricate face tattoos and runes", "silver jewellery and gemstones"],
+      palette: ["desaturated silver with crimson accents"], background: ["dark smoky backdrop"], mood: ["Dark & gothic"] },
+      extra: "hyperreal dark-fantasy digital art, hyper-detailed macro texture on skin, ink, metal and hair, piercing pale eyes, every surface intricate" },
+    { id: "builtin:card-kurokawa", group: "cards", name: "Ink & red editorial (Kurokawa Rin)", picks: {
+      medium: ["Studio portrait photo"], framing: ["Waist-up"], angle: ["Three-quarter view"], composition: ["Negative space"],
+      lighting: ["Studio softbox"], lens: ["85mm portrait"], finish: ["High contrast"],
+      materials: ["traditional irezumi tattoos", "red silk rope"], palette: ["Black", "White", "a single red accent"],
+      background: ["white backdrop with black Japanese ink calligraphy"] },
+      extra: "high-key fashion editorial, stark black and white with one bold red accent, sumi-e ink brushwork" },
   ];
 
   function emptyLook(name = "") {
