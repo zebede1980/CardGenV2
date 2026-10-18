@@ -1,7 +1,7 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-10-18. Branch `ChatTest`, clean, pushed and deployed (head `768a86f` before this
-file). Update this file when you ship something or find something worth remembering: it is the
+Last updated 2026-10-18 (evening). Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
+✨ Prompt Builder merged, pushed and deployed. Update this file when you ship something or find something worth remembering: it is the
 hand-over between machines, since Claude's own memory does not travel between them.
 
 ## Shipped recently, not yet tried for real
@@ -34,7 +34,7 @@ run was made.
 - Hand-added ids may be aliases: `nano-banana-2.1` is `google/gemini-nano-banana-2.1` in the
   catalogue. `findImageCatalogEntry` matches a unique id ending in the name at a `/` or `-`.
 
-## Local MOSS-Image (`local/moss-image`), branch `feat/moss-image`
+## Local MOSS-Image (`local/moss-image`) — deployed 2026-10-18 (`d4be9b0`)
 
 `buildMossGraph` in `proxy/server.js`, from Comfy's `image_moss_image_t2i` template flattened out of
 its subgraph, without the LLM prompt-upsampler branch. 25 steps, CFG 2.5, `er_sde`/`simple`, the
@@ -53,7 +53,7 @@ official negative prompt, skip-layer guidance off (the template's default). Text
   prose, not tags).
 - Sizes need multiples of 16; `localComfyDims` already rounds to 32. It is happiest at 1–2 MP.
 
-## Image prompt fix (same branch)
+## Image prompt fix — deployed 2026-10-18 (`66d9991`), since folded into the Prompt Builder writer
 
 `generateImage` used to bookend every prompt with the style's opening and ~25 SD tags plus a mood
 tail, and the prompt writer was also told to open with style words. The result, even for MOSS/Qwen:
@@ -74,12 +74,38 @@ a woman…, masterpiece, melancholic mood…". Now (`src/scripts/api-image.js`):
 - **To do in Settings:** tick "Natural-language prompts" for every modern model (all local ones,
   Flux, Nano Banana, Seedream, Qwen); leave it off for SDXL/Illustrious/Pony.
 
-## Next up: Playground prompt builder
+## ✨ Prompt Builder (branch `feat/prompt-builder`)
 
-A ✨ Build prompt button by the Generate prompt box: short idea + chosen model's preferences +
-Shape → text model writes a rich prompt (stream it; resumable) → user edits → Generate. Base the
-instructions on the fixed `buildImagePromptInstruction` rules and OpenMOSS's prompt-enhancer skill.
-Raise the box's `maxlength` (2000) to ~4000.
+Design mockup: <https://claude.ai/artifact/27bQCmnhM3B4v7xJLSzTLk>. A prompt is a **subject** (an
+idea, or a character card) plus a **look** (how it's shot or drawn).
+
+- **One writer:** `writeImagePrompt(spec)` in `api-image.js` replaced `buildImagePromptInstruction`.
+  It writes fragments / prose / tags at short / rich / max, optionally as N takes, streams, and is
+  **resumable** (the old prompt call wasn't). `generateImagePrompt` keeps its signature and builds a
+  spec, so Draft Prompt, Gen 4, Compare Models, batch and Inspire Me all use it.
+- **Formats by model:** "Natural-language prompts" ticked → fragments; unticked with an SDXL-family
+  name (Illustrious, Pony, SDXL…) → tags; any other unticked model → prose, so a modern model whose
+  box was never ticked doesn't get tag soup.
+- **Look catalogue:** `prompt-look.js` (10 sections, each group with ✨ AI decides). Starter looks,
+  the old Style Presets as built-in looks, and saved looks (`api.image.looks`, an array).
+- **Sheet:** `prompt-builder.js` + `.pb-*` styles in `main.css`. Full screen on phones, centred at
+  ≥700px. Build, 🎲 Surprise me (bold choices, temperature 0.85), 🔀 3 variations, Match an image
+  (`extractStyleFromImage`), save/delete looks, edit before use. State is kept per host in
+  localStorage (`cardgen.promptBuilder.v1`). Closing mid-write lets it finish; a toast says when.
+  ■ Stop only abandons the write, because `stopGeneration()` cancels every running job.
+- **Playground host:** ✨ Build beside the Generate box (maxlength now 4000), ↩ Restore my idea.
+- **Character Gen host:** 🎨 Look row above Prompt Guidance. The active look is
+  `api.image.activeLook` (a JSON string; config is deep-merged on load) + `activeLookId`. It replaces
+  Style Preset and Mood for Draft Prompt, Generate and Compare Models; **Gen 4 still uses its own
+  style picks**; with no look everything works as before. Guidance doubles as the builder's
+  "extra direction" and syncs both ways.
+- **Also fixed:** Draft Prompt always sent card type "single"; it now sends the card's real type.
+- **Tested headlessly only:** Node checks of the writer (instructions, parsing, bookends) and a
+  browser harness running the real sheet + host code against a fake streaming text model (all
+  flows, 320/375 px and desktop, light and dark). **Not yet run with the real text model, on a real
+  iPhone, or in WebKit.** The lock-and-resume path is `api.js`'s, unchanged, not exercised here.
+- **Open ideas:** a "Build" in Playground's Edit tab for edit instructions; storing the Look on
+  each card rather than globally.
 
 ## Known open issues
 
