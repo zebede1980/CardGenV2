@@ -955,6 +955,45 @@ class APIHandler {
     }
   }
 
+  // Free check for the status badge. It lists models instead of generating,
+  // because the badge refreshes on every page load and every settings save
+  // (including each keystroke in the custom style box), and used to send a
+  // paid "Respond with just OK" model call each time. It proves the endpoint is
+  // up but not that the key works; Settings → Test Connection still makes a
+  // real call for that. Results are reused until the URL or key changes.
+  async checkTextApiReachable() {
+    const baseUrl = (this.config.get("api.text.baseUrl") || "").replace(/\/$/, "");
+    const apiKey = this.config.get("api.text.apiKey");
+    if (!apiKey) return { success: false, error: "No API key configured" };
+    if (!baseUrl) return { success: false, error: "No API base URL configured" };
+
+    const cacheKey = `${baseUrl}|${apiKey}`;
+    const cached = this._reachableCache;
+    if (cached && cached.key === cacheKey && Date.now() - cached.at < 5 * 60 * 1000) return cached.result;
+    if (cached?.pending && cached.key === cacheKey) return cached.pending;
+
+    const pending = (async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(`${baseUrl}/models`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: controller.signal,
+        });
+        return res.ok ? { success: true } : { success: false, error: `HTTP ${res.status}` };
+      } catch (error) {
+        return { success: false, error: error.name === "AbortError" ? "Timed out" : error.message };
+      } finally {
+        clearTimeout(timer);
+      }
+    })();
+    this._reachableCache = { key: cacheKey, pending };
+    const result = await pending;
+    // Only a success is reused; a failure is re-checked next time.
+    this._reachableCache = result.success ? { key: cacheKey, at: Date.now(), result } : null;
+    return result;
+  }
+
   async testConnection() {
     try {
       const apiKey = this.config.get("api.text.apiKey");

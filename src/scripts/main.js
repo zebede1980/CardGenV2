@@ -974,7 +974,7 @@ class CharacterGeneratorApp {
     const indicator = statusElement.querySelector(".status-indicator");
     const text = statusElement.querySelector(".status-text");
     try {
-      const result = await this.apiHandler.testConnection();
+      const result = await this.apiHandler.checkTextApiReachable();
       if (result.success) {
         indicator.className = "status-indicator status-online";
         text.textContent = "API Status: Connected";
