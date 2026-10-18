@@ -34,31 +34,52 @@ run was made.
 - Hand-added ids may be aliases: `nano-banana-2.1` is `google/gemini-nano-banana-2.1` in the
   catalogue. `findImageCatalogEntry` matches a unique id ending in the name at a `/` or `-`.
 
-## Next up: add the local `moss` model
+## Local MOSS-Image (`local/moss-image`), branch `feat/moss-image`
 
-ComfyUI models are wired in `proxy/server.js` only; the frontend picks them up automatically.
+`buildMossGraph` in `proxy/server.js`, from Comfy's `image_moss_image_t2i` template flattened out of
+its subgraph, without the LLM prompt-upsampler branch. 25 steps, CFG 2.5, `er_sde`/`simple`, the
+official negative prompt, skip-layer guidance off (the template's default). Text-to-image only.
 
-1. Load moss's official ComfyUI template on the PC and export it in **API format**.
-2. Write `buildMossGraph({ prompt, seed, steps, width, height, sourceImage })` beside
-   `buildZImageTurboGraph` / `buildKrea2TurboGraph`. Use the exact filenames from the PC's models
-   folders, and keep the template's node ids so the two can be compared later.
-3. The final `SaveImage` node **must** use id `LOCAL_COMFY_OUTPUT_NODE` (`"56"`), with
-   `filename_prefix: "cardgen/moss"`. The result is read back from that node.
-4. Add an entry to `LOCAL_COMFY_MODELS`, e.g.
-   `"local/moss": { name: "Moss", capabilities: { generate: true, edit: false }, steps: {...}, buildGraph: buildMossGraph }`.
-   Set `edit: true` only if the workflow takes a source image (see how the Qwen graph handles
-   `sourceImage`).
-5. The nginx on the PC only lets through `/system_stats`, `/prompt`, `/history/*`, `/view` and
-   `/upload/image`. No change is needed there unless the workflow needs another endpoint.
-6. Deploy (proxy rebuild; check nothing is generating first). Then Settings → Image API → Fetch
-   models, add `local/moss`, and tick 🪄 Generate.
-7. Sizes: `localComfyDims` caps local generations at `COMFYUI_MAX_MEGAPIXELS` (2 MP) and rounds to
-   multiples of 32. If moss needs a different multiple or a fixed size list, handle it in the
-   graph builder.
-8. In Settings, give it a prompt-length preference (short/detailed). Compare Models groups by that.
+- **PC side (done 2026-10-18):** ComfyUI moved to master `c06bf5f5`, because MOSS support
+  (#17095) isn't in any release tag yet (v0.41.3 lacks it). Files on the PC:
+  `moss_image_sft_int8_convrot`, `qwen3.5_9b_int8_convrot` (int8 instead of the template's w4a8),
+  and `flux2-vae_small`. If Comfy Desktop is "updated" to a stable release before one includes
+  MOSS, the model breaks with "rejected the workflow".
+- **Tested:** the graph that `buildMossGraph` builds ran on the PC's ComfyUI directly (not through
+  the tunnel/nginx) at 896×1152: 15 s, good prompt adherence. Not yet run through the deployed
+  proxy.
+- **To finish:** deploy, then Settings → Image API → Fetch models, add `local/moss-image`, tick
+  🪄 Generate, set Prompt Length to **Detailed** and tick **Is Flux Model** (it wants natural-language
+  prose, not tags).
+- Sizes need multiples of 16; `localComfyDims` already rounds to 32. It is happiest at 1–2 MP.
 
-The PC's ComfyUI can't be inspected from the cloud box (the nginx allow-list blocks
-`/object_info` and the model listings), so this is easiest to do from the PC.
+## Image prompt fix (same branch)
+
+`generateImage` used to bookend every prompt with the style's opening and ~25 SD tags plus a mood
+tail, and the prompt writer was also told to open with style words. The result, even for MOSS/Qwen:
+"High-quality 2.5D semi-realistic anime illustration of A semi-realistic 2.5D anime illustration of
+a woman…, masterpiece, melancholic mood…". Now (`src/scripts/api-image.js`):
+
+- **Natural-language models** (the Settings tickbox formerly called "Is Flux Model"): no bookends.
+  The prompt writer opens with one medium + subject sentence and closes by restating the style,
+  using the style's tag list as prose cues (`_proseStyleDirective`, quality filler removed).
+- **Tag models:** bookends unchanged, but the writer is told the app adds the opening, so it starts
+  at the subject ("…illustration of a woman…").
+- **Both:** framing/viewpoint asked for, no character names (they can render as text),
+  visual-only, lighting concrete and varied instead of "ALWAYS volumetric/HDR".
+- **Side effect:** for a natural-language model, changing the Style after a prompt is already in
+  the box no longer restyles it. Regenerate the prompt.
+- **Tested:** headlessly only, by loading the real file with stubbed config and comparing the
+  final prompt before and after. No real text-model or image run yet.
+- **To do in Settings:** tick "Natural-language prompts" for every modern model (all local ones,
+  Flux, Nano Banana, Seedream, Qwen); leave it off for SDXL/Illustrious/Pony.
+
+## Next up: Playground prompt builder
+
+A ✨ Build prompt button by the Generate prompt box: short idea + chosen model's preferences +
+Shape → text model writes a rich prompt (stream it; resumable) → user edits → Generate. Base the
+instructions on the fixed `buildImagePromptInstruction` rules and OpenMOSS's prompt-enhancer skill.
+Raise the box's `maxlength` (2000) to ~4000.
 
 ## Known open issues
 

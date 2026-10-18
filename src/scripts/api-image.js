@@ -171,14 +171,20 @@ Object.assign(APIHandler.prototype, {
 
     this.lastGeneratedImagePrompt = imagePrompt;
 
-    // We previously stopped bookending with style tags, but to strongly enforce styles
-    // and moods, we are explicitly re-introducing them under the hood before sending to the API.
+    // Tag-based models get the style and mood bookended on here, to enforce
+    // them. Natural-language models ("Is Flux" in Settings) don't: their prompt
+    // already opens and closes with the style in prose (see
+    // buildImagePromptInstruction), and a bookend on top read as "…illustration
+    // of A 2.5D anime image of a portrait of…" followed by a pile of SD tags.
     let finalApiPrompt = imagePrompt;
+    const naturalLanguage = !!settings.isFlux;
 
     const activeStyle = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
     const activeMood = moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood");
 
-    if (activeStyle && activeStyle !== "custom") {
+    if (naturalLanguage) {
+      // Nothing to add.
+    } else if (activeStyle && activeStyle !== "custom") {
       const styleTags = this.getImageStyleTags(activeStyle);
       if (styleTags && (styleTags.prefix || styleTags.suffix)) {
         finalApiPrompt = `${styleTags.prefix ? styleTags.prefix + " " : ""}${finalApiPrompt}${styleTags.suffix ? ", " + styleTags.suffix : ""}`;
@@ -190,7 +196,7 @@ Object.assign(APIHandler.prototype, {
       }
     }
 
-    if (activeMood && activeMood.trim()) {
+    if (!naturalLanguage && activeMood && activeMood.trim()) {
       const formattedMood = activeMood.replace(/-/g, " ");
       finalApiPrompt = `${finalApiPrompt}, ${formattedMood} mood, ${formattedMood} atmosphere, evocative lighting`;
     }
@@ -737,6 +743,17 @@ Object.assign(APIHandler.prototype, {
     return prompt;
   },
 
+  // Natural-language models get the style as prose from the prompt writer,
+  // nothing appended afterwards. The style's tag list (getImageStyleTags) still
+  // says what the style looks like, so it's passed along as cues to write in,
+  // minus the SD-era quality filler those models ignore or render oddly.
+  _proseStyleDirective(styleName, tagList) {
+    const filler = /^(masterpiece|best quality|high quality|highly detailed|ultra-detailed|high resolution|8k( resolution)?|trending on artstation|artstation|professional (illustration|quality)|museum quality fine art|masterpiece (anime film still|illustration))$/i;
+    const cues = (tagList || "").split(",").map(t => t.trim()).filter(t => t && !filler.test(t));
+    const cueLine = cues.length ? ` Work these cues in as prose where they fit: ${cues.join("; ")}.` : "";
+    return `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". Open with ONE sentence that names the medium and the subject together (e.g. "A semi-realistic 2.5D anime illustration of a silver-haired woman in her late twenties…"). Name the medium once: never stack two ("an illustration of an image of a portrait of"). Keep every detail consistent with this style.${cueLine} End with one sentence restating the rendering style (medium, shading, palette) so the style holds.`;
+  },
+
   buildImagePromptInstruction(characterDescription, characterName, cardType = "single", guidance = "", style = "", lengthPref = "detailed", mood = "", isFlux = false) {
     const personalityTraits = this.extractPersonalityTraits(characterDescription);
 
@@ -757,7 +774,7 @@ Object.assign(APIHandler.prototype, {
       const customStyleText = this.config.get("api.image.customStyleText");
       if (customStyleText && customStyleText.trim()) {
         styleBlock = isFlux
-          ? `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style — weave the style and medium into the opening descriptive sentence as prose (e.g. "a cinematic photograph of..."), NOT as a leading list of comma-separated keywords.`
+          ? this._proseStyleDirective(customStyleText.trim(), "")
           : `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords.`;
       }
     } else if (style && style.trim()) {
@@ -789,9 +806,18 @@ Object.assign(APIHandler.prototype, {
         mediumExamples = `"digital illustration", "concept art", "digital painting"`;
       }
 
-      styleBlock = isFlux
-        ? `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style — weave medium-specific cues (e.g. ${mediumExamples}) into the opening descriptive sentence as prose (e.g. "a cinematic photograph of..."), NOT as a leading list of comma-separated keywords.`
-        : `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. ${mediumExamples}).`;
+      // Tag models have the style's opening ("… illustration of") put in
+      // front by generateImage, so the prompt must start where that leaves
+      // off: at the subject. Asking it to open with style words as well is
+      // what produced "…illustration of A 2.5D anime image of a portrait of".
+      const { prefix, suffix } = this.getImageStyleTags(style);
+      if (isFlux) {
+        styleBlock = this._proseStyleDirective(styleName, suffix);
+      } else if (prefix) {
+        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style, using medium-specific keywords (e.g. ${mediumExamples}). The app automatically puts "${prefix}" in front of your text, so begin directly with the subject itself in lowercase (e.g. "a young woman with…"). Do NOT open with any style, medium or "image of" words.`;
+      } else {
+        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. ${mediumExamples}).`;
+      }
     }
     
     let moodBlock = "";
@@ -806,7 +832,7 @@ Object.assign(APIHandler.prototype, {
 
     let fluxBlock = "";
     if (isFlux) {
-      fluxBlock = `\n- FLUX MODEL COMPATIBILITY (CRITICAL): Write a natural language prompt compatible with Flux. Use full, highly descriptive sentences focusing on spatial relationships, composition, and accurate anatomy. DO NOT use comma-separated Danbooru tags. DO NOT use negative prompts in the text. The prompt MUST open with a complete sentence describing the subject — NEVER begin with a comma-separated list of style/medium/camera keywords (e.g. "DSLR photograph, cinematic photography, 50mm lens").`;
+      fluxBlock = `\n- NATURAL-LANGUAGE MODEL (CRITICAL): Write plain descriptive prose, as a caption describing the finished image. Use full sentences focusing on spatial relationships, composition, and accurate anatomy. DO NOT use comma-separated Danbooru tags. DO NOT use negative prompts in the text. The prompt MUST open with a complete sentence — NEVER begin with a comma-separated list of style/medium/lens keywords (e.g. "DSLR photograph, cinematic photography, 50mm lens").`;
     }
 
     let qualityBlock = isFlux
@@ -824,16 +850,19 @@ ${characterDescription}
 Your task: Read the profile above and output a single image generation prompt.
 
 Extract these specifics from the profile text:
-- SUBJECT: name, apparent gender, approximate age range, species/ethnicity if notable
+- SUBJECT: apparent gender, approximate age range, species/ethnicity if notable
 - PHYSICAL: exact hair colour and style, eye colour, any distinctive features (scars, tattoos, unusual traits)
 - OUTFIT: specific clothing that matches their role, world, or status — not generic
 - EXPRESSION: one expression or body language cue that reflects their dominant personality trait (e.g. "cold calculating stare", "warm crooked smile", "guarded tense posture")
 - SETTING: one concrete location or environment drawn from their backstory or scenario
+- FRAMING: one clear framing and viewpoint that suits the card. For a single character, a portrait that shows the face clearly (head-and-shoulders, chest-up or waist-up) from a stated angle (eye level, slightly low, three-quarter view)
 
 Format rules:
 - Output ONE paragraph, no lists, no labels, no headers
 - Lead with the subject and physical details, weave in expression and setting naturally
-- Describe the lighting, mood, and atmosphere that fits the character's tone. To avoid flat images, ALWAYS specify dynamic lighting conditions (e.g., "volumetric lighting", "cinematic lighting", "deep dramatic shadows", "high contrast", "HDR") to ensure the image has striking depth and dimension.
+- Do NOT use the character's name. The image model can't know who that is and may write the name into the picture as text; describe them instead
+- Describe only what can be seen: no sounds, smells, backstory, or abstract personality words that have no visible form
+- Describe the lighting concretely — its source, direction and colour — choosing what suits the character's tone and setting (e.g. "warm candlelight from the left", "cold overcast daylight", "neon rim light from behind", "low golden-hour sun"). Give the image depth and contrast and avoid flat, even lighting, but don't default to the same dramatic look every time.
 ${qualityBlock}
 - CRITICAL AVOIDANCE: DO NOT use terms like "photograph", "real life", or "camera" UNLESS the requested style is explicitly a photograph or realistic. However, you MAY and SHOULD use lighting and depth terms (like "studio lighting" or "dramatic shadows") for any style to maintain visual depth!
 - ${lengthBlock}${styleBlock}${moodBlock}${fluxBlock}

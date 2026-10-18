@@ -2641,7 +2641,7 @@
         <script src="src/scripts/name-bank.js?v=20260919-namebank"></script>
         <script src="src/scripts/api-character.js?v=20261015-cap16k"></script>
         <script src="src/scripts/character-search.js?v=20260526"></script>
-        <script src="src/scripts/api-image.js?v=20261018-catalog"></script>
+        <script src="src/scripts/api-image.js?v=20261018-prose-prompts"></script>
         <script src="src/scripts/api-lorebook.js?v=20261016-castretry"></script>
         <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260922-imagefixes"></script>
@@ -2935,8 +2935,8 @@
                         
                         <div class="form-group checkbox-group" style="margin-top: 0.5rem; margin-bottom: 0;">
                             <input type="checkbox" id="image-is-flux" class="checkbox">
-                            <label for="image-is-flux" style="margin: 0; font-size: 0.875rem;">Is Flux Model</label>
-                            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-left: 1.5rem; margin-top: 0.25rem;">Checking this ensures the AI writes prompts thoroughly compatible with Flux models.</p>
+                            <label for="image-is-flux" style="margin: 0; font-size: 0.875rem;">Natural-language prompts</label>
+                            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-left: 1.5rem; margin-top: 0.25rem;">Tick for models that read plain sentences: Flux, Qwen-Image, MOSS-Image, Krea, Z-Image, Nano Banana, Seedream. The AI then writes the style into the prompt as prose, and no SD-style tags are added. Leave unticked for tag-based models (SDXL, Illustrious, Pony).</p>
                         </div>
                     </div>
 
