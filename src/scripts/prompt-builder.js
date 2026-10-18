@@ -301,8 +301,13 @@
             <label class="pb-check" for="pb-nsfw"><input type="checkbox" id="pb-nsfw" ${s.nsfw ? "checked" : ""}><span>🔞 NSFW</span></label>
             <p class="pb-hint">Steers towards nudity and erotic imagery instead of covering up. Characters are always written as adults (18+). Some text models may still tone it down; edit the result before using it.</p>
           </section>`,
-        footer: `<button type="button" class="btn-small pb-wide" data-act="surprise" title="Bold choices for everything you left to the AI">🎲 Surprise me</button>
-          <button type="button" class="btn-primary pb-wide" data-act="build">✨ Build prompt</button>`,
+        // Held back while an image's style is being read, or the build would
+        // go ahead without the look it was waiting for.
+        footer: s.matching
+          ? `<button type="button" class="btn-small pb-wide" disabled>🎲 Surprise me</button>
+            <button type="button" class="btn-primary pb-wide" disabled aria-busy="true">⏳ Reading image…</button>`
+          : `<button type="button" class="btn-small pb-wide" data-act="surprise" title="Bold choices for everything you left to the AI">🎲 Surprise me</button>
+            <button type="button" class="btn-primary pb-wide" data-act="build">✨ Build prompt</button>`,
       };
     }
 
@@ -451,8 +456,8 @@
           </section>
           <div class="pb-row">
             <button type="button" class="btn-small" data-go="steer">← Adjust</button>
-            <button type="button" class="btn-small" data-act="build">↻ Rebuild</button>
-            <button type="button" class="btn-small" data-act="variations">🔀 3 variations</button>
+            <button type="button" class="btn-small" data-act="build" ${s.matching ? "disabled" : ""}>${s.matching ? "⏳ Reading image…" : "↻ Rebuild"}</button>
+            <button type="button" class="btn-small" data-act="variations" ${s.matching ? "disabled" : ""}>🔀 3 variations</button>
           </div>`,
         footer: `<button type="button" class="btn-small pb-wide" data-act="use">${useLabel}</button>
           <button type="button" class="btn-primary pb-wide" data-act="use-generate">Use &amp; Generate</button>`,
@@ -648,6 +653,11 @@
     async _build({ surprise = false, variations = 0 }) {
       const s = this.state;
       const host = this.opts.host;
+      // Also covers Rebuild / 3 variations reached via "Back to your last prompt".
+      if (s.matching) {
+        window.app?.showNotification("Still reading the image's style — build once it's done", "warning");
+        return;
+      }
       if (s.subject.kind === "idea" && !(s.subject.idea || "").trim()) {
         s.error = "Write a rough idea first: who or what is in the picture.";
         s.screen = "steer";
