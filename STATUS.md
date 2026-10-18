@@ -95,6 +95,13 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   localStorage (`cardgen.promptBuilder.v1`). Closing mid-write lets it finish; a toast says when.
   ■ Stop only abandons the write, because `stopGeneration()` cancels every running job.
 - **Playground host:** ✨ Build beside the Generate box (maxlength now 4000), ↩ Restore my idea.
+- **🖼️ Match an image** opens a picker inside the sheet: 🧙 Characters (Library cards, portrait from
+  `/api/storage/cards/thumbnail`) and 🧪 Library (Playground images), with a name filter, plus
+  📁 Upload from this device. Lists load once per opening of the sheet. Only the picture's *style*
+  is read (`extractStyleFromImage`) into `look.fromImage`.
+- **Explainers:** `PromptLook.DESCRIPTIONS` has a one-liner for every built-in option (128) and for
+  ✨ AI decides. Shown as a `title` on hover, and under the group for the last option tapped (phones
+  have no hover). Add one whenever an option is added to the catalogue.
 - **🔞 NSFW checkbox** (Output panel, remembered per host): `spec.nsfw` adds a MATURE CONTENT block to
   the writer — nudity and erotic imagery described plainly, `nsfw` as the first tag for tag models —
   with a fixed rule that every character is a clear adult (18+). Keep that rule if the block is

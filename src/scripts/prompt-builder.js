@@ -40,6 +40,10 @@
       this.states = {};   // per host, so a write that finishes after closing is still there on reopen
       this.runs = {};     // per host run counter, to ignore abandoned writes
       this.lastFocus = null;
+      // Match an image's picker lists, by tab ("cards" / "library").
+      this.matchItems = {};
+      this.matchLoading = {};
+      this.matchError = {};
     }
 
     get config() { return window.apiHandler?.config; }
@@ -117,6 +121,9 @@
         }
       }
       this.states[host] = this.state;
+      if (this.state.screen === "match") this.state.screen = "steer";
+      this.matchItems = {};
+      this.matchError = {};
 
       this.lastFocus = document.activeElement;
       this.el.hidden = false;
@@ -164,6 +171,15 @@
         if (e.key === "Enter" && e.target.id === "pb-custom-input") { e.preventDefault(); this._addCustom(); }
         if (e.key === "Enter" && e.target.id === "pb-look-name") { e.preventDefault(); this._saveLook(); }
       });
+      // Match an image: filter the tiles in place, without re-rendering (keeps
+      // the keyboard up on a phone).
+      el.addEventListener("input", (e) => {
+        if (e.target.id !== "pb-match-filter") return;
+        const q = e.target.value.trim().toLowerCase();
+        el.querySelectorAll(".pb-match-tile").forEach(tile => {
+          tile.style.display = !q || tile.dataset.name.includes(q) ? "" : "none";
+        });
+      });
       // A tap on the dimmed backdrop (desktop) closes; choices are kept.
       el.addEventListener("mousedown", (e) => { if (e.target === el) this.close(); });
     }
@@ -179,6 +195,7 @@
         writing: () => this._writingHtml(),
         result: () => this._resultHtml(),
         takes: () => this._takesHtml(),
+        match: () => this._matchHtml(),
       }[s.screen]();
       scroll.innerHTML = this._headerHtml() + html.body;
       footer.innerHTML = html.footer || "";
@@ -190,12 +207,13 @@
       }
       if (s.addingTo) scroll.querySelector("#pb-custom-input")?.focus();
       if (s.savingLook) scroll.querySelector("#pb-look-name")?.focus();
+      if (s.screen === "match") this._loadMatchItems(s.matchTab || "cards");
     }
 
     _headerHtml() {
       const s = this.state;
       const hostLabel = this.opts.host === "character" ? "Character Gen" : "Playground";
-      const title = { steer: "✨ Prompt Builder", writing: "Writing your prompt…", result: "Your prompt", takes: "Pick a take" }[s.screen];
+      const title = { steer: "✨ Prompt Builder", writing: "Writing your prompt…", result: "Your prompt", takes: "Pick a take", match: "Match an image" }[s.screen];
       const left = s.screen === "writing"
         ? `<button type="button" class="pb-icon" data-act="abandon" aria-label="Stop writing" title="Stop writing">■</button>`
         : s.screen === "steer"
@@ -273,7 +291,7 @@
             <label class="pb-label" for="pb-look">Look</label>${lookSelect}${saveRow}${fromImage}
             <label class="pb-label" for="pb-extra">Anything else about the look <span class="pb-soft">(optional)</span></label>
             <input type="text" id="pb-extra" class="input pb-input" maxlength="300" value="${esc(s.look.extra || "")}" placeholder="e.g. 1980s fashion editorial, rain on the lens">
-            <p class="pb-hint">Every section below is optional. Anything left on ✨ AI decides is chosen to fit.</p>
+            <p class="pb-hint">Every section below is optional. Anything left on ✨ AI decides is chosen to fit. Tap any option to see what it means (tap again to un-pick it).</p>
           </section>
           <div class="pb-accs">${sections}</div>
           <section class="pb-panel" aria-label="Output"><span class="pb-eyebrow">Output</span>
@@ -293,12 +311,110 @@
       const picked = s.look.picks[g.key] || [];
       const options = [...g.opts, ...picked.filter(v => !g.opts.includes(v))];
       const label = sec.groups.length > 1 ? `<span class="pb-grp">${esc(g.label)}</span>` : "";
-      const chips = options.map(o => `<button type="button" class="pb-chip" data-chip="${g.key}" data-v="${esc(o)}" aria-pressed="${picked.includes(o)}">${esc(o)}</button>`).join("");
-      const ai = `<button type="button" class="pb-chip pb-chip-ai" data-chip="${g.key}" data-ai="1" aria-pressed="${!picked.length}">✨ AI decides</button>`;
+      const desc = (o) => PL.DESCRIPTIONS[o] || "";
+      const tip = (o) => (desc(o) ? ` title="${esc(desc(o))}"` : "");
+      const chips = options.map(o => `<button type="button" class="pb-chip" data-chip="${g.key}" data-v="${esc(o)}" aria-pressed="${picked.includes(o)}"${tip(o)}>${esc(o)}</button>`).join("");
+      const ai = `<button type="button" class="pb-chip pb-chip-ai" data-chip="${g.key}" data-ai="1" aria-pressed="${!picked.length}"${tip("✨ AI decides")}>✨ AI decides</button>`;
+      // Phones have no hover, so the last option tapped in this group explains itself here.
+      const tapped = s.explain?.key === g.key ? s.explain.v : "";
+      const explain = tapped && desc(tapped) ? `<p class="pb-explain" aria-live="polite"><b>${esc(tapped)}</b> — ${esc(desc(tapped))}</p>` : "";
       const custom = !g.custom ? "" : s.addingTo === g.key
         ? `<span class="pb-custom"><input type="text" id="pb-custom-input" class="input pb-input" maxlength="40" placeholder="Your own" aria-label="Your own ${esc(g.label)}"><button type="button" class="btn-small" data-act="custom-add">Add</button></span>`
         : `<button type="button" class="pb-chip pb-chip-add" data-act="custom-open" data-key="${g.key}">＋ Your own</button>`;
-      return `${label}<div class="pb-chips">${ai}${chips}${custom}</div>`;
+      return `${label}<div class="pb-chips">${ai}${chips}${custom}</div>${explain}`;
+    }
+
+    // ── 🖼️ Match an image: pick from what's already saved ──
+    // Characters are the cards in the Library (portrait via the same
+    // authenticated URL the Library's thumbnails use); Library is the
+    // Playground image library. Lists are fetched once per opening of the
+    // sheet, so something saved in the meantime shows up next time.
+    async _loadMatchItems(tab) {
+      if (this.matchItems[tab] || this.matchLoading[tab]) return;
+      this.matchLoading[tab] = true;
+      this.matchError[tab] = "";
+      const token = window.cardgenAuth?.getToken() || localStorage.getItem("cardgen_auth_token") || "";
+      try {
+        if (tab === "cards") {
+          const cards = await window.characterStorage.listCards();
+          const ordered = [...cards.filter(c => c.isPermanent), ...cards.filter(c => !c.isPermanent)];
+          this.matchItems.cards = ordered.map(c => {
+            const base = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(c.id)}`;
+            const stamp = new Date(c.updatedAt || c.createdAt || 0).getTime();
+            return {
+              name: c.characterName || c.character?.name || "Unnamed character",
+              sub: c.isPermanent ? "" : "History",
+              thumb: `${base}${token ? `&token=${encodeURIComponent(token)}` : ""}&_t=${stamp}`,
+              fetchUrl: base,
+            };
+          });
+        } else {
+          const rows = await window.characterStorage.listPlaygroundImages();
+          this.matchItems.library = rows.map(r => ({
+            name: r.label || r.prompt?.slice(0, 40) || "Untitled",
+            sub: "",
+            thumb: `${r.url}?token=${encodeURIComponent(token)}`,
+            fetchUrl: r.url,
+          }));
+        }
+      } catch (err) {
+        console.error(`Prompt Builder: couldn't load ${tab} for Match an image:`, err);
+        this.matchError[tab] = err.message || "Couldn't load the images";
+      } finally {
+        this.matchLoading[tab] = false;
+      }
+      if (this.state?.screen === "match" && (this.state.matchTab || "cards") === tab && !this.el.hidden) this.render();
+    }
+
+    _matchHtml() {
+      const s = this.state;
+      const tab = s.matchTab || "cards";
+      const items = this.matchItems[tab];
+      const tabs = `<div class="pb-seg" role="group" aria-label="Where to pick from">
+          <button type="button" data-seg="matchTab" data-v="cards" aria-pressed="${tab === "cards"}">🧙 Characters</button>
+          <button type="button" data-seg="matchTab" data-v="library" aria-pressed="${tab === "library"}">🧪 Library</button>
+        </div>`;
+      let body;
+      if (this.matchError[tab]) {
+        body = `<div class="pb-error" role="alert">Couldn't load these images: ${esc(this.matchError[tab])}</div>
+          <button type="button" class="btn-small" data-act="match-retry">Try again</button>`;
+      } else if (!items) {
+        body = `<p class="pb-hint">Loading…</p>`;
+      } else if (!items.length) {
+        body = `<p class="pb-hint">${tab === "cards" ? "No saved characters yet." : "Nothing in your Playground library yet. Save images there with 💾."}</p>`;
+      } else {
+        body = `<input type="search" id="pb-match-filter" class="input pb-input" placeholder="Filter by name" aria-label="Filter by name">
+          <div class="pb-match-grid">${items.map((it, i) => `
+            <button type="button" class="pb-match-tile" data-match="${i}" data-name="${esc(it.name.toLowerCase())}" title="Match ${esc(it.name)}">
+              <img src="${esc(it.thumb)}" alt="" loading="lazy" onerror="this.closest('button').style.display = 'none'">
+              <span>${esc(it.name)}${it.sub ? ` <em>· ${esc(it.sub)}</em>` : ""}</span>
+            </button>`).join("")}</div>`;
+      }
+      return {
+        body: `<p class="pb-hint">Pick a picture whose look you want. Only its style is read (medium, lighting, palette, finish), not who is in it.</p>${tabs}${body}`,
+        footer: `<button type="button" class="btn-small pb-wide" data-act="match-upload">📁 Upload from this device</button>`,
+      };
+    }
+
+    async _matchFromSaved(index) {
+      const s = this.state;
+      const item = this.matchItems[s.matchTab || "cards"]?.[index];
+      if (!item) return;
+      s.screen = "steer";
+      s.matching = true;
+      this.render();
+      try {
+        const res = await (window.authFetch || fetch)(item.fetchUrl);
+        if (!res.ok) throw new Error(`couldn't load the picture (${res.status})`);
+        const blob = await res.blob();
+        // Our own image routes; a missing or generic content type still means an image.
+        const type = blob.type?.startsWith("image/") ? blob.type : "image/png";
+        await this._matchImage(new File([blob], "match.png", { type }));
+      } catch (err) {
+        s.matching = false;
+        window.app?.showNotification(`Couldn't read the image's style: ${err.message}`, "error");
+        if (this.state === s && !this.el.hidden) this.render();
+      }
     }
 
     _writingHtml() {
@@ -379,7 +495,7 @@
     }
 
     _onClick(e) {
-      const t = e.target.closest("[data-act],[data-go],[data-acc],[data-chip],[data-seg],[data-take]");
+      const t = e.target.closest("[data-act],[data-go],[data-acc],[data-chip],[data-seg],[data-take],[data-match]");
       if (!t) return;
       this._readInputs();
       const s = this.state;
@@ -397,12 +513,14 @@
         if (t.dataset.ai) list = [];
         else if (list.includes(v)) list = list.filter(x => x !== v);
         else list = group.single ? [v] : [...list, v];
+        s.explain = { key, v: t.dataset.ai ? "✨ AI decides" : v };
         if (list.length) s.look.picks[key] = list; else delete s.look.picks[key];
         this._markCustom();
         return this.render();
       }
       if (t.dataset.seg) { s[t.dataset.seg] = t.dataset.v; this._persist(); return this.render(); }
       if (t.dataset.take) { s.chosenTake = +t.dataset.take; return this.render(); }
+      if (t.dataset.match !== undefined) return this._matchFromSaved(+t.dataset.match);
 
       switch (t.dataset.act) {
         case "close": return this.close();
@@ -426,7 +544,9 @@
         case "delete-look": return this._deleteLook();
         case "clear-look": s.look = PL.emptyLook(); s.lookId = ""; return this.render();
         case "drop-image": s.look.fromImage = ""; this._markCustom(); return this.render();
-        case "match": return this.el.querySelector("#pb-match-file").click();
+        case "match": s.screen = "match"; return this.render();
+        case "match-upload": s.screen = "steer"; this.render(); return this.el.querySelector("#pb-match-file").click();
+        case "match-retry": delete this.matchItems[s.matchTab || "cards"]; this.matchError[s.matchTab || "cards"] = ""; return this.render();
       }
     }
 

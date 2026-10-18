@@ -4696,6 +4696,15 @@ html.pb-open, html.pb-open body { overflow: hidden; }
 .pb-pill-nsfw { background: color-mix(in srgb, var(--error) 14%, transparent); color: var(--error); border-color: transparent; }
 #prompt-builder .pb-check { display: inline-flex; align-self: flex-start; align-items: center; gap: 0.55rem; margin-top: 0.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
 #prompt-builder .pb-check input { width: 1.2rem; height: 1.2rem; margin: 0; accent-color: var(--accent); cursor: pointer; }
+#prompt-builder .pb-explain { margin: 0; padding: 0.45rem 0.6rem; border-radius: var(--radius-sm); background: var(--accent-soft); font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); }
+#prompt-builder .pb-explain b { color: var(--text-primary); }
+#prompt-builder .pb-match-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+@media (min-width: 700px) { #prompt-builder .pb-match-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+#prompt-builder .pb-match-tile { display: flex; flex-direction: column; min-width: 0; padding: 0; overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-muted); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+#prompt-builder .pb-match-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#prompt-builder .pb-match-tile img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--surface-muted); }
+#prompt-builder .pb-match-tile span { display: block; padding: 0.3rem 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.72rem; }
+#prompt-builder .pb-match-tile em { font-style: normal; color: var(--text-soft); }
 .pb-panel { display: flex; flex-direction: column; gap: 0.55rem; padding: 0.9rem; background: var(--surface-strong); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .pb-eyebrow { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft); }
 .pb-label { font-size: 0.85rem; font-weight: 600; }
