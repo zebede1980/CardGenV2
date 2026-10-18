@@ -2199,6 +2199,28 @@ function sseErrorFrame(message) {
   return `data: ${JSON.stringify({ error: { message } })}\n\n`;
 }
 
+// A connection can stall without closing: on 2026-10-18 a card stream reached
+// NPM in full but stopped arriving at a desktop browser 15% in, and the page
+// waited forever. A comment frame every few seconds means silence on the
+// client really does mean a dead connection, so it can reconnect (see
+// STREAM_STALL_MS in api.js). SSE parsers ignore lines starting with ":".
+const SSE_HEARTBEAT_MS = 15 * 1000;
+
+function startSseHeartbeat(res) {
+  const timer = setInterval(() => {
+    if (res.writableEnded || res.destroyed) return clearInterval(timer);
+    try {
+      res.write(": ping\n\n");
+    } catch (_) {
+      clearInterval(timer);
+    }
+  }, SSE_HEARTBEAT_MS);
+  const stop = () => clearInterval(timer);
+  res.once("close", stop);
+  res.once("finish", stop);
+  return stop;
+}
+
 const jobSweeper = setInterval(() => {
   const now = Date.now();
   for (const [key, at] of cancelledClientRefs) {
@@ -2260,6 +2282,7 @@ app.get("/api/jobs/:jobId/stream", requireAuth, (req, res) => {
   }
 
   job.subscribers++;
+  startSseHeartbeat(res);
   const listener = (event) => {
     try {
       if (event.type === "delta") {
@@ -2548,6 +2571,7 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
       if (job) res.setHeader("X-Accel-Buffering", "no");
+      startSseHeartbeat(res);
 
       // The client must learn the job id before any content arrives, so it can
       // persist it and still resume if the socket dies on the very next chunk.

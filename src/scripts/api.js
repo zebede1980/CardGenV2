@@ -24,6 +24,14 @@ function withContentContext(messages) {
   return [{ role: "system", content: CARD_CONTENT_CONTEXT }, ...messages];
 }
 
+// How long a stream may go completely silent before it is treated as stalled.
+// The proxy sends a heartbeat every 15s, so this is three missed beats. A
+// stalled connection never errors or closes on its own: without this a card
+// stream that stopped arriving 15% in left the page waiting forever
+// (2026-10-18). A stall is handled like a dropped connection: resumable jobs
+// reconnect from where they got to, anything else surfaces an error.
+const STREAM_STALL_MS = 45 * 1000;
+
 class APIHandler {
   constructor() {
     this.config = window.config;
@@ -548,11 +556,39 @@ class APIHandler {
     const decoder = new TextDecoder();
     let buffer = "";
 
+    // Cancelling makes the pending read() resolve as `done`, which would look
+    // like a clean end, so the stall is recorded first for the caller to see.
+    //
+    // Only silence the page actually sat through counts. iOS freezes timers
+    // while the phone is locked or another app is in front, and an overdue
+    // timer fires the moment the page wakes, before the socket has had a
+    // chance to deliver or fail. So a hidden page, or a timer that fired well
+    // late (the page was asleep), just starts a fresh wait; the lock-screen
+    // recovery (socket error, then resume) runs exactly as it did before.
+    let stalled = null;
+    let watchdog = null;
+    const armWatchdog = () => {
+      clearTimeout(watchdog);
+      const armedAt = Date.now();
+      watchdog = setTimeout(() => {
+        const asleep = Date.now() - armedAt > STREAM_STALL_MS + 5000;
+        if (asleep || (typeof document !== "undefined" && document.visibilityState !== "visible")) {
+          armWatchdog();
+          return;
+        }
+        stalled = new Error(`Connection stalled (nothing received for ${STREAM_STALL_MS / 1000}s)`);
+        console.warn("[API]", stalled.message, "- reconnecting");
+        reader.cancel().catch(() => {});
+      }, STREAM_STALL_MS);
+    };
+
     try {
+      armWatchdog();
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) break;
+        armWatchdog();
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -632,6 +668,8 @@ class APIHandler {
         console.debug("Stream read ended:", error?.message || error);
       }
     } finally {
+      clearTimeout(watchdog);
+      if (stalled && !state.complete) state.interrupted = stalled;
       this.currentReader = null;
     }
   }
