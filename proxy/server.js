@@ -2866,6 +2866,13 @@ const LOCAL_COMFY_MODELS = {
     steps: { default: 8, min: 4, max: 20 },
     buildGraph: buildKrea2TurboGraph,
   },
+  "local/moss-image": {
+    name: "MOSS-Image",
+    capabilities: { generate: true, edit: false },
+    // The template uses 25; OpenMOSS's own default is 50 (slower, a bit cleaner).
+    steps: { default: 25, min: 12, max: 50 },
+    buildGraph: buildMossGraph,
+  },
 };
 
 function isLocalComfyModel(model) {
@@ -3053,6 +3060,32 @@ function buildKrea2TurboGraph({ prompt, seed, steps, width, height }) {
     },
     8: { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["12", 0] } },
     [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/krea2" } },
+  };
+}
+
+// From Comfy's "MOSS-Image: Text to Image" template (image_moss_image_t2i),
+// flattened out of its subgraph, minus the LLM prompt-upsampler branch: our
+// prompts already come from the text model. Its skip-layer-guidance switch is
+// off by default there too. The int8 text encoder replaces the template's
+// w4a8 one (the PC has that file). Unlike the turbo models this runs real CFG,
+// so the negative prompt matters; it's the official one from OpenMOSS.
+function buildMossGraph({ prompt, seed, steps, width, height }) {
+  return {
+    1: { class_type: "UNETLoader", inputs: { unet_name: "moss_image_sft_int8_convrot.safetensors", weight_dtype: "default" } },
+    2: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3.5_9b_int8_convrot.safetensors", type: "moss_image", device: "default" } },
+    3: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae_small.safetensors" } },
+    4: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: prompt } },
+    5: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: "nsfw, worst quality, bad anatomy, watermark, jpeg artifact" } },
+    6: { class_type: "EmptyFlux2LatentImage", inputs: { width, height, batch_size: 1 } },
+    7: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["1", 0], positive: ["4", 0], negative: ["5", 0], latent_image: ["6", 0],
+        seed, steps, cfg: 2.5, sampler_name: "er_sde", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    8: { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/moss" } },
   };
 }
 
