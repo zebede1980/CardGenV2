@@ -38,7 +38,8 @@ run was made.
 
 `buildMossGraph` in `proxy/server.js`, from Comfy's `image_moss_image_t2i` template flattened out of
 its subgraph, without the LLM prompt-upsampler branch. 25 steps, CFG 2.5, `er_sde`/`simple`, the
-official negative prompt, skip-layer guidance off (the template's default). Text-to-image only.
+official negative prompt minus "nsfw" (removed 2026-10-18 at the user's request: it pushed every
+image towards covering up), skip-layer guidance off (the template's default). Text-to-image only.
 
 - **PC side (done 2026-10-18):** ComfyUI moved to master `c06bf5f5`, because MOSS support
   (#17095) isn't in any release tag yet (v0.41.3 lacks it). Files on the PC:

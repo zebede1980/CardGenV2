@@ -3068,14 +3068,16 @@ function buildKrea2TurboGraph({ prompt, seed, steps, width, height }) {
 // prompts already come from the text model. Its skip-layer-guidance switch is
 // off by default there too. The int8 text encoder replaces the template's
 // w4a8 one (the PC has that file). Unlike the turbo models this runs real CFG,
-// so the negative prompt matters; it's the official one from OpenMOSS.
+// so the negative prompt matters. It's OpenMOSS's official one minus "nsfw",
+// which pushed every picture towards covering up; this is an adult roleplay
+// tool, and what a picture shows is the prompt's call.
 function buildMossGraph({ prompt, seed, steps, width, height }) {
   return {
     1: { class_type: "UNETLoader", inputs: { unet_name: "moss_image_sft_int8_convrot.safetensors", weight_dtype: "default" } },
     2: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3.5_9b_int8_convrot.safetensors", type: "moss_image", device: "default" } },
     3: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae_small.safetensors" } },
     4: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: prompt } },
-    5: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: "nsfw, worst quality, bad anatomy, watermark, jpeg artifact" } },
+    5: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: "worst quality, bad anatomy, watermark, jpeg artifact" } },
     6: { class_type: "EmptyFlux2LatentImage", inputs: { width, height, batch_size: 1 } },
     7: {
       class_type: "KSampler",
