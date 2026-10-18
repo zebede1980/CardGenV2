@@ -138,6 +138,11 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
 
 - Bump the `?v=` on a script's tag in `index.html` whenever you change that script, or iPhone
   Safari keeps the old file.
+- `main.js` injects a dark-theme rule, `[data-theme="dark"] button:not(.btn-primary):not(…)…`, that
+  repaints every other button's background, colour and border. Its `:not()` chain outranks ordinary
+  class selectors, so any button with its own selected state (chips, toggles) must be styled under
+  an id, as the Prompt Builder's are (`#prompt-builder .pb-chip…`). A test page without `main.js`
+  won't show the problem; check in the real `index.html`.
 - Never pass a third-party 401 through to the browser; `authFetch` logs the user out on any 401.
 - Model ids contain dots and slashes. Never use `config.get("api.image.modelCapabilities." + id)`;
   read the map whole and index it.

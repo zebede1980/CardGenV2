@@ -4689,7 +4689,7 @@ html.pb-open, html.pb-open body { overflow: hidden; }
 .pb-wide { flex: 1; min-width: 0; justify-content: center; text-align: center; padding: 0.7rem 0.5rem; font-size: 0.9rem; }
 .pb-head { display: flex; align-items: center; gap: 0.6rem; }
 .pb-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 1.05rem; outline: none; }
-.pb-icon { width: 2.25rem; height: 2.25rem; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text-primary); font-size: 1rem; cursor: pointer; }
+#prompt-builder .pb-icon { width: 2.25rem; height: 2.25rem; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text-primary); font-size: 1rem; cursor: pointer; }
 .pb-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .pb-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.15rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text-secondary); font-size: 0.72rem; font-weight: 600; }
 .pb-pill-accent { background: var(--accent-soft); color: var(--accent-strong); border-color: transparent; }
@@ -4710,10 +4710,10 @@ html.pb-open, html.pb-open body { overflow: hidden; }
 .pb-note { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.5rem 0.6rem; border-radius: var(--radius-sm); background: var(--accent-soft); font-size: 0.78rem; color: var(--text-secondary); }
 .pb-note span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .pb-note b { color: var(--text-primary); }
-.pb-x { border: 0; background: transparent; color: var(--text-secondary); font-size: 0.95rem; padding: 0 0.25rem; cursor: pointer; }
+#prompt-builder .pb-x { border: 0; background: transparent; color: var(--text-secondary); font-size: 0.95rem; padding: 0 0.25rem; cursor: pointer; }
 .pb-accs { display: flex; flex-direction: column; gap: 0.4rem; }
 .pb-acc { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-strong); }
-.pb-acc-head { width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 0.8rem; border: 0; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+#prompt-builder .pb-acc-head { width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 0.8rem; border: 0; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
 .pb-acc-name { flex: none; font-size: 0.88rem; font-weight: 600; }
 .pb-acc-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: 0.75rem; color: var(--text-soft); }
 .pb-acc-sum.is-set { color: var(--accent-strong); font-weight: 600; }
@@ -4723,24 +4723,24 @@ html.pb-open, html.pb-open body { overflow: hidden; }
 .pb-acc-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 0 0.8rem 0.8rem; }
 .pb-grp { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-soft); }
 .pb-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.pb-chip { min-height: 2rem; padding: 0.4rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-strong); color: var(--text-primary); font: inherit; font-size: 0.8rem; cursor: pointer; }
-.pb-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.pb-chip-ai, .pb-chip-add { border-style: dashed; color: var(--text-secondary); }
-.pb-chip-ai[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); border-style: solid; color: var(--accent-strong); }
+#prompt-builder .pb-chip { min-height: 2rem; padding: 0.4rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-strong); color: var(--text-primary); font: inherit; font-size: 0.8rem; cursor: pointer; }
+#prompt-builder .pb-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+#prompt-builder .pb-chip-ai, #prompt-builder .pb-chip-add { border-style: dashed; color: var(--text-secondary); }
+#prompt-builder .pb-chip-ai[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); border-style: solid; color: var(--accent-strong); }
 .pb-custom { display: inline-flex; flex: 1 1 12rem; min-width: 0; gap: 0.35rem; align-items: center; }
 .pb-seg { display: inline-flex; align-self: flex-start; max-width: 100%; padding: 3px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-muted); }
-.pb-seg button { padding: 0.4rem 0.85rem; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
-.pb-seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-[data-theme="dark"] .pb-chip[aria-pressed="true"]:not(.pb-chip-ai), [data-theme="dark"] .pb-seg button[aria-pressed="true"] { color: #120a2a; }
+#prompt-builder .pb-seg button { padding: 0.4rem 0.85rem; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+#prompt-builder .pb-seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+[data-theme="dark"] #prompt-builder .pb-chip[aria-pressed="true"]:not(.pb-chip-ai), [data-theme="dark"] #prompt-builder .pb-seg button[aria-pressed="true"] { color: #120a2a; }
 .pb-error { padding: 0.65rem 0.8rem; border: 1px solid var(--error); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--error) 10%, transparent); color: var(--error); font-size: 0.85rem; }
-.pb-linkbtn { align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--accent-strong); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+#prompt-builder .pb-linkbtn { align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--accent-strong); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
 .pb-notes { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.4rem 0.7rem; border-left: 3px solid var(--success); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: color-mix(in srgb, var(--success) 9%, transparent); font-size: 0.78rem; color: var(--text-secondary); }
 .pb-notes b { color: var(--text-primary); }
-.pb-take { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.75rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-strong); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
-.pb-take[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+#prompt-builder .pb-take { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.75rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-strong); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+#prompt-builder .pb-take[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .pb-take-head { font-size: 0.8rem; font-weight: 700; color: var(--accent-strong); }
 .pb-take-text { display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; font-family: "IBM Plex Mono", Consolas, monospace; font-size: 0.76rem; color: var(--text-secondary); }
-.pb-icon:focus-visible, .pb-chip:focus-visible, .pb-seg button:focus-visible, .pb-acc-head:focus-visible, .pb-take:focus-visible, .pb-linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#prompt-builder .pb-icon:focus-visible, #prompt-builder .pb-chip:focus-visible, #prompt-builder .pb-seg button:focus-visible, #prompt-builder .pb-acc-head:focus-visible, #prompt-builder .pb-take:focus-visible, #prompt-builder .pb-linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .pb-chev { transition: none; } }
 
 /* Hosts: Playground's Build button and Character Gen's Look row */
