@@ -1,5 +1,10 @@
 # CardGenV2 — notes for Claude
 
+**Current state, untested work, open issues and the next task are in `STATUS.md`.** Read it at the
+start of a session and keep it up to date when you ship something.
+
+@STATUS.md
+
 ## The iPhone is the primary client — this is a core feature, not a nice-to-have
 
 The app is used mostly from an **iPhone (Safari)**, over HTTPS through nginx-proxy-manager, and
