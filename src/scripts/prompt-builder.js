@@ -96,6 +96,7 @@
           lookId: opts.look !== undefined ? (opts.lookId || (look ? "custom" : "")) : stored.lookId || "",
           format: prefs.format,
           detail: stored.detail || prefs.detail,
+          nsfw: !!stored.nsfw,
           model: opts.model,
           shape: opts.shape,
           open: new Set(["medium"]),
@@ -137,7 +138,7 @@
       const s = this.state;
       if (!s || !this.opts) return;
       writeStore(this.opts.host, {
-        look: s.look, lookId: s.lookId, detail: s.detail,
+        look: s.look, lookId: s.lookId, detail: s.detail, nsfw: !!s.nsfw,
         subject: s.subject, openedWith: s.openedWith, prompt: s.prompt || "",
       });
     }
@@ -202,7 +203,7 @@
           : `<button type="button" class="pb-icon" data-go="${s.screen === "takes" && s.prompt ? "result" : "steer"}" aria-label="Back">‹</button>`;
       const right = s.screen !== "steer" ? `<button type="button" class="pb-icon" data-act="close" aria-label="Close">✕</button>` : "";
       return `<div class="pb-head">${left}<h2 id="pb-title" tabindex="-1">${title}</h2>${right}</div>
-        <div class="pb-pills"><span class="pb-pill pb-pill-accent">${esc(s.model || "no model")}</span>${s.shape ? `<span class="pb-pill">${esc(s.shape)}</span>` : ""}<span class="pb-pill">${hostLabel}</span></div>`;
+        <div class="pb-pills"><span class="pb-pill pb-pill-accent">${esc(s.model || "no model")}</span>${s.shape ? `<span class="pb-pill">${esc(s.shape)}</span>` : ""}<span class="pb-pill">${hostLabel}</span>${s.nsfw ? `<span class="pb-pill pb-pill-nsfw">🔞 NSFW</span>` : ""}</div>`;
     }
 
     _steerHtml() {
@@ -279,6 +280,8 @@
             <span class="pb-label">Format</span>${seg("format", [["fragments", "Fragments"], ["prose", "Prose"], ["tags", "Tags"]], s.format)}
             <p class="pb-hint">${fmtHint}</p>
             <span class="pb-label">Detail</span>${seg("detail", [["short", "Short"], ["rich", "Rich"], ["max", "Max"]], s.detail)}
+            <label class="pb-check" for="pb-nsfw"><input type="checkbox" id="pb-nsfw" ${s.nsfw ? "checked" : ""}><span>🔞 NSFW</span></label>
+            <p class="pb-hint">Steers towards nudity and erotic imagery instead of covering up. Characters are always written as adults (18+). Some text models may still tone it down; edit the result before using it.</p>
           </section>`,
         footer: `<button type="button" class="btn-small pb-wide" data-act="surprise" title="Bold choices for everything you left to the AI">🎲 Surprise me</button>
           <button type="button" class="btn-primary pb-wide" data-act="build">✨ Build prompt</button>`,
@@ -316,7 +319,7 @@
       parts.push(s.subject.kind === "card" ? `<span><b>Subject:</b> the card${s.subject.direction ? `, plus “${esc(s.subject.direction.slice(0, 60))}”` : ""}</span>` : `<span><b>Subject:</b> your idea</span>`);
       parts.push(`<span><b>Your choices:</b> ${count ? `${count} across ${lines.length} group${lines.length === 1 ? "" : "s"}` : "none"}${s.look.fromImage ? " + an image's style" : ""}</span>`);
       if (open.length) parts.push(`<span><b>AI chose:</b> ${esc(open.join(", "))}</span>`);
-      parts.push(`<span><b>Length:</b> ${words} words, ${esc(s.format)}</span>`);
+      parts.push(`<span><b>Length:</b> ${words} words, ${esc(s.format)}${s.nsfw ? " · 🔞 NSFW on" : ""}</span>`);
       return `<div class="pb-notes">${parts.join("")}</div>`;
     }
 
@@ -439,6 +442,12 @@
         s.savingLook = false;
         return this.render();
       }
+      if (e.target.id === "pb-nsfw") {
+        this._readInputs();
+        s.nsfw = e.target.checked;
+        this._persist();
+        return this.render();
+      }
       if (e.target.id === "pb-match-file") {
         const file = e.target.files?.[0];
         e.target.value = "";
@@ -544,6 +553,7 @@
         detail: s.detail,
         surprise,
         variations,
+        nsfw: !!s.nsfw,
         model: s.model,
         shape: s.shape,
       };

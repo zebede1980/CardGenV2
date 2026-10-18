@@ -768,6 +768,15 @@ ${subject.description || ""}`);
       parts.push(this._legacyStyleBlock(spec.legacyStyle, format));
     }
 
+    // ── 🔞 NSFW (Prompt Builder checkbox) ──
+    // Steers towards nudity and erotic imagery instead of the covered-up
+    // default. The adult rule is not optional and stays in whatever else
+    // changes here.
+    if (spec.nsfw) {
+      parts.push(`MATURE CONTENT — the user has turned on NSFW for this adult-only tool. Nudity and sensual or erotic imagery are wanted: describe bodies, skin, nudity and a sensual pose plainly and specifically, rather than covering up, cropping away or only implying. Keep it visual — no story, dialogue or acts described beyond the pose in this single picture.${format === "tags" ? " Start the tags with \"nsfw\"." : ""}
+Every character is an adult, clearly 18 or older with an adult face and body. Never sexualise anyone who could read as a minor: no childlike bodies, features or proportions, and no school settings or uniforms. If the subject could be read as young, make them unmistakably adult.`);
+    }
+
     // ── What every prompt covers ──
     const isPhoto = look ? PL.isPhotoMedium(look) : /realistic|cinematic|photo/i.test(spec.legacyStyle?.style || "");
     // A card's picture is its portrait, so unless a look picks the framing

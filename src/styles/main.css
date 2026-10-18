@@ -4693,6 +4693,9 @@ html.pb-open, html.pb-open body { overflow: hidden; }
 .pb-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .pb-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.15rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text-secondary); font-size: 0.72rem; font-weight: 600; }
 .pb-pill-accent { background: var(--accent-soft); color: var(--accent-strong); border-color: transparent; }
+.pb-pill-nsfw { background: color-mix(in srgb, var(--error) 14%, transparent); color: var(--error); border-color: transparent; }
+#prompt-builder .pb-check { display: inline-flex; align-self: flex-start; align-items: center; gap: 0.55rem; margin-top: 0.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+#prompt-builder .pb-check input { width: 1.2rem; height: 1.2rem; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .pb-panel { display: flex; flex-direction: column; gap: 0.55rem; padding: 0.9rem; background: var(--surface-strong); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .pb-eyebrow { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft); }
 .pb-label { font-size: 0.85rem; font-weight: 600; }

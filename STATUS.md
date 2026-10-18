@@ -95,6 +95,10 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   localStorage (`cardgen.promptBuilder.v1`). Closing mid-write lets it finish; a toast says when.
   ■ Stop only abandons the write, because `stopGeneration()` cancels every running job.
 - **Playground host:** ✨ Build beside the Generate box (maxlength now 4000), ↩ Restore my idea.
+- **🔞 NSFW checkbox** (Output panel, remembered per host): `spec.nsfw` adds a MATURE CONTENT block to
+  the writer — nudity and erotic imagery described plainly, `nsfw` as the first tag for tag models —
+  with a fixed rule that every character is a clear adult (18+). Keep that rule if the block is
+  ever reworded. The text model (GLM via nano-gpt) may still soften prompts.
 - **🖼️ Generate all 3** on the takes screen draws one image per take. Playground: the take prompts
   go through `handleGeneratePlaygroundImage({ takes, model })` into its pick grid, badged with the
   take labels. Character Gen: `_generateCharacterTakes` shows them in Gen 4's pick-one modal (Keep
