@@ -142,7 +142,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const generateCountSelect = document.getElementById("playground-generate-count");
     if (generateCountSelect) {
       this._restorePlaygroundGenerateCount();
-      generateCountSelect.addEventListener("change", (e) => this.config.set("api.image.generateCount", parseInt(e.target.value, 10) || 1));
+      generateCountSelect.addEventListener("change", (e) => {
+        const value = e.target.value === "models" ? "models" : parseInt(e.target.value, 10) || 1;
+        this.config.set("api.image.generateCount", value);
+        this._syncPlaygroundGenerateMode();
+      });
     }
     const generateRatioSelect = document.getElementById("playground-generate-ratio");
     if (generateRatioSelect) {
@@ -327,6 +331,59 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!select) return;
     const saved = String(this.config.get("api.image.generateCount") || 1);
     if ([...select.options].some(o => o.value === saved)) select.value = saved;
+    this._syncPlaygroundGenerateMode();
+  },
+
+  // "1 per model" swaps the model dropdown for a checklist: the same prompt
+  // drawn once by each ticked model, to see which suits it.
+  _syncPlaygroundGenerateMode() {
+    const perModel = document.getElementById("playground-generate-count")?.value === "models";
+    const single = document.getElementById("playground-generate-single-model");
+    const compare = document.getElementById("playground-generate-compare");
+    if (single) single.style.display = perModel ? "none" : "";
+    if (compare) compare.style.display = perModel ? "" : "none";
+    if (perModel) this._renderPlaygroundCompareList();
+  },
+
+  // Shares its picks with Character Gen's ⚔️ Compare Models, so there is one
+  // "models I compare" list. Same defaults too: last picks, else the local GPU
+  // models (free to run), else the first few.
+  _renderPlaygroundCompareList() {
+    const list = document.getElementById("playground-generate-compare-list");
+    if (!list) return;
+    const MAX_MODELS = 4;
+    const candidates = getImageModelsWithCapability("generate", this.config);
+    const saved = (this.config.get("api.image.compareModels") || []).filter(m => candidates.includes(m));
+    const local = candidates.filter(m => m.startsWith("local/"));
+    const preselected = new Set(saved.length ? saved : local.length ? local.slice(0, MAX_MODELS) : candidates.slice(0, 2));
+
+    list.innerHTML = "";
+    if (!candidates.length) {
+      list.innerHTML = `<p style="margin:0; font-size:0.75rem; color:var(--warning);">No models are marked 🪄 Generate in ⚙️ Settings → Image API.</p>`;
+      return;
+    }
+    candidates.forEach(model => {
+      const row = document.createElement("label");
+      row.style.cssText = "display:flex; align-items:center; gap:0.5rem; cursor:pointer; color:var(--text-primary); font-size:0.85rem;";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = model;
+      cb.checked = preselected.has(model);
+      cb.addEventListener("change", () => {
+        const chosen = [...list.querySelectorAll("input:checked")].map(c => c.value);
+        if (chosen.length > MAX_MODELS) {
+          cb.checked = false;
+          this.showNotification(`Pick at most ${MAX_MODELS} models.`, "warning");
+          return;
+        }
+        this.config.set("api.image.compareModels", chosen);
+      });
+      const name = document.createElement("span");
+      name.style.cssText = "font-family:monospace; overflow-wrap:anywhere;";
+      name.textContent = model;
+      row.append(cb, name);
+      list.appendChild(row);
+    });
   },
 
   // Until this had its own setting, Playground used Character Gen's Aspect
@@ -358,14 +415,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
-    const model = document.getElementById("playground-generate-model")?.value
-      || this.config.get("api.image.generateModel");
-    if (!model) {
-      this.showNotification("Choose a model first (⚙️ Settings → Image API → Fetch Models)", "warning");
-      return;
+    // One model per slot: the dropdown's model N times, or each ticked model once.
+    const perModel = document.getElementById("playground-generate-count")?.value === "models";
+    let models;
+    if (perModel) {
+      models = [...document.querySelectorAll("#playground-generate-compare-list input:checked")].map(cb => cb.value);
+      if (!models.length) {
+        this.showNotification("Tick at least one model to generate with", "warning");
+        return;
+      }
+    } else {
+      const model = document.getElementById("playground-generate-model")?.value
+        || this.config.get("api.image.generateModel");
+      if (!model) {
+        this.showNotification("Choose a model first (⚙️ Settings → Image API → Fetch Models)", "warning");
+        return;
+      }
+      const n = parseInt(document.getElementById("playground-generate-count")?.value, 10) || 1;
+      models = Array(n).fill(model);
     }
-
-    const count = parseInt(document.getElementById("playground-generate-count")?.value, 10) || 1;
+    const count = models.length;
+    // Grid whenever there's a choice to make, including a single ticked model
+    // in per-model mode, so its tile still says which model drew it.
+    const showGrid = count > 1 || perModel;
+    this._pgGenerateByModel = perModel;
+    this._pgGenerateModels = models;
     const aspectRatio = document.getElementById("playground-generate-ratio")?.value || "1:1";
 
     const btn = document.getElementById("generate-playground-image-btn");
@@ -374,23 +448,26 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const setStatus = (done) => {
       if (!statusEl) return;
       statusEl.style.display = "block";
-      statusEl.textContent = count > 1
-        ? `🪄 Generating ${count} with ${model}… ${done}/${count} done, this may take a minute.`
-        : `🪄 Generating with ${model}… this may take a minute.`;
+      statusEl.textContent = perModel
+        ? `🪄 Generating with ${count} model${count > 1 ? "s" : ""}… ${done}/${count} done, this may take a minute.`
+        : count > 1
+          ? `🪄 Generating ${count} with ${models[0]}… ${done}/${count} done, this may take a minute.`
+          : `🪄 Generating with ${models[0]}… this may take a minute.`;
     };
     setStatus(0);
 
     // One slot per requested image; null while pending, { url } or { error } once settled.
-    this._pgGenerateResults = count > 1 ? Array.from({ length: count }, () => null) : [];
+    this._pgGenerateResults = showGrid ? Array.from({ length: count }, () => null) : [];
     this._renderPlaygroundGenerateResults();
 
     let first = true;
     let done = 0;
     const runOne = async (index) => {
+      const model = models[index];
       try {
         const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model, aspectRatio });
         const dataUrl = await this._urlToDataUrl(resultUrl);
-        if (count > 1) this._pgGenerateResults[index] = { url: dataUrl, model, prompt };
+        if (showGrid) this._pgGenerateResults[index] = { url: dataUrl, model, prompt };
 
         if (first) {
           first = false;
@@ -404,7 +481,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         }
       } catch (error) {
         console.error("Playground generate error:", error);
-        if (count > 1) this._pgGenerateResults[index] = { error: error.message };
+        if (showGrid) this._pgGenerateResults[index] = { error: error.message, model };
         throw error;
       } finally {
         done++;
@@ -426,7 +503,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           "warning", 6000,
         );
       } else {
-        this.showNotification(count > 1 ? `${count} images generated — tap one to pick it` : "Image generated!", "success");
+        this.showNotification(showGrid ? `${count} image${count > 1 ? "s" : ""} generated — tap one to pick it` : "Image generated!", "success");
       }
     } finally {
       if (btn) btn.disabled = false;
@@ -441,7 +518,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!grid) return;
 
     const results = this._pgGenerateResults || [];
-    if (results.length < 2) {
+    if (!results.length) {
       grid.style.display = "none";
       grid.innerHTML = "";
       return;
@@ -449,6 +526,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     grid.style.display = "grid";
     grid.innerHTML = "";
+
+    // In per-model mode the badge names the model, which is the whole point.
+    const byModel = !!this._pgGenerateByModel;
+    const modelOf = (index) => (byModel ? this._pgGenerateResults[index]?.model || this._pgGenerateModels?.[index] : null);
+    const badgeText = (index) => {
+      const model = modelOf(index);
+      return model ? model.replace(/^local\//, "💻 ") : String(index + 1);
+    };
 
     results.forEach((result, index) => {
       const tile = document.createElement("div");
@@ -461,17 +546,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
         font-size: 0.75rem; color: var(--text-soft); padding: ${result?.url ? "0" : "0.5rem"};
       `;
 
+      const pendingLabel = byModel ? `\n${badgeText(index)}` : "";
       if (!result) {
-        tile.textContent = "⏳ Generating…";
+        tile.style.whiteSpace = "pre-line";
+        tile.textContent = `⏳ Generating…${pendingLabel}`;
       } else if (result.error) {
+        tile.style.whiteSpace = "pre-line";
         tile.title = result.error;
-        tile.textContent = "❌ Failed";
+        tile.textContent = `❌ Failed${pendingLabel}`;
       } else {
         tile.style.cursor = "pointer";
         tile.title = isActive ? "This is the working image" : "Tap to make this the working image";
         tile.innerHTML = `
           <img src="${result.url}" alt="Option ${index + 1}" style="width: 100%; height: 100%; object-fit: contain; display: block;">
-          <span style="position:absolute; top:0; left:0; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; padding:0.15rem 0.35rem; border-bottom-right-radius:0.4rem;">${isActive ? "✓ " : ""}${index + 1}</span>
+          <span style="position:absolute; top:0; left:0; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; padding:0.15rem 0.35rem; border-bottom-right-radius:0.4rem; max-width:calc(100% - 2.5rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${isActive ? "✓ " : ""}${escapeHtml(badgeText(index))}</span>
           <button type="button" data-save title="Save this one to your image library"
             style="position:absolute; bottom:0; right:0; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:0.85rem; line-height:1; padding:0.35rem 0.45rem; cursor:pointer;"
           >💾</button>
