@@ -177,6 +177,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.config.set("api.image.style", "realistic");
       const styleSelect = document.getElementById("image-style");
       if (styleSelect) styleSelect.value = "realistic";
+      // Mood resets with the style, so a mood picked for one card doesn't
+      // quietly carry into every new one.
+      this.config.set("api.image.mood", "");
+      const moodSelect = document.getElementById("image-mood");
+      if (moodSelect) moodSelect.value = "";
+    }
+    // A Look outlives the card it was set for and replaces the Style Preset,
+    // so say when one is shaping a new character's portrait.
+    const activeLook = window.apiHandler?.getActiveLook?.();
+    if (activeLook) {
+      this.showStreamMessage(`🎨 Using Look: ${activeLook.name || "Custom look"} (clear it under Image → 🎨 Look to go back to the Style Preset)\n`);
     }
     if (window.apiHandler) window.apiHandler.lastGeneratedImagePrompt = null;
 

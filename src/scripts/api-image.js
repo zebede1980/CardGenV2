@@ -179,7 +179,8 @@ Object.assign(APIHandler.prototype, {
     // SD tags.
     let finalApiPrompt = imagePrompt;
     const lookActive = styleOverride === undefined && moodOverride === undefined && !!this.getActiveLook();
-    const naturalLanguage = lookActive || this.imagePromptPrefs(model).format === "fragments";
+    const writtenAs = this._promptFormats?.get(imagePrompt.trim()) || this.imagePromptPrefs(model).format;
+    const naturalLanguage = lookActive || writtenAs === "fragments";
 
     const activeStyle = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
     const activeMood = moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood");
@@ -604,7 +605,23 @@ Object.assign(APIHandler.prototype, {
       shape: this.config.get("api.image.aspectRatio") || "",
     });
 
-    return prefs.detail === "short" ? await this.truncateImagePrompt(prompt) : prompt;
+    const final = prefs.detail === "short" ? await this.truncateImagePrompt(prompt) : prompt;
+    this._rememberPromptFormat(final, prefs.format);
+    return final;
+  },
+
+  // Which format each recent prompt was written in, so generateImage adds the
+  // Style Preset bookends by how the prompt was written rather than by the
+  // model drawing it. They differ when a new character's local model fails
+  // and the hosted fallback draws the prompt already written for it — a
+  // fragments prompt with an opening bolted on brought back the doubled
+  // "…illustration of A … photograph of". An edited prompt isn't found here,
+  // and falls back to the drawing model's setting.
+  _rememberPromptFormat(prompt, format) {
+    if (!prompt) return;
+    if (!this._promptFormats) this._promptFormats = new Map();
+    this._promptFormats.set(prompt.trim(), format);
+    while (this._promptFormats.size > 20) this._promptFormats.delete(this._promptFormats.keys().next().value);
   },
 
   // Character Gen's active Look, or null when none is set (then the Style
@@ -753,6 +770,17 @@ ${subject.description || ""}`);
 
     // ── What every prompt covers ──
     const isPhoto = look ? PL.isPhotoMedium(look) : /realistic|cinematic|photo/i.test(spec.legacyStyle?.style || "");
+    // A card's picture is its portrait, so unless a look picks the framing
+    // the face must read clearly; left to itself the model sometimes chose a
+    // wide or full-body shot with a tiny face.
+    let framingNote = "";
+    if (subject.kind === "card" && !look?.picks?.framing?.length) {
+      framingNote = subject.cardType === "group"
+        ? " — frame the group so every face is clearly visible"
+        : subject.cardType === "scenario"
+          ? " — a wide establishing view of the place"
+          : " — a character portrait that shows the face clearly: head-and-shoulders, chest-up or waist-up, unless the user direction asks for something else";
+    }
     parts.push(`COVER, in this order:
 1. Medium and genre${subject.kind === "card" ? ", then the subject: who, appearance, outfit" : ", then the subject"}
 2. Materials and surface texture of what matters (fabric, metal, skin, ceramic…)
@@ -760,7 +788,7 @@ ${subject.description || ""}`);
 4. Setting or background
 5. Lighting: its source, direction and colour, chosen for this picture — not the same dramatic look every time
 ${isPhoto ? "6. Lens and focus\n7" : "6"}. Finish (grain, gloss, line work, brushwork — whatever suits the medium) and palette
-${isPhoto ? "8" : "7"}. Framing, angle and composition${spec.shape ? `, composed for a ${this._shapeWord(spec.shape)} (${spec.shape}) frame` : ""}
+${isPhoto ? "8" : "7"}. Framing, angle and composition${spec.shape ? `, composed for a ${this._shapeWord(spec.shape)} (${spec.shape}) frame` : ""}${framingNote}
 
 Describe only what can be seen: no sounds, smells, backstory, or personality words with no visible form. Never use a character's name: the image model can't know who that is and may write it into the picture as text.${format === "tags" ? "" : " No quality filler such as \"masterpiece\", \"best quality\", \"8k\" or \"trending on artstation\"."}`);
 

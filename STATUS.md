@@ -100,6 +100,15 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   style picks**; with no look everything works as before. Guidance doubles as the builder's
   "extra direction" and syncs both ways.
 - **Also fixed:** Draft Prompt always sent card type "single"; it now sends the card's real type.
+- **New-character portraits** (Generate, batch, Inspire Me; `generateNewCharacterImage`):
+  - Card prompts with no framing picked ask for a portrait that shows the face clearly (group: every
+    face visible; scenario: wide view). The first builder release had dropped that rule.
+  - Generate and batch reset Mood along with Style (to none and "realistic"); Inspire Me resets
+    neither, as before.
+  - An active Look still applies to new characters, and the progress log says "🎨 Using Look: …".
+  - The PC-off fallback reuses the prompt written for the local model. `generateImage` now adds
+    Style Preset bookends according to how a prompt was *written* (`_rememberPromptFormat`), so a
+    fragments prompt drawn by an unticked hosted model isn't given a doubled opening.
 - **Tested headlessly only:** Node checks of the writer (instructions, parsing, bookends) and a
   browser harness running the real sheet + host code against a fake streaming text model (all
   flows, 320/375 px and desktop, light and dark). **Not yet run with the real text model, on a real
