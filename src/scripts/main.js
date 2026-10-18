@@ -306,6 +306,9 @@ class CharacterGeneratorApp {
     if (imgOptModal) imgOptModal.addEventListener("click", (e) => { if (e.target === imgOptModal) this.closeImageOptionsModal(); });
 
     document.getElementById("draft-prompt-btn").addEventListener("click", () => this.handleRegeneratePrompt());
+    document.getElementById("character-look-edit-btn")?.addEventListener("click", () => this.openCharacterPromptBuilder());
+    document.getElementById("character-look-clear-btn")?.addEventListener("click", () => this.clearCharacterLook());
+    if (typeof this.renderCharacterLookRow === "function") this.renderCharacterLookRow();
 
     const imageStyleSelect = document.getElementById("image-style");
     if (imageStyleSelect) {

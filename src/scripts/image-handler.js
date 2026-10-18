@@ -6,6 +6,87 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return document.getElementById("prompt-guidance")?.value?.trim() || "";
   },
 
+  // ── 🎨 Look row (✨ Prompt Builder, Character Gen host) ──
+  // The active Look is stored as a JSON string (api.image.activeLook) plus the
+  // dropdown id it came from (api.image.activeLookId); see prompt-look.js.
+  renderCharacterLookRow() {
+    const nameEl = document.getElementById("character-look-name");
+    const sumEl = document.getElementById("character-look-summary");
+    const clearBtn = document.getElementById("character-look-clear-btn");
+    const editBtn = document.getElementById("character-look-edit-btn");
+    if (!nameEl || !window.PromptLook) return;
+    const look = window.apiHandler?.getActiveLook?.();
+    if (look) {
+      const n = window.PromptLook.countPicks(look);
+      nameEl.textContent = `🎨 Look: ${look.name || "Custom look"}`;
+      sumEl.textContent = `${window.PromptLook.summary(look)}${n ? ` · ${n} choice${n === 1 ? "" : "s"}` : ""} · replaces Style Preset & Mood`;
+      if (clearBtn) clearBtn.style.display = "";
+      if (editBtn) editBtn.textContent = "✨ Edit";
+    } else {
+      nameEl.textContent = "🎨 Look: none";
+      sumEl.textContent = "Using the Style Preset and Mood. ✨ Build steers the look in detail.";
+      if (clearBtn) clearBtn.style.display = "none";
+      if (editBtn) editBtn.textContent = "✨ Build";
+    }
+  },
+
+  openCharacterPromptBuilder() {
+    if (!this.currentCharacter?.description) {
+      this.showNotification("Generate or load a character first — the card is what the picture is of", "warning");
+      return;
+    }
+    const refNotes = document.getElementById("reference-image-description")?.value?.trim();
+    const description = refNotes
+      ? `${this.currentCharacter.description}\n\nReference image details:\n${refNotes}`
+      : this.currentCharacter.description;
+    const look = window.apiHandler.getActiveLook();
+
+    window.promptBuilder.open({
+      host: "character",
+      subject: {
+        kind: "card",
+        name: this.currentCharacter.name,
+        description,
+        cardType: this.currentCharacter.cardType || document.getElementById("card-type-select")?.value || "single",
+        direction: this._getGuidance(),
+      },
+      look,
+      lookId: look ? this.config.get("api.image.activeLookId") || "custom" : "",
+      model: this.config.get("api.image.model") || firstImageModelWithCapability("generate", this.config) || "",
+      shape: this.config.get("api.image.aspectRatio") || "1:1",
+      onUse: ({ prompt, look: usedLook, lookId, subject, generate }) => this._applyCharacterBuild({ prompt, look: usedLook, lookId, subject, generate }),
+    });
+  },
+
+  _applyCharacterBuild({ prompt, look, lookId, subject, generate }) {
+    this.config.set("api.image.activeLook", look ? JSON.stringify(look) : "");
+    this.config.set("api.image.activeLookId", look ? lookId || "custom" : "");
+    this.renderCharacterLookRow();
+
+    const guidance = document.getElementById("prompt-guidance");
+    if (guidance && subject && typeof subject.direction === "string") guidance.value = subject.direction.slice(0, 200);
+
+    const textarea = document.getElementById("custom-image-prompt");
+    if (textarea) {
+      textarea.value = prompt;
+      textarea.closest("details")?.setAttribute("open", "");
+      window.updatePromptCharCount?.();
+    }
+    if (this.currentCharacter) this.currentCharacter.imagePrompt = prompt;
+    const editor = document.getElementById("image-prompt-editor");
+    if (editor) editor.style.display = "block";
+
+    if (generate) this.handleRegenerateImage();
+    else this.showNotification("Prompt ready in ✏️ Final Prompt Preview — Generate when you're happy", "success");
+  },
+
+  clearCharacterLook() {
+    this.config.set("api.image.activeLook", "");
+    this.config.set("api.image.activeLookId", "");
+    this.renderCharacterLookRow();
+    this.showNotification("Look cleared — back to the Style Preset and Mood", "info");
+  },
+
   // Fetches any image URL (blob:, data:, or remote http(s)) and returns it as
   // a base64 data: URL. Remote http(s) URLs are routed through
   // /api/proxy-image (same as every other remote-result fetch in the app,

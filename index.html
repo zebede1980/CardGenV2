@@ -1400,6 +1400,20 @@
                                 </div>
                             </div>
 
+                            <!-- 🎨 Look: the ✨ Prompt Builder's look for Character Gen
+                                 (api.image.activeLook). When set it replaces the Style
+                                 Preset and Mood in Draft Prompt, Generate and Compare
+                                 Models; Gen 4 still uses its own style picks. Filled by
+                                 renderCharacterLookRow in image-handler.js. -->
+                            <div class="pb-look-row" id="character-look-row">
+                                <div class="pb-look-meta">
+                                    <strong id="character-look-name">🎨 Look: none</strong>
+                                    <span id="character-look-summary">Using the Style Preset and Mood above</span>
+                                </div>
+                                <button type="button" id="character-look-edit-btn" class="btn-small pb-build-btn" title="Open the ✨ Prompt Builder with this card as the subject">✨ Build</button>
+                                <button type="button" id="character-look-clear-btn" class="btn-small" style="display: none;" title="Stop using this Look and go back to the Style Preset and Mood">✕</button>
+                            </div>
+
                             <!-- Prompt Guidance -->
                             <div style="margin-top: 1rem" id="prompt-guidance-section">
                                 <label for="prompt-guidance" class="label" style="display: block; margin-bottom: 0.35rem">
@@ -2655,7 +2669,7 @@
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260908-modelcaps"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20261014-lore"></script>
-        <script src="src/scripts/main.js?v=20261018-freestatus"></script>
+        <script src="src/scripts/main.js?v=20261018-builder"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-display.js?v=20261015-pov"></script>
         <script src="src/scripts/image-handler.js?v=20261018-builder"></script>
