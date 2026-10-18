@@ -171,13 +171,15 @@ Object.assign(APIHandler.prototype, {
 
     this.lastGeneratedImagePrompt = imagePrompt;
 
-    // Tag-based models get the style and mood bookended on here, to enforce
-    // them. Natural-language models ("Is Flux" in Settings) don't: their prompt
-    // already opens and closes with the style in prose (see
-    // buildImagePromptInstruction), and a bookend on top read as "…illustration
-    // of A 2.5D anime image of a portrait of…" followed by a pile of SD tags.
+    // On the Style Preset path, prose and tag prompts get the style and mood
+    // bookended on here, to enforce them; the writer starts them at the
+    // subject so the opening joins up. Fragment prompts and prompts written to
+    // a Look carry their own style, and a bookend on top used to read as
+    // "…illustration of A 2.5D anime image of a portrait of…" plus a pile of
+    // SD tags.
     let finalApiPrompt = imagePrompt;
-    const naturalLanguage = !!settings.isFlux;
+    const lookActive = styleOverride === undefined && moodOverride === undefined && !!this.getActiveLook();
+    const naturalLanguage = lookActive || this.imagePromptPrefs(model).format === "fragments";
 
     const activeStyle = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
     const activeMood = moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood");
@@ -573,32 +575,83 @@ Object.assign(APIHandler.prototype, {
     }
   },
 
-  // `modelOverride` writes the prompt to that model's length/Flux preferences
-  // instead of the active model's — Compare Models drafts one per model.
+  // Character Gen's way in to writeImagePrompt: the card is the subject. The
+  // look is Character Gen's active Look when one is set, otherwise the Style
+  // Preset and Mood as before. An explicit style or mood (Gen 4 picks one per
+  // variation) always wins over the Look. `modelOverride` writes for that
+  // model's preferences instead of the active model's — Compare Models drafts
+  // one per model.
   async generateImagePrompt(characterDescription, characterName, cardType = "single", guidance = "", styleOverride = undefined, moodOverride = undefined, modelOverride = null) {
     if (!characterDescription || !characterName) {
       throw new Error("Character description and name are required to generate an image prompt");
     }
 
-    const style = styleOverride !== undefined ? styleOverride : this.config.get("api.image.style");
-    const mood = moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood");
     const imageModel = modelOverride || this.config.get("api.image.model");
-    const modelSettings = this.config.get("api.image.modelSettings") || {};
-    const settings = modelSettings[imageModel] || {};
-    const lengthPref = settings.promptLengthPref || "detailed";
-    const isFlux = settings.isFlux || false;
-    
-    const metaPrompt = this.buildImagePromptInstruction(characterDescription, characterName, cardType, guidance, style, lengthPref, mood, isFlux);
-    const model = this.config.get("api.text.model");
+    const explicitStyle = styleOverride !== undefined || moodOverride !== undefined;
+    const look = explicitStyle ? null : this.getActiveLook();
+    const prefs = this.imagePromptPrefs(imageModel);
 
+    const prompt = await this.writeImagePrompt({
+      subject: { kind: "card", name: characterName, description: characterDescription, cardType, direction: guidance },
+      look,
+      legacyStyle: look ? null : {
+        style: styleOverride !== undefined ? styleOverride : this.config.get("api.image.style"),
+        mood: moodOverride !== undefined ? moodOverride : this.config.get("api.image.mood"),
+      },
+      format: prefs.format,
+      detail: prefs.detail,
+      model: imageModel,
+      shape: this.config.get("api.image.aspectRatio") || "",
+    });
+
+    return prefs.detail === "short" ? await this.truncateImagePrompt(prompt) : prompt;
+  },
+
+  // Character Gen's active Look, or null when none is set (then the Style
+  // Preset and Mood apply).
+  getActiveLook() {
+    const look = window.PromptLook?.normalise(this.config.get("api.image.activeLook"));
+    return look && !window.PromptLook.isEmpty(look) ? look : null;
+  },
+
+  // How a model wants its prompt written, from its Settings. Unticked models
+  // default to prose rather than tags: a modern model whose "Natural-language
+  // prompts" box was never ticked would otherwise start getting tag soup.
+  imagePromptPrefs(model) {
+    const settings = (this.config.get("api.image.modelSettings") || {})[model] || {};
+    const format = settings.isFlux
+      ? "fragments"
+      : /illustrious|pony|sdxl|noob|animagine|\bsd-?1\.5\b/i.test(model || "") ? "tags" : "prose";
+    return { format, detail: settings.promptLengthPref === "short" ? "short" : "rich" };
+  },
+
+  // The one image-prompt writer, behind Draft Prompt, Gen 4, Compare Models,
+  // batch, Inspire Me and the Prompt Builder. Streams and is resumable, so a
+  // phone locking mid-write picks up where it left off rather than paying for
+  // the call again.
+  //
+  // spec: {
+  //   subject: { kind: "idea", idea } | { kind: "card", name, description, cardType, direction },
+  //   look,          // PromptLook look, or null
+  //   legacyStyle,   // { style, mood } from the Style Preset / Mood, used when there's no look
+  //   format,        // "fragments" | "prose" | "tags"
+  //   detail,        // "short" | "rich" | "max"
+  //   surprise,      // bold choices for everything left to the AI
+  //   variations,    // 0, or a number of takes to write
+  //   model, shape,
+  // }
+  // Returns the prompt, or [{ label, prompt }] when variations were asked for.
+  async writeImagePrompt(spec, { onStream = null, label = "Image prompt" } = {}) {
+    const instruction = this.buildImagePromptWriterInstruction(spec);
+    const temperature = spec.surprise ? 0.85 : spec.subject?.kind === "idea" ? 0.6 : 0.4;
     const data = {
-      model: model,
-      messages: [{ role: "user", content: metaPrompt }],
+      model: this.config.get("api.text.model"),
+      messages: [{ role: "user", content: instruction }],
       max_tokens: 8192,
-      // Faithful transformation of the card into an image prompt, not an
-      // invention exercise — keep it close to the source description.
-      temperature: 0.4,
+      temperature,
       stream: true,
+      resumable: true,
+      __jobLabel: label,
     };
 
     let response;
@@ -609,18 +662,166 @@ Object.assign(APIHandler.prototype, {
       throw new Error(`Failed to call text API for image prompt generation: ${error.message}`);
     }
 
-    const generatedPrompt = await this.handleStreamResponse(response, () => {});
+    const raw = await this.handleStreamResponse(response, onStream || (() => {}));
+    if (!raw || !raw.trim()) throw new Error("Text API returned an empty image prompt");
 
-    if (!generatedPrompt || generatedPrompt.trim().length === 0) {
-      console.error("Text API returned empty prompt");
-      throw new Error("Text API returned an empty image prompt");
+    if (spec.variations) {
+      const takes = this._parsePromptTakes(raw);
+      if (!takes.length) throw new Error("The text model didn't return the variations in a readable form — try again");
+      return takes;
+    }
+    return this._cleanWrittenPrompt(raw);
+  },
+
+  // Strips what models wrap a prompt in despite being told not to.
+  _cleanWrittenPrompt(text) {
+    let t = String(text || "").trim();
+    t = t.replace(/^(here(?:'s| is)[^\n]*:|prompt:|image prompt:)\s*/i, "");
+    t = t.replace(/^```[a-z]*\s*\n?/i, "").replace(/\n?```\s*$/, "").trim();
+    if (/^["“].*["”]$/s.test(t)) t = t.slice(1, -1);
+    return t.trim();
+  },
+
+  _parsePromptTakes(text) {
+    const takes = [];
+    const re = /^#{2,4}\s*TAKE\s*\d+\s*[:\-–—]\s*(.*)$/gim;
+    const heads = [...String(text).matchAll(re)];
+    heads.forEach((m, i) => {
+      const start = m.index + m[0].length;
+      const end = i + 1 < heads.length ? heads[i + 1].index : text.length;
+      const prompt = this._cleanWrittenPrompt(text.slice(start, end));
+      if (prompt) takes.push({ label: m[1].trim() || `Take ${i + 1}`, prompt });
+    });
+    return takes;
+  },
+
+  buildImagePromptWriterInstruction(spec) {
+    const PL = window.PromptLook;
+    const subject = spec.subject || {};
+    const format = ["fragments", "prose", "tags"].includes(spec.format) ? spec.format : "prose";
+    const detail = ["short", "rich", "max"].includes(spec.detail) ? spec.detail : "rich";
+    const look = spec.look ? PL.normalise(spec.look) : null;
+    const parts = [];
+
+    parts.push(`You write prompts for an AI image model${spec.model ? ` (${spec.model})` : ""}. Your prompt is sent to the image model exactly as you write it, so it must describe a finished picture.`);
+
+    // ── Subject ──
+    if (subject.kind === "card") {
+      let cardNote = "";
+      if (subject.cardType === "group") {
+        cardNote = "\nThis is a GROUP card: show two or three of its characters together in a shared setting, not one person.";
+      } else if (subject.cardType === "scenario") {
+        cardNote = "\nThis is a SCENARIO / LOCATION card: the setting is the subject. Any figures are part of the environment.";
+      }
+      parts.push(`SUBJECT — a roleplay character card. Read the profile and take from it:
+- apparent gender, approximate age, species or ethnicity if notable
+- exact hair colour and style, eye colour, distinctive features (scars, tattoos, unusual traits)
+- specific clothing that fits their role and world, not generic
+- one expression or body-language cue that shows their dominant personality
+- one concrete setting from their story or scenario${cardNote}
+
+Character name (context only — never write it in the prompt): ${subject.name || "Unknown"}
+
+Profile:
+${subject.description || ""}`);
+      if (subject.direction && subject.direction.trim()) {
+        parts.push(`USER DIRECTION (high priority — steer the picture this way, overriding profile details where they conflict):\n${subject.direction.trim()}`);
+      }
+    } else {
+      parts.push(`SUBJECT — the user's idea:\n"""${(subject.idea || "").trim()}"""\nKeep everything the user specified: subjects, counts, actions, clothing, colours, any text to show, and anything they excluded. Never contradict or drop it. Fill whatever they left open with concrete visual choices.`);
     }
 
-    if (lengthPref === "short") {
-      return await this.truncateImagePrompt(generatedPrompt.trim());
+    // ── Look ──
+    if (look) {
+      const lines = PL.chosenLines(look);
+      const open = PL.openGroups(look);
+      let block = "LOOK — the user chose these. Every one must appear in the prompt:";
+      block += lines.length ? "\n" + lines.map(l => `- ${l.label}: ${l.values.join(", ")}`).join("\n") : "\n- (nothing specific)";
+      if (look.extra) block += `\nAlso: ${look.extra}`;
+      if (look.fromImage) block += `\nMatch the style of a reference image described as: ${look.fromImage}`;
+      if (open.length) {
+        block += `\n\nLeft to you: ${open.join(", ")}. Choose what fits the subject and the chosen look`;
+        block += spec.surprise
+          ? " — and be bold: distinctive, unexpected but coherent choices, not the safe default."
+          : ".";
+      }
+      block += "\nIf two choices contradict each other (for example deep focus and extreme bokeh), keep the one that matters most for this picture and drop the other.";
+      parts.push(block);
+    } else if (spec.legacyStyle) {
+      parts.push(this._legacyStyleBlock(spec.legacyStyle, format));
     }
 
-    return generatedPrompt.trim();
+    // ── What every prompt covers ──
+    const isPhoto = look ? PL.isPhotoMedium(look) : /realistic|cinematic|photo/i.test(spec.legacyStyle?.style || "");
+    parts.push(`COVER, in this order:
+1. Medium and genre${subject.kind === "card" ? ", then the subject: who, appearance, outfit" : ", then the subject"}
+2. Materials and surface texture of what matters (fabric, metal, skin, ceramic…)
+3. Pose and expression
+4. Setting or background
+5. Lighting: its source, direction and colour, chosen for this picture — not the same dramatic look every time
+${isPhoto ? "6. Lens and focus\n7" : "6"}. Finish (grain, gloss, line work, brushwork — whatever suits the medium) and palette
+${isPhoto ? "8" : "7"}. Framing, angle and composition${spec.shape ? `, composed for a ${this._shapeWord(spec.shape)} (${spec.shape}) frame` : ""}
+
+Describe only what can be seen: no sounds, smells, backstory, or personality words with no visible form. Never use a character's name: the image model can't know who that is and may write it into the picture as text.${format === "tags" ? "" : " No quality filler such as \"masterpiece\", \"best quality\", \"8k\" or \"trending on artstation\"."}`);
+
+    // ── Format ──
+    const words = { short: "40–80", rich: "100–180", max: "180–300" }[detail];
+    const maxNote = detail === "max" ? " Spend the extra words on fine surface detail: stitching, wear, reflections, skin and fabric texture." : "";
+    if (format === "fragments") {
+      parts.push(`FORMAT — fragments, like a photographer's shot list. Short declarative fragments, each ending with a full stop, most of them 2–8 words. Example of the style: "Analog cyberpunk street photography. Young woman, early twenties. Clean white ceramic plates, black servo joints. Specular highlights on the ceramic. Hand on hip."
+Two blocks separated by one blank line: first the medium and the subject (who, appearance, outfit, materials, pose, expression); then the look (lighting, lens and focus, finish, palette, background, composition). No flowing sentences, lists, labels or headings. About ${words} words.${maxNote}`);
+    } else if (format === "prose") {
+      parts.push(`FORMAT — plain descriptive prose, as a caption of the finished picture: one or two paragraphs of full sentences. Open with one sentence naming the medium and the subject together (e.g. "A semi-realistic 2.5D anime illustration of a silver-haired woman in her late twenties…"). Name the medium once — never "an illustration of an image of a portrait of". No lists, labels or tags. About ${words} words.${maxNote}`);
+    } else {
+      parts.push(`FORMAT — comma-separated tags for a tag-trained model (Danbooru-style tags where they fit), in this order: subject count and type, appearance, outfit, pose and expression, setting, lighting, composition, medium and style. End with "masterpiece, best quality". No sentences. About ${{ short: "20–35", rich: "35–60", max: "60–90" }[detail]} tags.`);
+    }
+
+    // ── Output ──
+    const n = parseInt(spec.variations, 10) || 0;
+    if (n > 1) {
+      parts.push(`OUTPUT — ${n} takes. Each keeps the subject and every one of the user's choices, and changes exactly one thing that was left open (angle, lighting, framing, pose or setting) — a different thing in each take. Write exactly this, with nothing before or after:
+${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 words>\n<the full prompt>`).join("\n")}`);
+    } else {
+      parts.push("OUTPUT — only the prompt itself: no title, preamble, explanation, quotes or markdown.");
+    }
+
+    return parts.join("\n\n");
+  },
+
+  _shapeWord(shape) {
+    const [w, h] = String(shape).split(":").map(Number);
+    if (!(w > 0 && h > 0)) return "square";
+    return w === h ? "square" : w > h ? "landscape" : "portrait";
+  },
+
+  // The pre-Look Style Preset and Mood, for when no Look is set. Tag and prose
+  // prompts for a preset with an opening ("… illustration of") still get that
+  // opening and its tags added by generateImage, so the writer starts at the
+  // subject. Fragment prompts carry the style themselves.
+  _legacyStyleBlock({ style = "", mood = "" } = {}, format) {
+    let styleName = "";
+    let cues = [];
+    let prefix = "";
+    if (style === "custom") {
+      styleName = (this.config.get("api.image.customStyleText") || "").trim();
+    } else if (style) {
+      styleName = style === "realistic" ? "Realistic photography" : style.replace(/-/g, " ");
+      const tags = this.getImageStyleTags(style);
+      prefix = tags.prefix || "";
+      const filler = /^(masterpiece|best quality|high quality|highly detailed|ultra-detailed|high resolution|8k( resolution)?|trending on artstation|artstation|professional (illustration|quality)|museum quality fine art|masterpiece (anime film still|illustration))$/i;
+      cues = (tags.suffix || "").split(",").map(t => t.trim()).filter(t => t && !filler.test(t));
+    }
+    const lines = [];
+    if (styleName) {
+      lines.push(`STYLE — "${styleName}". Bias the whole prompt towards it.${cues.length ? ` Its hallmarks: ${cues.join("; ")}.` : ""}`);
+      if (prefix && format !== "fragments") {
+        lines.push(`The app puts "${prefix}" in front of your prompt and adds the style's tags after it, so start directly with the subject in lowercase (e.g. "a young woman with…") and don't repeat the style words.`);
+      }
+    }
+    if (mood) {
+      lines.push(`MOOD — "${mood.replace(/-/g, " ")}": let the lighting, expression and atmosphere carry it.`);
+    }
+    return lines.join("\n") || "LOOK — nothing chosen: pick a medium, lighting and composition that suit the subject.";
   },
 
   async truncateImagePrompt(prompt) {
@@ -741,134 +942,6 @@ Object.assign(APIHandler.prototype, {
 
     prompt += " Appropriate background that suits the character's setting and personality.";
     return prompt;
-  },
-
-  // Natural-language models get the style as prose from the prompt writer,
-  // nothing appended afterwards. The style's tag list (getImageStyleTags) still
-  // says what the style looks like, so it's passed along as cues to write in,
-  // minus the SD-era quality filler those models ignore or render oddly.
-  _proseStyleDirective(styleName, tagList) {
-    const filler = /^(masterpiece|best quality|high quality|highly detailed|ultra-detailed|high resolution|8k( resolution)?|trending on artstation|artstation|professional (illustration|quality)|museum quality fine art|masterpiece (anime film still|illustration))$/i;
-    const cues = (tagList || "").split(",").map(t => t.trim()).filter(t => t && !filler.test(t));
-    const cueLine = cues.length ? ` Work these cues in as prose where they fit: ${cues.join("; ")}.` : "";
-    return `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". Open with ONE sentence that names the medium and the subject together (e.g. "A semi-realistic 2.5D anime illustration of a silver-haired woman in her late twenties…"). Name the medium once: never stack two ("an illustration of an image of a portrait of"). Keep every detail consistent with this style.${cueLine} End with one sentence restating the rendering style (medium, shading, palette) so the style holds.`;
-  },
-
-  buildImagePromptInstruction(characterDescription, characterName, cardType = "single", guidance = "", style = "", lengthPref = "detailed", mood = "", isFlux = false) {
-    const personalityTraits = this.extractPersonalityTraits(characterDescription);
-
-    let taskInstruction = "";
-    if (cardType === "group") {
-      taskInstruction = `\n\nIMPORTANT: This is a GROUP card. Generate a group portrait or ensemble scene showing multiple characters together. Focus on the group dynamic — show at least two or three figures in a shared environment that reflects their collective identity. Do not focus on just one person.`;
-    } else if (cardType === "scenario") {
-      taskInstruction = `\n\nIMPORTANT: This is a SCENARIO / LOCATION card. Generate a scene or environment illustration — focus on the atmosphere, setting, and sense of place rather than on a single character portrait. Any figures present should feel like part of the environment, not the subject. Prioritise mood, lighting, and environmental detail.`;
-    }
-
-    let guidanceBlock = "";
-    if (guidance && guidance.trim()) {
-      guidanceBlock = `\n\nUSER GUIDANCE (high priority — steer the image toward these specifics):\n${guidance.trim()}\n\nIncorporate the guidance above as the primary creative direction. Override or adapt profile details as needed to satisfy the guidance.`;
-    }
-    
-    let styleBlock = "";
-    if (style === "custom") {
-      const customStyleText = this.config.get("api.image.customStyleText");
-      if (customStyleText && customStyleText.trim()) {
-        styleBlock = isFlux
-          ? this._proseStyleDirective(customStyleText.trim(), "")
-          : `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${customStyleText.trim()}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords.`;
-      }
-    } else if (style && style.trim()) {
-      let styleName = style.replace(/-/g, " ");
-      let mediumExamples = `"illustration", "3D render", "digital painting"`;
-      
-      if (style === "realistic") {
-        styleName = "Realistic / Photography";
-        mediumExamples = `"photograph", "DSLR photo", "cinematic photography"`;
-      } else if (style === "2.5d-realistic-anime") {
-        mediumExamples = `"2.5D anime render", "semi-realistic", "intricate digital shading"`;
-      } else if (style.includes("anime") || style === "waifu") {
-        mediumExamples = `"anime illustration", "cel shading", "2D art"`;
-      } else if (style === "cinematic") {
-        mediumExamples = `"cinematic film still", "movie scene", "anamorphic"`;
-      } else if (style === "3d-render") {
-        mediumExamples = `"3D render", "octane render", "CGI"`;
-      } else if (style === "oil-painting") {
-        mediumExamples = `"oil on canvas", "impasto", "classical painting"`;
-      } else if (style === "watercolor") {
-        mediumExamples = `"watercolor painting", "ink and wash", "translucent"`;
-      } else if (style === "comic" || style === "comic-book") {
-        mediumExamples = `"comic book art", "graphic novel", "ink outlines"`;
-      } else if (style === "fantasy") {
-        mediumExamples = `"high fantasy illustration", "mythological art", "ethereal lighting"`;
-      } else if (style === "sci-fi") {
-        mediumExamples = `"cyberpunk", "sci-fi concept art", "futuristic render"`;
-      } else if (style === "digital-art") {
-        mediumExamples = `"digital illustration", "concept art", "digital painting"`;
-      }
-
-      // Tag models have the style's opening ("… illustration of") put in
-      // front by generateImage, so the prompt must start where that leaves
-      // off: at the subject. Asking it to open with style words as well is
-      // what produced "…illustration of A 2.5D anime image of a portrait of".
-      const { prefix, suffix } = this.getImageStyleTags(style);
-      if (isFlux) {
-        styleBlock = this._proseStyleDirective(styleName, suffix);
-      } else if (prefix) {
-        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style, using medium-specific keywords (e.g. ${mediumExamples}). The app automatically puts "${prefix}" in front of your text, so begin directly with the subject itself in lowercase (e.g. "a young woman with…"). Do NOT open with any style, medium or "image of" words.`;
-      } else {
-        styleBlock = `\n- STYLE DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested art style is "${styleName}". You MUST heavily bias the entire prompt towards this style. Start the prompt with words related to this style, and use medium-specific keywords (e.g. ${mediumExamples}).`;
-      }
-    }
-    
-    let moodBlock = "";
-    if (mood && mood.trim()) {
-      const formattedMood = mood.replace(/-/g, " ");
-      moodBlock = `\n- MOOD DIRECTIVE (ABSOLUTE CRITICAL PRIORITY): The requested mood is "${formattedMood}". You MUST dictate the lighting, character expression, and environmental atmosphere to vividly convey this mood.`;
-    }
-    
-    let lengthBlock = lengthPref === "short" 
-        ? "Total output: 50-100 words. Keep it direct and concise, ideal for fast generation models."
-        : "Total output: 150-300 words. Make it highly detailed and descriptive, ideal for heavyweight generation models.";
-
-    let fluxBlock = "";
-    if (isFlux) {
-      fluxBlock = `\n- NATURAL-LANGUAGE MODEL (CRITICAL): Write plain descriptive prose, as a caption describing the finished image. Use full sentences focusing on spatial relationships, composition, and accurate anatomy. DO NOT use comma-separated Danbooru tags. DO NOT use negative prompts in the text. The prompt MUST open with a complete sentence — NEVER begin with a comma-separated list of style/medium/lens keywords (e.g. "DSLR photograph, cinematic photography, 50mm lens").`;
-    }
-
-    let qualityBlock = isFlux
-      ? "- QUALITY DIRECTIVE: Describe the visual quality and medium naturally within the sentences. Do not use old SD-style quality tags like \"masterpiece\" or \"best quality\", and DO NOT use comma-separated tags at the end."
-      : "- ALWAYS include keywords that ensure a highly detailed and high-quality image (e.g. \"masterpiece, best quality, highly detailed, high resolution\"). You may include these as comma-separated tags at the end or weave them naturally.";
-
-    return `You are an expert at extracting visual details from character profiles to write image generation prompts.
-
-Character Name: ${characterName || "Unknown"}
-Personality Traits Detected: ${personalityTraits}${taskInstruction}${guidanceBlock}
-
-Full Character Profile:
-${characterDescription}
-
-Your task: Read the profile above and output a single image generation prompt.
-
-Extract these specifics from the profile text:
-- SUBJECT: apparent gender, approximate age range, species/ethnicity if notable
-- PHYSICAL: exact hair colour and style, eye colour, any distinctive features (scars, tattoos, unusual traits)
-- OUTFIT: specific clothing that matches their role, world, or status — not generic
-- EXPRESSION: one expression or body language cue that reflects their dominant personality trait (e.g. "cold calculating stare", "warm crooked smile", "guarded tense posture")
-- SETTING: one concrete location or environment drawn from their backstory or scenario
-- FRAMING: one clear framing and viewpoint that suits the card. For a single character, a portrait that shows the face clearly (head-and-shoulders, chest-up or waist-up) from a stated angle (eye level, slightly low, three-quarter view)
-
-Format rules:
-- Output ONE paragraph, no lists, no labels, no headers
-- Lead with the subject and physical details, weave in expression and setting naturally
-- Do NOT use the character's name. The image model can't know who that is and may write the name into the picture as text; describe them instead
-- Describe only what can be seen: no sounds, smells, backstory, or abstract personality words that have no visible form
-- Describe the lighting concretely — its source, direction and colour — choosing what suits the character's tone and setting (e.g. "warm candlelight from the left", "cold overcast daylight", "neon rim light from behind", "low golden-hour sun"). Give the image depth and contrast and avoid flat, even lighting, but don't default to the same dramatic look every time.
-${qualityBlock}
-- CRITICAL AVOIDANCE: DO NOT use terms like "photograph", "real life", or "camera" UNLESS the requested style is explicitly a photograph or realistic. However, you MAY and SHOULD use lighting and depth terms (like "studio lighting" or "dramatic shadows") for any style to maintain visual depth!
-- ${lengthBlock}${styleBlock}${moodBlock}${fluxBlock}
-- Do NOT start with "Here is" or any preamble — begin the prompt directly
-
-BEGIN PROMPT:`;
   },
 
   extractPersonalityTraits(text) {

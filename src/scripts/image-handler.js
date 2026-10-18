@@ -1292,7 +1292,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const newPrompt = await window.apiHandler.generateImagePrompt(
         this.currentCharacter.description,
         this.currentCharacter.name,
-        "single",
+        this.currentCharacter.cardType || document.getElementById("card-type-select")?.value || "single",
         this._getGuidance(),
       );
       customPromptTextarea.value = newPrompt;
