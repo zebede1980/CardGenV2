@@ -54,11 +54,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       lookId: look ? this.config.get("api.image.activeLookId") || "custom" : "",
       model: this.config.get("api.image.model") || firstImageModelWithCapability("generate", this.config) || "",
       shape: this.config.get("api.image.aspectRatio") || "1:1",
-      onUse: ({ prompt, look: usedLook, lookId, subject, generate }) => this._applyCharacterBuild({ prompt, look: usedLook, lookId, subject, generate }),
+      onUse: ({ prompt, takes, look: usedLook, lookId, subject, generate }) => this._applyCharacterBuild({ prompt, takes, look: usedLook, lookId, subject, generate }),
     });
   },
 
-  _applyCharacterBuild({ prompt, look, lookId, subject, generate }) {
+  _applyCharacterBuild({ prompt, takes, look, lookId, subject, generate }) {
     this.config.set("api.image.activeLook", look ? JSON.stringify(look) : "");
     this.config.set("api.image.activeLookId", look ? lookId || "custom" : "");
     this.renderCharacterLookRow();
@@ -76,8 +76,84 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const editor = document.getElementById("image-prompt-editor");
     if (editor) editor.style.display = "block";
 
-    if (generate) this.handleRegenerateImage();
+    if (generate && takes?.length) this._generateCharacterTakes(takes);
+    else if (generate) this.handleRegenerateImage();
     else this.showNotification("Prompt ready in ✏️ Final Prompt Preview — Generate when you're happy", "success");
+  },
+
+  // 🖼️ Generate all from the Prompt Builder's takes: one portrait per take,
+  // side by side in the same pick-one modal as Gen 4, with Keep current first.
+  // Picking one makes it the card's image and puts its prompt in the Final
+  // Prompt; the others go to history, as with Gen 4.
+  async _generateCharacterTakes(takes) {
+    if (!this.config.get("api.image.baseUrl") || !this.config.get("api.image.apiKey")) {
+      this.showNotification("Please configure image API settings first", "warning");
+      return;
+    }
+    const model = this.config.get("api.image.model") || firstImageModelWithCapability("generate", this.config);
+    if (!model) {
+      this.showNotification("No active image model selected", "warning");
+      return;
+    }
+    const character = this.currentCharacter;
+    const cardType = character?.cardType || document.getElementById("card-type-select")?.value || "single";
+
+    this.openImageOptionsModal();
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    const loadingText = loading?.querySelector("p");
+    if (modalTitle) modalTitle.innerHTML = "🖼️ Drawing your takes";
+    if (loadingText) loadingText.textContent = `Drawing ${takes.length} takes with ${model}… this might take a minute.`;
+    grid.innerHTML = "";
+    if (loading) loading.style.display = "block";
+
+    const results = await Promise.all(takes.map(async (take, index) => {
+      try {
+        const imageUrl = await window.apiHandler.generateImage(character.description, character.name, take.prompt, model, cardType);
+        let displayUrl = imageUrl;
+        if (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+          const response = await (window.authFetch || fetch)(`/api/proxy-image?url=${encodeURIComponent(imageUrl)}`);
+          if (response.ok) displayUrl = URL.createObjectURL(await response.blob());
+        }
+        return { url: displayUrl, prompt: take.prompt, model, label: take.label, index };
+      } catch (err) {
+        console.error(`Take "${take.label}" failed:`, err);
+        return { error: err.message, label: take.label, index };
+      }
+    }));
+    if (loading) loading.style.display = "none";
+
+    const valid = results.filter(r => r.url);
+    const failed = results.filter(r => r.error);
+    if (!valid.length) {
+      this.closeImageOptionsModal();
+      this.showNotification(`None of the takes could be drawn: ${failed[0]?.error || "unknown error"}`, "error");
+      return;
+    }
+
+    this._pendingCandidateUrls = valid.map(r => r.url);
+    if (modalTitle) modalTitle.innerHTML = "🖼️ Choose a take";
+    this._insertCurrentImageCard(grid, this._pendingCandidateUrls);
+    valid.forEach((res) => {
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText = "cursor:pointer;border:2px solid transparent;border-radius:0.5rem;overflow:hidden;transition:border-color 0.2s;background-color:var(--surface-color);";
+      wrapper.onmouseenter = () => (wrapper.style.border = "2px solid var(--accent)");
+      wrapper.onmouseleave = () => (wrapper.style.border = "2px solid transparent");
+      wrapper.onclick = () => this.selectImageOption(res.url, res.prompt, res.model, valid);
+      wrapper.innerHTML = `
+        <img src="${res.url}" style="width:100%;height:auto;display:block;" alt="${escapeHtml(res.label)}">
+        <div style="padding:0.5rem;text-align:center;font-size:0.8rem;color:var(--text-secondary);background:rgba(0,0,0,0.1);border-top:1px solid var(--border);font-family:monospace;">${escapeHtml(res.label)} · ${escapeHtml(res.model)}</div>
+      `;
+      grid.appendChild(wrapper);
+    });
+    this._makeImageGalleryable(grid, valid.map(r => ({ url: r.url, prompt: r.prompt, model: r.model, label: r.label })));
+    this.openImageOptionsModal();
+    if (failed.length) {
+      this.showNotification(`${valid.length} of ${takes.length} takes drawn — "${failed[0].label}" failed: ${failed[0].error}`, "warning");
+    } else {
+      this.showNotification(`${valid.length} takes drawn — tap the one you want`, "success");
+    }
   },
 
   clearCharacterLook() {

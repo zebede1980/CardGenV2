@@ -423,7 +423,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       subject: { kind: "idea", idea },
       model,
       shape: document.getElementById("playground-generate-ratio")?.value || "1:1",
-      onUse: ({ prompt, subject, generate }) => {
+      onUse: ({ prompt, takes, subject, generate }) => {
         if (!promptEl) return;
         // The idea as last edited in the builder, which is what the prompt was built from.
         this._pgIdeaBeforeBuild = subject?.idea ?? idea;
@@ -432,7 +432,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
         promptEl.rows = Math.min(14, Math.max(5, Math.ceil(prompt.length / 70)));
         const restore = document.getElementById("playground-restore-idea-btn");
         if (restore) restore.style.display = this._pgIdeaBeforeBuild ? "inline-flex" : "none";
-        if (generate) this.handleGeneratePlaygroundImage();
+        if (generate && takes?.length) this.handleGeneratePlaygroundImage({ takes, model });
+        else if (generate) this.handleGeneratePlaygroundImage();
         else promptEl.focus();
       },
     });
@@ -458,19 +459,32 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // calls each get their own seed and their own resumable job, so a phone
   // locking mid-batch loses none of them. The first to land becomes the
   // working image; the rest fill a grid to pick from.
-  async handleGeneratePlaygroundImage() {
+  //
+  // `takes` ([{ label, prompt }], from the Prompt Builder's 🖼️ Generate all)
+  // draws one image per take with `model` instead, each from its own prompt,
+  // badged with the take's label.
+  async handleGeneratePlaygroundImage({ takes = null, model: takesModel = "" } = {}) {
     const promptEl = document.getElementById("playground-generate-prompt");
-    const prompt = promptEl?.value?.trim();
+    const prompt = takes ? takes[0].prompt : promptEl?.value?.trim();
     if (!prompt) {
       this.showNotification("Describe the image you want to create first", "warning");
       promptEl?.focus();
       return;
     }
+    const promptAt = (index) => (takes ? takes[index].prompt : prompt);
+    this._pgGenerateLabels = takes ? takes.map(t => t.label) : null;
 
     // One model per slot: the dropdown's model N times, or each ticked model once.
-    const perModel = document.getElementById("playground-generate-count")?.value === "models";
+    const perModel = !takes && document.getElementById("playground-generate-count")?.value === "models";
     let models;
-    if (perModel) {
+    if (takes) {
+      const model = takesModel || document.getElementById("playground-generate-model")?.value || this.config.get("api.image.generateModel");
+      if (!model) {
+        this.showNotification("Choose a model first (⚙️ Settings → Image API → Fetch Models)", "warning");
+        return;
+      }
+      models = takes.map(() => model);
+    } else if (perModel) {
       models = [...document.querySelectorAll("#playground-generate-compare-list input:checked")].map(cb => cb.value);
       if (!models.length) {
         this.showNotification("Tick at least one model to generate with", "warning");
@@ -489,7 +503,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const count = models.length;
     // Grid whenever there's a choice to make, including a single ticked model
     // in per-model mode, so its tile still says which model drew it.
-    const showGrid = count > 1 || perModel;
+    const showGrid = count > 1 || perModel || !!takes;
     this._pgGenerateByModel = perModel;
     this._pgGenerateModels = models;
     const aspectRatio = document.getElementById("playground-generate-ratio")?.value || "1:1";
@@ -500,7 +514,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const setStatus = (done) => {
       if (!statusEl) return;
       statusEl.style.display = "block";
-      statusEl.textContent = perModel
+      statusEl.textContent = takes
+        ? `🖼️ Drawing ${count} takes with ${models[0]}… ${done}/${count} done, this may take a minute.`
+        : perModel
         ? `🪄 Generating with ${count} model${count > 1 ? "s" : ""}… ${done}/${count} done, this may take a minute.`
         : count > 1
           ? `🪄 Generating ${count} with ${models[0]}… ${done}/${count} done, this may take a minute.`
@@ -516,6 +532,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     let done = 0;
     const runOne = async (index) => {
       const model = models[index];
+      const prompt = promptAt(index);
       try {
         const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model, aspectRatio });
         const dataUrl = await this._urlToDataUrl(resultUrl);
@@ -583,6 +600,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const byModel = !!this._pgGenerateByModel;
     const modelOf = (index) => (byModel ? this._pgGenerateResults[index]?.model || this._pgGenerateModels?.[index] : null);
     const badgeText = (index) => {
+      const take = this._pgGenerateLabels?.[index];
+      if (take) return take;
       const model = modelOf(index);
       return model ? model.replace(/^local\//, "💻 ") : String(index + 1);
     };
@@ -598,7 +617,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         font-size: 0.75rem; color: var(--text-soft); padding: ${result?.url ? "0" : "0.5rem"};
       `;
 
-      const pendingLabel = byModel ? `\n${badgeText(index)}` : "";
+      const pendingLabel = byModel || this._pgGenerateLabels ? `\n${badgeText(index)}` : "";
       if (!result) {
         tile.style.whiteSpace = "pre-line";
         tile.textContent = `⏳ Generating…${pendingLabel}`;

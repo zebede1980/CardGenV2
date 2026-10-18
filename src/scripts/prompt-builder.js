@@ -344,10 +344,11 @@
       const s = this.state;
       const cards = s.takes.map((t, i) => `<button type="button" class="pb-take" data-take="${i}" aria-pressed="${i === s.chosenTake}">
           <span class="pb-take-head">${esc(t.label)}</span><span class="pb-take-text">${esc(t.prompt)}</span></button>`).join("");
+      const n = s.takes.length;
       return {
-        body: `<p class="pb-hint">Each take keeps your choices and changes one thing the AI was free to pick. Text only, so no image has been made yet.</p>${cards}`,
-        footer: `<button type="button" class="btn-small pb-wide" data-go="${s.prompt ? "result" : "steer"}">Back</button>
-          <button type="button" class="btn-primary pb-wide" data-act="pick-take">Use this one</button>`,
+        body: `<p class="pb-hint">Each take keeps your choices and changes one thing the AI was free to pick. No image has been made yet: pick one to edit, or 🖼️ Generate all ${n} to draw one image from each and choose between the pictures.</p>${cards}`,
+        footer: `<button type="button" class="btn-small pb-wide" data-act="pick-take">Use this one</button>
+          <button type="button" class="btn-primary pb-wide" data-act="generate-all" title="Draw one image from each take (${n} image generations)">🖼️ Generate all ${n}</button>`,
       };
     }
 
@@ -408,6 +409,7 @@
         case "abandon": return this._abandon();
         case "use": return this._use(false);
         case "use-generate": return this._use(true);
+        case "generate-all": return this._use(true, { all: true });
         case "pick-take": {
           const take = s.takes[s.chosenTake];
           if (take) { s.prompt = take.prompt; s.screen = "result"; this._persist(); }
@@ -588,9 +590,16 @@
       this.render();
     }
 
-    _use(generate) {
+    // `all`: from the takes screen, hand every take over to be drawn (one
+    // image each); the highlighted take becomes "the" prompt the host keeps.
+    _use(generate, { all = false } = {}) {
       this._readInputs();
       const s = this.state;
+      const takes = all ? s.takes.map(t => ({ label: t.label, prompt: t.prompt })) : null;
+      if (all) {
+        if (!takes.length) return;
+        s.prompt = (s.takes[s.chosenTake] || s.takes[0]).prompt;
+      }
       const prompt = (s.prompt || "").trim();
       if (!prompt) return;
       this._persist();
@@ -602,7 +611,7 @@
       s.screen = "steer";
       s.lastPrompt = true;
       this.close();
-      onUse?.({ prompt, look, lookId, subject, generate });
+      onUse?.({ prompt, takes, look, lookId, subject, generate });
     }
   }
 

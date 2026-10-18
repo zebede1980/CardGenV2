@@ -94,6 +94,11 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   localStorage (`cardgen.promptBuilder.v1`). Closing mid-write lets it finish; a toast says when.
   ■ Stop only abandons the write, because `stopGeneration()` cancels every running job.
 - **Playground host:** ✨ Build beside the Generate box (maxlength now 4000), ↩ Restore my idea.
+- **🖼️ Generate all 3** on the takes screen draws one image per take. Playground: the take prompts
+  go through `handleGeneratePlaygroundImage({ takes, model })` into its pick grid, badged with the
+  take labels. Character Gen: `_generateCharacterTakes` shows them in Gen 4's pick-one modal (Keep
+  current first, the rest go to history). A failed take is named and doesn't stop the others.
+  Tested in the harness against a fake image API only.
 - **Character Gen host:** 🎨 Look row above Prompt Guidance. The active look is
   `api.image.activeLook` (a JSON string; config is deep-merged on load) + `activeLookId`. It replaces
   Style Preset and Mood for Draft Prompt, Generate and Compare Models; **Gen 4 still uses its own
