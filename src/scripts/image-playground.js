@@ -139,6 +139,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     const generateBtn = document.getElementById("generate-playground-image-btn");
     if (generateBtn) generateBtn.addEventListener("click", () => this.handleGeneratePlaygroundImage());
+    document.getElementById("playground-build-prompt-btn")?.addEventListener("click", () => this.openPlaygroundPromptBuilder());
+    document.getElementById("playground-restore-idea-btn")?.addEventListener("click", () => this._restorePlaygroundIdea());
+    // Typing in the box after a build makes the stashed idea stale.
+    document.getElementById("playground-generate-prompt")?.addEventListener("input", () => {
+      const restore = document.getElementById("playground-restore-idea-btn");
+      if (restore) restore.style.display = "none";
+    });
     const generateCountSelect = document.getElementById("playground-generate-count");
     if (generateCountSelect) {
       this._restorePlaygroundGenerateCount();
@@ -394,6 +401,51 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!select) return;
     const saved = this.config.get("api.image.generateAspectRatio") || this.config.get("api.image.aspectRatio") || "1:1";
     if ([...select.options].some(o => o.value === saved)) select.value = saved;
+  },
+
+  // ✨ Build: the box's text is the idea for the Prompt Builder, and the built
+  // prompt replaces it. Writes for the dropdown's model, or the first ticked
+  // model in "1 per model" mode. If the box still holds the last built prompt,
+  // the idea it was built from goes back into the builder instead, so a second
+  // build steers from what you wrote rather than from the long result.
+  openPlaygroundPromptBuilder() {
+    if (!window.promptBuilder) return;
+    const promptEl = document.getElementById("playground-generate-prompt");
+    const perModel = document.getElementById("playground-generate-count")?.value === "models";
+    const model = (perModel && document.querySelector("#playground-generate-compare-list input:checked")?.value)
+      || document.getElementById("playground-generate-model")?.value
+      || this.config.get("api.image.generateModel") || "";
+    const text = promptEl?.value?.trim() || "";
+    const idea = this._pgBuiltPrompt && text === this._pgBuiltPrompt.trim() ? this._pgIdeaBeforeBuild || text : text;
+
+    window.promptBuilder.open({
+      host: "playground",
+      subject: { kind: "idea", idea },
+      model,
+      shape: document.getElementById("playground-generate-ratio")?.value || "1:1",
+      onUse: ({ prompt, subject, generate }) => {
+        if (!promptEl) return;
+        // The idea as last edited in the builder, which is what the prompt was built from.
+        this._pgIdeaBeforeBuild = subject?.idea ?? idea;
+        this._pgBuiltPrompt = prompt;
+        promptEl.value = prompt;
+        promptEl.rows = Math.min(14, Math.max(5, Math.ceil(prompt.length / 70)));
+        const restore = document.getElementById("playground-restore-idea-btn");
+        if (restore) restore.style.display = this._pgIdeaBeforeBuild ? "inline-flex" : "none";
+        if (generate) this.handleGeneratePlaygroundImage();
+        else promptEl.focus();
+      },
+    });
+  },
+
+  _restorePlaygroundIdea() {
+    const promptEl = document.getElementById("playground-generate-prompt");
+    if (!promptEl || this._pgIdeaBeforeBuild === undefined) return;
+    promptEl.value = this._pgIdeaBeforeBuild;
+    promptEl.rows = 3;
+    this._pgBuiltPrompt = null;
+    const restore = document.getElementById("playground-restore-idea-btn");
+    if (restore) restore.style.display = "none";
   },
 
   // Generates a fresh image from a prompt alone and makes it the working

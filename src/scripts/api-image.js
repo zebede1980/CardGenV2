@@ -788,6 +788,14 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
     return parts.join("\n\n");
   },
 
+  // A Style Preset's look as plain cues, minus the SD-era quality filler that
+  // modern models ignore or render oddly. Also seeds the builder's built-in
+  // "style preset" looks.
+  styleCues(style) {
+    const filler = /^(masterpiece|best quality|high quality|highly detailed|ultra-detailed|high resolution|8k( resolution)?|trending on artstation|artstation|professional (illustration|quality)|museum quality fine art|masterpiece (anime film still|illustration))$/i;
+    return (this.getImageStyleTags(style).suffix || "").split(",").map(t => t.trim()).filter(t => t && !filler.test(t));
+  },
+
   _shapeWord(shape) {
     const [w, h] = String(shape).split(":").map(Number);
     if (!(w > 0 && h > 0)) return "square";
@@ -806,10 +814,8 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
       styleName = (this.config.get("api.image.customStyleText") || "").trim();
     } else if (style) {
       styleName = style === "realistic" ? "Realistic photography" : style.replace(/-/g, " ");
-      const tags = this.getImageStyleTags(style);
-      prefix = tags.prefix || "";
-      const filler = /^(masterpiece|best quality|high quality|highly detailed|ultra-detailed|high resolution|8k( resolution)?|trending on artstation|artstation|professional (illustration|quality)|museum quality fine art|masterpiece (anime film still|illustration))$/i;
-      cues = (tags.suffix || "").split(",").map(t => t.trim()).filter(t => t && !filler.test(t));
+      prefix = this.getImageStyleTags(style).prefix || "";
+      cues = this.styleCues(style);
     }
     const lines = [];
     if (styleName) {

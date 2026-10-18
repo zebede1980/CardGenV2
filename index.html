@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20260905-gallerylock" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261018-builder" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -2315,9 +2315,14 @@
                                     <div id="playground-generate-compare-list" style="display: flex; flex-direction: column; gap: 0.35rem;"></div>
                                 </div>
 
-                                <label for="playground-generate-prompt" class="label" style="display:block; margin-bottom:0.35rem;">
-                                    🪄 Describe the image to create:
-                                </label>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
+                                    <label for="playground-generate-prompt" class="label" style="margin: 0;">
+                                        🪄 Describe the image to create:
+                                    </label>
+                                    <!-- Opens the ✨ Prompt Builder (prompt-builder.js) with the box's
+                                         text as the idea; the built prompt replaces it. -->
+                                    <button type="button" id="playground-build-prompt-btn" class="btn-small pb-build-btn" title="Turn a rough idea into a detailed prompt, steering the look with optional choices">✨ Build</button>
+                                </div>
                                 <!-- Prompt presets: built-ins plus anything saved, see
                                      _initPlaygroundPresets in image-playground.js. -->
                                 <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
@@ -2330,9 +2335,10 @@
                                     id="playground-generate-prompt"
                                     class="input"
                                     rows="3"
-                                    maxlength="2000"
+                                    maxlength="4000"
                                     placeholder="e.g. a lighthouse on a rocky cliff at sunset, oil painting style | a cyberpunk city street in the rain, neon reflections"
                                 ></textarea>
+                                <button type="button" id="playground-restore-idea-btn" class="btn-small" style="display: none; margin-top: 0.35rem;" title="Put back what you wrote before using ✨ Build">↩ Restore my idea</button>
                                 <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
                                     💡 Sends just your prompt to the model selected above — no source image involved. Costs API credits per attempt and may take a moment. The list shows only models you've marked 🪄 <strong>Generate</strong> in ⚙️ Settings → Image API → Available Image Models; change what's listed here by ticking boxes there.
                                 </p>
@@ -2654,7 +2660,8 @@
         <script src="src/scripts/character-display.js?v=20261015-pov"></script>
         <script src="src/scripts/image-handler.js?v=20261018-builder"></script>
         <script src="src/scripts/image-cropper.js?v=20260922-imagefixes"></script>
-        <script src="src/scripts/image-playground.js?v=20261018-per-model"></script>
+        <script src="src/scripts/image-playground.js?v=20261018-builder"></script>
+        <script src="src/scripts/prompt-builder.js?v=20261018-builder"></script>
         <script src="src/scripts/playground-library.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/lorebook-handler.js?v=20261016-castretry"></script>
         <script src="src/scripts/alt-greetings-handler.js?v=20260218-ex1"></script>
