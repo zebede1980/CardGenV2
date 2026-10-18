@@ -27,20 +27,66 @@ function getRatioDims(model, ratio) {
   return map[ratio];
 }
 
-// Nano Banana (Google, via NanoGPT) takes a resolution tier ("1k"/"2k") plus a
-// named aspect ratio, and rejects any pixel size with a 400 ("Nano Banana 2.1
-// supports 1K or 2K resolution"). Leaving the tier unset uses the model's own
-// default, which differs per variant (fast starts at 2k, ultra at 4k).
+// How each hosted model takes its size, from nano-gpt's model list via the
+// proxy's /api/image/catalog: { id: { tiers, sizes: [[w,h]], aspectRatios,
+// customSize } }. Null until loaded, and if it couldn't be; everything below
+// then falls back to the fixed ratio maps above.
+let imageCatalog = null;
+let imageCatalogPromise = null;
+
+// Ids added by hand can be a short alias: "nano-banana-2.1" is listed as
+// "google/gemini-nano-banana-2.1". A unique match on a name boundary counts.
+function findImageCatalogEntry(model) {
+  if (!imageCatalog || !model || model.startsWith("local/")) return null;
+  if (imageCatalog[model]) return imageCatalog[model];
+  const matches = Object.keys(imageCatalog).filter(id =>
+    id.length > model.length && id.endsWith(model) && /[/-]$/.test(id.slice(0, -model.length)));
+  return matches.length === 1 ? imageCatalog[matches[0]] : null;
+}
+
+// Some models (Nano Banana, qwen-image-3-pro) take a resolution tier
+// ("1k"/"2k") plus a named aspect ratio, and reject any pixel size with a 400
+// ("Nano Banana 2.1 supports 1K or 2K resolution"). Leaving the tier unset
+// uses the model's own default. The name check covers Nano Banana when the
+// catalogue is unavailable or doesn't know the id.
 function usesResolutionTiers(model) {
+  const entry = findImageCatalogEntry(model);
+  if (entry) return entry.tiers.length > 0 && entry.sizes.length === 0;
   return /nano-banana/i.test(model || "");
 }
 
+// For models that accept only a fixed list of sizes (flux-2 has no 4:3 at
+// all): the listed size nearest the requested shape, then nearest the size we
+// would otherwise have asked for.
+function closestListedSize(sizes, ratio, target) {
+  const [rw, rh] = ratio.split(":").map(Number);
+  if (!(rw > 0 && rh > 0)) return null;
+  const wantShape = Math.log(rw / rh);
+  const wantArea = target ? target.width * target.height : 1024 * 1024;
+  let best = null;
+  let bestScore = Infinity;
+  for (const [w, h] of sizes) {
+    // Shape outweighs size: a wrong shape is visible, a smaller image is not.
+    const score = Math.abs(Math.log(w / h) - wantShape) * 10 + Math.abs(Math.log((w * h) / wantArea));
+    if (score < bestScore) {
+      bestScore = score;
+      best = { width: w, height: h };
+    }
+  }
+  return best;
+}
+
 // Sets whichever size fields the model understands for the chosen ratio.
+// Local models and any-size models get our own pixel dims, as before.
 function applyImageRatio(data, model, ratio) {
   if (!ratio) return;
   data.aspect_ratio = ratio;
   if (usesResolutionTiers(model)) return;
-  const dims = getRatioDims(model, ratio);
+  const entry = findImageCatalogEntry(model);
+  const fallback = getRatioDims(model, ratio);
+  const dims = entry && !entry.customSize && entry.sizes.length
+    ? closestListedSize(entry.sizes, ratio, fallback) || fallback
+    : fallback;
   if (dims) {
     data.width = dims.width;
     data.height = dims.height;
@@ -48,7 +94,41 @@ function applyImageRatio(data, model, ratio) {
   }
 }
 
+// The tier to ask for when enhancing: 2k if offered, else the largest listed.
+// Null for a model with no tiers to choose from ("auto" only): send none.
+function upscaleTierFor(model) {
+  const entry = findImageCatalogEntry(model);
+  if (!entry) return "2k";
+  const tiers = entry.tiers.filter(t => t !== "auto");
+  if (!tiers.length) return null;
+  if (tiers.includes("2k")) return "2k";
+  return tiers.slice().sort((a, b) => parseFloat(a) - parseFloat(b)).pop();
+}
+
 Object.assign(APIHandler.prototype, {
+
+  // Loaded once and shared; awaited (briefly) before any request that sets a
+  // size. A failure is not remembered, so the next request tries again.
+  loadImageCatalog() {
+    if (imageCatalog) return Promise.resolve(imageCatalog);
+    if (!imageCatalogPromise) {
+      imageCatalogPromise = (async () => {
+        try {
+          const res = await (window.authFetch || fetch)("/api/image/catalog", { headers: this._authHeaders() });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const body = await res.json();
+          if (body?.models && Object.keys(body.models).length) imageCatalog = body.models;
+        } catch (err) {
+          console.warn("[images] model catalogue unavailable, using default sizes:", err?.message || err);
+        } finally {
+          imageCatalogPromise = null;
+        }
+        return imageCatalog;
+      })();
+    }
+    // Never hold up a generation for long over this.
+    return Promise.race([imageCatalogPromise, new Promise(r => setTimeout(() => r(imageCatalog), 5000))]);
+  },
 
   async generateImage(
     characterDescription,
@@ -142,6 +222,7 @@ Object.assign(APIHandler.prototype, {
       seed: Math.floor(Math.random() * 2147483647),
     };
 
+    await this.loadImageCatalog();
     const imageSize = this.config.get("api.image.size");
     const imageAspectRatio = this.config.get("api.image.aspectRatio");
     const imageSteps = settings.steps;
@@ -214,6 +295,7 @@ Object.assign(APIHandler.prototype, {
       seed: Math.floor(Math.random() * 2147483647),
     };
 
+    await this.loadImageCatalog();
     applyImageRatio(data, generateModel, aspectRatio || this.config.get("api.image.aspectRatio"));
 
     console.log("=== SENDING PLAYGROUND GENERATE REQUEST ===");
@@ -299,11 +381,13 @@ Object.assign(APIHandler.prototype, {
       __jobLabel: "Image enhance",
     };
     // Tier models reject pixel sizes; 2k is the step up from their 1k default.
+    await this.loadImageCatalog();
     if (usesResolutionTiers(upscaleModel)) {
       delete data.width;
       delete data.height;
       delete data.size;
-      data.resolution = "2k";
+      const tier = upscaleTierFor(upscaleModel);
+      if (tier) data.resolution = tier;
     }
 
     console.log("=== SENDING IMAGE UPSCALE REQUEST ===");
@@ -370,6 +454,7 @@ Object.assign(APIHandler.prototype, {
       seed: Math.floor(Math.random() * 2147483647),
     };
 
+    await this.loadImageCatalog();
     applyImageRatio(data, editModel, aspectRatio || this.config.get("api.image.aspectRatio"));
 
     console.log("=== SENDING IMAGE EDIT REQUEST ===");

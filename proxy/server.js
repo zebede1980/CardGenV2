@@ -3210,6 +3210,55 @@ app.get("/api/image/local-models", requireAuth, (req, res) => {
   res.json({ data: configured ? models : [] });
 });
 
+// How each hosted image model takes its output size, from nano-gpt's public
+// model list (no API key). Models differ: some want a tier ("1k"/"2k") plus a
+// named aspect ratio and reject pixel sizes outright (Nano Banana, 400
+// "supports 1K or 2K resolution"), some accept only a fixed list of WxH, some
+// any WxH. The client picks the right shape of request from this; see
+// applyImageRatio in api-image.js. Cached, since the list is ~1MB and rarely
+// changes; a failed fetch serves the last good copy, or an empty map (the
+// client then falls back to plain pixel sizes).
+const IMAGE_CATALOG_URL = "https://nano-gpt.com/api/models";
+const IMAGE_CATALOG_TTL_MS = 6 * 60 * 60 * 1000;
+let imageCatalogCache = { at: 0, models: null };
+
+function summariseImageModel(m) {
+  const values = (m.resolutions || []).map((r) => String(r?.value ?? r)).filter(Boolean);
+  const sizes = [];
+  const tiers = [];
+  for (const v of values) {
+    const wh = v.match(/^(\d+)\s*[x*×]\s*(\d+)$/i);
+    if (wh) sizes.push([parseInt(wh[1], 10), parseInt(wh[2], 10)]);
+    else tiers.push(v.toLowerCase());
+  }
+  const params = m.additionalParams || {};
+  return {
+    sizes,
+    tiers,
+    aspectRatios: (params.aspect_ratio?.options || []).map((o) => String(o?.value ?? o)),
+    customSize: !!params.customResolution,
+  };
+}
+
+app.get("/api/image/catalog", requireAuth, async (req, res) => {
+  const fresh = imageCatalogCache.models && Date.now() - imageCatalogCache.at < IMAGE_CATALOG_TTL_MS;
+  if (!fresh) {
+    try {
+      const response = await fetch(IMAGE_CATALOG_URL, { timeout: 15000 });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json();
+      const image = body?.models?.image || {};
+      const entries = Array.isArray(image) ? image.map((m) => [m.id || m.model, m]) : Object.entries(image);
+      const models = {};
+      for (const [id, m] of entries) if (id && m) models[id] = summariseImageModel(m);
+      imageCatalogCache = { at: Date.now(), models };
+    } catch (err) {
+      console.warn("Image catalog fetch failed:", err.message);
+    }
+  }
+  res.json({ models: imageCatalogCache.models || {} });
+});
+
 // Proxy endpoint for image API
 app.post("/api/image/generations", requireAuth, async (req, res) => {
   // Set when the caller opts into resumable buffering; see the job registry
