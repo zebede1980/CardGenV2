@@ -1,6 +1,6 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-10-18 (evening). Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
+Last updated 2026-10-19. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
 ✨ Prompt Builder merged, pushed and deployed. Update this file when you ship something or find something worth remembering: it is the
 hand-over between machines, since Claude's own memory does not travel between them.
 
@@ -142,6 +142,25 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   iPhone, or in WebKit.** The lock-and-resume path is `api.js`'s, unchanged, not exercised here.
 - **Open ideas:** a "Build" in Playground's Edit tab for edit instructions; storing the Look on
   each card rather than globally.
+
+## 🔍 Tap-to-zoom on the main images — deployed 2026-10-19
+
+Tapping Character Gen's portrait (`#image-content`) or the Playground's working image
+(`#playground-image-preview`) opens the existing lightbox (`openGallery` in `image-gallery.js`).
+`_initImageZoomTriggers` delegates from the containers, because many code paths replace the image
+via `innerHTML`. A 🔍 badge (CSS `::after`) marks both images.
+
+- Character Gen opens in context `view`: just the portrait, no "Use This".
+- Playground opens on the working image with every history version a swipe away, labelled, plus
+  the prompt where one was recorded. **↩ Make Current** on another version selects it, as tapping
+  its thumbnail does.
+- The lightbox's gestures were reworked for the iPhone: pinch zooms around the fingers, double-tap
+  (or double-click) zooms 2.5× on that spot and back, one finger pans when zoomed or swipes between
+  images when not, wheel zooms at the cursor. Pan is clamped so the image always covers the
+  screen, and scale never goes below 1. `touch-action: none` on the container keeps Safari's page
+  zoom out of it. These apply everywhere the lightbox is used (library, gallery strip, chat scenes).
+- **Tested:** WebKit at 390 px (synthetic touch events) and 1280 px: anchoring, clamp, swipe,
+  Make Current, Esc. **Not yet tried on a real iPhone**, where real multi-touch is what matters.
 
 ## Known open issues
 

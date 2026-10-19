@@ -2266,6 +2266,49 @@ h6.rcf-heading { font-size: 0.75rem; }
     white-space: nowrap;
 }
 
+/* The lightbox handles its own pinch, pan and double-tap; Safari's page zoom
+   would fight it. */
+.gallery-image-container {
+    touch-action: none;
+}
+
+/* Tap-to-zoom on Character Gen's portrait and the Playground's working image
+   (_initImageZoomTriggers). The container hugs the image so the 🔍 badge sits
+   on the picture's corner, not out at the edge of the column. */
+#image-content .image-container {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+}
+
+#image-content .generated-image,
+#playground-image-preview img {
+    cursor: zoom-in;
+}
+
+#playground-image-preview {
+    position: relative;
+}
+
+#image-content .image-container::after,
+#playground-image-preview:has(img)::after {
+    content: "🔍";
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
 /* Magnifying glass trigger on image cards */
 .gallery-zoom-trigger {
     position: absolute;
