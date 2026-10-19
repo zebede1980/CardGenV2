@@ -125,7 +125,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // just using Edit with a good image-to-image model. Generate is the only
     // tab that doesn't require an existing working image — it's how one gets
     // created from nothing but a prompt.
-    ["generate", "crop", "edit", "enhance", "combine", "library"].forEach(tab => {
+    ["generate", "crop", "edit", "reimagine", "enhance", "combine", "library"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
@@ -205,6 +205,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (editModelSelect) {
       editModelSelect.addEventListener("change", (e) => this.config.set("api.image.editModel", e.target.value));
     }
+
+    this._initPlaygroundReimagine();
   },
 
   // Switches which of the Generate / Crop / Edit / Combine panels is
@@ -214,8 +216,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // openCropModal('playground') a button click used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", enhance: "pg-tab-enhance", combine: "pg-tab-combine", library: "pg-tab-library" };
-    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", enhance: "pg-panel-enhance", combine: "pg-panel-combine", library: "pg-panel-library" };
+    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", reimagine: "pg-tab-reimagine", enhance: "pg-tab-enhance", combine: "pg-tab-combine", library: "pg-tab-library" };
+    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", reimagine: "pg-panel-reimagine", enhance: "pg-panel-enhance", combine: "pg-panel-combine", library: "pg-panel-library" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -233,6 +235,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (tab === "library" && typeof this.renderPlaygroundLibrary === "function") {
       this.renderPlaygroundLibrary();
     }
+
+    if (tab === "reimagine") this._renderReimagineSource();
 
     if (!this.playgroundImageUrl) return;
     if (tab === "crop") this.openCropModal('playground');
@@ -785,6 +789,253 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  // ── Reimagine ──────────────────────────────────────────────────────────────
+  // A new picture of the same character, scene and style. The vision model
+  // writes a full new-shot prompt from the picture (writeReimaginePrompt);
+  // the image model then draws it with the picture as reference
+  // (reimagineImage). The source is pinned rather than read from the working
+  // image each time: results become the working image, and "try again" has to
+  // start from the same picture, not from the last attempt.
+
+  _initPlaygroundReimagine() {
+    const byId = (id) => document.getElementById(id);
+    this._updatePlaygroundReimagineModelDropdown();
+    byId("playground-reimagine-model")?.addEventListener("change", (e) => {
+      this.config.set("api.image.reimagineModel", e.target.value);
+      this._syncReimagineControls();
+    });
+
+    const persisted = [
+      ["playground-reimagine-likeness", "api.image.reimagineLikeness", "close"],
+      ["playground-reimagine-ratio", "api.image.reimagineRatio", "source"],
+      ["playground-reimagine-count", "api.image.reimagineCount", "1"],
+    ];
+    persisted.forEach(([id, key, fallback]) => {
+      const select = byId(id);
+      if (!select) return;
+      const saved = String(this.config.get(key) ?? fallback);
+      select.value = [...select.options].some((o) => o.value === saved) ? saved : fallback;
+      select.addEventListener("change", (e) => this.config.set(key, e.target.value));
+    });
+
+    // A hand-edited prompt is the user's; only one still exactly as written
+    // gets rewritten when the change or the source moves on.
+    byId("playground-reimagine-prompt")?.addEventListener("input", () => { this._reimaginePromptEdited = true; });
+    byId("playground-reimagine-write-btn")?.addEventListener("click", () => this.handleWriteReimaginePrompt());
+    byId("reimagine-playground-image-btn")?.addEventListener("click", () => this.handleReimaginePlaygroundImage());
+    byId("playground-reimagine-use-current")?.addEventListener("click", () => {
+      this._reimagineSourceUrl = this.playgroundImageUrl;
+      this._renderReimagineSource();
+    });
+    byId("playground-reimagine-source-img")?.addEventListener("click", () => {
+      if (this._reimagineSourceUrl) this.openGallery([{ url: this._reimagineSourceUrl, label: "Reimagine source" }], 0, "view");
+    });
+    this._syncReimagineControls();
+  },
+
+  // Models that can see the picture come first (local first: they're free),
+  // then text-to-image models, which work from the written description alone.
+  _updatePlaygroundReimagineModelDropdown() {
+    const select = document.getElementById("playground-reimagine-model");
+    if (!select) return;
+    const models = this.config.get("api.image.models") || [];
+    const local = (m) => isLocalImageModel(m) ? 0 : 1;
+    const byLocal = (a, b) => local(a) - local(b);
+    const withPicture = models.filter((m) => getImageModelCapabilities(m, this.config).edit).sort(byLocal);
+    const wordsOnly = models.filter((m) => !withPicture.includes(m) && getImageModelCapabilities(m, this.config).generate).sort(byLocal);
+    const label = (m) => (isLocalImageModel(m) ? "💻 " + m.slice("local/".length) : m);
+    const group = (title, list) => list.length
+      ? `<optgroup label="${escapeHtml(title)}">${list.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(label(m))}</option>`).join("")}</optgroup>`
+      : "";
+    select.innerHTML = group("Sees your picture", withPicture) + group("From the description only", wordsOnly)
+      || `<option value="">No image models configured — add one in ⚙️ Settings</option>`;
+
+    const saved = this.config.get("api.image.reimagineModel");
+    const all = [...withPicture, ...wordsOnly];
+    select.value = all.includes(saved) ? saved : (withPicture[0] || wordsOnly[0] || "");
+    this._syncReimagineControls();
+  },
+
+  _syncReimagineControls() {
+    const model = document.getElementById("playground-reimagine-model")?.value;
+    const note = document.getElementById("playground-reimagine-model-note");
+    const likenessWrap = document.getElementById("playground-reimagine-likeness-wrap");
+    if (!model || !window.apiHandler?.reimagineRoute) return;
+    const route = window.apiHandler.reimagineRoute(model);
+    if (likenessWrap) likenessWrap.style.display = route === "local" ? "" : "none";
+    if (note) {
+      note.textContent = route === "local"
+        ? "Free on your GPU. Sees your picture: lays out the new shot first, then pulls the face, outfit and style back from it. Likeness: Close stays nearest your picture, Loose gives the model the most freedom."
+        : route === "reference"
+          ? "Sees your picture along with the prompt. Costs credits per picture."
+          : "Doesn't see your picture — draws from the written description alone, so the likeness is looser."
+            + (isLocalImageModel(model) ? " Free on your GPU." : " Costs credits per picture.");
+    }
+  },
+
+  _renderReimagineSource() {
+    if (!this._reimagineSourceUrl && this.playgroundImageUrl) this._reimagineSourceUrl = this.playgroundImageUrl;
+    const box = document.getElementById("playground-reimagine-source");
+    const img = document.getElementById("playground-reimagine-source-img");
+    const useCurrent = document.getElementById("playground-reimagine-use-current");
+    if (!box || !img) return;
+    box.style.display = this._reimagineSourceUrl ? "flex" : "none";
+    if (this._reimagineSourceUrl && img.getAttribute("src") !== this._reimagineSourceUrl) img.src = this._reimagineSourceUrl;
+    if (useCurrent) {
+      useCurrent.style.display = this.playgroundImageUrl && this.playgroundImageUrl !== this._reimagineSourceUrl ? "" : "none";
+    }
+  },
+
+  // For a local model, "Same as source" is the source's own proportions at
+  // about a megapixel; hosted models get the nearest of the five named shapes.
+  async _reimagineShape(sourceUrl, model) {
+    const choice = document.getElementById("playground-reimagine-ratio")?.value || "source";
+    if (choice !== "source") return { aspectRatio: choice };
+    const size = await new Promise((resolve) => {
+      const probe = new Image();
+      probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight });
+      probe.onerror = () => resolve(null);
+      probe.src = sourceUrl;
+    });
+    if (!size?.w || !size?.h) return { aspectRatio: "3:4" };
+    const ratio = size.w / size.h;
+    if (isLocalImageModel(model)) {
+      const area = 1024 * 1024;
+      const snap = (n) => Math.max(256, Math.round(n / 32) * 32);
+      return { dims: { width: snap(Math.sqrt(area * ratio)), height: snap(Math.sqrt(area / ratio)) } };
+    }
+    const named = { "1:1": 1, "3:4": 3 / 4, "9:16": 9 / 16, "4:3": 4 / 3, "16:9": 16 / 9 };
+    const nearest = Object.entries(named).sort((a, b) => Math.abs(Math.log(a[1] / ratio)) - Math.abs(Math.log(b[1] / ratio)))[0][0];
+    return { aspectRatio: nearest };
+  },
+
+  async handleWriteReimaginePrompt() {
+    if (!this._reimagineSourceUrl) this._renderReimagineSource();
+    const source = this._reimagineSourceUrl;
+    if (!source) {
+      this.showNotification("Upload, paste or generate an image first", "warning");
+      return null;
+    }
+    const change = document.getElementById("playground-reimagine-change")?.value?.trim() || "";
+    const model = document.getElementById("playground-reimagine-model")?.value;
+    const promptEl = document.getElementById("playground-reimagine-prompt");
+    const writeBtn = document.getElementById("playground-reimagine-write-btn");
+    const statusEl = document.getElementById("playground-reimagine-status");
+    const withReference = !model || window.apiHandler.reimagineRoute(model) !== "words";
+
+    if (writeBtn) writeBtn.disabled = true;
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.textContent = "✍️ Looking at your picture and writing the new shot…";
+    }
+    try {
+      let streamed = "";
+      const prompt = await window.apiHandler.writeReimaginePrompt({
+        imageDataUrl: source,
+        change,
+        withReference,
+        onStream: (chunk) => {
+          streamed += chunk;
+          if (promptEl) promptEl.value = streamed;
+        },
+      });
+      if (promptEl) promptEl.value = prompt;
+      this._reimaginePromptFor = { source, change, withReference };
+      this._reimaginePromptEdited = false;
+      return prompt;
+    } catch (error) {
+      console.error("Reimagine prompt error:", error);
+      this.showNotification(`Couldn't write the prompt: ${error.message}`, "error", 6000);
+      return null;
+    } finally {
+      if (writeBtn) writeBtn.disabled = false;
+      if (statusEl) statusEl.style.display = "none";
+    }
+  },
+
+  async handleReimaginePlaygroundImage() {
+    if (!this._reimagineSourceUrl) this._renderReimagineSource();
+    const source = this._reimagineSourceUrl;
+    if (!source) {
+      this.showNotification("Upload, paste or generate an image first", "warning");
+      return;
+    }
+    const model = document.getElementById("playground-reimagine-model")?.value;
+    if (!model) {
+      this.showNotification("Choose a model first", "warning");
+      return;
+    }
+    const route = window.apiHandler.reimagineRoute(model);
+    const change = document.getElementById("playground-reimagine-change")?.value?.trim() || "";
+    const promptEl = document.getElementById("playground-reimagine-prompt");
+    const btn = document.getElementById("reimagine-playground-image-btn");
+    const statusEl = document.getElementById("playground-reimagine-status");
+
+    // Write (or rewrite) the prompt when there isn't one, or when the one in
+    // the box was written for a different picture, request or kind of model
+    // and hasn't been touched since.
+    const written = this._reimaginePromptFor;
+    const stale = !written || written.source !== source || written.change !== change
+      || written.withReference !== (route !== "words");
+    let prompt = promptEl?.value?.trim() || "";
+    if (btn) btn.disabled = true;
+    try {
+      if (!prompt || (stale && !this._reimaginePromptEdited)) {
+        prompt = await this.handleWriteReimaginePrompt();
+        if (!prompt) return;
+      }
+
+      const likeness = document.getElementById("playground-reimagine-likeness")?.value || "close";
+      const count = parseInt(document.getElementById("playground-reimagine-count")?.value, 10) || 1;
+      const shape = await this._reimagineShape(source, model);
+      const shortName = isLocalImageModel(model) ? model.slice("local/".length) : model;
+      const label = route === "local" ? `Reimagined (${shortName}, ${likeness})` : `Reimagined (${shortName})`;
+
+      let landed = 0;
+      let failed = 0;
+      const update = () => {
+        if (!statusEl) return;
+        statusEl.style.display = "block";
+        statusEl.textContent = `🔄 Drawing ${count > 1 ? `${count} pictures` : "the new picture"} with ${shortName}…`
+          + (count > 1 ? ` ${landed} of ${count} done.` : "");
+      };
+      update();
+
+      await Promise.all(Array.from({ length: count }, async () => {
+        try {
+          const resultUrl = await window.apiHandler.reimagineImage({
+            imageBase64: source, prompt, model, likeness, aspectRatio: shape.aspectRatio, dims: shape.dims,
+          });
+          const dataUrl = await this._urlToDataUrl(resultUrl);
+          landed++;
+          // The first to land becomes the working image; the rest wait in the
+          // history strip (and a swipe away in the full-screen viewer).
+          if (landed === 1) {
+            this.playgroundImageUrl = dataUrl;
+            this.updatePlaygroundImagePreview(dataUrl);
+            if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+          }
+          this._addPlaygroundHistoryEntry(dataUrl, label, { tool: "reimagine", model, prompt, change, likeness });
+          this._renderReimagineSource();
+          update();
+        } catch (error) {
+          failed++;
+          console.error("Reimagine error:", error);
+          this.showNotification(`Reimagine failed: ${error.message}`, "error", 6000);
+        }
+      }));
+      if (landed) {
+        this.showNotification(
+          landed > 1 ? `${landed} new pictures — tap the picture to swipe through them` : "New picture ready!",
+          "success",
+        );
+      }
+    } finally {
+      if (btn) btn.disabled = false;
+      if (statusEl) statusEl.style.display = "none";
+    }
+  },
+
   // ── History strip ──────────────────────────────────────────────────────────
   // Every version of the working image (original, plus after each crop/edit)
   // as a non-destructive, click-to-revisit thumbnail strip — this is what
@@ -934,6 +1185,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       setValue("playground-combine-instruction", meta.prompt);
       setValue("playground-combine-model", meta.model);
       this._setPlaygroundToolTab("combine");
+    } else if (meta.tool === "reimagine") {
+      setValue("playground-reimagine-change", meta.change);
+      setValue("playground-reimagine-prompt", meta.prompt);
+      setValue("playground-reimagine-model", meta.model);
+      setValue("playground-reimagine-likeness", meta.likeness);
+      this._reimaginePromptFor = null;
+      this._syncReimagineControls();
+      this._setPlaygroundToolTab("reimagine");
     } else if (meta.tool === "enhance") {
       setValue("playground-upscale-instruction", meta.prompt);
       setValue("playground-upscale-model", meta.model);

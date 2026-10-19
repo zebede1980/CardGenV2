@@ -521,6 +521,122 @@ Object.assign(APIHandler.prototype, {
     return resultUrl;
   },
 
+  // ── Reimagine ────────────────────────────────────────────────────────────
+  // A new picture of the same character, scene and style: a new angle, pose
+  // or moment. An edit model given a short instruction keeps the old
+  // composition, so the vision model first writes a full description of the
+  // new shot, with the change built in and the character spelled out in
+  // enough detail to stay recognisable. That prompt then goes to the image
+  // model along with the picture (see reimagineImage).
+  //
+  // withReference: whether the image model will also see the picture. Without
+  // it, the words alone have to carry the likeness, so the writer is told so.
+  //
+  // Streams and is resumable, like writeImagePrompt: a reasoning vision model
+  // can run past iOS's 60-second cut-off for requests that send nothing back.
+  async writeReimaginePrompt({ imageDataUrl, change, withReference = true, onStream = null }) {
+    if (!imageDataUrl) throw new Error("A picture is required");
+    const model = this.config.get("api.text.visionModel") || this.config.get("api.text.model");
+    if (!model) throw new Error("No vision model or text model configured");
+
+    const wanted = (change || "").trim()
+      || "A fresh new shot: choose a different camera angle, pose and moment that suits the character and scene.";
+    const instruction = `You write the prompt for an AI image model that will create a NEW picture based on the attached image: the same character(s), the same scene and the same art style, in a new shot.
+${withReference
+    ? "The image model will also be shown the original picture, but it copies whatever layout your words don't change, so describe the new shot completely."
+    : "The image model will NOT see the picture, only your words, so everything that makes the character, scene and style recognisable has to be in the prompt."}
+
+What the user wants in the new picture:
+"""${wanted}"""
+
+Write ONE paragraph of 130 to 220 words, in this order:
+1. The new shot. Start with "A new shot of the same" and the subject (for example "A new shot of the same young woman"). Then the camera position, angle and framing, the pose, action and expression, applying everything the user asked for. Whatever they left open, choose so the picture is a genuinely new composition that suits the change. Don't keep the original pose or camera angle unless the user asked to.
+2. The character(s), in precise visual detail so they stay recognisable: face and features, eye colour, skin, hair colour, length and style, tattoos, scars, piercings, make-up, build, and each item of clothing and accessory with its colours and materials.
+3. The setting and key props from the picture (or the new setting, if the user asked for one), time of day and weather.
+4. Lighting, colour palette, lens and depth of field, and the exact medium and art style of the picture (for example "glossy cinematic 3D render", "loose watercolour", "35mm film photo").
+
+Describe only what can be seen. No character names, no headings, lists or quotation marks, and no preamble. Don't mention "the original", "the reference" or "the image": write it as a description of the new picture.`;
+
+    const data = {
+      model,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: instruction },
+          { type: "image_url", image_url: { url: imageDataUrl } },
+        ],
+      }],
+      max_tokens: 4096,
+      temperature: 0.5,
+      stream: true,
+      resumable: true,
+      __jobLabel: "Reimagine prompt",
+    };
+    const response = await this.makeRequest("/api/text/chat/completions", data, false, true);
+    const raw = await this.handleStreamResponse(response, onStream || (() => {}));
+    const prompt = this._cleanWrittenPrompt(raw);
+    if (!prompt) throw new Error("The vision model returned an empty prompt — try again");
+    if (this.lastFinishReason === "length") throw new Error("The prompt was cut off before the model finished — try again");
+    return prompt;
+  },
+
+  // How a model takes part in Reimagine:
+  //  "local"     — a local edit model (Qwen-Image 2.1): the proxy's reimagine
+  //                workflow, with a likeness setting
+  //  "reference" — a hosted edit model: the picture plus the written prompt
+  //  "words"     — a text-to-image model: the written prompt alone
+  reimagineRoute(model) {
+    const caps = getImageModelCapabilities(model, this.config);
+    if (caps.edit) return isLocalImageModel(model) ? "local" : "reference";
+    return "words";
+  },
+
+  // dims: exact { width, height } for a local model ("same shape as the
+  // source"); otherwise aspectRatio picks the size as for any other request.
+  async reimagineImage({ imageBase64, prompt, model, aspectRatio, dims, likeness = "close" }) {
+    const route = this.reimagineRoute(model);
+    if (route === "reference") return this.editImage({ imageBase64, instruction: prompt, model, aspectRatio });
+    if (route === "words" && !dims) return this.generateImageFromPrompt({ prompt, model, aspectRatio });
+
+    const data = {
+      model,
+      prompt: (prompt || "").trim(),
+      n: 1,
+      response_format: "url",
+      seed: Math.floor(Math.random() * 2147483647),
+      resumable: true,
+      __jobLabel: "Reimagine",
+    };
+    if (route === "local") {
+      data.image = imageBase64;
+      data.reimagine = likeness;
+    }
+    if (dims) {
+      data.width = dims.width;
+      data.height = dims.height;
+    } else {
+      await this.loadImageCatalog();
+      applyImageRatio(data, model, aspectRatio || "3:4");
+    }
+
+    const startedAt = performance.now();
+    const response = await this.makeRequest("/api/image/generations", data, true);
+    if (!response.ok) {
+      const errorText = await response.text();
+      let message = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        message = parsed.error?.message || parsed.message || parsed.error || errorText;
+      } catch (e) { /* not JSON */ }
+      throw new Error(`Reimagine failed (${response.status}): ${message}`);
+    }
+    const result = await response.json();
+    const resultUrl = result.data?.[0]?.url || result.image || result.url;
+    if (!resultUrl) throw new Error("Unexpected response from the image model: " + JSON.stringify(result).slice(0, 300));
+    recordImageModelRun(model, performance.now() - startedAt, this.config);
+    return resultUrl;
+  },
+
   // Loads `imageUrl` and checks whether it's a suspiciously uniform (near
   // solid-color) image — the signature of a silent safety-filter block rather
   // than a real generation. Fetches via the proxy first so the canvas read

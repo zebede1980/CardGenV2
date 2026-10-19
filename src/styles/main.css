@@ -2309,6 +2309,25 @@ h6.rcf-heading { font-size: 0.75rem; }
     pointer-events: none;
 }
 
+/* Playground → Reimagine: the pinned source picture */
+.pg-reimagine-source {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+}
+
+.pg-reimagine-source img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 0.4rem;
+    flex: 0 0 auto;
+}
+
 /* Magnifying glass trigger on image cards */
 .gallery-zoom-trigger {
     position: absolute;

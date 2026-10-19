@@ -1802,6 +1802,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this._updatePlaygroundGenerateModelDropdown?.();
     this._updatePlaygroundEditModelDropdown?.();
     this._updatePlaygroundCombineModelDropdown?.();
+    this._updatePlaygroundReimagineModelDropdown?.();
   },
 
   // The Character Generator's portrait model. Filtered to models marked
