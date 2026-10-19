@@ -162,6 +162,69 @@ via `innerHTML`. A 🔍 badge (CSS `::after`) marks both images.
 - **Tested:** WebKit at 390 px (synthetic touch events) and 1280 px: anchoring, clamp, swipe,
   Make Current, Esc. **Not yet tried on a real iPhone**, where real multi-touch is what matters.
 
+## 🔄 Reimagine (Playground tab) — deployed 2026-10-19 (`d45068b`)
+
+A new picture of the same character, scene and style: a new angle, pose or moment. Edit can't do
+this: an edit model given "show her from the front" keeps the old composition.
+
+**How it works:**
+1. The vision model (`api.text.visionModel`, Gemini 3.5 Flash) looks at the pinned source and writes
+   a full new-shot prompt ("A new shot of the same…"): the change, then the character in detail,
+   the setting, then lighting and art style (`writeReimaginePrompt` in `api-image.js`; streams and
+   is resumable).
+2. The image model gets the prompt plus the picture (`reimagineImage`). Three routes, from
+   `reimagineRoute(model)`:
+   - **local edit model** (Qwen-Image 2.1): the proxy's `buildQwenReimagineGraph`, with
+     `reimagine: close|balanced|loose`.
+   - **hosted edit model** (Nano Banana, Seedream…): `editImage` with the written prompt.
+   - **text-to-image model** (MOSS, Flux 2 Pro…): the prompt alone, written for no reference.
+
+**The local workflow (measured on the PC, 2026-10-19):** Qwen's encoder takes the source two ways:
+vision-language tokens (what is in it) and VAE reference latents (where every pixel is). The
+latents are what pin the old layout. So a two-stage `KSamplerAdvanced` run:
+- the first steps see only the VL tokens plus the prompt, so the composition is free;
+- then the reference latents join, pulling the face, outfit and textures back to the source.
+
+`REIMAGINE_REFERENCE_FROM`: close joins at 12% of steps (3 of 25), balanced at 24%, loose never.
+Even joining at step 2 kept the new composition.
+
+What didn't work:
+- A long "keep everything" prompt *with* latents changes less than a short one.
+- `ConditioningSetTimestepRange` + `ConditioningCombine` to mix the two crashes ("size of tensor a
+  must match"): different token lengths.
+- A smaller reference (0.3 MP) still copies.
+
+**UI:**
+- The source is pinned when the tab opens (↺ Use current re-pins it), so retries start from the
+  same picture.
+- A prompt still exactly as written is rewritten when the change, source or model kind changes; a
+  hand-edited one is kept.
+- How many 1/2/4: the first result becomes the working image, the rest go to the history strip
+  (tap the picture to swipe through them). Shape "Same as source" sends the exact proportions to
+  local models, and the nearest named ratio to hosted ones.
+
+**Tested:**
+- Three Likeness settings through the live proxy on the PC with a hand-written prompt: new
+  front-on shots, ~30 s each.
+- The UI in WebKit at 390 px against fake APIs.
+- **Not yet run live:** the prompt writer (one Gemini vision call per write) and the hosted routes.
+
+## Next work stream: image-to-image for Flux 2 and Krea 2
+
+Joe's request (2026-10-19): Flux 2 (and probably Krea 2) can do image-to-image / reference
+editing. Investigate support and whether new local workflows are needed. Get Qwen Reimagine working
+really well first.
+
+Starting points:
+- Comfy's Flux 2 templates use `ReferenceLatent` nodes for multi-reference editing.
+- The PC already has `flux2-vae_small` (from MOSS), but not a local Flux 2 diffusion model.
+- Krea 2 Turbo is local, text-to-image only today (`buildKrea2TurboGraph`).
+- Check what each model's official ComfyUI edit/reference template needs. The PC's nginx blocks
+  `/object_info`, so do it from the PC, or probe by submitting graphs: `/prompt` validation errors
+  name the missing inputs, and unknown inputs are ignored.
+- Experiment harness used for Reimagine: submit graphs from inside the proxy container (it has the
+  COMFYUI env), save as `cardgen/exp`, compare on a contact sheet.
+
 ## Known open issues
 
 - **Root cause of the 2026-10-18 stall is unknown.** The proxy finished the job and NPM sent the
