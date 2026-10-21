@@ -2873,6 +2873,14 @@ const LOCAL_COMFY_MODELS = {
     steps: { default: 25, min: 12, max: 50 },
     buildGraph: buildMossGraph,
   },
+  "local/illustrious-xl": {
+    name: "Illustrious XL",
+    capabilities: { generate: true, edit: false },
+    steps: { default: 28, min: 12, max: 50 },
+    // SDXL was trained around 1MP; bigger repeats bodies and limbs.
+    maxMegapixels: 1.05,
+    buildGraph: buildIllustriousGraph,
+  },
 };
 
 function isLocalComfyModel(model) {
@@ -2913,7 +2921,7 @@ function roundTo32(n) {
 
 // Text-to-image size: honour the requested aspect ratio but cap the area, since
 // generation time grows much faster than linearly once VRAM runs out.
-function localComfyDims(body) {
+function localComfyDims(body, maxMegapixels = LOCAL_COMFY.maxMegapixels) {
   let width = parseInt(body.width, 10);
   let height = parseInt(body.height, 10);
   if (!(width > 0 && height > 0) && typeof body.size === "string") {
@@ -2921,7 +2929,7 @@ function localComfyDims(body) {
   }
   if (!(width > 0 && height > 0)) [width, height] = [896, 1152];
 
-  const maxPixels = LOCAL_COMFY.maxMegapixels * 1024 * 1024;
+  const maxPixels = Math.min(maxMegapixels, LOCAL_COMFY.maxMegapixels) * 1024 * 1024;
   if (width * height > maxPixels) {
     const scale = Math.sqrt(maxPixels / (width * height));
     width *= scale;
@@ -3091,6 +3099,37 @@ function buildMossGraph({ prompt, seed, steps, width, height }) {
   };
 }
 
+// Plain SDXL text-to-image, as in Comfy's default workflow. The checkpoint is a
+// NoobAI-derived v-prediction Illustrious merge; ComfyUI reads the `v_pred` key
+// in the file and switches sampling itself. Sampler settings are the ones saved
+// in the checkpoint's own metadata. Prompts arrive as tags with the app's
+// quality bookends already on, so only the negative is added here, and it
+// leaves out "nsfw" for the same reason as MOSS's.
+function buildIllustriousGraph({ prompt, seed, steps, width, height }) {
+  return {
+    4: { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: "vxpIllustrious20_beta2.safetensors" } },
+    6: { class_type: "CLIPTextEncode", inputs: { clip: ["4", 1], text: prompt } },
+    7: {
+      class_type: "CLIPTextEncode",
+      inputs: {
+        clip: ["4", 1],
+        text: "lowres, worst quality, low quality, bad anatomy, bad hands, extra digits, fewer digits, " +
+          "jpeg artifacts, signature, watermark, username, artist name, blurry, text",
+      },
+    },
+    5: { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
+    3: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["4", 0], positive: ["6", 0], negative: ["7", 0], latent_image: ["5", 0],
+        seed, steps, cfg: 5.0, sampler_name: "euler", scheduler: "normal", denoise: 1.0,
+      },
+    },
+    8: { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["4", 2] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/illustrious" } },
+  };
+}
+
 async function waitForLocalComfyResult(promptId) {
   const deadline = Date.now() + LOCAL_COMFY.runTimeoutMs;
   while (Date.now() < deadline) {
@@ -3166,7 +3205,7 @@ async function runLocalComfyImage(body) {
   const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed : Math.floor(Math.random() * 2147483647);
   const steps = Math.min(spec.steps.max, Math.max(spec.steps.min, parseInt(body.steps, 10) || spec.steps.default));
 
-  const graph = spec.buildGraph({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, ...localComfyDims(body) });
+  const graph = spec.buildGraph({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, ...localComfyDims(body, spec.maxMegapixels) });
   const submit = await localComfyFetch("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
