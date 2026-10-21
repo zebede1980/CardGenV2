@@ -222,6 +222,8 @@ class CharacterGeneratorApp {
     // rendered dynamically (one per pending image, see
     // _renderGalleryGeneratePreview), so this delegates from the static list
     // container instead of binding listeners that don't exist yet.
+    this._initImageZoomTriggers();
+
     const galleryGeneratePreviewList = document.getElementById("gallery-generate-preview-list");
     if (galleryGeneratePreviewList) {
       galleryGeneratePreviewList.addEventListener("click", (e) => {

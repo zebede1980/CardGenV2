@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20261018-explain" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261019-reimagine" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -2301,6 +2301,7 @@
                                 <button type="button" id="pg-tab-generate" class="btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🪄 Generate</button>
                                 <button type="button" id="pg-tab-crop" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✂️ Crop</button>
                                 <button type="button" id="pg-tab-edit" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
+                                <button type="button" id="pg-tab-reimagine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="A new picture of the same character, scene and style — a new angle, pose or moment">🔄 Reimagine</button>
                                 <button type="button" id="pg-tab-enhance" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">⬆️ Enhance</button>
                                 <button type="button" id="pg-tab-combine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🔀 Combine</button>
                                 <button type="button" id="pg-tab-library" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="Images you have saved, on the server and available from any device">📚 Library</button>
@@ -2436,6 +2437,93 @@
                                     ✨ Edit Image
                                 </button>
                                 <p id="playground-edit-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
+                            </div>
+
+                            <!-- Reimagine: a new picture of the same character, scene and style
+                                 (new angle, pose or moment), where Edit would keep the old
+                                 composition. The vision model writes a full new-shot prompt from
+                                 the picture; the image model then gets the prompt plus the picture.
+                                 The source is pinned when a run starts, so trying again works from
+                                 the same picture even though results become the working image.
+                                 See handleReimaginePlaygroundImage in image-playground.js. -->
+                            <div id="pg-panel-reimagine" style="display: none;">
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;">
+                                    Makes a brand-new picture of the same character, scene and style — a new angle, pose or moment. Your picture goes in as the reference.
+                                </p>
+
+                                <div id="playground-reimagine-source" class="pg-reimagine-source" style="display: none;">
+                                    <img id="playground-reimagine-source-img" alt="Reimagine source">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-size: 0.8rem; font-weight: 600;">Source picture</div>
+                                        <div id="playground-reimagine-source-note" style="font-size: 0.72rem; color: var(--text-soft);">Every run starts from this picture.</div>
+                                    </div>
+                                    <button type="button" id="playground-reimagine-use-current" class="btn-small" style="display: none;" title="Reimagine the working image instead">↺ Use current</button>
+                                </div>
+
+                                <label for="playground-reimagine-change" class="label" style="display:block; margin-bottom:0.35rem;">
+                                    What should the new picture show?
+                                </label>
+                                <textarea
+                                    id="playground-reimagine-change"
+                                    class="input"
+                                    rows="2"
+                                    maxlength="1000"
+                                    placeholder="e.g. from the front, facing us | a low angle, standing on top of the tank | the same scene at night, sitting by a campfire"
+                                ></textarea>
+
+                                <label for="playground-reimagine-model" class="label" style="display:block; margin: 0.75rem 0 0.35rem;">
+                                    Model:
+                                </label>
+                                <select id="playground-reimagine-model" class="input" style="margin-bottom: 0.35rem;"></select>
+                                <p id="playground-reimagine-model-note" style="font-size: 0.7rem; color: var(--text-soft); margin: 0 0 0.6rem;"></p>
+
+                                <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                                    <div id="playground-reimagine-likeness-wrap" style="flex: 1 1 9rem; min-width: 0;">
+                                        <label for="playground-reimagine-likeness" class="label" style="display:block; margin-bottom:0.35rem;">Likeness:</label>
+                                        <select id="playground-reimagine-likeness" class="input">
+                                            <option value="close">Close</option>
+                                            <option value="balanced">Balanced</option>
+                                            <option value="loose">Loose</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex: 1 1 8rem; min-width: 0;">
+                                        <label for="playground-reimagine-ratio" class="label" style="display:block; margin-bottom:0.35rem;">Shape:</label>
+                                        <select id="playground-reimagine-ratio" class="input">
+                                            <option value="source">Same as source</option>
+                                            <option value="1:1">1:1 Square</option>
+                                            <option value="3:4">3:4 Portrait</option>
+                                            <option value="9:16">9:16 Tall</option>
+                                            <option value="4:3">4:3 Landscape</option>
+                                            <option value="16:9">16:9 Wide</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex: 0 1 6rem; min-width: 0;">
+                                        <label for="playground-reimagine-count" class="label" style="display:block; margin-bottom:0.35rem;">How many:</label>
+                                        <select id="playground-reimagine-count" class="input">
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="4">4</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                                    <label for="playground-reimagine-prompt" class="label" style="margin: 0;">Prompt:</label>
+                                    <button type="button" id="playground-reimagine-write-btn" class="btn-small" title="Have the vision model look at the picture and write the prompt for the new shot">✍️ Write prompt</button>
+                                </div>
+                                <textarea
+                                    id="playground-reimagine-prompt"
+                                    class="input"
+                                    rows="6"
+                                    maxlength="4000"
+                                    placeholder="Written for you from the picture and what you asked for — or press Reimagine and it's written first. Edit it freely."
+                                ></textarea>
+                                <p style="font-size: 0.7rem; color: var(--text-soft); margin-top: 0.3rem;">
+                                    💡 Writing the prompt is one quick call to your vision model. 💻 local models draw for free. On a hosted model each picture costs credits.
+                                </p>
+
+                                <button type="button" id="reimagine-playground-image-btn" class="btn-primary" style="margin-top: 0.75rem;">🔄 Reimagine</button>
+                                <p id="playground-reimagine-status" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;"></p>
                             </div>
 
                             <!-- Upscale / clean up, without changing the content. Driven by
@@ -2662,19 +2750,19 @@
         <script src="src/scripts/api-character.js?v=20261015-cap16k"></script>
         <script src="src/scripts/character-search.js?v=20260526"></script>
         <script src="src/scripts/prompt-look.js?v=20261018-cardlooks"></script>
-        <script src="src/scripts/api-image.js?v=20261018-nsfw"></script>
+        <script src="src/scripts/api-image.js?v=20261019-reimagine"></script>
         <script src="src/scripts/api-lorebook.js?v=20261016-castretry"></script>
         <script src="src/scripts/character-generator.js?v=20260513"></script>
         <script src="src/scripts/image-generator.js?v=20260922-imagefixes"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20260908-modelcaps"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20261014-lore"></script>
-        <script src="src/scripts/main.js?v=20261018-newchar"></script>
+        <script src="src/scripts/main.js?v=20261019-zoom"></script>
         <script src="src/scripts/app-ui.js?v=20260218-ex1"></script>
         <script src="src/scripts/character-display.js?v=20261015-pov"></script>
-        <script src="src/scripts/image-handler.js?v=20261018-takes"></script>
+        <script src="src/scripts/image-handler.js?v=20261019-reimagine"></script>
         <script src="src/scripts/image-cropper.js?v=20260922-imagefixes"></script>
-        <script src="src/scripts/image-playground.js?v=20261018-takes"></script>
+        <script src="src/scripts/image-playground.js?v=20261019-reimagine"></script>
         <script src="src/scripts/prompt-builder.js?v=20261018-cardlooks"></script>
         <script src="src/scripts/playground-library.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/lorebook-handler.js?v=20261016-castretry"></script>
@@ -2685,7 +2773,7 @@
         <script src="src/scripts/rich-element-parser.js"></script>
         <script src="src/scripts/st-handler.js?v=20260514"></script>
         <script src="src/scripts/batch-generator.js?v=20261015-stop"></script>
-        <script src="src/scripts/image-gallery.js?v=20260907-imagelibrary"></script>
+        <script src="src/scripts/image-gallery.js?v=20261019-zoom"></script>
         <script src="src/scripts/character-gallery-panel.js?v=20260905-gallerylock"></script>
         <script src="src/scripts/url-import.js?v=20261014-lore"></script>
         <script src="src/scripts/storywriter.js?v=20260908-voices"></script>

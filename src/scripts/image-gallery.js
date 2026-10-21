@@ -46,9 +46,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
       useBtn.title = context === 'reference' ? "Use This as the Reference Image"
         : context === 'galleryPending' ? "Add This Image to the Gallery"
         : context === 'playgroundLibrary' ? "Start a New Character from This Image"
+        : context === 'playgroundHistory' ? "Make This Version the Working Image"
         : "Use This Image for Card";
       useBtn.textContent = context === 'galleryPending' ? "✔️ Add to Gallery"
         : context === 'playgroundLibrary' ? "🎭 New Character"
+        : context === 'playgroundHistory' ? "↩ Make Current"
         : "✓ Use This";
     }
     const discardBtn = document.getElementById("gallery-lightbox-discard-btn");
@@ -93,14 +95,25 @@ Object.assign(CharacterGeneratorApp.prototype, {
     imgEl.src = img.url;
     imgEl.alt = img.label || img.model || "Generated Image";
 
-    // Show metadata
-    const model = img.model || "Unknown model";
+    // Show metadata — whatever is known about the image, or nothing at all
+    // (a bare "Unknown model" bar over a portrait just hides part of it).
+    const heading = img.model || img.label || "";
     const prompt = img.prompt || "";
     const snippet = prompt.length > 200 ? prompt.slice(0, 200) + "…" : prompt;
     metaEl.innerHTML = `
-      <span class="gallery-meta-model">${escapeHtml(model)}</span>
+      ${heading ? `<span class="gallery-meta-model">${escapeHtml(heading)}</span>` : ""}
       ${snippet ? `<span class="gallery-meta-prompt" title="${escapeHtml(prompt)}">${escapeHtml(snippet)}</span>` : ""}
     `;
+    metaEl.style.display = heading || snippet ? "" : "none";
+
+    // 'view' is look-only: the image is already where it is being used.
+    // 'playgroundHistory' has nothing to do for the version already current.
+    const useBtn = document.getElementById("gallery-use-btn");
+    if (useBtn) {
+      const hideUse = this._galleryContext === 'view'
+        || (this._galleryContext === 'playgroundHistory' && img.url === this.playgroundImageUrl);
+      useBtn.style.display = hideUse ? "none" : "";
+    }
 
     this._updateGalleryCounter();
     this._updateGalleryNavButtons();
@@ -111,8 +124,58 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!container) return;
     const img = container.querySelector("img");
     if (!img) return;
+    this._clampGalleryPan();
     img.style.transform = `scale(${this._galleryScale}) translate(${this._galleryPanX / this._galleryScale}px, ${this._galleryPanY / this._galleryScale}px)`;
-    img.style.cursor = this._galleryScale > 1 ? (this._galleryIsPanning ? "grabbing" : "grab") : "default";
+    img.style.cursor = this._galleryScale > 1 ? (this._galleryIsPanning ? "grabbing" : "grab") : "zoom-in";
+  },
+
+  // Keeps a zoomed image covering the screen: it can be dragged until an edge
+  // meets the screen's edge, never off into the dark. Uses the image's
+  // untransformed size (offsetWidth ignores transforms).
+  _clampGalleryPan() {
+    const img = document.getElementById("gallery-image");
+    if (!img || this._galleryScale <= 1) {
+      this._galleryPanX = 0;
+      this._galleryPanY = 0;
+      return;
+    }
+    const maxX = Math.max(0, (img.offsetWidth * this._galleryScale - window.innerWidth) / 2);
+    const maxY = Math.max(0, (img.offsetHeight * this._galleryScale - window.innerHeight) / 2);
+    this._galleryPanX = Math.max(-maxX, Math.min(maxX, this._galleryPanX));
+    this._galleryPanY = Math.max(-maxY, Math.min(maxY, this._galleryPanY));
+  },
+
+  // The image's centre when unzoomed. The container is laid out around the
+  // image and transforms don't move layout, so its box is the resting box.
+  _galleryRestCentre() {
+    const rect = document.getElementById("gallery-image-container")?.getBoundingClientRect();
+    if (!rect) return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  },
+
+  // Zooms so the point of the image under (clientX, clientY) stays put —
+  // under the fingers, the cursor or the double-tap. No point means the
+  // middle of the screen (the toolbar buttons).
+  _galleryZoomTo(scale, clientX, clientY) {
+    const next = Math.max(this._GALLERY_MIN_SCALE, Math.min(this._GALLERY_MAX_SCALE, scale));
+    const c = this._galleryRestCentre();
+    const qx = (clientX ?? window.innerWidth / 2) - c.x;
+    const qy = (clientY ?? window.innerHeight / 2) - c.y;
+    const ratio = next / this._galleryScale;
+    this._galleryPanX = qx - ratio * (qx - this._galleryPanX);
+    this._galleryPanY = qy - ratio * (qy - this._galleryPanY);
+    this._galleryScale = next;
+    this._applyGalleryTransform();
+  },
+
+  _GALLERY_MIN_SCALE: 1,
+  _GALLERY_MAX_SCALE: 5,
+  _GALLERY_DOUBLE_TAP_SCALE: 2.5,
+
+  // Double-tap / double-click: zoom in on that spot, or back out if zoomed.
+  _galleryToggleZoom(clientX, clientY) {
+    if (this._galleryScale > 1) this._galleryZoomTo(1);
+    else this._galleryZoomTo(this._GALLERY_DOUBLE_TAP_SCALE, clientX, clientY);
   },
 
   _updateGalleryCounter() {
@@ -145,18 +208,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
-  _galleryZoomIn() {
-    this._galleryScale = Math.min(5, this._galleryScale + 0.25);
-    this._applyGalleryTransform();
+  _galleryZoomIn(clientX, clientY) {
+    this._galleryZoomTo(this._galleryScale * 1.25, clientX, clientY);
   },
 
-  _galleryZoomOut() {
-    this._galleryScale = Math.max(0.25, this._galleryScale - 0.25);
-    if (this._galleryScale <= 1) {
-      this._galleryPanX = 0;
-      this._galleryPanY = 0;
-    }
-    this._applyGalleryTransform();
+  _galleryZoomOut(clientX, clientY) {
+    this._galleryZoomTo(this._galleryScale / 1.25, clientX, clientY);
   },
 
   _galleryDownload() {
@@ -185,6 +242,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
       return;
     }
+
+    if (this._galleryContext === 'playgroundHistory') {
+      const idx = (this.playgroundHistory || []).findIndex((e) => e.url === img.url);
+      this.closeGallery();
+      if (idx >= 0) this._selectPlaygroundHistoryEntry(idx);
+      return;
+    }
+
+    if (this._galleryContext === 'view') return;
 
     if (this._galleryContext === 'playgroundLibrary') {
       // Same action as the tile's "🎭 New character" button — the row, not the
@@ -295,11 +361,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const container = document.getElementById("gallery-image-container");
     if (!container) return;
 
-    // Mouse wheel zoom
+    // Mouse wheel zoom, centred on the cursor
     this._onGalleryWheel = (e) => {
       e.preventDefault();
-      if (e.deltaY < 0) this._galleryZoomIn();
-      else this._galleryZoomOut();
+      if (e.deltaY < 0) this._galleryZoomIn(e.clientX, e.clientY);
+      else this._galleryZoomOut(e.clientX, e.clientY);
     };
     container.addEventListener("wheel", this._onGalleryWheel, { passive: false });
 
@@ -332,52 +398,125 @@ Object.assign(CharacterGeneratorApp.prototype, {
     };
     window.addEventListener("mouseup", this._onGalleryMouseUp);
 
-    // Touch support — pinch to zoom & two-finger pan
-    let lastTouchDist = 0;
-    let lastTouchScale = 1;
+    // Desktop double-click. Touch double-taps are handled in touchend, and a
+    // browser that also synthesises dblclick from them is ignored here.
+    this._onGalleryDblClick = (e) => {
+      if (Date.now() - (this._galleryLastTouchAt || 0) < 800) return;
+      this._galleryToggleZoom(e.clientX, e.clientY);
+    };
+    container.addEventListener("dblclick", this._onGalleryDblClick);
+
+    // Touch: pinch zooms around the point between the fingers (and moving
+    // both fingers pans); one finger pans when zoomed, swipes to the
+    // previous/next image when not; a double-tap toggles zoom on that spot.
+    // The container has touch-action: none, so Safari's own page zoom and
+    // double-tap zoom stay out of it.
+    let pinch = null;
+    let swipe = null;
+    let lastTap = null;
+    const mid = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
     this._onGalleryTouchStart = (e) => {
+      this._galleryLastTouchAt = Date.now();
       if (e.touches.length === 2) {
-        lastTouchDist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY,
-        );
-        lastTouchScale = this._galleryScale;
-      } else if (e.touches.length === 1 && this._galleryScale > 1) {
-        this._galleryIsPanning = true;
-        this._galleryPanStartX = e.touches[0].clientX;
-        this._galleryPanStartY = e.touches[0].clientY;
-        this._galleryPanOrigX = this._galleryPanX;
-        this._galleryPanOrigY = this._galleryPanY;
+        e.preventDefault();
+        swipe = null;
+        this._galleryIsPanning = false;
+        const c = this._galleryRestCentre();
+        const m = mid(e.touches);
+        // The image point under the fingers, in unzoomed pixels from its centre.
+        pinch = {
+          dist: dist(e.touches) || 1,
+          scale: this._galleryScale,
+          ux: (m.x - c.x - this._galleryPanX) / this._galleryScale,
+          uy: (m.y - c.y - this._galleryPanY) / this._galleryScale,
+        };
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        swipe = { x: t.clientX, y: t.clientY, at: Date.now(), moved: false };
+        if (this._galleryScale > 1) {
+          this._galleryIsPanning = true;
+          this._galleryPanStartX = t.clientX;
+          this._galleryPanStartY = t.clientY;
+          this._galleryPanOrigX = this._galleryPanX;
+          this._galleryPanOrigY = this._galleryPanY;
+        }
       }
     };
     container.addEventListener("touchstart", this._onGalleryTouchStart, { passive: false });
 
     this._onGalleryTouchMove = (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const dist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY,
-        );
-        if (lastTouchDist > 0) {
-          const newScale = Math.min(5, Math.max(0.25, lastTouchScale * (dist / lastTouchDist)));
-          this._galleryScale = newScale;
-          if (newScale <= 1) { this._galleryPanX = 0; this._galleryPanY = 0; }
+      e.preventDefault();
+      if (e.touches.length === 2 && pinch) {
+        const c = this._galleryRestCentre();
+        const m = mid(e.touches);
+        const scale = Math.max(this._GALLERY_MIN_SCALE, Math.min(this._GALLERY_MAX_SCALE, pinch.scale * (dist(e.touches) / pinch.dist)));
+        this._galleryScale = scale;
+        this._galleryPanX = m.x - c.x - scale * pinch.ux;
+        this._galleryPanY = m.y - c.y - scale * pinch.uy;
+        this._applyGalleryTransform();
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (swipe && Math.hypot(t.clientX - swipe.x, t.clientY - swipe.y) > 10) swipe.moved = true;
+        if (this._galleryIsPanning) {
+          this._galleryPanX = this._galleryPanOrigX + (t.clientX - this._galleryPanStartX);
+          this._galleryPanY = this._galleryPanOrigY + (t.clientY - this._galleryPanStartY);
           this._applyGalleryTransform();
         }
-      } else if (e.touches.length === 1 && this._galleryIsPanning) {
-        this._galleryPanX = this._galleryPanOrigX + (e.touches[0].clientX - this._galleryPanStartX);
-        this._galleryPanY = this._galleryPanOrigY + (e.touches[0].clientY - this._galleryPanStartY);
-        this._applyGalleryTransform();
       }
     };
     container.addEventListener("touchmove", this._onGalleryTouchMove, { passive: false });
 
-    this._onGalleryTouchEnd = () => {
+    this._onGalleryTouchEnd = (e) => {
+      if (!document.getElementById("gallery-lightbox")?.classList.contains("show")) return;
+      this._galleryLastTouchAt = Date.now();
+      if (e.touches.length > 0) {
+        // One finger lifted out of a pinch: carry on panning with the other.
+        pinch = null;
+        if (e.touches.length === 1 && this._galleryScale > 1) {
+          const t = e.touches[0];
+          this._galleryIsPanning = true;
+          this._galleryPanStartX = t.clientX;
+          this._galleryPanStartY = t.clientY;
+          this._galleryPanOrigX = this._galleryPanX;
+          this._galleryPanOrigY = this._galleryPanY;
+        }
+        return;
+      }
+      const wasPinch = !!pinch;
+      pinch = null;
       this._galleryIsPanning = false;
-      lastTouchDist = 0;
+      this._applyGalleryTransform();
+
+      const t = e.changedTouches?.[0];
+      if (!swipe || !t || wasPinch) { swipe = null; return; }
+      const dx = t.clientX - swipe.x;
+      const dy = t.clientY - swipe.y;
+      const quick = Date.now() - swipe.at < 600;
+      if (this._galleryScale <= 1 && quick && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (dx < 0) this._galleryNext();
+        else this._galleryPrev();
+        lastTap = null;
+      } else if (!swipe.moved) {
+        const now = Date.now();
+        if (lastTap && now - lastTap.at < 300 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 40) {
+          this._galleryToggleZoom(t.clientX, t.clientY);
+          lastTap = null;
+        } else {
+          lastTap = { x: t.clientX, y: t.clientY, at: now };
+        }
+      }
+      swipe = null;
     };
-    window.addEventListener("touchend", this._onGalleryTouchEnd);
+    container.addEventListener("touchend", this._onGalleryTouchEnd);
+    container.addEventListener("touchcancel", this._onGalleryTouchEnd);
+
+    // Older iOS Safari pinch-zooms the page from gesture events even when
+    // the touches themselves are cancelled.
+    this._onGalleryGesture = (e) => e.preventDefault();
+    container.addEventListener("gesturestart", this._onGalleryGesture);
+    container.addEventListener("gesturechange", this._onGalleryGesture);
 
     // Click on overlay backdrop to close
     this._onGalleryOverlayClick = (e) => {
@@ -420,8 +559,50 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (this._onGalleryMouseUp) window.removeEventListener("mouseup", this._onGalleryMouseUp);
     if (this._onGalleryTouchStart) document.getElementById("gallery-image-container")?.removeEventListener("touchstart", this._onGalleryTouchStart);
     if (this._onGalleryTouchMove) document.getElementById("gallery-image-container")?.removeEventListener("touchmove", this._onGalleryTouchMove);
-    if (this._onGalleryTouchEnd) window.removeEventListener("touchend", this._onGalleryTouchEnd);
+    const container = document.getElementById("gallery-image-container");
+    if (this._onGalleryTouchEnd) {
+      container?.removeEventListener("touchend", this._onGalleryTouchEnd);
+      container?.removeEventListener("touchcancel", this._onGalleryTouchEnd);
+    }
+    if (this._onGalleryDblClick) container?.removeEventListener("dblclick", this._onGalleryDblClick);
+    if (this._onGalleryGesture) {
+      container?.removeEventListener("gesturestart", this._onGalleryGesture);
+      container?.removeEventListener("gesturechange", this._onGalleryGesture);
+    }
     if (this._onGalleryOverlayClick) document.getElementById("gallery-lightbox")?.removeEventListener("click", this._onGalleryOverlayClick);
+  },
+
+  /* ── Tap-to-zoom on the main working images ─────────────────────────────── */
+
+  // Character Gen's portrait and the Playground's working image both open the
+  // lightbox when tapped. Listeners sit on the containers rather than the
+  // images, because a dozen code paths replace those images via innerHTML.
+  _initImageZoomTriggers() {
+    document.getElementById("image-content")?.addEventListener("click", (e) => {
+      const img = e.target.closest("img");
+      if (!img || !img.getAttribute("src")) return;
+      const label = this.currentCharacter?.name || "";
+      this.openGallery([{ url: img.getAttribute("src"), label }], 0, "view");
+    });
+
+    // Playground opens on the working image with every history version a
+    // swipe away, so before/after an edit can be compared at full size.
+    document.getElementById("playground-image-preview")?.addEventListener("click", (e) => {
+      const img = e.target.closest("img");
+      const current = img?.getAttribute("src");
+      if (!current) return;
+      const images = (this.playgroundHistory || []).map((entry) => ({
+        url: entry.url,
+        label: entry.label || "",
+        prompt: entry.meta?.prompt || "",
+      }));
+      let start = images.findIndex((entry) => entry.url === current);
+      if (start < 0) {
+        images.unshift({ url: current, label: "" });
+        start = 0;
+      }
+      this.openGallery(images, start, "playgroundHistory");
+    });
   },
 
   /* ── Character image gallery (persisted, linked to a saved card) ─────────── */

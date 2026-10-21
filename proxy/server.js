@@ -2853,6 +2853,7 @@ const LOCAL_COMFY_MODELS = {
     capabilities: { generate: true, edit: true },
     steps: { default: 25, min: 8, max: 50 },
     buildGraph: buildQwenImageGraph,
+    buildReimagineGraph: buildQwenReimagineGraph,
   },
   "local/z-image-turbo": {
     name: "Z-Image-Turbo",
@@ -3027,6 +3028,76 @@ function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage }
   return graph;
 }
 
+// Reimagine: a new picture of the same character, scene and style — a new
+// angle, pose or moment — rather than an edit of the old one. Measured on the
+// PC (2026-10-19): an ordinary edit keeps the source's composition because the
+// source goes in twice, as vision-language tokens (what is in it) and as VAE
+// reference latents (where every pixel is), and the latents pin the layout.
+// So the first few steps, which settle the composition, see only the vision
+// tokens and the prompt; the reference latents join for the rest, pulling the
+// face, outfit and textures back to the source without moving anything.
+// The earlier they join, the closer the likeness; even from step 2 of 25 the
+// new composition held. "loose" leaves them out entirely.
+const REIMAGINE_REFERENCE_FROM = { close: 0.12, balanced: 0.24 };
+
+function buildQwenReimagineGraph({ prompt, seed, steps, width, height, sourceImage, likeness }) {
+  const encode = (withLatents) => ({
+    class_type: "TextEncodeQwenImage21",
+    inputs: {
+      clip: ["38", 0], prompt, negative_prompt: "", resolution: 0, "images.image_1": ["77", 0],
+      ...(withLatents ? { vae: ["39", 0] } : {}),
+    },
+  });
+  const sampler = { cfg: 1.0, sampler_name: "euler", scheduler: "simple", steps, noise_seed: seed };
+  const graph = {
+    37: { class_type: "UNETLoader", inputs: { unet_name: "qwen_image_2.1_int8_convrot.safetensors", weight_dtype: "default" } },
+    38: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3vl_8b_int8_convrot.safetensors", type: "qwen_image", device: "default" } },
+    39: { class_type: "VAELoader", inputs: { vae_name: "qwen_image_2.1_vae_bf16.safetensors" } },
+    78: { class_type: "LoadImage", inputs: { image: sourceImage } },
+    79: {
+      class_type: "ResizeImageMaskNode",
+      inputs: { input: ["78", 0], resize_type: "scale total pixels", "resize_type.megapixels": LOCAL_COMFY.editMegapixels, scale_method: "area" },
+    },
+    77: {
+      class_type: "ResizeImageMaskNode",
+      inputs: { input: ["79", 0], resize_type: "scale to multiple", "resize_type.multiple": 32, scale_method: "bicubic" },
+    },
+    64: encode(false),
+    62: { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
+    8: { class_type: "VAEDecode", inputs: { samples: ["4", 0], vae: ["39", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/reimagine" } },
+  };
+
+  const from = REIMAGINE_REFERENCE_FROM[likeness];
+  if (!from) {
+    graph[4] = {
+      class_type: "KSamplerAdvanced",
+      inputs: {
+        ...sampler, model: ["37", 0], positive: ["64", 0], negative: ["64", 1], latent_image: ["62", 0],
+        add_noise: "enable", start_at_step: 0, end_at_step: 10000, return_with_leftover_noise: "disable",
+      },
+    };
+    return graph;
+  }
+  const split = Math.max(1, Math.round(steps * from));
+  graph[65] = encode(true);
+  graph[3] = {
+    class_type: "KSamplerAdvanced",
+    inputs: {
+      ...sampler, model: ["37", 0], positive: ["64", 0], negative: ["64", 1], latent_image: ["62", 0],
+      add_noise: "enable", start_at_step: 0, end_at_step: split, return_with_leftover_noise: "enable",
+    },
+  };
+  graph[4] = {
+    class_type: "KSamplerAdvanced",
+    inputs: {
+      ...sampler, model: ["37", 0], positive: ["65", 0], negative: ["65", 1], latent_image: ["3", 0],
+      add_noise: "disable", start_at_step: split, end_at_step: 10000, return_with_leftover_noise: "disable",
+    },
+  };
+  return graph;
+}
+
 // From Comfy's "Z-Image-Turbo: Text to Image" template (bf16 model).
 function buildZImageTurboGraph({ prompt, seed, steps, width, height }) {
   return {
@@ -3194,6 +3265,14 @@ async function runLocalComfyImage(body) {
   if (body.image && !spec.capabilities.edit) {
     throw new LocalComfyError(400, `${spec.name} can't edit images — pick an edit model`);
   }
+  const likeness = body.reimagine;
+  if (likeness !== undefined) {
+    if (!["close", "balanced", "loose"].includes(likeness)) {
+      throw new LocalComfyError(400, "reimagine must be close, balanced or loose");
+    }
+    if (!spec.buildReimagineGraph) throw new LocalComfyError(400, `${spec.name} can't reimagine from a picture`);
+    if (!body.image) throw new LocalComfyError(400, "Reimagine needs the source picture");
+  }
 
   // Fail fast with a clear message rather than queueing into a PC that's off.
   // A PC that's off fails in milliseconds (refused / unreachable); the long
@@ -3205,7 +3284,8 @@ async function runLocalComfyImage(body) {
   const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed : Math.floor(Math.random() * 2147483647);
   const steps = Math.min(spec.steps.max, Math.max(spec.steps.min, parseInt(body.steps, 10) || spec.steps.default));
 
-  const graph = spec.buildGraph({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, ...localComfyDims(body, spec.maxMegapixels) });
+  const build = likeness !== undefined ? spec.buildReimagineGraph : spec.buildGraph;
+  const graph = build({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, likeness, ...localComfyDims(body, spec.maxMegapixels) });
   const submit = await localComfyFetch("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3217,7 +3297,8 @@ async function runLocalComfyImage(body) {
     throw new LocalComfyError(502, `Local GPU rejected the workflow (${submit.status}) — are the ${spec.name} models installed?`);
   }
   const { prompt_id: promptId } = await submit.json();
-  console.log(`[comfy] queued ${spec.name} ${sourceImage ? "edit" : "generation"} ${promptId}`);
+  const kind = likeness !== undefined ? `reimagine (${likeness})` : sourceImage ? "edit" : "generation";
+  console.log(`[comfy] queued ${spec.name} ${kind} ${promptId}`);
 
   let image;
   try {
