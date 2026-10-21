@@ -69,6 +69,13 @@ negative prompt without "nsfw". Capped at 1.05 MP (`maxMegapixels` on the regist
 - **Tested:** the real graph builder, run straight against the PC's ComfyUI at 896×1152: 8 s
   warm, ~30 s cold. After deploying, the deployed builder ran from the proxy container through
   the gateway: 9.3 s, 3:2 capped to 1280×864. Not yet tried from the app itself.
+- **NoobAI-XL V-Pred 1.0 tried as a replacement (2026-10-21), and lost.** It's the base that vxp is
+  merged from, and is usually named the best for anatomy and NSFW. Same 3 prompts and seed, each
+  model with its own recommended negative (NoobAI's needs `mammal, anthro, furry…` because it
+  learned from e621): anatomy was about equal, but vxp was clearly more polished, and NoobAI was
+  flatter, with sticker-like outlines. The file stays in `models\checkpoints`
+  (`NoobAI-XL-Vpred-v1.0.safetensors`, 7.1 GB, from HF `Laxhar/noobai-XL-Vpred-1.0`; Civitai is
+  region-blocked here) and can be deleted. NSFW wasn't compared.
 - **To finish:** deploy, then Settings → Image API → Fetch models, add `local/illustrious-xl`,
   tick 🪄 Generate and leave **Natural-language prompts unticked**: the id contains
   "illustrious", so the writer produces tags and the tag bookends apply.
