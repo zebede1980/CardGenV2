@@ -54,7 +54,7 @@ image towards covering up), skip-layer guidance off (the template's default). Te
   prose, not tags).
 - Sizes need multiples of 16; `localComfyDims` already rounds to 32. It is happiest at 1–2 MP.
 
-## Local Illustrious XL (`local/illustrious-xl`) — added 2026-10-21, not deployed
+## Local Illustrious XL (`local/illustrious-xl`) — deployed 2026-10-21 (`ddbc691`)
 
 `buildIllustriousGraph` in `proxy/server.js`: plain SDXL, checkpoint `vxpIllustrious20_beta2`
 (a v-prediction merge from NoobAI-XL; ComfyUI spots the `v_pred` key and samples correctly on its
@@ -67,7 +67,8 @@ negative prompt without "nsfw". Capped at 1.05 MP (`maxMegapixels` on the regist
   disk; deleting the link leaves Forge's copy). Also linked: `illustriousXL_v01` (the original
   v0.1 base, May 2024), which was noticeably flatter in a side-by-side test, so it isn't used.
 - **Tested:** the real graph builder, run straight against the PC's ComfyUI at 896×1152: 8 s
-  warm, ~30 s cold. Not yet run through the deployed proxy or the app.
+  warm, ~30 s cold. After deploying, the deployed builder ran from the proxy container through
+  the gateway: 9.3 s, 3:2 capped to 1280×864. Not yet tried from the app itself.
 - **To finish:** deploy, then Settings → Image API → Fetch models, add `local/illustrious-xl`,
   tick 🪄 Generate and leave **Natural-language prompts unticked**: the id contains
   "illustrious", so the writer produces tags and the tag bookends apply.
