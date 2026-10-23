@@ -288,6 +288,13 @@ Starting points:
 - Experiment harness used for Reimagine: submit graphs from inside the proxy container (it has the
   COMFYUI env), save as `cardgen/exp`, compare on a contact sheet.
 
+## Next: Roleplay Chat on the iPhone — review done 2026-10-23, plan in `plans/roleplay-chat-mobile-redesign.md`
+
+The in-chat full-screen view is glitchy on the iPhone. Main causes: 15 px fields make Safari zoom on tap, nothing
+handles the keyboard (`visualViewport`), and waking/focusing the page aborts a live reply and redraws the chat. The
+`.chat-fullscreen` CSS/JS is dead since `bb39a1e`; `body.chat-in-chat` is what runs. Waiting on Joe's four decisions
+at the end of the plan.
+
 ## Known open issues
 
 - **Root cause of the 2026-10-18 stall is unknown.** The proxy finished the job and NPM sent the
