@@ -291,7 +291,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       const textarea = document.createElement("textarea");
       textarea.className = "input gallery-instruction-input";
-      textarea.rows = 2;
+      textarea.rows = count > 1 ? 3 : 4; // one box per image when several are asked for
       textarea.maxLength = 1000;
       textarea.placeholder = count > 1
         ? `Image ${i + 1} — e.g. sitting by a campfire at night, same character`
