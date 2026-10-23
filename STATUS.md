@@ -1,6 +1,6 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-10-21. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
+Last updated 2026-10-23. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
 ✨ Prompt Builder merged, pushed and deployed. Update this file when you ship something or find something worth remembering: it is the
 hand-over between machines, since Claude's own memory does not travel between them.
 
@@ -53,7 +53,7 @@ image towards covering up), skip-layer guidance off (the template's default). Te
   🪄 Generate, set Prompt Length to **Detailed** and tick **Is Flux Model** (it wants natural-language
   prose, not tags).
 - Sizes need multiples of 16; `localComfyDims` already rounds to 32. It is happiest at 1–2 MP.
-- **Uncensored LoRA, always on (2026-10-21, user's choice over a separate NSFW entry):**
+- **Uncensored LoRA, always on (2026-10-23, user's choice over a separate NSFW entry):**
   `MOSS_NSFW_LORA` in `server.js`. axiomofmind's `MOSS-Image-NSFW-Uncensored-LoRA-ComfyUI`
   (74 MB, HF `axiomofmind/Moss-image-nsfw-uncensored-lora`, in the PC's `models\loras`) is applied
   through `LoraLoaderModelOnly` at 0.7, and its trigger `moss_xvstyle, ` leads every prompt.
