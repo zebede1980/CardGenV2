@@ -120,9 +120,59 @@ Costs:
   the iPhone: keyboard open/close, rotation, locking mid-reply, editing a long message.
 - Real GLM chat calls are fine for streaming checks (Joe, 2026-10-23).
 
-## Decisions for Joe
+## Decisions (Joe, 2026-10-23)
 
-1. Return key on the iPhone: newline (recommended) or send?
-2. Avatars on the phone: in the name row (recommended) or keep the left column?
-3. Home Screen app mode: in scope?
-4. Ship Phase 1 first, or go straight to the rebuild?
+1. Return key on the iPhone: **newline**; the Send button sends. Desktop keeps Enter to send.
+2. Avatars on the phone: **in the name row**.
+3. Home Screen app mode: **later, maybe**. Not part of this build.
+4. Rollout: **straight to the rebuild** (phases 1–4 together), no interim quick-win release.
+
+## Implementation notes (built 2026-10-23)
+
+Phases 1–4 were built together, as decided above.
+
+- **Markup** (`index.html`, the active chat view): same element ids, so the existing wiring
+  (`chat-settings.js`, `chat-character-cards.js`) still works. New: `#chat-header-who` (avatars,
+  title, characters; tap opens the cards), `Aa` → `#chat-text-size-pop`, `＋` → `#chat-tools-tray`
+  (OOC note, Impersonate, `#chat-speaker-wrap`). The ↓ button now lives inside `.chat-input-area`,
+  so it always sits just above the composer.
+- **CSS** (`main.css`): the old chat-view rules, including the 2024-era block and the dead
+  `.chat-fullscreen` CSS, were replaced by one section, "OPEN CHAT". All of it sits under
+  `#view-roleplaychat` to beat main.js's dark button rule. The edit sheet is `#chat-edit-sheet`.
+  The page lock is `html:has(> body.chat-in-chat)`, so any code that clears the body class also
+  frees the page. The lobby rules are unchanged.
+- **Shell:** `_trackVisualViewport` / `_syncVisualViewport` write `--chat-vh` / `--chat-vtop` on
+  `<html>`, plus `body.chat-kb-open` when the visible viewport is more than 120px shorter than
+  `innerHeight`.
+- **Touch** (`chatIsTouch()` = `pointer: coarse`): Return types a newline; `_focusInput()` doesn't
+  focus; after Send the box is blurred, so the keyboard goes away and the reply gets the screen.
+  Impersonate still focuses the box, because editing comes next.
+- **Streams:** `_readChatStream(res, controller, getReplyId, onEvent)` is shared by send, Regen and
+  Impersonate.
+  - Watchdog: `CHAT_STREAM_STALL_MS` (45 s). It ignores time hidden, and a tick more than 15 s late
+    counts as sleep.
+  - On a drop or stall, `_recoverReply` polls `GET /chats/:id` every 4 s, for up to 6 min, until
+    that reply id has content, then fills in that one bubble. No redraw, no second generation.
+  - The backend pings every 15 s (`SSE_HEARTBEAT_SECONDS`, `_next_or_ping` in `routers/chat.py`).
+  - `syncOnWake` no longer listens to window `focus`. A live stream is left alone; if it has been
+    quiet for over 20 s, `_liveStream.checkServer()` asks whether the reply already finished.
+- **Scrolling:** `_startReplyScroll` / `_followReply` follow a reply until your message (or the
+  reply's top) reaches the top of the screen, then stop and light the ↓ dot. Scroll to the bottom
+  and it follows from there. A ResizeObserver on the composer keeps the bottom in view as the
+  composer grows.
+- **Removed:** `toggleFullscreen`, the calls to a non-existent `closeMobileSidebar` (Escape in the
+  message box used to throw), the injected `#chat-touch-fixes` style, and `appendMessage`'s
+  `alignToTop`.
+- **Tested** (headless WebKit against a fake streaming backend; 41 checks pass):
+  - Tap to show actions; tray, badge and text size.
+  - Return = newline on touch, Enter sends on desktop; 16px fields.
+  - The shell following a viewport resize.
+  - Reply scroll anchoring; Stop; the edit sheet saving.
+  - A dropped stream recovered with no redraw and no second generation.
+  - A stalled stream recovered after 45 s and not at 30 s (Playwright clock).
+  - Wake picking up a finished reply; wake or focus mid-reply leaving a healthy stream alone.
+  - Desktop reading column, hover and tray.
+  - Layouts at 320/390/1280 px in light and dark.
+- **Not yet tested on a real iPhone:** the real keyboard (WebKit headless has none; a resized
+  viewport stood in), a real lock mid-reply, rotation. The backend heartbeat hasn't been seen
+  through nginx yet either.
