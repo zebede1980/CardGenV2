@@ -71,6 +71,8 @@ image towards covering up), skip-layer guidance off (the template's default). Te
   - **Tested on the PC:** same seed with and without it. It takes effect on the int8 model, with no
     "lora key not loaded" in the log and no extra time (13.6 s warm). SFW prompts barely change:
     anime stays anime, and a photo gets a slightly smoother face.
+  - **Deployed 2026-10-23 (`fabb7b3`):** the deployed builder ran from the proxy container through
+    the gateway: LoRA node in, trigger leading, 22 s (cold after Qwen).
   - **Not tested:** NSFW output itself.
 - **No MOSS edit model exists.** OpenMOSS released only Base and SFT, both text-to-image. Comfy's
   repack adds just a colour/depth *control* LoRA. Edits stay on Qwen-Image 2.1.
