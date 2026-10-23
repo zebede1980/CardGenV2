@@ -15,7 +15,6 @@ run was made.
 | Nano Banana 2.1 fix: tier models get `aspect_ratio` only, no pixels (they 400 on pixels) | `d15f16a`, `6f652c0` | Generate with Nano Banana 2.1 and qwen-image-3-pro |
 | Image sizes follow nano-gpt's catalogue (`GET /api/image/catalog`, cached 6 h) | `6f652c0` | flux-2-pro at 4:3 should come back 1536×1024 (it lists no 4:3) |
 | Text-stream stall fix: proxy `: ping` every 15 s, client watchdog after 45 s silence | `ef00936` | Nothing to do unless a card stalls again; if it does, check whether it resumed |
-| Playground **1 per model** (How many → 1 per model; picks shared with ⚔️ Compare Models, max 4) | `bd06db7` | Run it with the PC on, across all local models |
 | Status badge is free now (`checkTextApiReachable`, GET `/models`, cached 5 min) | `768a86f` | Badge still goes green; Settings → Test Connection still makes a real call |
 | ⚔️ Compare Models in Character Gen | `eda75dd` | Never run against the real GPU |
 | Combine tab (qwen-image-3-pro, reve/2.1/remix, grok-imagine edit) | — | Never confirmed against a real model |
@@ -34,6 +33,17 @@ run was made.
 - Hand-added ids may be aliases: `nano-banana-2.1` is `google/gemini-nano-banana-2.1` in the
   catalogue. `findImageCatalogEntry` matches a unique id ending in the name at a `/` or `-`.
 
+## Playground Generate grid opens the lightbox — `a7fba76`, confirmed on the iPhone 2026-10-23
+
+Tapping a pick-grid tile opens the lightbox (context `playgroundGenerate`) on every landed result
+instead of swapping the preview at the top of the page; ✓ Use This makes the one on screen the
+working image. Results that land while it is open join it (`_renderPlaygroundGenerateResults`).
+
+## Playground **1 per model** — `bd06db7`, confirmed live 2026-10-23
+
+How many → 1 per model (picks shared with ⚔️ Compare Models, max 4). Joe ran it across Qwen-Image 2.1,
+Krea-2 Turbo, MOSS-Image and Z-Image-Turbo on the PC; all four came back and looked good.
+
 ## Local MOSS-Image (`local/moss-image`) — deployed 2026-10-18 (`d4be9b0`)
 
 `buildMossGraph` in `proxy/server.js`, from Comfy's `image_moss_image_t2i` template flattened out of
@@ -47,8 +57,8 @@ image towards covering up), skip-layer guidance off (the template's default). Te
   and `flux2-vae_small`. If Comfy Desktop is "updated" to a stable release before one includes
   MOSS, the model breaks with "rejected the workflow".
 - **Tested:** the graph that `buildMossGraph` builds ran on the PC's ComfyUI directly (not through
-  the tunnel/nginx) at 896×1152: 15 s, good prompt adherence. Not yet run through the deployed
-  proxy.
+  the tunnel/nginx) at 896×1152: 15 s, good prompt adherence. **Ran from the app through the
+  deployed proxy 2026-10-23** (Playground 1 per model) and looked good.
 - **To finish:** deploy, then Settings → Image API → Fetch models, add `local/moss-image`, tick
   🪄 Generate, set Prompt Length to **Detailed** and tick **Is Flux Model** (it wants natural-language
   prose, not tags).
@@ -65,7 +75,7 @@ image towards covering up), skip-layer guidance off (the template's default). Te
 - **No MOSS edit model exists.** OpenMOSS released only Base and SFT, both text-to-image. Comfy's
   repack adds just a colour/depth *control* LoRA. Edits stay on Qwen-Image 2.1.
 
-## Local Illustrious XL (`local/illustrious-xl`) — deployed 2026-10-21 (`ddbc691`)
+## Local Illustrious XL (`local/illustrious-xl`) — deployed 2026-10-21 (`ddbc691`), confirmed in the app 2026-10-23
 
 `buildIllustriousGraph` in `proxy/server.js`: plain SDXL, checkpoint `vxpIllustrious20_beta2`
 (a v-prediction merge from NoobAI-XL; ComfyUI spots the `v_pred` key and samples correctly on its
@@ -79,7 +89,8 @@ negative prompt without "nsfw". Capped at 1.05 MP (`maxMegapixels` on the regist
   v0.1 base, May 2024), which was noticeably flatter in a side-by-side test, so it isn't used.
 - **Tested:** the real graph builder, run straight against the PC's ComfyUI at 896×1152: 8 s
   warm, ~30 s cold. After deploying, the deployed builder ran from the proxy container through
-  the gateway: 9.3 s, 3:2 capped to 1280×864. Not yet tried from the app itself.
+  the gateway: 9.3 s, 3:2 capped to 1280×864. **Confirmed from the app 2026-10-23:** Joe added it in Settings → Image API
+  and generated with it; it all worked well.
 - **NoobAI-XL V-Pred 1.0 tried as a replacement (2026-10-21), and lost.** It's the base that vxp is
   merged from, and is usually named the best for anatomy and NSFW. Same 3 prompts and seed, each
   model with its own recommended negative (NoobAI's needs `mammal, anthro, furry…` because it
@@ -87,9 +98,16 @@ negative prompt without "nsfw". Capped at 1.05 MP (`maxMegapixels` on the regist
   flatter, with sticker-like outlines. The file stays in `models\checkpoints`
   (`NoobAI-XL-Vpred-v1.0.safetensors`, 7.1 GB, from HF `Laxhar/noobai-XL-Vpred-1.0`; Civitai is
   region-blocked here) and can be deleted. NSFW wasn't compared.
-- **To finish:** deploy, then Settings → Image API → Fetch models, add `local/illustrious-xl`,
+- **Set up (done 2026-10-23):** Settings → Image API → Fetch models, add `local/illustrious-xl`,
   tick 🪄 Generate and leave **Natural-language prompts unticked**: the id contains
   "illustrious", so the writer produces tags and the tag bookends apply.
+- **Anthro / furry characters (tested on the PC 2026-10-23, 12 images, 2 seeds):** "anthropomorphic
+  cat, cat girl, cat ears" gives a human with ears and a tail (Danbooru's kemonomimi). What works:
+  `furry female, anthro, (furry:1.2), cat, feline, (body fur:1.2), <colour> fur, snout, animal nose,
+  whiskers`, plus `furry hands, fur on hands, pawpads, claws` (without them the hands stay human).
+  **Never `muzzle`**: it draws a muzzle restraint. Adding `human, kemonomimi mode, human skin` to the
+  negative changed almost nothing, so the fixed negative was left alone. One seed drew a stray extra
+  tail. The tag writer now carries this as an ANTHRO / FURRY rule; not yet run with GLM.
 
 ## Image prompt fix — deployed 2026-10-18 (`66d9991`), since folded into the Prompt Builder writer
 
@@ -177,6 +195,12 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   browser harness running the real sheet + host code against a fake streaming text model (all
   flows, 320/375 px and desktop, light and dark). **Not yet run with the real text model, on a real
   iPhone, or in WebKit.** The lock-and-resume path is `api.js`'s, unchanged, not exercised here.
+- **Format follows the model on reopen (fixed 2026-10-23):** reopening the sheet with the same idea
+  resumes its state, and that used to keep the old Format, so building with Illustrious (tags)
+  and then with MOSS gave MOSS tags. Now a model that wants a different format switches it; a
+  model of the same kind keeps a Format picked by hand. In 1 per model, the builder writes for the
+  **first ticked** model, so mixing Illustrious with natural-language models still gives one format
+  for all.
 - **Open ideas:** a "Build" in Playground's Edit tab for edit instructions; storing the Look on
   each card rather than globally.
 

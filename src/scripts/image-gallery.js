@@ -47,6 +47,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         : context === 'galleryPending' ? "Add This Image to the Gallery"
         : context === 'playgroundLibrary' ? "Start a New Character from This Image"
         : context === 'playgroundHistory' ? "Make This Version the Working Image"
+        : context === 'playgroundGenerate' ? "Make This the Working Image"
         : "Use This Image for Card";
       useBtn.textContent = context === 'galleryPending' ? "✔️ Add to Gallery"
         : context === 'playgroundLibrary' ? "🎭 New Character"
@@ -107,11 +108,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
     metaEl.style.display = heading || snippet ? "" : "none";
 
     // 'view' is look-only: the image is already where it is being used.
-    // 'playgroundHistory' has nothing to do for the version already current.
+    // 'playgroundHistory' and 'playgroundGenerate' have nothing to do for the
+    // image that is already the working one.
     const useBtn = document.getElementById("gallery-use-btn");
     if (useBtn) {
       const hideUse = this._galleryContext === 'view'
-        || (this._galleryContext === 'playgroundHistory' && img.url === this.playgroundImageUrl);
+        || ((this._galleryContext === 'playgroundHistory' || this._galleryContext === 'playgroundGenerate')
+          && img.url === this.playgroundImageUrl);
       useBtn.style.display = hideUse ? "none" : "";
     }
 
@@ -247,6 +250,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const idx = (this.playgroundHistory || []).findIndex((e) => e.url === img.url);
       this.closeGallery();
       if (idx >= 0) this._selectPlaygroundHistoryEntry(idx);
+      return;
+    }
+
+    if (this._galleryContext === 'playgroundGenerate') {
+      // An index into this._pgGenerateResults (see _pgGenerateGalleryImages).
+      this.closeGallery();
+      this._pickPlaygroundGenerateResult(img.resultIndex);
+      this.showNotification("✓ That one is now the working image", "success");
       return;
     }
 

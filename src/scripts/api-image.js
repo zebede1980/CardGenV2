@@ -926,7 +926,8 @@ Two blocks separated by one blank line: first the medium and the subject (who, a
     } else if (format === "prose") {
       parts.push(`FORMAT — plain descriptive prose, as a caption of the finished picture: one or two paragraphs of full sentences. Open with one sentence naming the medium and the subject together (e.g. "A semi-realistic 2.5D anime illustration of a silver-haired woman in her late twenties…"). Name the medium once — never "an illustration of an image of a portrait of". No lists, labels or tags. About ${words} words.${maxNote}`);
     } else {
-      parts.push(`FORMAT — comma-separated tags for a tag-trained model (Danbooru-style tags where they fit), in this order: subject count and type, appearance, outfit, pose and expression, setting, lighting, composition, medium and style. End with "masterpiece, best quality". No sentences. About ${{ short: "20–35", rich: "35–60", max: "60–90" }[detail]} tags.`);
+      parts.push(`FORMAT — comma-separated tags for a tag-trained model (Danbooru-style tags where they fit), in this order: subject count and type, appearance, outfit, pose and expression, setting, lighting, composition, medium and style. End with "masterpiece, best quality". No sentences. About ${{ short: "20–35", rich: "35–60", max: "60–90" }[detail]} tags.
+ANTHRO / FURRY subjects (a talking animal, an animal-bodied person, anything covered in fur, scales or feathers): to these models "cat girl", "animal ears", "kemonomimi" and "<animal> ears/tail" mean a human with ears and a tail, so never use them for such a subject. Start with "furry female" or "furry male", "anthro", "furry", then the species ("cat, feline", "wolf, canine"…), and tag the body: "body fur", "<colour> fur", "snout", "animal nose", "whiskers" where it fits, and "furry hands, pawpads, claws" so the hands aren't human. Never write "muzzle" — it draws a muzzle restraint; use "snout".`);
     }
 
     // ── Output ──

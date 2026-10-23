@@ -87,7 +87,11 @@
       // edited to in the sheet: carry on from where it was left.
       const resumable = prev && (sameSubject(prev.openedWith, opts.subject) || sameSubject(prev.subject, opts.subject));
       if (resumable) {
+        // A different kind of model (Illustrious → MOSS) gets its own format;
+        // the same kind keeps a Format picked by hand.
+        const formatBefore = window.apiHandler.imagePromptPrefs(prev.model).format;
         this.state = prev;
+        if (prefs.format !== formatBefore) this.state.format = prefs.format;
         this.state.model = opts.model;
         this.state.shape = opts.shape;
       } else {
