@@ -57,8 +57,8 @@ image towards covering up), skip-layer guidance off (the template's default). Te
   and `flux2-vae_small`. If Comfy Desktop is "updated" to a stable release before one includes
   MOSS, the model breaks with "rejected the workflow".
 - **Tested:** the graph that `buildMossGraph` builds ran on the PC's ComfyUI directly (not through
-  the tunnel/nginx) at 896×1152: 15 s, good prompt adherence. Not yet run through the deployed
-  proxy.
+  the tunnel/nginx) at 896×1152: 15 s, good prompt adherence. **Ran from the app through the
+  deployed proxy 2026-10-23** (Playground 1 per model) and looked good.
 - **To finish:** deploy, then Settings → Image API → Fetch models, add `local/moss-image`, tick
   🪄 Generate, set Prompt Length to **Detailed** and tick **Is Flux Model** (it wants natural-language
   prose, not tags).
