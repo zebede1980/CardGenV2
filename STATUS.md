@@ -11,6 +11,7 @@ run was made.
 
 | What | Commit | Try this |
 |---|---|---|
+| Playground Generate grid opens the **lightbox**: swipe/arrow through results, ✓ Use This picks one (was: tap swapped the preview at the top) | _this commit_ | Generate 4, tap a tile, swipe, Use This |
 | Playground Generate **Shape** picker (`api.image.generateAspectRatio`) | `279755b` | Generate a 16:9 and a 3:4 image and check the shape |
 | Nano Banana 2.1 fix: tier models get `aspect_ratio` only, no pixels (they 400 on pixels) | `d15f16a`, `6f652c0` | Generate with Nano Banana 2.1 and qwen-image-3-pro |
 | Image sizes follow nano-gpt's catalogue (`GET /api/image/catalog`, cached 6 h) | `6f652c0` | flux-2-pro at 4:3 should come back 1536×1024 (it lists no 4:3) |

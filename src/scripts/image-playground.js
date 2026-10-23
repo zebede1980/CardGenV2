@@ -576,7 +576,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           "warning", 6000,
         );
       } else {
-        this.showNotification(showGrid ? `${count} image${count > 1 ? "s" : ""} generated — tap one to pick it` : "Image generated!", "success");
+        this.showNotification(showGrid ? `${count} image${count > 1 ? "s" : ""} generated — tap one to view them full size` : "Image generated!", "success");
       }
     } finally {
       if (btn) btn.disabled = false;
@@ -631,7 +631,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         tile.textContent = `❌ Failed${pendingLabel}`;
       } else {
         tile.style.cursor = "pointer";
-        tile.title = isActive ? "This is the working image" : "Tap to make this the working image";
+        tile.title = isActive ? "This is the working image — tap to view full size" : "Tap to view full size, swipe between them, then ✓ Use This";
         tile.innerHTML = `
           <img src="${result.url}" alt="Option ${index + 1}" style="width: 100%; height: 100%; object-fit: contain; display: block;">
           <span style="position:absolute; top:0; left:0; background:rgba(0,0,0,0.55); color:#fff; font-size:0.7rem; padding:0.15rem 0.35rem; border-bottom-right-radius:0.4rem; max-width:calc(100% - 2.5rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${isActive ? "✓ " : ""}${escapeHtml(badgeText(index))}</span>
@@ -643,10 +643,44 @@ Object.assign(CharacterGeneratorApp.prototype, {
           e.stopPropagation();
           this.savePlaygroundImageToLibrary(result.url, `Generated (${result.model})`, result.prompt);
         });
-        tile.addEventListener("click", () => this._pickPlaygroundGenerateResult(index));
+        tile.addEventListener("click", () => this._openPlaygroundGenerateGallery(index));
       }
       grid.appendChild(tile);
     });
+
+    // Results landing while the lightbox is open join it, keeping whichever
+    // image is on screen where it is.
+    if (this._galleryContext === "playgroundGenerate"
+      && document.getElementById("gallery-lightbox")?.classList.contains("show")) {
+      const showing = this._galleryImages[this._galleryCurrentIdx]?.resultIndex;
+      this._galleryImages = this._pgGenerateGalleryImages();
+      this._galleryCurrentIdx = Math.max(0, this._galleryImages.findIndex(img => img.resultIndex === showing));
+      this._updateGalleryCounter();
+      this._updateGalleryNavButtons();
+    }
+  },
+
+  // The landed results as lightbox images. Tapping a tile used to swap the
+  // preview at the top of the page, so comparing them meant scrolling up and
+  // down between it and this grid; the lightbox puts them a swipe apart.
+  _pgGenerateGalleryImages() {
+    return (this._pgGenerateResults || []).flatMap((result, index) => {
+      if (!result?.url) return [];
+      const take = this._pgGenerateLabels?.[index];
+      return [{
+        url: result.url,
+        model: take ? `${take} · ${result.model}` : result.model,
+        prompt: result.prompt || "",
+        resultIndex: index,
+      }];
+    });
+  },
+
+  _openPlaygroundGenerateGallery(index) {
+    const images = this._pgGenerateGalleryImages();
+    const start = images.findIndex(img => img.resultIndex === index);
+    if (start < 0) return;
+    this.openGallery(images, start, "playgroundGenerate");
   },
 
   // Adds the pick to the history strip rather than resetting it, so swapping
