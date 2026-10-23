@@ -301,7 +301,8 @@ covers the details.
 - **Replies:** read from the top as they arrive, with the ↓ dot when text is below.
 - **Resilience:** the chat now has a stall watchdog (45 s, with the backend pinging every 15 s)
   and recovers a dropped reply by fetching that one message. Waking no longer aborts a live reply.
-- **Tested:** headless WebKit against a fake streaming backend only.
+- **Tested:** headless WebKit against a fake streaming backend. **First iPhone try (2026-10-23):** Joe ran
+  through most of the checks below: "much improved", no problems found so far. Desktop not yet checked.
 - **Try on the iPhone:**
   - The keyboard opening and closing.
   - Locking mid-reply, then coming back.
