@@ -53,6 +53,17 @@ image towards covering up), skip-layer guidance off (the template's default). Te
   🪄 Generate, set Prompt Length to **Detailed** and tick **Is Flux Model** (it wants natural-language
   prose, not tags).
 - Sizes need multiples of 16; `localComfyDims` already rounds to 32. It is happiest at 1–2 MP.
+- **Uncensored LoRA, always on (2026-10-21, user's choice over a separate NSFW entry):**
+  `MOSS_NSFW_LORA` in `server.js`. axiomofmind's `MOSS-Image-NSFW-Uncensored-LoRA-ComfyUI`
+  (74 MB, HF `axiomofmind/Moss-image-nsfw-uncensored-lora`, in the PC's `models\loras`) is applied
+  through `LoraLoaderModelOnly` at 0.7, and its trigger `moss_xvstyle, ` leads every prompt.
+  - The card's SHA-256 is one character short (a typo); the file matched HF's own LFS hash.
+  - **Tested on the PC:** same seed with and without it. It takes effect on the int8 model, with no
+    "lora key not loaded" in the log and no extra time (13.6 s warm). SFW prompts barely change:
+    anime stays anime, and a photo gets a slightly smoother face.
+  - **Not tested:** NSFW output itself.
+- **No MOSS edit model exists.** OpenMOSS released only Base and SFT, both text-to-image. Comfy's
+  repack adds just a colour/depth *control* LoRA. Edits stay on Qwen-Image 2.1.
 
 ## Local Illustrious XL (`local/illustrious-xl`) — deployed 2026-10-21 (`ddbc691`)
 

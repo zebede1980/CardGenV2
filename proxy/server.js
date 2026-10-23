@@ -3150,18 +3150,31 @@ function buildKrea2TurboGraph({ prompt, seed, steps, width, height }) {
 // so the negative prompt matters. It's OpenMOSS's official one minus "nsfw",
 // which pushed every picture towards covering up; this is an adult roleplay
 // tool, and what a picture shows is the prompt's call.
+//
+// Always runs with axiomofmind's uncensored LoRA (HF
+// axiomofmind/Moss-image-nsfw-uncensored-lora, ComfyUI-keyed file) at its
+// card's strength, 0.7, model only. It only takes effect after its trigger
+// word, so that leads every prompt. It was trained on explicit photos, so it
+// also pulls everything towards a photographic look; that trade-off was the
+// owner's choice over a separate NSFW entry.
+const MOSS_NSFW_LORA = { file: "MOSS-Image-NSFW-Uncensored-LoRA-ComfyUI.safetensors", strength: 0.7, trigger: "moss_xvstyle" };
+
 function buildMossGraph({ prompt, seed, steps, width, height }) {
   return {
     1: { class_type: "UNETLoader", inputs: { unet_name: "moss_image_sft_int8_convrot.safetensors", weight_dtype: "default" } },
+    9: {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: ["1", 0], lora_name: MOSS_NSFW_LORA.file, strength_model: MOSS_NSFW_LORA.strength },
+    },
     2: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3.5_9b_int8_convrot.safetensors", type: "moss_image", device: "default" } },
     3: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae_small.safetensors" } },
-    4: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: prompt } },
+    4: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: `${MOSS_NSFW_LORA.trigger}, ${prompt}` } },
     5: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: "worst quality, bad anatomy, watermark, jpeg artifact" } },
     6: { class_type: "EmptyFlux2LatentImage", inputs: { width, height, batch_size: 1 } },
     7: {
       class_type: "KSampler",
       inputs: {
-        model: ["1", 0], positive: ["4", 0], negative: ["5", 0], latent_image: ["6", 0],
+        model: ["9", 0], positive: ["4", 0], negative: ["5", 0], latent_image: ["6", 0],
         seed, steps, cfg: 2.5, sampler_name: "er_sde", scheduler: "simple", denoise: 1.0,
       },
     },
