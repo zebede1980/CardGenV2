@@ -11,7 +11,6 @@ run was made.
 
 | What | Commit | Try this |
 |---|---|---|
-| Playground Generate grid opens the **lightbox**: swipe/arrow through results, ✓ Use This picks one (was: tap swapped the preview at the top) | `a7fba76` | Generate 4, tap a tile, swipe, Use This |
 | Playground Generate **Shape** picker (`api.image.generateAspectRatio`) | `279755b` | Generate a 16:9 and a 3:4 image and check the shape |
 | Nano Banana 2.1 fix: tier models get `aspect_ratio` only, no pixels (they 400 on pixels) | `d15f16a`, `6f652c0` | Generate with Nano Banana 2.1 and qwen-image-3-pro |
 | Image sizes follow nano-gpt's catalogue (`GET /api/image/catalog`, cached 6 h) | `6f652c0` | flux-2-pro at 4:3 should come back 1536×1024 (it lists no 4:3) |
@@ -34,6 +33,12 @@ run was made.
   still recognised by name.
 - Hand-added ids may be aliases: `nano-banana-2.1` is `google/gemini-nano-banana-2.1` in the
   catalogue. `findImageCatalogEntry` matches a unique id ending in the name at a `/` or `-`.
+
+## Playground Generate grid opens the lightbox — `a7fba76`, confirmed on the iPhone 2026-10-23
+
+Tapping a pick-grid tile opens the lightbox (context `playgroundGenerate`) on every landed result
+instead of swapping the preview at the top of the page; ✓ Use This makes the one on screen the
+working image. Results that land while it is open join it (`_renderPlaygroundGenerateResults`).
 
 ## Local MOSS-Image (`local/moss-image`) — deployed 2026-10-18 (`d4be9b0`)
 
