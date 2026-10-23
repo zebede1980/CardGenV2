@@ -15,7 +15,6 @@ run was made.
 | Nano Banana 2.1 fix: tier models get `aspect_ratio` only, no pixels (they 400 on pixels) | `d15f16a`, `6f652c0` | Generate with Nano Banana 2.1 and qwen-image-3-pro |
 | Image sizes follow nano-gpt's catalogue (`GET /api/image/catalog`, cached 6 h) | `6f652c0` | flux-2-pro at 4:3 should come back 1536×1024 (it lists no 4:3) |
 | Text-stream stall fix: proxy `: ping` every 15 s, client watchdog after 45 s silence | `ef00936` | Nothing to do unless a card stalls again; if it does, check whether it resumed |
-| Playground **1 per model** (How many → 1 per model; picks shared with ⚔️ Compare Models, max 4) | `bd06db7` | Run it with the PC on, across all local models |
 | Status badge is free now (`checkTextApiReachable`, GET `/models`, cached 5 min) | `768a86f` | Badge still goes green; Settings → Test Connection still makes a real call |
 | ⚔️ Compare Models in Character Gen | `eda75dd` | Never run against the real GPU |
 | Combine tab (qwen-image-3-pro, reve/2.1/remix, grok-imagine edit) | — | Never confirmed against a real model |
@@ -39,6 +38,11 @@ run was made.
 Tapping a pick-grid tile opens the lightbox (context `playgroundGenerate`) on every landed result
 instead of swapping the preview at the top of the page; ✓ Use This makes the one on screen the
 working image. Results that land while it is open join it (`_renderPlaygroundGenerateResults`).
+
+## Playground **1 per model** — `bd06db7`, confirmed live 2026-10-23
+
+How many → 1 per model (picks shared with ⚔️ Compare Models, max 4). Joe ran it across Qwen-Image 2.1,
+Krea-2 Turbo, MOSS-Image and Z-Image-Turbo on the PC; all four came back and looked good.
 
 ## Local MOSS-Image (`local/moss-image`) — deployed 2026-10-18 (`d4be9b0`)
 
