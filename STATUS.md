@@ -86,6 +86,13 @@ negative prompt without "nsfw". Capped at 1.05 MP (`maxMegapixels` on the regist
 - **Set up (done 2026-10-23):** Settings → Image API → Fetch models, add `local/illustrious-xl`,
   tick 🪄 Generate and leave **Natural-language prompts unticked**: the id contains
   "illustrious", so the writer produces tags and the tag bookends apply.
+- **Anthro / furry characters (tested on the PC 2026-10-23, 12 images, 2 seeds):** "anthropomorphic
+  cat, cat girl, cat ears" gives a human with ears and a tail (Danbooru's kemonomimi). What works:
+  `furry female, anthro, (furry:1.2), cat, feline, (body fur:1.2), <colour> fur, snout, animal nose,
+  whiskers`, plus `furry hands, fur on hands, pawpads, claws` (without them the hands stay human).
+  **Never `muzzle`**: it draws a muzzle restraint. Adding `human, kemonomimi mode, human skin` to the
+  negative changed almost nothing, so the fixed negative was left alone. One seed drew a stray extra
+  tail. The tag writer now carries this as an ANTHRO / FURRY rule; not yet run with GLM.
 
 ## Image prompt fix — deployed 2026-10-18 (`66d9991`), since folded into the Prompt Builder writer
 
