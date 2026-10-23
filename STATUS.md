@@ -1,6 +1,6 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-10-21. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
+Last updated 2026-10-23. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
 ✨ Prompt Builder merged, pushed and deployed. Update this file when you ship something or find something worth remembering: it is the
 hand-over between machines, since Claude's own memory does not travel between them.
 
@@ -54,7 +54,7 @@ image towards covering up), skip-layer guidance off (the template's default). Te
   prose, not tags).
 - Sizes need multiples of 16; `localComfyDims` already rounds to 32. It is happiest at 1–2 MP.
 
-## Local Illustrious XL (`local/illustrious-xl`) — deployed 2026-10-21 (`ddbc691`)
+## Local Illustrious XL (`local/illustrious-xl`) — deployed 2026-10-21 (`ddbc691`), confirmed in the app 2026-10-23
 
 `buildIllustriousGraph` in `proxy/server.js`: plain SDXL, checkpoint `vxpIllustrious20_beta2`
 (a v-prediction merge from NoobAI-XL; ComfyUI spots the `v_pred` key and samples correctly on its
@@ -68,7 +68,8 @@ negative prompt without "nsfw". Capped at 1.05 MP (`maxMegapixels` on the regist
   v0.1 base, May 2024), which was noticeably flatter in a side-by-side test, so it isn't used.
 - **Tested:** the real graph builder, run straight against the PC's ComfyUI at 896×1152: 8 s
   warm, ~30 s cold. After deploying, the deployed builder ran from the proxy container through
-  the gateway: 9.3 s, 3:2 capped to 1280×864. Not yet tried from the app itself.
+  the gateway: 9.3 s, 3:2 capped to 1280×864. **Confirmed from the app 2026-10-23:** Joe added it in Settings → Image API
+  and generated with it; it all worked well.
 - **NoobAI-XL V-Pred 1.0 tried as a replacement (2026-10-21), and lost.** It's the base that vxp is
   merged from, and is usually named the best for anatomy and NSFW. Same 3 prompts and seed, each
   model with its own recommended negative (NoobAI's needs `mammal, anthro, furry…` because it
@@ -76,7 +77,7 @@ negative prompt without "nsfw". Capped at 1.05 MP (`maxMegapixels` on the regist
   flatter, with sticker-like outlines. The file stays in `models\checkpoints`
   (`NoobAI-XL-Vpred-v1.0.safetensors`, 7.1 GB, from HF `Laxhar/noobai-XL-Vpred-1.0`; Civitai is
   region-blocked here) and can be deleted. NSFW wasn't compared.
-- **To finish:** deploy, then Settings → Image API → Fetch models, add `local/illustrious-xl`,
+- **Set up (done 2026-10-23):** Settings → Image API → Fetch models, add `local/illustrious-xl`,
   tick 🪄 Generate and leave **Natural-language prompts unticked**: the id contains
   "illustrious", so the writer produces tags and the tag bookends apply.
 
