@@ -184,6 +184,12 @@ idea, or a character card) plus a **look** (how it's shot or drawn).
   browser harness running the real sheet + host code against a fake streaming text model (all
   flows, 320/375 px and desktop, light and dark). **Not yet run with the real text model, on a real
   iPhone, or in WebKit.** The lock-and-resume path is `api.js`'s, unchanged, not exercised here.
+- **Format follows the model on reopen (fixed 2026-10-23):** reopening the sheet with the same idea
+  resumes its state, and that used to keep the old Format, so building with Illustrious (tags)
+  and then with MOSS gave MOSS tags. Now a model that wants a different format switches it; a
+  model of the same kind keeps a Format picked by hand. In 1 per model, the builder writes for the
+  **first ticked** model, so mixing Illustrious with natural-language models still gives one format
+  for all.
 - **Open ideas:** a "Build" in Playground's Edit tab for edit instructions; storing the Look on
   each card rather than globally.
 
