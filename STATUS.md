@@ -361,13 +361,35 @@ Starting points:
 - Experiment harness used for Reimagine: submit graphs from inside the proxy container (it has the
   COMFYUI env), save as `cardgen/exp`, compare on a contact sheet.
 
+## Roleplay Chat rebuilt for the iPhone (2026-10-23) — `plans/roleplay-chat-mobile-redesign.md`
+
+The open chat was rebuilt as one layer, iPhone first; the plan's "Implementation notes" section
+covers the details.
+- **Shell:** a fixed shell sized to `visualViewport`, so the keyboard no longer pushes the header
+  away. Fields are 16px, so Safari no longer zooms on tap.
+- **Layout:** a slim header (Aa for text size, tap the names for the cards); a one-row composer,
+  with ＋ for OOC / Impersonate / speaker. On a phone Return types a newline. Actions show when you
+  tap a message; the latest reply always shows its own.
+- **Editing:** a full-screen sheet.
+- **Replies:** read from the top as they arrive, with the ↓ dot when text is below.
+- **Resilience:** the chat now has a stall watchdog (45 s, with the backend pinging every 15 s)
+  and recovers a dropped reply by fetching that one message. Waking no longer aborts a live reply.
+- **Tested:** headless WebKit against a fake streaming backend. **First iPhone try (2026-10-23):** Joe ran
+  through most of the checks below: "much improved", no problems found so far. Desktop not yet checked.
+- **Try on the iPhone:**
+  - The keyboard opening and closing.
+  - Locking mid-reply, then coming back.
+  - Editing a long message.
+  - Rotating.
+  - A group chat's speaker picker.
+
 ## Known open issues
 
 - **Root cause of the 2026-10-18 stall is unknown.** The proxy finished the job and NPM sent the
   full 55 KB, but the desktop browser stopped receiving it partway through. The watchdog now
   recovers resumable streams. It hasn't been reproduced on a real stalled network.
-- Chat, Story Writer and Adventure (`/api/sw/*`) have no stall watchdog. They have their own
-  readers.
+- Story Writer and Adventure (`/api/sw/*`) have no stall watchdog (Roleplay Chat has one since
+  2026-10-23). They have their own readers.
 - Recovered card **Avril Downing** (History, `h_1792307637233_joudne`) has no example messages,
   creator's notes, post-history instructions or portrait yet. Generate those in-app.
 - Only new-character portraits fall back to a hosted model when the PC is off. Regenerate,

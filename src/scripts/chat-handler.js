@@ -2,6 +2,19 @@
  * RoleplayChatHandler
  * Handles state, DOM binding, and backend API interactions for the Roleplay Chat tab.
  */
+
+// A reply stream silent for this long is treated as dropped, and the finished
+// reply is fetched from the server instead. The backend sends an SSE ping every
+// 15 s (SSE_HEARTBEAT_SECONDS in routers/chat.py), so 45 s is three missed pings.
+const CHAT_STREAM_STALL_MS = 45000;
+// After a dropped stream, how often and how long to poll for the saved reply.
+const CHAT_RECOVER_POLL_MS = 4000;
+const CHAT_RECOVER_GIVE_UP_MS = 6 * 60 * 1000;
+
+// Phones and tablets: Return types a newline (Send sends), the keyboard isn't
+// popped up uninvited, and actions are revealed by tapping a message.
+const chatIsTouch = () => window.matchMedia?.('(pointer: coarse)').matches ?? false;
+
 class RoleplayChatHandler {
     constructor() {
         this.activeChatId = null;
@@ -23,6 +36,7 @@ class RoleplayChatHandler {
         this.bindEvents();
         this.setupTabIntegration();
         this.loadPersonas();
+        this._trackVisualViewport();
     }
 
     /* ── Lobby / Chat-view navigation ──────────────────────────────────────── */
@@ -33,6 +47,7 @@ class RoleplayChatHandler {
         if (activeView) activeView.style.display = 'none';
         const grid = document.getElementById('chat-session-list');
         if (grid) grid.scrollTop = 0;
+        this._closePopovers();
         document.body.classList.remove('chat-in-chat');
     }
 
@@ -42,40 +57,73 @@ class RoleplayChatHandler {
         if (lobby) lobby.style.display = 'none';
         if (activeView) activeView.style.display = 'flex';
         document.body.classList.add('chat-in-chat');
+        // Safari may have the page scrolled from the lobby; the fixed shell
+        // follows the visual viewport, so start from the top.
+        window.scrollTo(0, 0);
+        this._syncVisualViewport();
     }
 
+    // The open chat is a fixed shell sized to the *visible* viewport. iOS
+    // Safari doesn't resize the page for the keyboard: it pans the visual
+    // viewport over it, which pushed a 100dvh shell's header off the top. So
+    // mirror visualViewport into CSS variables on <html> (the edit sheet uses
+    // them too) and note when the keyboard is up.
+    _trackVisualViewport() {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const onChange = () => this._syncVisualViewport();
+        vv.addEventListener('resize', onChange);
+        vv.addEventListener('scroll', onChange);
+        window.addEventListener('orientationchange', onChange);
+    }
+
+    _syncVisualViewport() {
+        const vv = window.visualViewport;
+        if (!vv || !document.body.classList.contains('chat-in-chat')) return;
+        const root = document.documentElement.style;
+        const wasAtBottom = !this.isUserScrolling;
+        root.setProperty('--chat-vh', `${Math.round(vv.height)}px`);
+        root.setProperty('--chat-vtop', `${Math.round(vv.offsetTop)}px`);
+        // A keyboard takes well over 100px; toolbars and zoom don't.
+        document.body.classList.toggle('chat-kb-open', window.innerHeight - vv.height > 120);
+        // Keep the latest message in view as the keyboard opens and the shell shrinks.
+        if (wasAtBottom) requestAnimationFrame(() => this.scrollToBottom(false, true));
+    }
 
     fixLayout() {
-        // Scroll-to-bottom FAB
+        // ↓ jump button: shown whenever the latest text is out of view. During
+        // a reply it carries a dot, because text is arriving below.
         const fab = document.getElementById('chat-scroll-bottom-btn');
+        this.els.fab = fab;
         if (fab) {
             fab.addEventListener('click', () => {
                 this.scrollToBottom(true, true);
                 fab.style.display = 'none';
+                fab.classList.remove('has-new');
             });
 
             this.els.timeline.addEventListener('scroll', () => {
                 const { scrollTop, scrollHeight, clientHeight } = this.els.timeline;
                 const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
                 this.isUserScrolling = !isAtBottom;
-                
-                if (this.isUserScrolling) {
-                    fab.style.display = 'flex';
-                } else {
-                    fab.style.display = 'none';
-                }
-            });
+                fab.style.display = isAtBottom ? 'none' : 'flex';
+                if (isAtBottom) fab.classList.remove('has-new');
+            }, { passive: true });
         }
 
-        // Touch device detection for always-visible message actions
+        // The composer grows with the tray, an OOC note or a long message;
+        // if the latest text was in view, keep it there.
+        const composer = document.querySelector('#view-roleplaychat .chat-input-area');
+        if (composer && window.ResizeObserver) {
+            new ResizeObserver(() => {
+                if (!this.isUserScrolling) this.scrollToBottom(false, true);
+            }).observe(composer);
+        }
+
+        // Still used by the lobby (always-visible delete on chat cards).
         if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
             document.documentElement.classList.add('touch-device');
-            const style = document.createElement('style');
-            style.id = 'chat-touch-fixes';
-            style.textContent = `.touch-device .chat-bubble-wrapper .chat-message-actions { opacity: 1 !important; }`;
-            document.head.appendChild(style);
         }
-
     }
 
     setupTabIntegration() {
@@ -181,7 +229,42 @@ class RoleplayChatHandler {
             zoomOutBtn: document.getElementById('chat-zoom-out-btn'),
             zoomResetBtn: document.getElementById('chat-zoom-reset-btn'),
             zoomInBtn: document.getElementById('chat-zoom-in-btn'),
+
+            headerWho: document.getElementById('chat-header-who'),
+            headerAvatars: document.getElementById('chat-header-avatars'),
+            viewCardsBtn: document.getElementById('chat-view-cards-btn'),
+            textSizeBtn: document.getElementById('chat-text-size-btn'),
+            textSizePop: document.getElementById('chat-text-size-pop'),
+            toolsBtn: document.getElementById('chat-tools-btn'),
+            toolsTray: document.getElementById('chat-tools-tray'),
+            speakerWrap: document.getElementById('chat-speaker-wrap'),
         };
+    }
+
+    /* ── Header popover and composer tray ──────────────────────────────────── */
+    _togglePopover(btn, panel, open = !panel.classList.contains('open')) {
+        if (!btn || !panel) return;
+        panel.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', String(open));
+    }
+
+    _closePopovers() {
+        this._togglePopover(this.els.textSizeBtn, this.els.textSizePop, false);
+        this._togglePopover(this.els.toolsBtn, this.els.toolsTray, false);
+    }
+
+    // The ＋ button carries a dot while something in its tray will shape the
+    // next reply: an OOC note, or a chosen speaker.
+    _updateToolsBadge() {
+        const hasOoc = !!this.els.oocInput?.value.trim();
+        const hasSpeaker = !!(this.els.speakerSelect && this.els.speakerWrap?.style.display !== 'none' && this.els.speakerSelect.value);
+        this.els.toolsBtn?.classList.toggle('has-extras', hasOoc || hasSpeaker);
+        this.els.oocToggleBtn?.classList.toggle('active', this.els.oocContainer?.style.display !== 'none');
+    }
+
+    // Don't summon the iPhone keyboard over a reply the user is about to read.
+    _focusInput() {
+        if (!chatIsTouch()) this.els.msgInput?.focus();
     }
 
     bindEvents() {
@@ -268,10 +351,13 @@ class RoleplayChatHandler {
         this.els.oocToggleBtn.addEventListener('click', () => {
             const isHidden = this.els.oocContainer.style.display === 'none';
             this.els.oocContainer.style.display = isHidden ? 'block' : 'none';
+            this._togglePopover(this.els.toolsBtn, this.els.toolsTray, false);
+            this._updateToolsBadge();
             if (isHidden) this.els.oocInput.focus();
         });
 
         this.els.oocInput.addEventListener('input', () => this.updateOocBadge());
+        this.els.speakerSelect?.addEventListener('change', () => this._updateToolsBadge());
 
         this.els.sendBtn.addEventListener('click', () => this.sendMessage());
 
@@ -280,26 +366,55 @@ class RoleplayChatHandler {
         }
 
         if (this.els.impBtn) {
-            this.els.impBtn.addEventListener('click', () => this.sendImpersonateMessage());
+            this.els.impBtn.addEventListener('click', () => {
+                this._togglePopover(this.els.toolsBtn, this.els.toolsTray, false);
+                this.sendImpersonateMessage();
+            });
         }
 
+        // Header: tapping who's in the chat opens their cards; Aa holds text size.
+        this.els.headerWho?.addEventListener('click', () => this.els.viewCardsBtn?.click());
+        this.els.textSizeBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._togglePopover(this.els.textSizeBtn, this.els.textSizePop);
+        });
+        this.els.toolsBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._togglePopover(this.els.toolsBtn, this.els.toolsTray);
+        });
+        // A tap anywhere else closes the popover and the tray.
+        document.addEventListener('click', (e) => {
+            if (!document.body.classList.contains('chat-in-chat')) return;
+            if (!e.target.closest('#chat-text-size-pop, #chat-text-size-btn')) {
+                this._togglePopover(this.els.textSizeBtn, this.els.textSizePop, false);
+            }
+            if (!e.target.closest('#chat-tools-tray, #chat-tools-btn')) {
+                this._togglePopover(this.els.toolsBtn, this.els.toolsTray, false);
+            }
+        });
+
+        // Grows with its text up to the CSS max-height (150px, or 30% of the
+        // visible screen when the keyboard leaves less), then scrolls.
         const autoResizeInput = (el) => {
+            const max = parseFloat(getComputedStyle(el).maxHeight) || 150;
             el.style.height = 'auto';
-            el.style.height = Math.min(el.scrollHeight, 150) + 'px';
-            el.style.overflowY = el.scrollHeight > 150 ? 'auto' : 'hidden';
+            el.style.height = Math.min(el.scrollHeight, max) + 'px';
+            el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
         };
 
         this.els.msgInput.addEventListener('input', () => autoResizeInput(this.els.msgInput));
         // Trigger initial resize
         setTimeout(() => autoResizeInput(this.els.msgInput), 0);
+        this.els.msgInput.placeholder = chatIsTouch() ? 'Message…' : 'Message… (Shift+Enter for a new line)';
 
+        // Enter sends with a keyboard; on a phone Return types a newline (there's
+        // no Shift to hold) and the Send button sends.
         this.els.msgInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !chatIsTouch()) {
                 e.preventDefault();
                 this.sendMessage();
             } else if (e.key === 'Escape') {
                 this.els.msgInput.blur();
-                this.closeMobileSidebar();
             }
         });
 
@@ -311,16 +426,17 @@ class RoleplayChatHandler {
         });
 
         this.els.oocInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
-                this.sendMessage();
+                if (chatIsTouch()) this.els.msgInput.focus();
+                else this.sendMessage();
             }
         });
 
-
-
+        // Only visibility: window 'focus' also fired on every return to the
+        // browser window and, mid-reply, aborted a healthy stream and redrew
+        // the whole chat.
         document.addEventListener('visibilitychange', () => this.syncOnWake());
-        window.addEventListener('focus', () => this.syncOnWake());
 
         if (this.els.zoomOutBtn) {
             this.els.zoomOutBtn.addEventListener('click', () => this.setZoom(this.chatZoom - 0.1));
@@ -351,6 +467,7 @@ class RoleplayChatHandler {
         if (!this.els.oocToggleBtn || !this.els.oocInput) return;
         const hasContent = this.els.oocInput.value.trim().length > 0;
         this.els.oocToggleBtn.classList.toggle('has-ooc', hasContent);
+        this._updateToolsBadge();
     }
 
     async syncOnWake() {
@@ -360,43 +477,43 @@ class RoleplayChatHandler {
 
         if (!this.activeChatId) return;
 
+        // A reply streaming in this page is left alone: the stall watchdog in
+        // _readChatStream handles a connection that died while the phone was
+        // locked. But don't make the user wait out the watchdog if the reply
+        // may already be finished: when nothing has arrived for a while, ask.
+        if (this._liveStream) {
+            if (Date.now() - this._liveStream.lastByteAt() > 20000) this._liveStream.checkServer();
+            return;
+        }
+        // Being fetched after a dropped stream, or the server is still writing
+        // a reply this page didn't start (the pending banner polls for it).
+        if (this._recovering || this.isGenerating) return;
+
         try {
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
             if (!res.ok) return;
             const chat = await res.json();
-
             const messages = chat.messages || [];
             const lastMsg = messages[messages.length - 1];
 
-            const serverIsGenerating = lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '';
-
-            if (serverIsGenerating || this.isGenerating) {
-                if (this.abortController) { 
-                    this.abortController.abort(); 
-                    this.abortController = null; 
-                }
-                this.selectChat(this.activeChatId);
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
+                this.selectChat(this.activeChatId); // shows the pending banner
                 return;
             }
 
             this._hidePendingGenerationBanner();
 
+            // Changed elsewhere (another device, or a reply that finished while
+            // this page was away): redraw.
             const domCount = this.els.timeline.querySelectorAll('.chat-bubble-wrapper').length;
-            const dbCount  = messages.length;
-            let needsReload = false;
-            
-            if (dbCount !== domCount) {
-                needsReload = true;
-            } else if (dbCount > 0 && domCount > 0) {
+            let needsReload = messages.length !== domCount;
+            if (!needsReload && messages.length > 0) {
                 const lastDomBubble = this.els.timeline.querySelector('.chat-bubble-wrapper:last-child .chat-bubble');
                 if (lastDomBubble && lastDomBubble.textContent.trim() === '' && lastMsg.content !== '') {
                     needsReload = true;
                 }
             }
-            
-            if (needsReload) {
-                this.selectChat(this.activeChatId);
-            }
+            if (needsReload) this.selectChat(this.activeChatId);
         } catch (e) {
             console.error('Failed to sync chat on wake', e);
         }
@@ -1206,37 +1323,6 @@ class RoleplayChatHandler {
         }
     }
 
-    toggleFullscreen() {
-        const chatView = document.getElementById('view-roleplaychat');
-        const fsBtn = document.getElementById('chat-fullscreen-toggle');
-        const sidebar = document.getElementById('chat-sidebar-container');
-        const backdrop = document.getElementById('chat-sidebar-backdrop');
-
-        if (!chatView) return;
-
-        if (!chatView.classList.contains('chat-fullscreen')) {
-            chatView.classList.add('chat-fullscreen');
-            if (fsBtn) { fsBtn.innerHTML = '✖'; fsBtn.title = 'Exit Fullscreen'; }
-
-            // Close mobile sidebar if open
-            this.closeMobileSidebar();
-            // Hide sidebar and backdrop
-            this.preFsSidebarDisplay = sidebar ? sidebar.style.display : '';
-            if (sidebar) sidebar.style.display = 'none';
-            if (backdrop) backdrop.style.display = 'none';
-        } else {
-            chatView.classList.remove('chat-fullscreen');
-            if (fsBtn) { fsBtn.innerHTML = '⛶'; fsBtn.title = 'Fullscreen'; }
-
-            // Restore sidebar
-            if (sidebar) sidebar.style.display = this.preFsSidebarDisplay !== undefined ? this.preFsSidebarDisplay : '';
-            if (backdrop) backdrop.style.display = '';
-
-
-        }
-
-    }
-
     async selectChat(chatId) {
         this.activeChatId = chatId;
 
@@ -1261,22 +1347,27 @@ class RoleplayChatHandler {
             // Cache character data for lobby avatars
             this._saveToCharCache(chatId, this.activeChatCharacters);
             this._applyChatBackground();
+            this._renderHeaderAvatars();
 
+            // Group chats choose who replies next from the composer's tray.
+            // sendMessage reads the select only while it's displayed.
             if (this.els.speakerSelect) {
-                if (chat.characters.length > 1) {
-                    this.els.speakerSelect.innerHTML = '<option value="">🤖 Auto (Router)</option>';
+                const isGroup = chat.characters.length > 1;
+                this.els.speakerSelect.innerHTML = '';
+                if (isGroup) {
+                    this.els.speakerSelect.innerHTML = '<option value="">Auto (router)</option>';
                     chat.characters.forEach(c => {
                         const opt = document.createElement('option');
                         opt.value = c.name;
                         opt.textContent = c.name;
                         this.els.speakerSelect.appendChild(opt);
                     });
-                    this.els.speakerSelect.style.display = 'block';
-                } else {
-                    this.els.speakerSelect.style.display = 'none';
-                    this.els.speakerSelect.innerHTML = '';
                 }
+                this.els.speakerSelect.style.display = isGroup ? '' : 'none';
+                if (this.els.speakerWrap) this.els.speakerWrap.style.display = isGroup ? '' : 'none';
             }
+            this._closePopovers();
+            this._updateToolsBadge();
 
             if (this.els.userPersonaSelect) {
                 const savedPersona = localStorage.getItem(`chatgen_persona_${chatId}`) || localStorage.getItem('chatgen_active_user_persona') || '';
@@ -1298,11 +1389,12 @@ class RoleplayChatHandler {
                 this.isGenerating = false;
             }
             this.els.timeline.innerHTML = '';
-
+            this.isUserScrolling = false;
+            if (this.els.fab) { this.els.fab.style.display = 'none'; this.els.fab.classList.remove('has-new'); }
 
             // Ensure messages are sorted chronologically (oldest first)
             const sortedMessages = (chat.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            sortedMessages.forEach(msg => this.appendMessage(msg, false));
+            sortedMessages.forEach(msg => this.appendMessage(msg));
 
             if (chat.messages.length === 0) {
                 this.els.timeline.innerHTML = '<div class="chat-placeholder"><p>No messages yet. Send a greeting!</p></div>';
@@ -1349,6 +1441,51 @@ class RoleplayChatHandler {
         this.els.timeline.style.setProperty('--chat-bg-image', bgUrl ? `url("${bgUrl}")` : 'none');
     }
 
+    // Up to two faces beside the title (the rest are named underneath).
+    _renderHeaderAvatars() {
+        const box = this.els.headerAvatars;
+        if (!box) return;
+        box.innerHTML = '';
+        (this.activeChatCharacters || []).slice(0, 2).forEach(c => {
+            const url = this.getAvatarUrl(c.name, c.id);
+            const el = document.createElement(url ? 'img' : 'span');
+            if (url) { el.src = url; el.alt = ''; }
+            else el.textContent = (c.name || '?').substring(0, 2).toUpperCase();
+            box.appendChild(el);
+        });
+    }
+
+    // Fills a message's avatar slot: the card's portrait (tap opens its
+    // gallery) or the name's initials.
+    _fillAvatar(avatarEl, name, cardId) {
+        const avatarUrl = this.getAvatarUrl(name, cardId);
+        avatarEl.innerHTML = '';
+        if (!avatarUrl) {
+            avatarEl.textContent = (name || '?').substring(0, 2).toUpperCase();
+            return;
+        }
+        const img = document.createElement('img');
+        img.src = avatarUrl;
+        img.alt = '';
+        img.className = 'chat-avatar-char-img';
+        const resolvedCardId = this._resolveCardId(name, cardId);
+        img.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.app && window.app.openCardImageGallery) {
+                window.app.openCardImageGallery(resolvedCardId, avatarUrl, name || 'Character');
+            }
+        });
+        avatarEl.appendChild(img);
+    }
+
+    _oocDetailsEl(note) {
+        const oocEl = document.createElement('details');
+        oocEl.style.marginTop = '0.5rem';
+        oocEl.style.fontSize = '0.82rem';
+        oocEl.innerHTML = `<summary style="cursor: pointer; opacity: 0.7; font-weight: 500;">OOC Instruction</summary><div style="margin-top: 0.25rem; font-style: italic; opacity: 0.8; padding-left: 0.5rem; border-left: 2px solid var(--border);">${this.escapeHtml(note)}</div>`;
+        return oocEl;
+    }
+
     getUserPersonaData() {
         if (!this.activeChatId || !this.chats) return null;
         const chat = this.chats.find(c => c.id === this.activeChatId);
@@ -1373,21 +1510,23 @@ class RoleplayChatHandler {
         return `hsl(${h}, 55%, 45%)`;
     }
 
-    appendMessage(msg, alignToTop = false) {
+    appendMessage(msg) {
         const placeholder = this.els.timeline.querySelector('.chat-placeholder');
         if (placeholder) placeholder.remove();
 
         const wrapper = document.createElement('div');
         wrapper.className = `chat-bubble-wrapper ${msg.role}`;
 
-        // Make actions visible on click (toggles visibility)
+        // Tapping a message shows its actions (one message at a time); tapping
+        // it again hides them. Taps on its own controls, links, reasoning
+        // blocks or a text selection don't count.
         wrapper.addEventListener('click', (e) => {
-            if (!e.target.closest('.chat-message-actions-bar') && !e.target.closest('.chat-avatar-char-img')) {
-                document.querySelectorAll('.chat-bubble-wrapper.actions-visible').forEach(el => {
-                    if (el !== wrapper) el.classList.remove('actions-visible');
-                });
-                wrapper.classList.toggle('actions-visible');
-            }
+            if (e.target.closest('.chat-message-actions-bar, .chat-avatar-char-img, summary, a, button, img, .chat-reply-status')) return;
+            if (String(window.getSelection?.() || '').length > 0) return;
+            document.querySelectorAll('.chat-bubble-wrapper.actions-visible').forEach(el => {
+                if (el !== wrapper) el.classList.remove('actions-visible');
+            });
+            wrapper.classList.toggle('actions-visible');
         });
 
         let displayCharName = msg.character_name;
@@ -1429,59 +1568,16 @@ class RoleplayChatHandler {
         let contentStr = msg.content || '';
         bubbleEl.innerHTML = this.formatMessage(contentStr, msg.character_name);
 
-        if (msg.ooc_note) {
-            const oocEl = document.createElement('details');
-            oocEl.style.marginTop = '0.5rem';
-            oocEl.style.fontSize = '0.82rem';
-            oocEl.innerHTML = `<summary style="cursor: pointer; opacity: 0.7; font-weight: 500;">OOC Instruction</summary><div style="margin-top: 0.25rem; font-style: italic; opacity: 0.8; padding-left: 0.5rem; border-left: 2px solid var(--border);">${this.escapeHtml(msg.ooc_note)}</div>`;
-            bubbleEl.appendChild(oocEl);
-        }
+        if (msg.ooc_note) bubbleEl.appendChild(this._oocDetailsEl(msg.ooc_note));
 
         // ── Avatar ──
         const avatarEl = document.createElement('div');
         avatarEl.className = 'chat-avatar-container';
-
         if (msg.role === 'user') {
-            if (userPersona) {
-                const avatarUrl = this.getAvatarUrl(userName, userPersona.id);
-                if (avatarUrl) {
-                    avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-user-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
-                    const imgEl = avatarEl.querySelector('img');
-                    if (imgEl) {
-                        const resolvedCardId = this._resolveCardId(userName, userPersona.id);
-                        imgEl.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            if (window.app && window.app.openCardImageGallery) {
-                                window.app.openCardImageGallery(resolvedCardId, avatarUrl, userName);
-                            }
-                        });
-                    }
-                } else {
-                    avatarEl.textContent = userName.substring(0, 2).toUpperCase();
-                    avatarEl.style.fontSize = 'calc(var(--chat-avatar-size) * 0.35)';
-                }
-            } else {
-                avatarEl.textContent = 'U';
-                avatarEl.style.fontSize = 'calc(var(--chat-avatar-size) * 0.4)';
-            }
+            if (userPersona) this._fillAvatar(avatarEl, userName, userPersona.id);
+            else avatarEl.textContent = 'U';
         } else {
-            const avatarUrl = this.getAvatarUrl(charName, msg.character_card_id);
-            if (avatarUrl) {
-                avatarEl.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
-                const imgEl = avatarEl.querySelector('img');
-                if (imgEl) {
-                    const resolvedCardId = this._resolveCardId(charName, msg.character_card_id);
-                    imgEl.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (window.app && window.app.openCardImageGallery) {
-                            window.app.openCardImageGallery(resolvedCardId, avatarUrl, charName);
-                        }
-                    });
-                }
-            } else {
-                avatarEl.textContent = charName.substring(0, 2).toUpperCase();
-                avatarEl.style.fontSize = 'calc(var(--chat-avatar-size) * 0.35)';
-            }
+            this._fillAvatar(avatarEl, charName, msg.character_card_id);
         }
 
         // ── Content column ──
@@ -1497,10 +1593,6 @@ class RoleplayChatHandler {
 
         if (msg.id) {
             this.attachMessageActions(wrapper, msg, bubbleEl, nameEl);
-        }
-
-        if (alignToTop) {
-            this.scrollToMessage(wrapper);
         }
 
         return wrapper;
@@ -1556,15 +1648,16 @@ class RoleplayChatHandler {
         this._updateRegenButtons();
     }
 
-    /** Ensure only the last assistant bubble's Regen button is visible */
+    /** Only the last assistant bubble offers Regen, and it keeps its actions on show. */
     _updateRegenButtons() {
         const allAssistantWrappers = Array.from(
             this.els.timeline.querySelectorAll('.chat-bubble-wrapper.assistant')
         );
         allAssistantWrappers.forEach((w, idx) => {
+            const isLast = idx === allAssistantWrappers.length - 1;
+            w.classList.toggle('is-latest-ai', isLast && !!w.querySelector('.chat-message-actions-bar'));
             const btn = w.querySelector('.chat-regen-btn');
-            if (!btn) return;
-            btn.style.display = (idx === allAssistantWrappers.length - 1) ? '' : 'none';
+            if (btn) btn.style.display = isLast ? '' : 'none';
         });
     }
 
@@ -1600,17 +1693,16 @@ class RoleplayChatHandler {
         }
 
         // 4. Stream a fresh AI response (no new user message)
-        this.isGenerating = true;
-        this.els.sendBtn.style.display = 'none';
-        if (this.els.impBtn) this.els.impBtn.style.display = 'none';
-        if (this.els.stopBtn) this.els.stopBtn.style.display = '';
+        this._setGeneratingUI(true);
 
         const aiMsgObj = { role: 'assistant', character_name: characterName || 'Routing...', content: '' };
-        const aiBubbleWrapper = this.appendMessage(aiMsgObj, true);
+        const aiBubbleWrapper = this.appendMessage(aiMsgObj);
         const contentEl = aiBubbleWrapper.querySelector('.chat-bubble');
-        const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
+        const anchor = this._startReplyScroll(null, aiBubbleWrapper);
 
         this.abortController = new AbortController();
+        let serverAiMsgId = null;
+        let dropped = false;
 
         try {
             const payload = {
@@ -1636,98 +1728,66 @@ class RoleplayChatHandler {
 
             if (!res.ok) throw new Error('Regen API Request Failed');
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
             let fullText = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (!line.startsWith('data: ')) continue;
-                    const dataStr = line.slice(6);
-                    if (dataStr.trim() === '[DONE]') continue;
-                    try {
-                        const data = JSON.parse(dataStr);
-                        if (data.type === 'metadata') {
-                            if (data.character_name) {
-                                nameTextEl.textContent = data.character_name;
-                                aiMsgObj.character_name = data.character_name;
-                            }
-                            if (data.character_card_id) {
-                                aiMsgObj.character_card_id = data.character_card_id;
-                                const avatarUrl = this.getAvatarUrl(data.character_name, data.character_card_id);
-                                if (avatarUrl) {
-                                    const avatarDiv = aiBubbleWrapper.querySelector('.chat-avatar-container');
-                                    if (avatarDiv) {
-                                        avatarDiv.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
-                                        const newImgEl = avatarDiv.querySelector('img');
-                                        if (newImgEl) {
-                                            newImgEl.addEventListener('click', (e) => {
-                                                e.stopPropagation();
-                                                if (window.app && window.app.openCardImageGallery) {
-                                                    window.app.openCardImageGallery(data.character_card_id, avatarUrl, data.character_name || 'Character');
-                                                }
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                            // user_message_id will be null since we sent empty content/ooc_note
-                        } else if (data.type === 'chunk') {
-                            fullText += data.content;
-                            aiMsgObj.content = fullText;
-                            contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
-                        } else if (data.type === 'corrected_content') {
-                            // Backend injected <think> tags that the model forgot to output.
-                            fullText = data.content;
-                            aiMsgObj.content = fullText;
-                            contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
-                        } else if (data.type === 'error') {
-                            console.error('Regen generation error:', data.message);
-                            contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
-                        }
-                    } catch (err) {
-                        console.warn('Failed to parse regen SSE data:', dataStr, err);
-                    }
+            await this._readChatStream(res, this.abortController, () => serverAiMsgId, (data) => {
+                if (data.type === 'metadata') {
+                    if (data.assistant_message_id) serverAiMsgId = data.assistant_message_id;
+                    this._applyReplyMetadata(data, aiMsgObj, aiBubbleWrapper);
+                    // user_message_id will be null since we sent empty content/ooc_note
+                } else if (data.type === 'chunk') {
+                    fullText += data.content;
+                    aiMsgObj.content = fullText;
+                    contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
+                    this._followReply(anchor);
+                } else if (data.type === 'corrected_content') {
+                    // Backend injected <think> tags that the model forgot to output.
+                    fullText = data.content;
+                    aiMsgObj.content = fullText;
+                    contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
+                    this._followReply(anchor);
+                } else if (data.type === 'error') {
+                    console.error('Regen generation error:', data.message);
+                    contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
                 }
-            }
+            });
         } catch (e) {
-            const isAbort = e.name === 'AbortError';
-            if (!isAbort) {
+            if (e.name !== 'AbortError') {
+                // Dropped or stalled (e.g. phone lock). The old message is already
+                // deleted; the backend carries on and saves the new one.
                 console.error('Regen stream error', e);
-                // Network drop (e.g. phone lock): old message already deleted, new one may not have
-                // been saved yet. Reload from server to show whatever state the backend reached.
-                if (this.activeChatId) {
-                    try { await this.selectChat(this.activeChatId); } catch (_) {}
-                }
+                dropped = true;
             }
         } finally {
-            this.isGenerating = false;
             this.abortController = null;
-            this.els.sendBtn.style.display = '';
-            if (this.els.impBtn) this.els.impBtn.style.display = '';
-            if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
-            this.els.sendBtn.disabled = false;
-            this.els.msgInput.focus();
-
-            // Assign server-generated ID so subsequent action buttons work
-            window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(r => r.json()).then(chat => {
-                if (chat && chat.messages && this.activeChatId === chat.id) {
-                    const lastAi = chat.messages.slice().reverse().find(m => m.role === 'assistant');
-                    if (lastAi && !aiMsgObj.id) {
-                        aiMsgObj.id = lastAi.id;
-                        this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
-                    }
-                }
-            }).catch(e => console.error('Error fetching chat after regen', e));
         }
+
+        if (dropped) {
+            if (serverAiMsgId) {
+                await this._recoverReply({ replyId: serverAiMsgId, wrapper: aiBubbleWrapper, contentEl, msgObj: aiMsgObj });
+            } else {
+                this._setGeneratingUI(false);
+                if (this.activeChatId) await this.selectChat(this.activeChatId).catch(() => {});
+            }
+            return;
+        }
+
+        this._setGeneratingUI(false);
+        this._focusInput();
+        if (serverAiMsgId && !aiMsgObj.id) {
+            aiMsgObj.id = serverAiMsgId;
+            this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, aiBubbleWrapper.querySelector('.chat-bubble-name'));
+            return;
+        }
+        // Fallback when the metadata event never arrived: find the id from the chat.
+        window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(r => r.json()).then(chat => {
+            if (chat && chat.messages && this.activeChatId === chat.id) {
+                const lastAi = chat.messages.slice().reverse().find(m => m.role === 'assistant');
+                if (lastAi && !aiMsgObj.id) {
+                    aiMsgObj.id = lastAi.id;
+                    this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, aiBubbleWrapper.querySelector('.chat-bubble-name'));
+                }
+            }
+        }).catch(e => console.error('Error fetching chat after regen', e));
     }
 
     async handleGenerateSceneImage(messageId, wrapper, bubbleEl) {
@@ -1804,105 +1864,60 @@ class RoleplayChatHandler {
         }
     }
 
+    // Editing happens in a full-screen sheet sized to the visible viewport,
+    // with Cancel and Save in its header: editing inside the bubble left the
+    // controls where the iPhone keyboard could push them out of reach.
     async editMessage(msg, bubbleEl, wrapper) {
-        if (bubbleEl.querySelector('textarea')) return;
+        if (document.getElementById('chat-edit-sheet')) return;
 
-        if (wrapper) wrapper.classList.add('is-editing');
+        const who = msg.role === 'user' ? 'your message' : (msg.character_name || 'message');
+        const sheet = document.createElement('div');
+        sheet.id = 'chat-edit-sheet';
+        sheet.setAttribute('role', 'dialog');
+        sheet.setAttribute('aria-modal', 'true');
+        sheet.setAttribute('aria-label', 'Edit message');
+        sheet.innerHTML = `
+            <div class="ces-header">
+                <button type="button" class="btn-outline ces-cancel">Cancel</button>
+                <span class="ces-title">Edit ${this.escapeHtml(who)}</span>
+                <button type="button" class="btn-primary ces-save">Save</button>
+            </div>
+            ${msg.role === 'assistant' ? `<div class="ces-tools"><button type="button" class="btn-outline ces-think" title="Insert a closing think tag at the cursor, then save">Insert &lt;/think&gt; &amp; save</button></div>` : ''}
+            <textarea class="ces-text" spellcheck="true" aria-label="Message text"></textarea>`;
+        document.body.appendChild(sheet);
+        this._syncVisualViewport();
 
-        const currentContent = msg.content || '';
-        const originalHTML = bubbleEl.innerHTML;
+        const textarea = sheet.querySelector('.ces-text');
+        const saveBtn = sheet.querySelector('.ces-save');
+        textarea.value = msg.content || '';
 
-        // Hide the inline action bar while editing
-        const actionBar = wrapper ? wrapper.querySelector('.chat-message-actions-bar') : null;
-        if (actionBar) {
-            actionBar.style.display = 'none';
+        const close = () => {
+            document.removeEventListener('keydown', onKey);
+            sheet.remove();
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') close();
+        };
+        document.addEventListener('keydown', onKey);
+        sheet.querySelector('.ces-cancel').onclick = close;
+
+        const insertThinkBtn = sheet.querySelector('.ces-think');
+        if (insertThinkBtn) {
+            insertThinkBtn.onclick = () => {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                textarea.value = text.substring(0, start) + '\n</think>\n' + text.substring(end);
+                textarea.selectionStart = textarea.selectionEnd = start + 10;
+                saveBtn.click();
+            };
         }
-
-        const textarea = document.createElement('textarea');
-        textarea.className = 'content-box edit-mode-textarea';
-        textarea.style.width = '100%';
-        textarea.style.minHeight = '250px';
-        textarea.style.resize = 'vertical';
-        textarea.style.fontFamily = 'inherit';
-        textarea.style.marginBottom = '0.5rem';
-        textarea.value = currentContent;
-
-        // Pin controls to chat-main bottom for all modes
-        const chatMain = bubbleEl.closest('.chat-main') || document.querySelector('.chat-main');
-
-        // Create edit controls bar
-        const editControls = document.createElement('div');
-        editControls.className = 'chat-edit-controls-bar chat-edit-controls-bar--sticky';
-
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'btn-primary btn-small edit-control-btn';
-        saveBtn.textContent = 'Save';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'btn-outline btn-small edit-control-btn';
-        cancelBtn.textContent = 'Cancel';
-
-        const insertThinkBtn = document.createElement('button');
-        insertThinkBtn.className = 'btn-outline btn-small edit-control-btn';
-        insertThinkBtn.textContent = 'Insert </think>';
-        insertThinkBtn.title = 'Insert closing think tag at cursor position and save';
-        insertThinkBtn.onclick = () => {
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const text = textarea.value;
-            textarea.value = text.substring(0, start) + '\n</think>\n' + text.substring(end);
-            textarea.selectionStart = textarea.selectionEnd = start + 10;
-            saveBtn.click();
-        };
-
-        editControls.appendChild(insertThinkBtn);
-        editControls.appendChild(cancelBtn);
-        editControls.appendChild(saveBtn);
-
-        bubbleEl.innerHTML = '';
-        bubbleEl.appendChild(textarea);
-
-        // Attach the controls bar to chat-main so it is pinned to the bottom of the chat area,
-        // remaining visible while scrolling.
-        // We insert it immediately before .chat-input-area so it sits in the
-        // flex column between the timeline and the input area.
-        if (chatMain) {
-            const inputArea = chatMain.querySelector('.chat-input-area');
-            if (inputArea) {
-                chatMain.insertBefore(editControls, inputArea);
-            } else {
-                chatMain.appendChild(editControls);
-            }
-        } else {
-            bubbleEl.appendChild(editControls);
-        }
-
-
-        // Auto-resize to fit content
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.max(250, textarea.scrollHeight) + 'px';
-
-        textarea.focus();
-
-        const cleanup = () => {
-            if (wrapper) wrapper.classList.remove('is-editing');
-            editControls.remove();
-            // Restore the action bar
-            if (actionBar) {
-                actionBar.style.display = '';
-            }
-        };
-
-        cancelBtn.onclick = () => {
-            cleanup();
-            bubbleEl.innerHTML = originalHTML;
-        };
 
         saveBtn.onclick = async () => {
             const newContent = textarea.value.trim();
             try {
                 saveBtn.disabled = true;
-                saveBtn.textContent = 'Saving...';
+                saveBtn.textContent = 'Saving…';
                 const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/messages/${msg.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -1910,15 +1925,9 @@ class RoleplayChatHandler {
                 });
                 if (res.ok) {
                     msg.content = newContent;
-                    cleanup();
+                    close();
                     bubbleEl.innerHTML = this.formatMessage(msg.content, msg.character_name);
-                    if (msg.ooc_note) {
-                        const oocEl = document.createElement('details');
-                        oocEl.style.marginTop = '0.5rem';
-                        oocEl.style.fontSize = '0.85rem';
-                        oocEl.innerHTML = `<summary style="cursor: pointer; opacity: 0.7; font-weight: 500;">OOC Instruction</summary><div style="margin-top: 0.25rem; font-style: italic; opacity: 0.8; padding-left: 0.5rem; border-left: 2px solid var(--border);">${this.escapeHtml(msg.ooc_note)}</div>`;
-                        bubbleEl.appendChild(oocEl);
-                    }
+                    if (msg.ooc_note) bubbleEl.appendChild(this._oocDetailsEl(msg.ooc_note));
                 } else {
                     alert('Failed to save message');
                     saveBtn.disabled = false;
@@ -1930,6 +1939,11 @@ class RoleplayChatHandler {
                 saveBtn.textContent = 'Save';
             }
         };
+
+        // Start at the top of the message; the caret goes where it's tapped.
+        textarea.focus({ preventScroll: true });
+        textarea.setSelectionRange(0, 0);
+        textarea.scrollTop = 0;
     }
 
     async deleteMessage(id, wrapper) {
@@ -2013,6 +2027,7 @@ class RoleplayChatHandler {
                 } else {
                     wrapper.remove();
                 }
+                this._updateRegenButtons();
             } else {
                 alert('Failed to delete message');
             }
@@ -2184,7 +2199,7 @@ class RoleplayChatHandler {
 
     scrollToBottom(smooth = false, force = false) {
         if (!this.els.timeline) return;
-        
+
         if (this.isUserScrolling && !force) return;
 
         this.els.timeline.scrollTo({
@@ -2193,12 +2208,201 @@ class RoleplayChatHandler {
         });
     }
 
-    scrollToMessage(element) {
-        if (!element || !this.els.timeline) return;
-        this.els.timeline.scrollTo({
-            top: element.offsetTop,
-            behavior: 'smooth'
-        });
+    /* ── Reply scrolling ───────────────────────────────────────────────────── */
+    // A long reply is read from its top while it's still being written. So on
+    // send, scroll to the user's message (or the reply itself, if the message
+    // is long), and while text arrives follow it only until that point reaches
+    // the top of the screen; after that the ↓ button lights up instead. Jump
+    // to the bottom and it follows from there.
+    _startReplyScroll(userWrapper, aiWrapper) {
+        const t = this.els.timeline;
+        const pick = userWrapper && userWrapper.offsetHeight < t.clientHeight * 0.4 ? userWrapper : aiWrapper;
+        const anchor = Math.max(0, pick.offsetTop - 12);
+        t.scrollTop = Math.min(t.scrollHeight - t.clientHeight, anchor);
+        this.isUserScrolling = false;
+        return anchor;
+    }
+
+    _followReply(anchor) {
+        const t = this.els.timeline;
+        if (!t) return;
+        if (!this.isUserScrolling) {
+            const max = t.scrollHeight - t.clientHeight;
+            const top = t.scrollTop > anchor ? max : Math.min(max, anchor);
+            if (top > t.scrollTop) t.scrollTop = top;
+        }
+        this._noteStreamGrowth();
+    }
+
+    _noteStreamGrowth() {
+        const t = this.els.timeline;
+        if (!t || !this.els.fab) return;
+        if (t.scrollHeight - t.clientHeight - t.scrollTop > 50) {
+            this.els.fab.style.display = 'flex';
+            this.els.fab.classList.add('has-new');
+        }
+    }
+
+    /* ── Reply streams ─────────────────────────────────────────────────────── */
+    _setGeneratingUI(on) {
+        this.isGenerating = on;
+        this.els.sendBtn.style.display = on ? 'none' : '';
+        this.els.sendBtn.disabled = false;
+        if (this.els.stopBtn) this.els.stopBtn.style.display = on ? '' : 'none';
+        if (this.els.impBtn) this.els.impBtn.disabled = on;
+    }
+
+    // Name and portrait arrive in the metadata event, once the router has
+    // picked who replies.
+    _applyReplyMetadata(data, msgObj, wrapper) {
+        if (data.character_name) {
+            const nameTextEl = wrapper.querySelector('.chat-bubble-name-text');
+            if (nameTextEl) nameTextEl.textContent = data.character_name;
+            msgObj.character_name = data.character_name;
+        }
+        if (data.character_card_id) {
+            msgObj.character_card_id = data.character_card_id;
+            const avatarDiv = wrapper.querySelector('.chat-avatar-container');
+            if (avatarDiv) this._fillAvatar(avatarDiv, msgObj.character_name, data.character_card_id);
+        }
+    }
+
+    // Reads a /api/sw reply stream, calling onEvent(data) for each JSON event.
+    // 45 s without a byte (the backend pings every 15 s) counts as a dropped
+    // connection: the read is aborted and a StreamStall error thrown, so the
+    // caller can fetch the saved reply instead. Per CLAUDE.md's iOS rules the
+    // watchdog ignores time the page spent hidden or asleep, since iOS freezes
+    // timers while locked and fires the overdue ones the instant it wakes.
+    async _readChatStream(res, controller, getReplyId, onEvent) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let lastByteAt = Date.now();
+        let lastTick = Date.now();
+        let stalled = false;
+        const stall = () => {
+            if (stalled) return;
+            stalled = true;
+            controller.abort();
+        };
+        const watchdog = setInterval(() => {
+            const now = Date.now();
+            const late = now - lastTick > 15000; // slept through ticks
+            lastTick = now;
+            if (document.visibilityState !== 'visible' || late) { lastByteAt = now; return; }
+            if (now - lastByteAt > CHAT_STREAM_STALL_MS) stall();
+        }, 5000);
+        // For syncOnWake: after a long sleep, ask the server whether the reply
+        // already finished, rather than waiting out the watchdog.
+        this._liveStream = {
+            lastByteAt: () => lastByteAt,
+            checkServer: async () => {
+                const id = getReplyId();
+                if (!id) return;
+                try {
+                    const r = await window.authFetch(`/api/sw/chats/${this.activeChatId}`);
+                    if (!r.ok) return;
+                    const chat = await r.json();
+                    const m = (chat.messages || []).find(x => x.id === id);
+                    if (m && m.content) stall(); // recovery picks it up at once
+                } catch (_) {}
+            },
+        };
+
+        try {
+            while (true) {
+                let result;
+                try {
+                    result = await reader.read();
+                } catch (e) {
+                    if (stalled) {
+                        const err = new Error('Reply stream stalled');
+                        err.name = 'StreamStall';
+                        throw err;
+                    }
+                    throw e;
+                }
+                if (result.done) break;
+                lastByteAt = Date.now();
+
+                buffer += decoder.decode(result.value, { stream: true });
+                const events = buffer.split('\n\n');
+                buffer = events.pop();
+
+                for (const ev of events) {
+                    if (!ev.startsWith('data: ')) continue; // `: ping` heartbeats
+                    const dataStr = ev.slice(6);
+                    if (dataStr.trim() === '[DONE]') continue;
+                    try {
+                        onEvent(JSON.parse(dataStr));
+                    } catch (err) {
+                        console.warn('Failed to handle chat SSE data:', dataStr, err);
+                    }
+                }
+            }
+        } finally {
+            clearInterval(watchdog);
+            this._liveStream = null;
+        }
+    }
+
+    // A reply stream dropped (phone locked, network change) or stalled. The
+    // backend keeps writing and saves the reply when it finishes, so poll for
+    // that one message and fill in its bubble, rather than redrawing the chat.
+    async _recoverReply({ replyId, wrapper, contentEl, msgObj }) {
+        const chatId = this.activeChatId;
+        const token = {};
+        this._recovering = token;
+        this._setGeneratingUI(true);
+
+        const status = document.createElement('div');
+        status.className = 'chat-reply-status';
+        status.innerHTML = '<span>⏳ Connection dropped. Fetching the reply from the server…</span>';
+        contentEl.appendChild(status);
+        this._noteStreamGrowth();
+
+        const started = Date.now();
+        let finalMsg = null;
+        let gone = false;
+        while (this._recovering === token && this.activeChatId === chatId && Date.now() - started < CHAT_RECOVER_GIVE_UP_MS) {
+            try {
+                const r = await window.authFetch(`/api/sw/chats/${chatId}`);
+                if (r.ok) {
+                    const chat = await r.json();
+                    const m = (chat.messages || []).find(x => x.id === replyId);
+                    if (!m) { gone = true; break; }
+                    if (m.content) { finalMsg = m; break; }
+                }
+            } catch (_) { /* offline for a moment: keep trying */ }
+            await new Promise(res => setTimeout(res, CHAT_RECOVER_POLL_MS));
+        }
+
+        const stillOurs = this._recovering === token;
+        if (stillOurs) {
+            this._recovering = null;
+            this._setGeneratingUI(false);
+        }
+        if (this.activeChatId !== chatId) return; // left this chat meanwhile
+
+        if (finalMsg) {
+            msgObj.id = finalMsg.id;
+            msgObj.content = finalMsg.content;
+            if (finalMsg.character_name) msgObj.character_name = finalMsg.character_name;
+            contentEl.innerHTML = this.formatMessage(finalMsg.content, msgObj.character_name);
+            this.attachMessageActions(wrapper, msgObj, contentEl, wrapper.querySelector('.chat-bubble-name'));
+            this._noteStreamGrowth();
+        } else if (gone) {
+            this.selectChat(chatId); // deleted elsewhere: show what the server has
+        } else if (stillOurs) {
+            status.innerHTML = '<span>⚠️ The reply hasn’t arrived.</span>';
+            const reload = document.createElement('button');
+            reload.type = 'button';
+            reload.textContent = 'Reload chat';
+            reload.onclick = () => this.selectChat(chatId);
+            status.appendChild(reload);
+        } else {
+            status.remove(); // Stop pressed: keep the partial text
+        }
     }
 
     stopGeneration() {
@@ -2206,12 +2410,9 @@ class RoleplayChatHandler {
             this.abortController.abort();
             this.abortController = null;
         }
-        this.isGenerating = false;
-        this.els.sendBtn.style.display = '';
-        if (this.els.impBtn) this.els.impBtn.style.display = '';
-        if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
-        this.els.sendBtn.disabled = false;
-        this.els.msgInput.focus();
+        this._recovering = null; // ends a recovery poll too
+        this._setGeneratingUI(false);
+        this._focusInput();
     }
 
     async sendImpersonateMessage() {
@@ -2225,7 +2426,7 @@ class RoleplayChatHandler {
         const originalLabel = impBtn ? impBtn.innerHTML : '';
         if (impBtn) {
             impBtn.disabled = true;
-            impBtn.innerHTML = '⏳ Generating...';
+            impBtn.innerHTML = '⏳ Writing…';
         }
         if (this.els.sendBtn) this.els.sendBtn.disabled = true;
 
@@ -2257,39 +2458,20 @@ class RoleplayChatHandler {
 
             if (!res.ok) throw new Error('Impersonate API request failed');
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (!line.startsWith('data: ')) continue;
-                    const dataStr = line.slice(6);
-                    if (dataStr.trim() === '[DONE]') continue;
-                    try {
-                        const data = JSON.parse(dataStr);
-                        if (data.type === 'chunk') {
-                            generatedText += data.content;
-                            // Stream text into the input field live
-                            this.els.msgInput.value = generatedText;
-                            // Auto-resize the textarea if possible
-                            this.els.msgInput.dispatchEvent(new Event('input'));
-                        } else if (data.type === 'error') {
-                            console.error('Impersonate stream error:', data.message);
-                        }
-                    } catch (err) {
-                        console.warn('Failed to parse impersonate SSE data:', dataStr, err);
-                    }
+            await this._readChatStream(res, this.abortController, () => null, (data) => {
+                if (data.type === 'chunk') {
+                    generatedText += data.content;
+                    // Stream text into the input field live
+                    this.els.msgInput.value = generatedText;
+                    // Auto-resize the textarea if possible
+                    this.els.msgInput.dispatchEvent(new Event('input'));
+                } else if (data.type === 'error') {
+                    console.error('Impersonate stream error:', data.message);
                 }
-            }
+            });
         } catch (e) {
+            // Impersonated text isn't saved anywhere, so a dropped stream keeps
+            // whatever arrived in the box.
             if (e.name !== 'AbortError') {
                 console.error('Impersonate stream error', e);
             }
@@ -2300,6 +2482,7 @@ class RoleplayChatHandler {
                 impBtn.innerHTML = originalLabel;
             }
             if (this.els.sendBtn) this.els.sendBtn.disabled = false;
+            // Here the keyboard is wanted: the next step is editing the text.
             this.els.msgInput.focus();
             // Place cursor at end of generated text
             const len = this.els.msgInput.value.length;
@@ -2335,24 +2518,26 @@ class RoleplayChatHandler {
         this.els.msgInput.value = '';
         this.els.msgInput.style.height = 'auto';
         this.els.oocInput.value = '';
+        this.els.oocContainer.style.display = 'none';
         this.updateOocBadge();
-        const userBubbleWrapper = this.appendMessage(userMsgObj, true);
+        this._closePopovers();
+        // On a phone, put the keyboard away so the reply gets the screen.
+        if (chatIsTouch()) this.els.msgInput.blur();
+        const userBubbleWrapper = this.appendMessage(userMsgObj);
 
-        this.isGenerating = true;
-        this.els.sendBtn.style.display = 'none';
-        if (this.els.impBtn) this.els.impBtn.style.display = 'none';
-        if (this.els.stopBtn) this.els.stopBtn.style.display = '';
+        this._setGeneratingUI(true);
 
         // Create empty AI bubble for streaming
         const aiMsgObj = { role: 'assistant', character_name: characterName || 'Routing...', content: '' };
-        const aiBubbleWrapper = this.appendMessage(aiMsgObj, true);
+        const aiBubbleWrapper = this.appendMessage(aiMsgObj);
         const contentEl = aiBubbleWrapper.querySelector('.chat-bubble');
-        const nameTextEl = aiBubbleWrapper.querySelector('.chat-bubble-name-text');
+        const anchor = this._startReplyScroll(userBubbleWrapper, aiBubbleWrapper);
 
         this.abortController = new AbortController();
         // IDs sent by backend in the metadata SSE event — captured during streaming
         let serverUserMsgId = null;
         let serverAiMsgId = null;
+        let dropped = false;
 
         try {
             const payload = {
@@ -2379,173 +2564,109 @@ class RoleplayChatHandler {
 
             if (!res.ok) throw new Error('API Request Failed');
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
             let fullText = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.slice(6);
-                        if (dataStr.trim() === '[DONE]') continue;
-                        try {
-                            const data = JSON.parse(dataStr);
-                            if (data.type === 'api_log' && window.apiHandler) {
-                                window.apiHandler.addBackendLog(data.log);
-                                continue;
-                            }
-
-                            if (data.type === 'metadata') {
-                                // Capture server-assigned IDs immediately — used to attach
-                                // action buttons as soon as the stream ends (or is aborted).
-                                if (data.user_message_id) serverUserMsgId = data.user_message_id;
-                                if (data.assistant_message_id) serverAiMsgId = data.assistant_message_id;
-                                if (data.character_name) {
-                                    nameTextEl.textContent = data.character_name;
-                                    aiMsgObj.character_name = data.character_name;
-                                }
-                                if (data.character_card_id) {
-                                    aiMsgObj.character_card_id = data.character_card_id;
-                                    const avatarUrl = this.getAvatarUrl(data.character_name, data.character_card_id);
-                                    if (avatarUrl) {
-                                        const imgEl = aiBubbleWrapper.querySelector('.chat-avatar-char-img');
-                                        if (imgEl) {
-                                            imgEl.src = avatarUrl;
-                                            imgEl.onclick = (e) => {
-                                                e.stopPropagation();
-                                                if (window.app && window.app.openCardImageGallery) {
-                                                    window.app.openCardImageGallery(data.character_card_id, avatarUrl, data.character_name || 'Character');
-                                                }
-                                            };
-                                        } else {
-                                            const avatarDiv = aiBubbleWrapper.querySelector('.chat-avatar-container');
-                                            if (avatarDiv) {
-                                                avatarDiv.innerHTML = `<img src="${avatarUrl}" alt="" class="chat-avatar-char-img" style="width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:0.5rem;">`;
-                                                const newImgEl = avatarDiv.querySelector('img');
-                                                if (newImgEl) {
-                                                    newImgEl.addEventListener('click', (e) => {
-                                                        e.stopPropagation();
-                                                        if (window.app && window.app.openCardImageGallery) {
-                                                            window.app.openCardImageGallery(data.character_card_id, avatarUrl, data.character_name || 'Character');
-                                                        }
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (data.type === 'chunk') {
-                                fullText += data.content;
-                                aiMsgObj.content = fullText;
-                                contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
-                            } else if (data.type === 'corrected_content') {
-                                // Backend injected <think> tags that the model forgot to output.
-                                // Replace the raw streamed text with the corrected version.
-                                fullText = data.content;
-                                aiMsgObj.content = fullText;
-                                contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
-                            } else if (data.type === 'error') {
-                                console.error('Chat generation error:', data.message);
-                                contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
-                            }
-                        } catch (err) {
-                            console.warn('Failed to parse chat SSE stream data:', dataStr, err);
-                        }
-                    }
+            await this._readChatStream(res, this.abortController, () => serverAiMsgId, (data) => {
+                if (data.type === 'api_log' && window.apiHandler) {
+                    window.apiHandler.addBackendLog(data.log);
+                } else if (data.type === 'metadata') {
+                    // Capture server-assigned IDs immediately — used to attach
+                    // action buttons as soon as the stream ends (or is aborted),
+                    // and to fetch the reply if the stream drops.
+                    if (data.user_message_id) serverUserMsgId = data.user_message_id;
+                    if (data.assistant_message_id) serverAiMsgId = data.assistant_message_id;
+                    this._applyReplyMetadata(data, aiMsgObj, aiBubbleWrapper);
+                } else if (data.type === 'chunk') {
+                    fullText += data.content;
+                    aiMsgObj.content = fullText;
+                    contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
+                    this._followReply(anchor);
+                } else if (data.type === 'corrected_content') {
+                    // Backend injected <think> tags that the model forgot to output.
+                    // Replace the raw streamed text with the corrected version.
+                    fullText = data.content;
+                    aiMsgObj.content = fullText;
+                    contentEl.innerHTML = this.formatMessage(fullText, aiMsgObj.character_name);
+                    this._followReply(anchor);
+                } else if (data.type === 'error') {
+                    console.error('Chat generation error:', data.message);
+                    contentEl.innerHTML += `<br><span style="color:var(--error);">Error: ${this.escapeHtml(data.message)}</span>`;
                 }
-            }
+            });
         } catch (e) {
-            const isAbort = e.name === 'AbortError';
-            if (!isAbort) {
+            if (e.name !== 'AbortError') {
+                // Dropped or stalled (phone lock, network change): the backend
+                // carries on and saves the reply; it's fetched below.
                 console.error('Chat stream error', e);
-                // Network drop (e.g. phone lock/503): reload from server to clear partial
-                // optimistic bubble and sync any content the backend saved in the background.
-                if (this.activeChatId) {
-                    try { await this.selectChat(this.activeChatId); } catch (_) {}
-                }
-            }
-            // On abort (Stop button) we still have the server-assigned IDs from the
-            // metadata event — attach action buttons so the partial message is usable.
-            if (isAbort) {
-                if (serverUserMsgId && userBubbleWrapper && !userMsgObj.id) {
-                    userMsgObj.id = serverUserMsgId;
-                    this.attachMessageActions(userBubbleWrapper, userMsgObj,
-                        userBubbleWrapper.querySelector('.chat-bubble'),
-                        userBubbleWrapper.querySelector('.chat-bubble-name'));
-                }
-                if (serverAiMsgId && aiBubbleWrapper && !aiMsgObj.id) {
-                    aiMsgObj.id = serverAiMsgId;
-                    this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
-                    this._updateRegenButtons();
-                }
+                dropped = true;
             }
         } finally {
-            const hasPendingBanner = !!document.getElementById('chat-pending-gen-banner');
-            this.isGenerating = hasPendingBanner;
             this.abortController = null;
-            this.els.sendBtn.style.display = '';
-            if (this.els.impBtn) {
-                this.els.impBtn.style.display = '';
-                this.els.impBtn.disabled = hasPendingBanner;
-            }
-            if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
-            this.els.sendBtn.disabled = hasPendingBanner;
-            if (!hasPendingBanner) {
-                this.els.msgInput.disabled = false;
-                this.els.msgInput.focus();
+        }
+
+        // Attach action buttons using the IDs captured from the metadata SSE event.
+        // This is the primary path — fast and doesn't require a round-trip.
+        if (serverUserMsgId && userBubbleWrapper && !userMsgObj.id) {
+            userMsgObj.id = serverUserMsgId;
+            this.attachMessageActions(userBubbleWrapper, userMsgObj,
+                userBubbleWrapper.querySelector('.chat-bubble'),
+                userBubbleWrapper.querySelector('.chat-bubble-name'));
+        }
+
+        if (dropped) {
+            if (serverAiMsgId) {
+                await this._recoverReply({ replyId: serverAiMsgId, wrapper: aiBubbleWrapper, contentEl, msgObj: aiMsgObj });
             } else {
-                this.els.msgInput.disabled = true;
+                // Died before the first event: the server may not even have the
+                // message. Show whatever state it reached.
+                this._setGeneratingUI(false);
+                if (this.activeChatId) await this.selectChat(this.activeChatId).catch(() => {});
             }
+            return;
+        }
 
-            // Attach action buttons using the IDs captured from the metadata SSE event.
-            // This is the primary path — fast and doesn't require a round-trip.
-            if (serverUserMsgId && userBubbleWrapper && !userMsgObj.id) {
-                userMsgObj.id = serverUserMsgId;
-                this.attachMessageActions(userBubbleWrapper, userMsgObj,
-                    userBubbleWrapper.querySelector('.chat-bubble'),
-                    userBubbleWrapper.querySelector('.chat-bubble-name'));
-            }
-            if (serverAiMsgId && aiBubbleWrapper && !aiMsgObj.id) {
-                aiMsgObj.id = serverAiMsgId;
-                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
-                this._updateRegenButtons();
-            }
+        const hasPendingBanner = !!document.getElementById('chat-pending-gen-banner');
+        this._setGeneratingUI(hasPendingBanner);
+        if (this.els.impBtn) this.els.impBtn.disabled = hasPendingBanner;
+        this.els.sendBtn.disabled = hasPendingBanner;
+        this.els.msgInput.disabled = hasPendingBanner;
+        if (hasPendingBanner) {
+            this.els.sendBtn.style.display = '';
+            if (this.els.stopBtn) this.els.stopBtn.style.display = 'none';
+        } else {
+            this._focusInput();
+        }
 
-            // Fallback: if the metadata event never arrived (e.g. very early network error
-            // before the first SSE event), fetch the full chat to recover the IDs.
-            if (!userMsgObj.id || !aiMsgObj.id) {
-                window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(res => res.json()).then(chat => {
-                    if (chat && chat.messages && this.activeChatId === chat.id) {
-                        const serverMessages = chat.messages;
-                        if (!userMsgObj.id) {
-                            const lastUser = serverMessages.slice().reverse().find(m => m.role === 'user');
-                            if (lastUser && userBubbleWrapper) {
-                                userMsgObj.id = lastUser.id;
-                                this.attachMessageActions(userBubbleWrapper, userMsgObj,
-                                    userBubbleWrapper.querySelector('.chat-bubble'),
-                                    userBubbleWrapper.querySelector('.chat-bubble-name'));
-                            }
+        if (serverAiMsgId && aiBubbleWrapper && !aiMsgObj.id) {
+            aiMsgObj.id = serverAiMsgId;
+            this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, aiBubbleWrapper.querySelector('.chat-bubble-name'));
+            this._updateRegenButtons();
+        }
+
+        // Fallback: if the metadata event never arrived (e.g. very early network error
+        // before the first SSE event), fetch the full chat to recover the IDs.
+        if (!userMsgObj.id || !aiMsgObj.id) {
+            window.authFetch(`/api/sw/chats/${this.activeChatId}`).then(res => res.json()).then(chat => {
+                if (chat && chat.messages && this.activeChatId === chat.id) {
+                    const serverMessages = chat.messages;
+                    if (!userMsgObj.id) {
+                        const lastUser = serverMessages.slice().reverse().find(m => m.role === 'user');
+                        if (lastUser && userBubbleWrapper) {
+                            userMsgObj.id = lastUser.id;
+                            this.attachMessageActions(userBubbleWrapper, userMsgObj,
+                                userBubbleWrapper.querySelector('.chat-bubble'),
+                                userBubbleWrapper.querySelector('.chat-bubble-name'));
                         }
-                        if (!aiMsgObj.id) {
-                            const lastAi = serverMessages[serverMessages.length - 1];
-                            if (lastAi && lastAi.role !== 'user') {
-                                aiMsgObj.id = lastAi.id;
-                                this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, nameTextEl.parentElement);
-                            }
-                        }
-                        this._updateRegenButtons();
                     }
-                }).catch(e => console.error('Error fetching updated chat (fallback)', e));
-            }
-
+                    if (!aiMsgObj.id) {
+                        const lastAi = serverMessages[serverMessages.length - 1];
+                        if (lastAi && lastAi.role !== 'user') {
+                            aiMsgObj.id = lastAi.id;
+                            this.attachMessageActions(aiBubbleWrapper, aiMsgObj, contentEl, aiBubbleWrapper.querySelector('.chat-bubble-name'));
+                        }
+                    }
+                    this._updateRegenButtons();
+                }
+            }).catch(e => console.error('Error fetching updated chat (fallback)', e));
         }
     }
 

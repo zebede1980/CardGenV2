@@ -20,6 +20,21 @@ from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
+# SSE heartbeat for the reply streams. The browser treats 45 s without a byte
+# as a dropped connection (CHAT_STREAM_STALL_MS in chat-handler.js) and fetches
+# the finished reply instead. A reply can go quiet for longer than that while
+# the model reasons or a CoT continuation call runs, so send an SSE comment
+# every 15 s; the browser's parser skips anything that isn't a `data:` line.
+SSE_HEARTBEAT_SECONDS = 15
+_SSE_PING = object()
+
+
+async def _next_or_ping(queue):
+    try:
+        return await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_SECONDS)
+    except asyncio.TimeoutError:
+        return _SSE_PING
+
 import re as _cot_re
 
 # ── Shared Chain-of-Thought prompt text ─────────────────────────────────────
@@ -1250,7 +1265,10 @@ async def send_message(
         async def sse_generator_imp():
             try:
                 while True:
-                    item = await queue.get()
+                    item = await _next_or_ping(queue)
+                    if item is _SSE_PING:
+                        yield ": ping\n\n"
+                        continue
                     if item is None:
                         break
                     if isinstance(item, Exception):
@@ -1449,7 +1467,10 @@ async def send_message(
     async def sse_generator():
         try:
             while True:
-                item = await queue.get()
+                item = await _next_or_ping(queue)
+                if item is _SSE_PING:
+                    yield ": ping\n\n"
+                    continue
                 if item is None:
                     break
                 if isinstance(item, Exception):
