@@ -2896,6 +2896,17 @@ const LOCAL_COMFY_MODELS = {
     maxReferences: 4,
     buildGraph: buildFibo2Graph,
   },
+  // BFL's distilled Klein: generates and edits from 1-10 pictures with one
+  // checkpoint. It wants full captions; the app expands edit instructions
+  // into one first (writeKleinEditCaption in api-image.js).
+  "local/flux3-klein": {
+    name: "FLUX.3 Klein",
+    capabilities: { generate: true, edit: true, combine: true },
+    steps: { default: 16, min: 8, max: 30 },
+    // BFL allows 10; each 1 MP reference adds work and VRAM on 16 GB.
+    maxReferences: 4,
+    buildGraph: buildFlux3KleinGraph,
+  },
   "local/illustrious-xl": {
     name: "Illustrious XL",
     capabilities: { generate: true, edit: false },
@@ -3339,6 +3350,49 @@ function buildFibo2Graph({ prompt, seed, steps, width, height, sourceImages }) {
     });
     graph[4].inputs.vae = ["3", 0];
   }
+  return graph;
+}
+
+// FLUX.3 Image Klein (distilled), from Comfy's "FLUX 3 Image Klein Distilled"
+// text-to-image and image-edit templates, minus their prompt-upsampler and
+// bounding-box branches. No CFG (the negative is zeroed). Generation: er_sde,
+// 15 steps there; edits: euler, 16. Each reference is scaled to ~1 MP and the
+// result takes the first one's size (ReferenceMultiLatent's latent output).
+// Weights: FLUX Kommunity License (non-commercial), gated on Hugging Face.
+function buildFlux3KleinGraph({ prompt, seed, steps, width, height, sourceImages }) {
+  const editing = sourceImages?.length > 0;
+  const graph = {
+    1: { class_type: "UNETLoader", inputs: { unet_name: "flux3-image-klein-int8-convrot.safetensors", weight_dtype: "default" } },
+    2: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3vl_4b_int8_convrot.safetensors", type: "flux3", device: "default" } },
+    3: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae.safetensors" } },
+    4: { class_type: "CLIPTextEncode", inputs: { clip: ["2", 0], text: prompt } },
+    5: { class_type: "ConditioningZeroOut", inputs: { conditioning: ["4", 0] } },
+    7: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["1", 0], positive: ["4", 0], negative: ["5", 0], latent_image: ["6", 0],
+        seed, steps, cfg: 1.0, sampler_name: editing ? "euler" : "er_sde", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    8: { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/klein" } },
+  };
+  if (!editing) {
+    graph[6] = { class_type: "EmptyFlux2LatentImage", inputs: { width, height, batch_size: 1 } };
+    return graph;
+  }
+  graph[17] = {
+    class_type: "ReferenceMultiLatent",
+    inputs: {
+      positive: ["4", 0], negative: ["5", 0], vae: ["3", 0],
+      resolution: "resize", "resolution.megapixels": LOCAL_COMFY.editMegapixels,
+    },
+  };
+  sourceImages.forEach((image, i) => {
+    graph[100 + i * 10] = { class_type: "LoadImage", inputs: { image } };
+    graph[17].inputs[`images.image${i}`] = [String(100 + i * 10), 0];
+  });
+  Object.assign(graph[7].inputs, { positive: ["17", 0], negative: ["17", 1], latent_image: ["17", 2] });
   return graph;
 }
 

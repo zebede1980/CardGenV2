@@ -794,7 +794,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (actionBtn) actionBtn.disabled = true;
     if (statusEl) {
       statusEl.style.display = "block";
-      statusEl.textContent = `✨ Working with ${editModel}… this may take a minute.`;
+      statusEl.textContent = window.apiHandler.needsEditCaption(editModel)
+        ? `✍️ Writing the full edit caption ${editModel} needs, then editing… this may take a minute.`
+        : `✨ Working with ${editModel}… this may take a minute.`;
     }
 
     try {
@@ -1436,7 +1438,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (btn) btn.disabled = true;
     if (statusEl) {
       statusEl.style.display = "block";
-      statusEl.textContent = `🔀 Combining with ${combineModel}… this may take a minute.`;
+      statusEl.textContent = this.apiHandler.needsEditCaption(combineModel)
+        ? `✍️ Writing the full caption ${combineModel} needs, then combining… this may take a minute.`
+        : `🔀 Combining with ${combineModel}… this may take a minute.`;
     }
 
     try {

@@ -1,8 +1,8 @@
 # CardGenV2 — where things stand
 
 Last updated 2026-10-26. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
-✨ Prompt Builder merged, pushed and deployed. MOSS-Image editing and Bria FIBO 2.0 committed
-2026-10-26, **not yet pushed or deployed**. Update this file when you ship something or find something worth remembering: it is the
+✨ Prompt Builder merged, pushed and deployed. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Klein committed 2026-10-26, **not yet pushed or deployed**. Update this file when you ship something or find something worth remembering: it is the
 hand-over between machines, since Claude's own memory does not travel between them.
 
 ## Shipped recently, not yet tried for real
@@ -44,6 +44,37 @@ working image. Results that land while it is open join it (`_renderPlaygroundGen
 
 How many → 1 per model (picks shared with ⚔️ Compare Models, max 4). Joe ran it across Qwen-Image 2.1,
 Krea-2 Turbo, MOSS-Image and Z-Image-Turbo on the PC; all four came back and looked good.
+
+## FLUX.3 Klein (`local/flux3-klein`) — committed 2026-10-26, not deployed
+
+BFL's distilled 5.6B Klein: generates, edits, and combines 2–4 pictures (BFL allows 10), one
+checkpoint. **The best local model tested so far, and the fastest**: ~6 s to generate at 1 MP,
+~8 s per edit, ~12 s for a 2-picture combine (cold loads included). Tested on the PC through a
+scratch copy of the proxy; not through nginx/OCI, the browser or the iPhone.
+
+- **Files:** `flux3-image-klein-int8-convrot` (5.8 GB, from the gated
+  `black-forest-labs/flux-3-image-klein-comfy`; Joe accepted the terms as zebede1980). Text encoder
+  `qwen3vl_4b_int8_convrot` is byte-identical to FIBO's (same SHA-256), VAE `flux2-vae`.
+  **Licence: FLUX Kommunity** (non-commercial, with a commercial-output exception for some users).
+- **Graph:** from Comfy's "FLUX 3 Image Klein Distilled" templates, minus the upsampler and
+  bounding-box branches: CFG 1 with a zeroed negative, er_sde for text-to-image and euler for edits,
+  16 steps. Edits go through `ReferenceMultiLatent` (each picture ~1 MP; its autogrow inputs are
+  `images.image0`, `image1`…), and the result takes the first picture's size.
+- **Captions:** Klein wants full captions. `writeEditCaption` in `api-image.js` has the vision model
+  look at the picture(s) and expand the instruction with BFL's own "i2i" upsampler system prompt
+  (verbatim, Apache-2.0), before every Klein edit and combine. Reimagine's prompt is already a
+  caption (`captioned: true`). Generation uses the app's own prompt writer as it is.
+  - With hand-written captions in that format: edits were as good with a one-line instruction as
+    with a caption, but **Combine needs the caption**. Short instructions mixed the two pictures
+    up; captioned, both "person from picture 2 into the room from picture 1" and an outfit swap came
+    out right, which neither FIBO nor MOSS managed.
+  - **Not yet run with the real vision model** (Gemini 3.5 Flash). It may soften or refuse explicit
+    edits; if it does, the fallback is BFL's local upsampler (`qwen3.5_9b_flux3_prompt_upsampler`,
+    w4a8 6.7 GB, a `TextGenerate` node in Comfy's templates).
+- **Reimagine** (reference route): a new pose and angle with face, outfit, tattoo and room kept,
+  7.6 s against ~30 s for Qwen's two-stage workflow.
+- **To finish:** deploy, Fetch models, add `local/flux3-klein`, tick "Natural-language prompts".
+- **Not built:** bounding-box layout prompts (`Flux3LayoutPrompt`; needs a box UI).
 
 ## MOSS-Image edits + Bria FIBO 2.0 (`local/fibo-2`) — committed 2026-10-26, not deployed
 
