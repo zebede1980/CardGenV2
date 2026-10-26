@@ -72,9 +72,16 @@ scratch copy of the proxy; not through nginx/OCI, the browser or the iPhone.
     with a caption, but **Combine needs the caption**. Short instructions mixed the two pictures
     up; captioned, both "person from picture 2 into the room from picture 1" and an outfit swap came
     out right, which neither FIBO nor MOSS managed.
-  - **Not yet run with the real vision model** (Gemini 3.5 Flash). It may soften or refuse explicit
-    edits; if it does, the fallback is BFL's local upsampler (`qwen3.5_9b_flux3_prompt_upsampler`,
-    w4a8 6.7 GB, a `TextGenerate` node in Comfy's templates).
+  - **Not yet run with the real vision model** (Gemini 3.5 Flash). If it refuses or errors,
+    `_editCaptionOrInstruction` sends the instruction as typed (`looksLikeRefusal` spots apology /
+    "I can't" openings and short policy replies; a ■ Stop still stops). A *softened* caption isn't
+    detectable; if that happens, the next step is BFL's local upsampler
+    (`qwen3.5_9b_flux3_prompt_upsampler`, w4a8 6.7 GB, a `TextGenerate` node in Comfy's templates).
+- **NSFW (tested on the PC 2026-10-26):** nothing blocks it (ComfyUI doesn't run BFL's reference
+  NSFW classifier) and it doesn't cover up, but the training data was filtered: nude photos get faint
+  nipples and a smoothed groin, anime gets neither. An undress edit on a fictional MOSS character
+  worked first time. No FLUX.3 Klein NSFW LoRA exists yet (the "Klein NSFW" ones on HF are for
+  FLUX.2 Klein 9B and won't load); for explicit work use MOSS (photo) or Illustrious (anime).
 - **Reimagine** (reference route): a new pose and angle with face, outfit, tattoo and room kept,
   7.6 s against ~30 s for Qwen's two-stage workflow.
 - **To finish (Joe):** Settings → Image API → Fetch models, add `local/flux3-klein`, tick "Natural-language prompts".

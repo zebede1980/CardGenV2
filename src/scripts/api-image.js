@@ -33,6 +33,17 @@ Keep every explicit edit, constraint, count, position, style cue and piece of wo
 
 Output only the instruction.`;
 
+// A refusal instead of an edit caption: an apology or "I can't…" opening, or a
+// short reply that mentions a policy. A real caption is 50–150 words of
+// instruction ("Change the…", "Create a photograph of…").
+function looksLikeRefusal(text) {
+  const t = String(text || "").trim();
+  if (t.length < 20) return true;
+  const opening = /^(i'?m sorry|i am sorry|sorry|apologi[sz]e|unfortunately|i (?:can(?:no|')t|cannot|won'?t|am unable|'m unable|am not able|'m not able)|as an ai|i must decline|i'?m not comfortable)/i;
+  const policy = /\b(content (?:policy|guidelines)|safety (?:policy|guidelines)|sexually explicit|explicit (?:content|material)|not able to (?:help|assist)|can(?:no|')t (?:help|assist) with)\b/i;
+  return opening.test(t) || (t.split(/\s+/).length < 60 && policy.test(t));
+}
+
 function getRatioDims(model, ratio) {
   const map = /seedream/i.test(model || "") ? SEEDREAM_RATIO_MAP : DEFAULT_RATIO_MAP;
   return map[ratio];
@@ -467,7 +478,7 @@ Object.assign(APIHandler.prototype, {
 
     const editModel = model || this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
     if (!captioned && this.needsEditCaption(editModel)) {
-      trimmedInstruction = await this.writeEditCaption({ images: [imageBase64], instruction: trimmedInstruction });
+      trimmedInstruction = await this._editCaptionOrInstruction([imageBase64], trimmedInstruction);
     }
 
     const data = {
@@ -634,6 +645,28 @@ Describe only what can be seen. No character names, no headings, lists or quotat
     if (!caption) throw new Error("The vision model returned an empty edit caption — try again");
     if (this.lastFinishReason === "length") throw new Error("The edit caption was cut off before the model finished — try again");
     console.log("Edit caption:", caption);
+    return caption;
+  },
+
+  // The caption, or the user's own instruction when the vision model refuses
+  // or fails: Klein still edits well from a one-liner (tested 2026-10-26), so
+  // a cloud model's content policy shouldn't block a local edit. A ■ Stop
+  // pressed meanwhile still stops it.
+  async _editCaptionOrInstruction(images, instruction) {
+    const stopSerial = this.stopSerial;
+    let caption = "";
+    try {
+      caption = await this.writeEditCaption({ images, instruction });
+    } catch (error) {
+      if (this.stopSerial !== stopSerial) throw error;
+      console.warn("Edit caption failed, sending the instruction as typed:", error.message);
+      return instruction;
+    }
+    if (this.stopSerial !== stopSerial) throw new Error("Generation stopped by user.");
+    if (looksLikeRefusal(caption)) {
+      console.warn("Vision model refused the edit caption, sending the instruction as typed:", caption);
+      return instruction;
+    }
     return caption;
   },
 
@@ -1467,7 +1500,7 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
     const combineModel = model || this.config.get("api.image.combineModel") || "";
     if (!combineModel) throw new Error("Choose a model that supports combining multiple images first.");
     if (this.needsEditCaption(combineModel)) {
-      trimmedInstruction = await this.writeEditCaption({ images, instruction: trimmedInstruction });
+      trimmedInstruction = await this._editCaptionOrInstruction(images, trimmedInstruction);
     }
 
     const apiKey = this.config.get("api.image.apiKey");
