@@ -2,7 +2,7 @@
 
 Last updated 2026-10-26. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
 ✨ Prompt Builder merged, pushed and deployed. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
-Klein committed 2026-10-26, **not yet pushed or deployed**. Update this file when you ship something or find something worth remembering: it is the
+Klein deployed 2026-10-26 (`f837558`). Update this file when you ship something or find something worth remembering: it is the
 hand-over between machines, since Claude's own memory does not travel between them.
 
 ## Shipped recently, not yet tried for real
@@ -45,7 +45,11 @@ working image. Results that land while it is open join it (`_renderPlaygroundGen
 How many → 1 per model (picks shared with ⚔️ Compare Models, max 4). Joe ran it across Qwen-Image 2.1,
 Krea-2 Turbo, MOSS-Image and Z-Image-Turbo on the PC; all four came back and looked good.
 
-## FLUX.3 Klein (`local/flux3-klein`) — committed 2026-10-26, not deployed
+## FLUX.3 Klein (`local/flux3-klein`) — deployed 2026-10-26
+
+**After deploying**, a generation sent from inside the proxy container through the gateway to
+the PC came back in 3.7 s (Klein) and 13 s (FIBO), and `/api/image/local-models` lists both.
+Edits and Combine through the deployed proxy, and anything in the browser, are untried.
 
 BFL's distilled 5.6B Klein: generates, edits, and combines 2–4 pictures (BFL allows 10), one
 checkpoint. **The best local model tested so far, and the fastest**: ~6 s to generate at 1 MP,
@@ -73,17 +77,17 @@ scratch copy of the proxy; not through nginx/OCI, the browser or the iPhone.
     w4a8 6.7 GB, a `TextGenerate` node in Comfy's templates).
 - **Reimagine** (reference route): a new pose and angle with face, outfit, tattoo and room kept,
   7.6 s against ~30 s for Qwen's two-stage workflow.
-- **To finish:** deploy, Fetch models, add `local/flux3-klein`, tick "Natural-language prompts".
+- **To finish (Joe):** Settings → Image API → Fetch models, add `local/flux3-klein`, tick "Natural-language prompts".
 - **Not built:** bounding-box layout prompts (`Flux3LayoutPrompt`; needs a box UI).
 
-## MOSS-Image edits + Bria FIBO 2.0 (`local/fibo-2`) — committed 2026-10-26, not deployed
+## MOSS-Image edits + Bria FIBO 2.0 (`local/fibo-2`) — deployed 2026-10-26
 
 From Joe's brief (`CardGenV2_new_image_models_brief.md`). ComfyUI on the PC is master `0b05cd8a`
 (2026-10-26), which has the core MOSS edit node (#17296) and FIBO 2.0 (#17240). Tested on the PC by
 running a scratch copy of the proxy against the local ComfyUI (real routes, real graphs); **not yet
 through nginx/OCI, in the browser, or on the iPhone.**
 
-- **To finish:** deploy, then Settings → Image API → Fetch models, add `local/fibo-2` (tick
+- **To finish (Joe):** Settings → Image API → Fetch models, add `local/fibo-2` (tick
   "Natural-language prompts"), and on `local/moss-image` tick ✨ Edit by hand (its saved ticks
   override the new default). FIBO's 🔀 Combine starts ticked.
 - **MOSS edit:** chinoll's edit LoRA in Comfy-Org's repack (`loras/moss_image_edit_lora_rank_64_bf16`)
