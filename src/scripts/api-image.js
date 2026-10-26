@@ -581,13 +581,14 @@ Describe only what can be seen. No character names, no headings, lists or quotat
   },
 
   // How a model takes part in Reimagine:
-  //  "local"     — a local edit model (Qwen-Image 2.1): the proxy's reimagine
-  //                workflow, with a likeness setting
-  //  "reference" — a hosted edit model: the picture plus the written prompt
+  //  "local"     — Qwen-Image 2.1 on the local GPU: the proxy's two-stage
+  //                reimagine workflow, with a likeness setting
+  //  "reference" — any other edit model (hosted, or local MOSS / FIBO): the
+  //                picture plus the written prompt, as an ordinary edit
   //  "words"     — a text-to-image model: the written prompt alone
   reimagineRoute(model) {
     const caps = getImageModelCapabilities(model, this.config);
-    if (caps.edit) return isLocalImageModel(model) ? "local" : "reference";
+    if (caps.edit) return (model || "").startsWith("local/qwen-image") ? "local" : "reference";
     return "words";
   },
 
@@ -1411,7 +1412,9 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
 
     const apiKey = this.config.get("api.image.apiKey");
     const apiUrl = this.config.get("api.image.baseUrl");
-    if (!apiKey || !apiUrl) throw new Error("Please configure your Image API settings first.");
+    if (!isLocalImageModel(combineModel) && (!apiKey || !apiUrl)) {
+      throw new Error("Please configure your Image API settings first.");
+    }
 
     const payload = {
       model: combineModel,

@@ -2869,10 +2869,32 @@ const LOCAL_COMFY_MODELS = {
   },
   "local/moss-image": {
     name: "MOSS-Image",
-    capabilities: { generate: true, edit: false },
+    // The edit LoRA takes up to 4 pictures, but 2-picture edits were poor in
+    // every test (2026-10-26, outfit from picture 2 onto picture 1: it copied
+    // picture 2's pose and body, bled its lettering across, and undressed the
+    // subject; same with and without the uncensored LoRA, at 1 and 0.25 MP).
+    // The graph handles several; set combine and maxReferences to try again.
+    capabilities: { generate: true, edit: true, combine: false },
     // The template uses 25; OpenMOSS's own default is 50 (slower, a bit cleaner).
     steps: { default: 25, min: 12, max: 50 },
+    // The edit LoRA's own node pack defaults to 30.
+    editSteps: { default: 30, min: 12, max: 50 },
+    maxReferences: 1,
     buildGraph: buildMossGraph,
+  },
+  // One entry, two checkpoints: Dev draws from a prompt, Edit Turbo (distilled
+  // for editing only) does every edit, in 4 steps. Single-picture edits were
+  // excellent in tests (2026-10-26, ~6 s warm). With 2 pictures it builds on
+  // the LAST one and brings the subject in from the other: "put the person
+  // from Image 1 into the room from Image 2" worked, but outfit swaps didn't
+  // in either order.
+  "local/fibo-2": {
+    name: "Bria FIBO 2.0",
+    capabilities: { generate: true, edit: true, combine: true },
+    steps: { default: 30, min: 12, max: 50 },
+    editSteps: { default: 4, min: 4, max: 12 },
+    maxReferences: 4,
+    buildGraph: buildFibo2Graph,
   },
   "local/illustrious-xl": {
     name: "Illustrious XL",
@@ -3159,7 +3181,92 @@ function buildKrea2TurboGraph({ prompt, seed, steps, width, height }) {
 // owner's choice over a separate NSFW entry.
 const MOSS_NSFW_LORA = { file: "MOSS-Image-NSFW-Uncensored-LoRA-ComfyUI.safetensors", strength: 0.7, trigger: "moss_xvstyle" };
 
-function buildMossGraph({ prompt, seed, steps, width, height }) {
+// Adds a LoadImage and a resize to about `megapixels` (a multiple of 32) for
+// each reference, as Qwen's edit does. Returns the resized image outputs.
+function addLocalComfyReferences(graph, sourceImages, megapixels = LOCAL_COMFY.editMegapixels) {
+  return sourceImages.map((image, i) => {
+    const [load, area, snap] = [100 + i * 10, 101 + i * 10, 102 + i * 10];
+    graph[load] = { class_type: "LoadImage", inputs: { image } };
+    graph[area] = {
+      class_type: "ResizeImageMaskNode",
+      inputs: { input: [String(load), 0], resize_type: "scale total pixels", "resize_type.megapixels": megapixels, scale_method: "area" },
+    };
+    graph[snap] = {
+      class_type: "ResizeImageMaskNode",
+      inputs: { input: [String(area), 0], resize_type: "scale to multiple", "resize_type.multiple": 32, scale_method: "bicubic" },
+    };
+    return [String(snap), 0];
+  });
+}
+
+// "image 1" and "<image_1>" both name a reference; each model wants its own.
+function nameReferencesAs(prompt, style) {
+  const pattern = /<image_([1-9])>|\b(?:image|picture)\s+([1-9])\b/gi;
+  return prompt.replace(pattern, (whole, tagged, plain) => {
+    const n = tagged || plain;
+    return style === "tag" ? `<image_${n}>` : `image ${n}`;
+  });
+}
+
+// MOSS-Image edits: chinoll's instruction-edit LoRA (Comfy-Org's repack of
+// chinoll/Moss-Image-Edit) through ComfyUI's core Text Encode MOSS-Image Edit
+// node. In its "Moss-Image-Edit" layout the text encoder never sees the
+// pictures, only the DiT does (as reference latents), so the instruction has
+// to stand on its own and name the pictures as "image 1", "image 2". The same
+// node encodes the negative, so it carries the references too.
+// Settings from the LoRA's node pack: CFG 4, shift 5 (MOSS's default), 30 steps.
+//
+// The uncensored LoRA rides on top, as for generation. Tested on the PC
+// (2026-10-26, same seed): without it a navy-uniform edit also turned a crop
+// top into a full top and lost a hip tattoo; with it both stayed.
+const MOSS_EDIT_LORA = { file: "moss_image_edit_lora_rank_64_bf16.safetensors", strength: 1.0 };
+
+function buildMossEditGraph({ prompt, seed, steps, sourceImages }) {
+  const graph = {
+    1: { class_type: "UNETLoader", inputs: { unet_name: "moss_image_sft_int8_convrot.safetensors", weight_dtype: "default" } },
+    10: {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: ["1", 0], lora_name: MOSS_EDIT_LORA.file, strength_model: MOSS_EDIT_LORA.strength },
+    },
+    9: {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: ["10", 0], lora_name: MOSS_NSFW_LORA.file, strength_model: MOSS_NSFW_LORA.strength },
+    },
+    2: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3.5_9b_int8_convrot.safetensors", type: "moss_image", device: "default" } },
+    // The full VAE: its encoder makes the reference latents.
+    3: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae.safetensors" } },
+    8: { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/moss_edit" } },
+  };
+  const refs = addLocalComfyReferences(graph, sourceImages);
+  // This node's autogrow inputs count from image_0 (FIBO's from image_1).
+  const images = Object.fromEntries(refs.map((ref, i) => [`images.image_${i}`, ref]));
+  const encode = (text) => ({
+    class_type: "TextEncodeMOSSImageEdit",
+    inputs: { clip: ["2", 0], vae: ["3", 0], prompt: text, edit_format: "Moss-Image-Edit", image_strength: 1.0, ...images },
+  });
+  Object.assign(graph, {
+    4: encode(`${MOSS_NSFW_LORA.trigger}, ${nameReferencesAs(prompt, "plain")}`),
+    5: encode("worst quality, bad anatomy, watermark, jpeg artifact"),
+    // The result is the first picture's size. It must be: with 0.25 MP
+    // references under a 1 MP result, MOSS drew a new picture rather than an
+    // edit. 0.25 MP for both (the LoRA pack's 512 default) edits as well in
+    // 8 s instead of 18, but returns a small picture.
+    11: { class_type: "GetImageSize", inputs: { image: refs[0] } },
+    6: { class_type: "EmptyFlux2LatentImage", inputs: { width: ["11", 0], height: ["11", 1], batch_size: 1 } },
+    7: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["9", 0], positive: ["4", 0], negative: ["5", 0], latent_image: ["6", 0],
+        seed, steps, cfg: 4.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+      },
+    },
+  });
+  return graph;
+}
+
+function buildMossGraph({ prompt, seed, steps, width, height, sourceImages }) {
+  if (sourceImages?.length) return buildMossEditGraph({ prompt, seed, steps, sourceImages });
   return {
     1: { class_type: "UNETLoader", inputs: { unet_name: "moss_image_sft_int8_convrot.safetensors", weight_dtype: "default" } },
     9: {
@@ -3181,6 +3288,58 @@ function buildMossGraph({ prompt, seed, steps, width, height }) {
     8: { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 0] } },
     [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/moss" } },
   };
+}
+
+// Bria FIBO 2.0, from the test workflow in ComfyUI's PR #17240 (there is no
+// gallery template for the local model yet; the "Bria" templates there call
+// Bria's paid API). Dev: 30 steps, CFG 5. Edit Turbo: 4 steps, CFG 1. Both
+// euler/simple at the model's default shift. TextEncodeFibo2 makes the latent
+// too: for an edit it sizes the result to about 1 MP at the first picture's
+// shape, the size Bria trained at, and crops the picture to match.
+//
+// The prompt can be plain text or Bria's structured JSON caption (keys
+// short_description, objects, background_setting, lighting, aesthetics,
+// photographic_characteristics, style_medium, context, artistic_style,
+// text_render); the encoder tells them apart. An empty negative is the null
+// caption FIBO was trained with, so none is set. Pictures are named
+// <image_1>…<image_4> in an edit instruction.
+//
+// Weights: CC BY-NC 4.0 (non-commercial use only).
+function buildFibo2Graph({ prompt, seed, steps, width, height, sourceImages }) {
+  const editing = sourceImages?.length > 0;
+  const graph = {
+    1: {
+      class_type: "UNETLoader",
+      inputs: { unet_name: editing ? "fibo2_edit_turbo_int8_convrot.safetensors" : "fibo2_dev_int8_convrot.safetensors", weight_dtype: "default" },
+    },
+    2: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3vl_4b_int8_convrot.safetensors", type: "fibo2", device: "default" } },
+    3: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae.safetensors" } },
+    4: {
+      class_type: "TextEncodeFibo2",
+      inputs: {
+        clip: ["2", 0], prompt: editing ? nameReferencesAs(prompt, "tag") : prompt, negative_prompt: "",
+        width: editing ? 0 : width, height: editing ? 0 : height, batch_size: 1,
+      },
+    },
+    6: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["1", 0], positive: ["4", 0], negative: ["4", 1], latent_image: ["4", 2],
+        seed, steps, cfg: editing ? 1.0 : 5.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    7: { class_type: "VAEDecode", inputs: { samples: ["6", 0], vae: ["3", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["7", 0], filename_prefix: "cardgen/fibo2" } },
+  };
+  if (editing) {
+    // Load only: the encoder scales and crops each picture itself.
+    sourceImages.forEach((image, i) => {
+      graph[100 + i * 10] = { class_type: "LoadImage", inputs: { image } };
+      graph[4].inputs[`images.image_${i + 1}`] = [String(100 + i * 10), 0];
+    });
+    graph[4].inputs.vae = ["3", 0];
+  }
+  return graph;
 }
 
 // Plain SDXL text-to-image, as in Comfy's default workflow. The checkpoint is a
@@ -3273,10 +3432,18 @@ async function runLocalComfyImage(body) {
   const spec = LOCAL_COMFY_MODELS[body.model];
   const prompt = (body.prompt || "").trim();
   if (!prompt) throw new LocalComfyError(400, "A prompt is required");
+  // Edit sends one `image`; Combine sends `input_references`, as for nano-gpt.
+  const references = Array.isArray(body.input_references) ? body.input_references : body.image ? [body.image] : [];
   // A text-to-image model would silently ignore the source and return an
   // unrelated picture, so refuse instead.
-  if (body.image && !spec.capabilities.edit) {
+  if (references.length && !spec.capabilities.edit) {
     throw new LocalComfyError(400, `${spec.name} can't edit images — pick an edit model`);
+  }
+  if (references.length > 1 && !spec.capabilities.combine) {
+    throw new LocalComfyError(400, `${spec.name} takes one picture at a time — pick a model that can combine`);
+  }
+  if (references.length > (spec.maxReferences || 1)) {
+    throw new LocalComfyError(400, `${spec.name} takes at most ${spec.maxReferences || 1} pictures`);
   }
   const likeness = body.reimagine;
   if (likeness !== undefined) {
@@ -3293,12 +3460,20 @@ async function runLocalComfyImage(body) {
   const health = await localComfyFetch("/system_stats", { timeout: 15000 });
   if (!health.ok) throw new LocalComfyError(503, `Local GPU is not responding (${health.status})`);
 
-  const sourceImage = body.image ? await uploadLocalComfyImage(parseImageDataUri(body.image)) : null;
+  // Parse every picture before uploading any, so a bad second one doesn't
+  // leave the first behind on the PC.
+  const parsed = references.map(parseImageDataUri);
+  const sourceImages = [];
+  for (const image of parsed) sourceImages.push(await uploadLocalComfyImage(image));
+  const sourceImage = sourceImages[0] || null;
   const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed : Math.floor(Math.random() * 2147483647);
-  const steps = Math.min(spec.steps.max, Math.max(spec.steps.min, parseInt(body.steps, 10) || spec.steps.default));
+  const range = (sourceImage && spec.editSteps) || spec.steps;
+  const steps = Math.min(range.max, Math.max(range.min, parseInt(body.steps, 10) || range.default));
 
   const build = likeness !== undefined ? spec.buildReimagineGraph : spec.buildGraph;
-  const graph = build({ prompt: prompt.slice(0, 8000), seed, steps, sourceImage, likeness, ...localComfyDims(body, spec.maxMegapixels) });
+  const graph = build({
+    prompt: prompt.slice(0, 8000), seed, steps, sourceImage, sourceImages, likeness, ...localComfyDims(body, spec.maxMegapixels),
+  });
   const submit = await localComfyFetch("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3310,7 +3485,8 @@ async function runLocalComfyImage(body) {
     throw new LocalComfyError(502, `Local GPU rejected the workflow (${submit.status}) — are the ${spec.name} models installed?`);
   }
   const { prompt_id: promptId } = await submit.json();
-  const kind = likeness !== undefined ? `reimagine (${likeness})` : sourceImage ? "edit" : "generation";
+  const kind = likeness !== undefined ? `reimagine (${likeness})`
+    : sourceImages.length > 1 ? `combine (${sourceImages.length} pictures)` : sourceImage ? "edit" : "generation";
   console.log(`[comfy] queued ${spec.name} ${kind} ${promptId}`);
 
   let image;
@@ -3606,6 +3782,13 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
 
   try {
     const { model, prompt, input_references } = req.body;
+
+    if (isLocalComfyModel(model)) {
+      if (!Array.isArray(input_references) || input_references.length < 2) {
+        return res.status(400).json({ error: { code: "400", message: "At least two input_references images are required" } });
+      }
+      return handleLocalComfyImage(req, res);
+    }
 
     const apiKey = req.headers["x-api-key"];
     const apiUrl = req.headers["x-api-url"];

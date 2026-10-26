@@ -1,7 +1,8 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-10-23. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
-✨ Prompt Builder merged, pushed and deployed. Update this file when you ship something or find something worth remembering: it is the
+Last updated 2026-10-26. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
+✨ Prompt Builder merged, pushed and deployed. MOSS-Image editing and Bria FIBO 2.0 committed
+2026-10-26, **not yet pushed or deployed**. Update this file when you ship something or find something worth remembering: it is the
 hand-over between machines, since Claude's own memory does not travel between them.
 
 ## Shipped recently, not yet tried for real
@@ -43,6 +44,47 @@ working image. Results that land while it is open join it (`_renderPlaygroundGen
 
 How many → 1 per model (picks shared with ⚔️ Compare Models, max 4). Joe ran it across Qwen-Image 2.1,
 Krea-2 Turbo, MOSS-Image and Z-Image-Turbo on the PC; all four came back and looked good.
+
+## MOSS-Image edits + Bria FIBO 2.0 (`local/fibo-2`) — committed 2026-10-26, not deployed
+
+From Joe's brief (`CardGenV2_new_image_models_brief.md`). ComfyUI on the PC is master `0b05cd8a`
+(2026-10-26), which has the core MOSS edit node (#17296) and FIBO 2.0 (#17240). Tested on the PC by
+running a scratch copy of the proxy against the local ComfyUI (real routes, real graphs); **not yet
+through nginx/OCI, in the browser, or on the iPhone.**
+
+- **To finish:** deploy, then Settings → Image API → Fetch models, add `local/fibo-2` (tick
+  "Natural-language prompts"), and on `local/moss-image` tick ✨ Edit by hand (its saved ticks
+  override the new default). FIBO's 🔀 Combine starts ticked.
+- **MOSS edit:** chinoll's edit LoRA in Comfy-Org's repack (`loras/moss_image_edit_lora_rank_64_bf16`)
+  through core `TextEncodeMOSSImageEdit`, format `Moss-Image-Edit`, CFG 4, 30 steps, the full
+  `flux2-vae` (its encoder makes the reference latents). The uncensored LoRA stays on top: on the
+  same seed it kept a crop top and a tattoo that the edit LoRA alone lost. 18 s warm, ~1 MP.
+  - Its autogrow inputs count from `images.image_0` (FIBO's from `image_1`), and `image_strength`
+    is required.
+  - References must be the output's size: 0.25 MP references under a 1 MP latent drew a new
+    picture, not an edit.
+  - **2-picture edits are off** (`combine: false`, `maxReferences: 1`): an outfit swap copied
+    picture 2's pose and body and undressed the subject in 4/4 tries. The graph supports more.
+- **FIBO 2.0:** one entry, two checkpoints, all from `Comfy-Org/Fibo-2.0` (INT8; bf16 is 16.5 GB
+  and won't fit): Dev generates (30 steps, CFG 5, ~23 s at 1 MP), Edit Turbo edits (4 steps, CFG 1,
+  **~6 s**). Text encoder `qwen3vl_4b_int8_convrot`, VAE `flux2-vae`. Settings from the test
+  workflow in ComfyUI PR #17240; the gallery has no local template yet (its "Bria" ones are the
+  paid API). **Licence CC BY-NC 4.0** (non-commercial); the repack isn't gated.
+  - Single edits were the best of any local model tried: face, layout, lettering and tattoo kept,
+    anime style held.
+  - Combine: builds on the LAST picture and brings the subject from the other. "Character from
+    Image 1 into the room from Image 2" worked (the outfit leaked); outfit swaps failed in either
+    order. The proxy rewrites "Image 1" to FIBO's `<image_1>`.
+  - Prose and Bria's JSON caption gave about equal results (sign text right in both), so the
+    writer has no JSON format. The encoder accepts either.
+- **Combine route:** `/api/image/combine` now sends local models to `handleLocalComfyImage`, with
+  `input_references` as the pictures. `runLocalComfyImage` takes `image` or `input_references`.
+- **Reimagine:** only Qwen uses the two-stage local workflow now; MOSS/FIBO go the "reference"
+  route (an ordinary edit with the written prompt). Before, any local edit model was sent there
+  and the proxy refused it.
+- **Not built from the brief:** MOSS layout boxes and the colour/depth control LoRA
+  (`moss_image_color_depth_control` exists in the repack) need UI the app doesn't have; FIBO masked
+  edits need a mask tool.
 
 ## Local MOSS-Image (`local/moss-image`) — deployed 2026-10-18 (`d4be9b0`)
 

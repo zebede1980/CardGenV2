@@ -901,7 +901,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       note.textContent = route === "local"
         ? "Free on your GPU. Sees your picture: lays out the new shot first, then pulls the face, outfit and style back from it. Likeness: Close stays nearest your picture, Loose gives the model the most freedom."
         : route === "reference"
-          ? "Sees your picture along with the prompt. Costs credits per picture."
+          ? "Sees your picture along with the prompt."
+            + (isLocalImageModel(model) ? " Free on your GPU." : " Costs credits per picture.")
           : "Doesn't see your picture — draws from the written description alone, so the likeness is looser."
             + (isLocalImageModel(model) ? " Free on your GPU." : " Costs credits per picture.");
     }
