@@ -309,6 +309,14 @@ textarea.content-box {
     transform: translateY(-1px);
 }
 
+/* A button whose action is still running (e.g. 💾 Save while the card uploads). */
+button[aria-busy="true"],
+button[aria-busy="true"]:hover {
+    opacity: 0.64;
+    cursor: progress;
+    transform: none;
+}
+
 .btn-outline,
 .btn-small {
     color: var(--text-primary);

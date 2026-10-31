@@ -122,8 +122,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return safe;
   },
 
+  // Resolves true once the card is stored, false if it couldn't be (errors are logged, not thrown,
+  // so the automatic saves after generation never interrupt anything).
   async saveCardToLibrary(isPermanent = false, specificId = null) {
-    if (!this.storageReady || !this.storage || !this.currentCharacter) return;
+    if (!this.storageReady || !this.storage || !this.currentCharacter) return false;
 
     try {
       this.currentCharacter.character_book = this.buildCharacterBook();
@@ -214,8 +216,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
           }
         }
       }
+      return true;
     } catch (error) {
       console.error("Failed to save card:", error);
+      return false;
     }
   },
 
@@ -318,12 +322,41 @@ Object.assign(CharacterGeneratorApp.prototype, {
     });
   },
 
+  // Both 💾 Save to Library buttons (card actions + the locked gallery panel) run the same save,
+  // so both show it's in progress and neither can start a second one.
+  _setSaveCardButtonsBusy(busy) {
+    for (const id of ["save-card-btn", "gallery-save-card-btn"]) {
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      if (busy) {
+        btn.dataset.idleLabel = btn.textContent;
+        btn.textContent = "⏳ Saving…";
+      } else if (btn.dataset.idleLabel !== undefined) {
+        btn.textContent = btn.dataset.idleLabel;
+        delete btn.dataset.idleLabel;
+      }
+      btn.disabled = busy;
+      btn.setAttribute("aria-busy", busy ? "true" : "false");
+    }
+  },
+
   async handleSaveCardManual() {
     if (!this.currentCharacter) {
       this.showNotification("No character to save", "warning");
       return;
     }
+    if (this._manualSaveInFlight) return;
+    this._manualSaveInFlight = true;
+    this._setSaveCardButtonsBusy(true);
+    try {
+      await this._saveCardManual();
+    } finally {
+      this._manualSaveInFlight = false;
+      this._setSaveCardButtonsBusy(false);
+    }
+  },
 
+  async _saveCardManual() {
     let saveId = null;
     const charName = this.currentCharacter.name || "Unnamed Character";
 
@@ -348,7 +381,11 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     this.showNotification("Saving card to permanent library...", "info");
-    await this.saveCardToLibrary(true, saveId);
+    const saved = await this.saveCardToLibrary(true, saveId);
+    if (!saved) {
+      this.showNotification("Couldn't save the card. Check your connection and try again.", "error");
+      return;
+    }
     await this.refreshLibraryViews();
     this.showNotification("Card saved permanently!", "success");
   },
