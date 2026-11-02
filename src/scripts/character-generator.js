@@ -32,6 +32,43 @@ class CharacterGenerator {
     }
   }
 
+  // The character's name, from "# Name's Profile" or else the opening sentence.
+  // Returns "" when none can be found.
+  //
+  // The prompt says to write the real name only in that header and the first
+  // sentence, and {{char}} everywhere else. Some models (DeepSeek V4 Pro,
+  // 2026-11-02) put {{char}} in the header too, so a placeholder there is
+  // skipped and the first sentence ("Deirdre O'Halloran is a…") is used.
+  // Names may contain apostrophes, hyphens, accents and particles: O'Halloran,
+  // Smith-Jones, Siobhán, van der Berg.
+  extractCharacterName(rawData) {
+    const text = rawData || "";
+    const isPlaceholder = (name) => !name || /\{\{|\}\}|\[|\]|^char$|character name/i.test(name);
+    const clean = (name) => name.replace(/^[*_"“”\s]+|[*_"“”\s]+$/g, "").trim();
+
+    const header = text.match(/^#\s*(.+?)(?:['’]s|['’])\s+Profile\s*$/im);
+    if (header && !isPlaceholder(clean(header[1]))) return clean(header[1]);
+
+    const word = "\\p{Lu}[\\p{L}\\p{M}'’-]*";
+    const particle = "(?:van|von|de|del|della|der|den|di|da|du|la|le|bin|ibn|al|el|of)";
+    const name = `${word}(?:\\s+(?:${particle}\\s+)*${word}){0,4}`;
+
+    // First person: "The name's Name"
+    const firstPerson = text.match(new RegExp(`The name['’]s\\s+(${name})`, "u"));
+    if (firstPerson) return firstPerson[1].trim();
+
+    // Third person: "Name is…" opening a line of the description (before
+    // ## Personality), so a later "She is…" can't be taken for a name.
+    const description = text.split(/^##\s*(?:My\s+)?Personality/im)[0];
+    const notName = "(?:He|She|They|It|This|That|The|There|Her|His|Their|A|An|What|Who)\\b";
+    const thirdPerson = description.match(
+      new RegExp(`^[*_\\s]*(?!${notName})(${name})[*_]*\\s+(?:is|was)\\b`, "mu"),
+    );
+    if (thirdPerson) return thirdPerson[1].trim();
+
+    return "";
+  }
+
   // Parse character data using simple string splitting based on template
   parseCharacterData(rawData) {
     const character = {
@@ -43,24 +80,7 @@ class CharacterGenerator {
       mesExample: "",
     };
 
-    // Extract character name from profile section
-    // Try standard header format first: # Name's Profile
-    const nameMatch = rawData.match(/^#\s*([^'\\]*(?:\\.[^'\\]*)*)'s Profile/i);
-    if (nameMatch) {
-      character.name = nameMatch[1].trim();
-    } else {
-      // Try to find name in text (First Person: "The name's Name")
-      const nameTextMatch = rawData.match(/The name's\s+([A-Z][a-z]+(?: [A-Z][a-z]+)*)/);
-      if (nameTextMatch) {
-        character.name = nameTextMatch[1].trim();
-      } else {
-        // Try Third Person: "Name is..." (at start of description)
-        const thirdPersonMatch = rawData.match(/^(?:#\s*[^#\n]+\n+)?([A-Z][a-z]+(?: [A-Z][a-z]+)*)\s+is\b/m);
-        if (thirdPersonMatch) {
-          character.name = thirdPersonMatch[1].trim();
-        }
-      }
-    }
+    character.name = this.extractCharacterName(rawData);
 
     // Fallback if name is still missing but we have content
     if (!character.name) {
