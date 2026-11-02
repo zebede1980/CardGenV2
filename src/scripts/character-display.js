@@ -799,6 +799,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
     this.resetCharacterForm();
+    const inputSectionDetails = document.getElementById("input-section-details");
+    if (inputSectionDetails) inputSectionDetails.open = true;
     this.showNotification("Cleared — ready for a new character", "info");
   },
 
