@@ -181,16 +181,24 @@ Object.assign(CharacterGeneratorApp.prototype, {
       streamContent.appendChild(contentContainer);
     }
 
+    const follow = this._isStreamAtBottom(streamContent);
     contentContainer.textContent += content;
-    streamContent.scrollTop = streamContent.scrollHeight;
+    if (follow) streamContent.scrollTop = streamContent.scrollHeight;
   },
 
   showStreamMessage(message) {
     const streamContent = document.getElementById("stream-content");
+    const follow = this._isStreamAtBottom(streamContent);
     const messageElement = document.createElement("div");
     messageElement.textContent = message;
     streamContent.appendChild(messageElement);
-    streamContent.scrollTop = streamContent.scrollHeight;
+    if (follow) streamContent.scrollTop = streamContent.scrollHeight;
+  },
+
+  // Only follow new output if the reader is already at the bottom, so scrolling
+  // up to read mid-generation isn't yanked back down on every chunk.
+  _isStreamAtBottom(el) {
+    return el.scrollHeight - el.clientHeight - el.scrollTop < 30;
   },
 
   downloadBlob(blob, filename) {
