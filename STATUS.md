@@ -20,6 +20,8 @@ run was made.
 | ⚔️ Compare Models in Character Gen | `eda75dd` | Never run against the real GPU |
 | Combine tab (qwen-image-3-pro, reve/2.1/remix, grok-imagine edit) | — | Never confirmed against a real model |
 | 💾 Save to Library shows ⏳ Saving… and can't be pressed twice; a failed save now says so instead of "saved" | `65909f8` (2026-10-31) | Tap Save on a card with a portrait; the button should grey out until the toast |
+| 📡 Raw Generation Stream only auto-scrolls while you're at the bottom (30 px) — not tested, even headlessly | `023104e` (2026-11-02) | Scroll up mid-generation: it stays put; scroll to the bottom: it follows again |
+| 🆕 Clear / New opens Character Generation Inputs — not tested, even headlessly | `92e87ea` (2026-11-02) | Load a card, Clear / New: the inputs section should be open |
 
 ### How image sizes are sent now (`src/scripts/api-image.js`, `applyImageRatio`)
 
