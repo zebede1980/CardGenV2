@@ -408,7 +408,39 @@ header and reads the first sentence, and accepts apostrophes/hyphens/accents/par
 regex also failed on any apostrophe name (`# Deirdre O'Halloran's Profile` didn't match), on GLM too.
 The user's model setting is still GLM 5.3; switching is a Settings → Text API change.
 
-## Roleplay Chat variety (2026-11-03) — committed, not deployed, not run against a real model
+## Roleplay Chat: Stop cancels the server, no error text in history, token floor, rich-tag XSS — 2026-11-03
+
+Four of the review findings below, fixed together. Backend (`chat.py`) and client (`chat-handler.js`):
+
+- **Stop cancels the generation on the server.** `POST /chats/{id}/messages/{msg}/cancel` cancels the
+  task in `_ACTIVE_GENERATIONS` (keyed by assistant message id), waits for it to save, and returns
+  `{cancelled, deleted, content}`. `stopGeneration()` fires it before aborting the socket; the send and
+  regen flows then await `_settleCancel()` and make the bubble match what the server kept (a reply that
+  had nothing yet is deleted and its bubble removed). Before, the server finished and paid for the
+  whole reply while the bubble showed a fragment, and Edit + Save overwrote the full text.
+  Impersonate has no message id, so Stop there still only closes the socket.
+- **Failed generations are no longer stored.** The error is sent to the browser only; the stored reply
+  is whatever arrived. An empty placeholder is deleted (an empty assistant message means "still
+  generating" to the browser's pending banner). A reply cut off inside its reasoning gets its
+  `<think>` closed so history stripping removes it. `DELETE …/messages/{id}` on a missing message
+  now returns `{success, missing}` instead of 404, so Regen and Delete on such a bubble still work.
+- **Token floor and length cut.** Chat `max_tokens` is now at least `CHAT_MIN_MAX_TOKENS = 4096`
+  (the proxy's floor; GLM 5.3 reasoning counts against it). A reply that still ends with
+  `finish_reason == "length"` is trimmed to its last sentence end (`_trim_cut_reply`) and re-sent as
+  `corrected_content`.
+- **Rich-tag XSS closed.** `formatMessage` lifts `<text-message>`, `<task>`, `<stat-bar>`,
+  `<scene-image>` and `<think>` out before escaping; now only a tag matching the renderer's own
+  shape (`SAFE_RICH_TAG`) goes back raw, anything else is escaped as prose. Scene images render
+  with the URL and prompt in `data-` attributes (scheme restricted to http(s), `/`, `data:image/`,
+  `blob:`) and a delegated click listener on the timeline opens the lightbox; the inline `onclick`
+  that spliced the URL into JavaScript is gone.
+- **Tested:** Python helpers (`_trim_cut_reply`, `_close_open_think`) against the real module;
+  `formatMessage` under Node with a stub DOM against the XSS payloads from the review and the normal
+  rich tags. **Not tested:** the cancel round-trip end to end, nor any of it on the iPhone.
+  Try: Stop mid-reply, then reload — the bubble and the reload should agree; Stop during the
+  "thinking" phase should leave no empty bubble.
+
+## Roleplay Chat variety (2026-11-03) — deployed, not yet run against a real model
 
 Why: apart from the history, the prompt was identical every turn (same cards, examples, CoT,
 post-history reminders) and Regenerate re-sent the very same prompt, so replies only varied through
@@ -438,20 +470,11 @@ the system block and history is unaffected) — `chat.py`, `llm_service.py`, `sc
 
 ## Code review 2026-11-03 — open findings (nothing below is fixed yet)
 
-Roleplay Chat, in severity order. Client lines are in `chat-handler.js`, backend in `chat.py`:
-- **XSS via rich tags:** `formatMessage` lifts `<text-message>`/`<task>`/`<stat-bar>`/`<scene-image>`
-  out before escaping and restores them raw; the parser only rewrites tags whose attributes match,
-  so `<text-message><img onerror=…>` runs. The scene-image URL is also spliced into an inline
-  `onclick`. A downloaded card's first message is enough. Fix: only restore tags the parser consumed,
-  and build the scene-image wrapper with DOM calls.
-- **Stop only drops the socket.** The detached backend task finishes and saves the full reply (paid
-  in full); the bubble shows a fragment; Edit + Save overwrites the full text. Needs a cancel route.
-- **Failed generations are stored** as `[Generation error: …]` and fed to the model next turn.
+Roleplay Chat, in severity order. Client lines are in `chat-handler.js`, backend in `chat.py`.
+(Fixed the same day, see the section above: rich-tag XSS, Stop not cancelling the server, error text
+stored in history, the output-token cap.)
 - **Cards reach the model with literal `{{char}}`/`{{user}}`** (only story mode and the first
   message substitute them), so `{{user}}` never becomes the persona name.
-- **Output cap vs reasoning:** chat defaults to 1024 output tokens with no floor (the proxy floors
-  its own calls at 4096); GLM 5.3 reasoning can use 1,600. `finish_reason == "length"` is never
-  checked in chat. Long replies likely truncate mid-sentence.
 - Impersonate never sets `isGenerating` (overlapping streams share one abort controller); streams
   aren't pinned to the chat they started in; the watchdog resets `lastByteAt` on hidden ticks so
   `syncOnWake`'s fast check never fires; settings can't store 0 (`parseFloat(v) || default`); old
