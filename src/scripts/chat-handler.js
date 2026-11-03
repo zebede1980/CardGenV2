@@ -111,6 +111,17 @@ class RoleplayChatHandler {
             }, { passive: true });
         }
 
+        // Scene images open the lightbox. Delegated, with the URL and prompt in
+        // data attributes: formatMessage() used to splice the URL into an inline
+        // onclick string, which let a crafted tag run script.
+        if (this.els.timeline) {
+            this.els.timeline.addEventListener('click', (e) => {
+                const wrapper = e.target.closest('.chat-scene-image-wrapper');
+                if (!wrapper || !window.app || typeof window.app.openGallery !== 'function') return;
+                window.app.openGallery([{ url: wrapper.dataset.url, prompt: wrapper.dataset.prompt || '', label: 'Chat Scene' }]);
+            });
+        }
+
         // The composer grows with the tray, an OOC note or a long message;
         // if the latest text was in view, keep it there.
         const composer = document.querySelector('#view-roleplaychat .chat-input-area');
@@ -1802,6 +1813,12 @@ class RoleplayChatHandler {
             this.abortController = null;
         }
 
+        const cancelResult = await this._settleCancel(serverAiMsgId);
+        if (cancelResult && !this._applyCancelResult(cancelResult, aiBubbleWrapper, contentEl, aiMsgObj)) {
+            this._setGeneratingUI(false);
+            return;
+        }
+
         if (dropped) {
             if (serverAiMsgId) {
                 await this._recoverReply({ replyId: serverAiMsgId, wrapper: aiBubbleWrapper, contentEl, msgObj: aiMsgObj });
@@ -2217,16 +2234,30 @@ class RoleplayChatHandler {
         // ══════════════════════════════════════════════════════════════════
         // STEP 4 — Restore rich tags & render
         // ══════════════════════════════════════════════════════════════════
-        parsed = parsed.replace(placeholderRegex, (match, index) => richTags[index]);
+        // Only a tag that the renderers below will consume (and whose text
+        // they escape) goes back in raw. Anything else that was lifted out in
+        // Step 2 is escaped like ordinary prose: a <text-message> with no
+        // sender, or a <stat-barx>, used to land in innerHTML as live HTML.
+        const SAFE_RICH_TAG = [
+            /^<span class="chat-think-streaming" style="display:none;"><\/span>$/,
+            /^<think>[\s\S]*?<\/think>$/i,
+            /^<text-message\s+sender=["'][^"']+["']>[\s\S]*?<\/text-message>$/i,
+            /^<task\s+title=["'][^"']+["']>[\s\S]*?<\/task>$/i,
+            /^<stat-bar\b[^>]*>(?:<\/stat-bar>)?$/i,
+            /^<scene-image\s+src="(?:https?:\/\/|\/|data:image\/|blob:)[^"<>\s]+"\s+prompt="[^"<>]*"\s*(?:><\/scene-image>|\/?>)$/i,
+        ];
+        parsed = parsed.replace(placeholderRegex, (match, index) => {
+            const tag = richTags[index];
+            return SAFE_RICH_TAG.some((re) => re.test(tag)) ? tag : this.escapeHtml(tag);
+        });
 
-        // Process <scene-image> tags into clickable image wrappers
+        // Process <scene-image> tags into clickable image wrappers. The click
+        // is handled by a delegated listener on the timeline (see init).
         parsed = parsed.replace(/<scene-image\s+src="([^"]+)"\s+prompt="([^"]*)"\s*(?:><\/scene-image>|\/?>)/g, (match, url, prompt) => {
-            return `
-                <div class="chat-scene-image-wrapper" onclick="if(window.app && window.app.openGallery) window.app.openGallery([{url: '${url}', prompt: decodeURIComponent('${encodeURIComponent(prompt)}'), label: 'Chat Scene'}]);">
-                    <img src="${url}" alt="Generated Scene" class="chat-scene-image">
-                    <div class="gallery-trigger-overlay">🔍</div>
-                </div>
-            `;
+            const safeUrl = this.escapeHtml(url);
+            return `<div class="chat-scene-image-wrapper" role="button" data-url="${safeUrl}" data-prompt="${this.escapeHtml(prompt)}">`
+                + `<img src="${safeUrl}" alt="Generated Scene" class="chat-scene-image">`
+                + `<div class="gallery-trigger-overlay">🔍</div></div>`;
         });
 
         // Pass through RichElementParser for <think>, <text-message>, <task>, <stat-bar>
@@ -2315,6 +2346,7 @@ class RoleplayChatHandler {
     // watchdog ignores time the page spent hidden or asleep, since iOS freezes
     // timers while locked and fires the overdue ones the instant it wakes.
     async _readChatStream(res, controller, getReplyId, onEvent) {
+        this._liveReplyId = getReplyId; // for stopGeneration()'s server-side cancel
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -2384,6 +2416,7 @@ class RoleplayChatHandler {
         } finally {
             clearInterval(watchdog);
             this._liveStream = null;
+            this._liveReplyId = null;
         }
     }
 
@@ -2447,6 +2480,19 @@ class RoleplayChatHandler {
     }
 
     stopGeneration() {
+        // Closing the socket alone left the server generating (and paying for)
+        // the whole reply, then saving a version the bubble never showed. Ask
+        // the backend to cancel too; the send/regen flow applies what it kept.
+        const replyId = typeof this._liveReplyId === 'function' ? this._liveReplyId() : null;
+        const chatId = this.activeChatId;
+        if (replyId && chatId) {
+            this._pendingCancel = {
+                replyId,
+                promise: window.authFetch(`/api/sw/chats/${chatId}/messages/${replyId}/cancel`, { method: 'POST' })
+                    .then((r) => (r.ok ? r.json() : null))
+                    .catch((e) => { console.warn('Cancel request failed', e); return null; }),
+            };
+        }
         if (this.abortController) {
             this.abortController.abort();
             this.abortController = null;
@@ -2454,6 +2500,30 @@ class RoleplayChatHandler {
         this._recovering = null; // ends a recovery poll too
         this._setGeneratingUI(false);
         this._focusInput();
+    }
+
+    /** After a Stop: the cancel route's answer for this reply, or null. */
+    async _settleCancel(replyId) {
+        const pending = this._pendingCancel;
+        if (!pending || !replyId || pending.replyId !== replyId) return null;
+        this._pendingCancel = null;
+        return pending.promise;
+    }
+
+    /** Make the bubble match what the server kept of a stopped reply. Returns
+     *  false when nothing was kept and the bubble is gone. */
+    _applyCancelResult(result, wrapper, contentEl, msgObj) {
+        if (!result) return true;
+        if (result.deleted) {
+            wrapper.remove();
+            this._updateRegenButtons();
+            return false;
+        }
+        if (typeof result.content === 'string') {
+            msgObj.content = result.content;
+            contentEl.innerHTML = this.formatMessage(result.content, msgObj.character_name);
+        }
+        return true;
     }
 
     async sendImpersonateMessage() {
@@ -2637,6 +2707,13 @@ class RoleplayChatHandler {
             this.attachMessageActions(userBubbleWrapper, userMsgObj,
                 userBubbleWrapper.querySelector('.chat-bubble'),
                 userBubbleWrapper.querySelector('.chat-bubble-name'));
+        }
+
+        const cancelResult = await this._settleCancel(serverAiMsgId);
+        if (cancelResult && !this._applyCancelResult(cancelResult, aiBubbleWrapper, contentEl, aiMsgObj)) {
+            this._setGeneratingUI(false);
+            this._focusInput();
+            return;
         }
 
         if (dropped) {

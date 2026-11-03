@@ -389,6 +389,41 @@ def _reply_text(content: str) -> str:
     return _SCENE_IMAGE_RE.sub('', strip_think(content or '')).strip()
 
 
+# ── Reply integrity ──────────────────────────────────────────────────────────
+# The chat's max_tokens is a ceiling that GLM 5.3's hidden reasoning also
+# counts against (the proxy measured up to 1,600 reasoning tokens on a call
+# whose answer was under 150), so a small cap cuts the prose, not the thinking.
+# Same floor as the proxy's MIN_TEXT_MAX_TOKENS; the length presets steer the
+# actual length. A reply that still hits the ceiling is cut back to its last
+# complete sentence rather than left hanging mid-word.
+CHAT_MIN_MAX_TOKENS = 4096
+
+# Running reply generations by assistant message id, so Stop can cancel the
+# server-side task instead of just closing the browser's socket (which left
+# the model running, paid in full, and saved a reply the reader never saw).
+_ACTIVE_GENERATIONS: dict = {}
+
+
+def _close_open_think(text: str) -> str:
+    """A reply cut off inside its reasoning has an unclosed <think>; close it so
+    history stripping removes the block instead of feeding raw planning back."""
+    if "<think>" in text and "</think>" not in text:
+        return text.rstrip() + "\n</think>\n"
+    return text
+
+
+def _trim_cut_reply(text: str) -> str:
+    """Cut a reply that hit max_tokens back to its last sentence end, keeping
+    the think block. Left alone if that would drop more than half the prose."""
+    head, sep, prose = text.rpartition("</think>")
+    if not sep:
+        head, prose = "", text
+    ends = [m.end() for m in _cot_re.finditer(r'[.!?…]["”’)\]*_]*(?=\s|$)', prose)]
+    if ends and ends[-1] >= len(prose) * 0.5:
+        return head + sep + prose[:ends[-1]].rstrip()
+    return text
+
+
 def _opening(text: str, words: int = VARIETY_OPENING_WORDS) -> str:
     parts = text.split()
     return " ".join(parts[:words]) + ("…" if len(parts) > words else "")
@@ -1002,8 +1037,10 @@ def delete_chat_message(chat_id: str, message_id: str, truncate: bool = False, d
         raise HTTPException(status_code=404, detail="Chat not found")
     msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.chat_id == chat_id).first()
     if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
-    
+        # Already gone: a failed or cancelled generation deletes its own empty
+        # placeholder, and the browser may still hold a bubble for it.
+        return {"success": True, "missing": True}
+
     if truncate:
         msgs_to_delete = db.query(models.ChatMessage).filter(
             models.ChatMessage.chat_id == chat_id,
@@ -1016,6 +1053,33 @@ def delete_chat_message(chat_id: str, message_id: str, truncate: bool = False, d
         
     db.commit()
     return {"success": True}
+
+@router.post("/{chat_id}/messages/{message_id}/cancel")
+async def cancel_generation(chat_id: str, message_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Stop the server-side generation of a reply. Returns what was kept:
+    `content` is the saved partial reply, or `deleted` when nothing had
+    arrived and the placeholder was removed."""
+    chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    task = _ACTIVE_GENERATIONS.get(message_id)
+    cancelled = False
+    if task is not None and not task.done():
+        task.cancel()
+        cancelled = True
+        try:
+            # The task swallows the cancellation, saves, and ends normally.
+            await asyncio.wait_for(asyncio.shield(task), timeout=15)
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"cancel_generation: task for {message_id} did not settle cleanly: {e}")
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.chat_id == chat_id).first()
+    if msg is not None:
+        db.refresh(msg)
+    return {
+        "cancelled": cancelled,
+        "deleted": msg is None,
+        "content": msg.content if msg is not None else None,
+    }
 
 class ImageGenParams(BaseModel):
     base_url: Optional[str] = None
@@ -1313,7 +1377,7 @@ async def send_message(
     # Per-request sampling overrides from the frontend (global chat settings);
     # None falls through to the stored Settings defaults in LLMService.
     gen_kwargs = dict(
-        max_tokens=req.max_output_tokens,
+        max_tokens=max(req.max_output_tokens or settings.max_tokens or 0, CHAT_MIN_MAX_TOKENS),
         temperature=req.temperature,
         repetition_penalty=req.repetition_penalty,
         top_p=req.top_p,
@@ -1477,6 +1541,14 @@ async def send_message(
 
             logger.info(f"[{request_id}] LLM request completed successfully")
 
+            # Hit the token ceiling with prose on the page: cut back to a sentence end.
+            if llm.finish_reason == "length" and strip_think(full_content):
+                trimmed = _trim_cut_reply(full_content)
+                if trimmed != full_content:
+                    logger.info(f"[{request_id}] Reply hit max_tokens ({gen_kwargs['max_tokens']}); trimmed to its last sentence")
+                    full_content = trimmed
+                    await queue.put({"type": "corrected_content", "content": full_content})
+
             # ── CoT tag fallback ─────────────────────────────────────────────
             # If CoT is enabled and the model forgot to wrap its reasoning in
             # <think> tags, inject them now.  We emit a corrected_content event
@@ -1532,27 +1604,40 @@ async def send_message(
                     "usage": llm.last_usage
                 }
             })
+        except asyncio.CancelledError:
+            # Stop pressed in the browser (see cancel_generation). Keep what the
+            # reader saw; the task ends normally so the save below still runs.
+            logger.info(f"[{request_id}] Generation cancelled by the user after {len(full_content)} chars")
         except Exception as e:
+            # The error goes to the browser only. It used to be appended to the
+            # stored reply, where the next turn fed it to the model as something
+            # the character had said.
             logger.error(f"[{request_id}] LLM request failed: {e}")
-            error_msg = f"\n\n[Generation error: {str(e)}]"
-            full_content += error_msg
             await queue.put(e)
         finally:
-            # Persist to DB in detached session
+            # Persist to DB in detached session. A placeholder with nothing in it
+            # is deleted: the browser reads an empty assistant message as "still
+            # generating on the server" and shows the pending banner.
+            full_content = _close_open_think(full_content)
             try:
                 with SessionLocal() as bg_db:
                     msg = bg_db.query(models.ChatMessage).filter(models.ChatMessage.id == assistant_msg_id).first()
                     if msg:
-                        msg.content = full_content if full_content else "[Generation failed to start]"
+                        if full_content.strip():
+                            msg.content = full_content
+                        else:
+                            bg_db.delete(msg)
                         bg_db.commit()
             except Exception as db_err:
                 logger.error(f"[{request_id}] DB save failed: {db_err}")
-                
+
             await llm.close()
             await queue.put(None)
-            
-    # Launch background task (survives HTTP disconnect)
-    asyncio.create_task(generate_task())
+
+    # Launch background task (survives HTTP disconnect); registered so Stop can cancel it.
+    gen_task = asyncio.create_task(generate_task())
+    _ACTIVE_GENERATIONS[assistant_msg_id] = gen_task
+    gen_task.add_done_callback(lambda t: _ACTIVE_GENERATIONS.pop(assistant_msg_id, None))
     
     # Launch background summarization for future turns
     # [CHAT-CONTEXT-SCALING 2026-08-12] pass the chat's configured input budget
