@@ -394,6 +394,19 @@ covers the details.
   - Rotating.
   - A group chat's speaker picker.
 
+## DeepSeek V4 Pro tried as the text model (2026-11-02) — works; name parser fixed
+
+`deepseek/deepseek-v4-pro-0813` ($0.66/$1.98 per M) was run against the real code with the user's
+settings, nothing saved. **Roleplay Chat:** 4 real chats regenerated through the backend's own prompt
+builder: native reasoning arrives in `delta.reasoning`, becomes the think block, no fallbacks fired, no
+CJK, explicit scenes continued without softening; faster than GLM 5.3 on all four (Avril: 18 s vs 91 s).
+**Character Gen:** 2 cards in headless WebKit on the live site: every field filled, ~50 s vs GLM's 66 s.
+One card came back named `{{char}}`: DeepSeek applied the "{{char}} everywhere else" rule to the
+`# Name's Profile` header too. `extractCharacterName` (character-generator.js) now skips a placeholder
+header and reads the first sentence, and accepts apostrophes/hyphens/accents/particles. The old header
+regex also failed on any apostrophe name (`# Deirdre O'Halloran's Profile` didn't match), on GLM too.
+The user's model setting is still GLM 5.3; switching is a Settings → Text API change.
+
 ## Known open issues
 
 - **Root cause of the 2026-10-18 stall is unknown.** The proxy finished the job and NPM sent the
