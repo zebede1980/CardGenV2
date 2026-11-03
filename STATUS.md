@@ -1,9 +1,10 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-10-26. Branch `ChatTest`, with MOSS-Image, the image-prompt fix and the
-✨ Prompt Builder merged, pushed and deployed. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
-Klein deployed 2026-10-26 (`f837558`). Update this file when you ship something or find something worth remembering: it is the
-hand-over between machines, since Claude's own memory does not travel between them.
+Last updated 2026-11-03. Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03, **not yet
+deployed** (needs a backend rebuild as well as the frontend). Update this file when you ship
+something or find something worth remembering: it is the hand-over between machines, since
+Claude's own memory does not travel between them.
 
 ## Shipped recently, not yet tried for real
 
@@ -406,6 +407,71 @@ One card came back named `{{char}}`: DeepSeek applied the "{{char}} everywhere e
 header and reads the first sentence, and accepts apostrophes/hyphens/accents/particles. The old header
 regex also failed on any apostrophe name (`# Deirdre O'Halloran's Profile` didn't match), on GLM too.
 The user's model setting is still GLM 5.3; switching is a Settings → Text API change.
+
+## Roleplay Chat variety (2026-11-03) — committed, not deployed, not run against a real model
+
+Why: apart from the history, the prompt was identical every turn (same cards, examples, CoT,
+post-history reminders) and Regenerate re-sent the very same prompt, so replies only varied through
+sampling. Changes, all in the post-history system message (already per-turn, so prompt caching of
+the system block and history is unaffected) — `chat.py`, `llm_service.py`, `schemas.py`,
+`chat-handler.js`, Chat Settings modal in `index.html`:
+
+- **Regenerate asks for a different take.** The client sends `regenerate: true` and
+  `previous_reply` (think block and scene images stripped, 1500 chars). The backend adds a
+  `[Regeneration]` line quoting the rejected reply's first sentence and ordering a different opening
+  and beat. A regen always gets a nudge. Regen also now sends `enable_cot` (it used to omit it).
+- **Variety nudges** (`VARIETY_NUDGES`, 12 beats + 3 blanks, `random.choice` per turn) as a
+  `[This turn]` line, plus a `[Variety]` line listing the first 8 words of the last 5 replies as
+  off-limits openings. Chat Settings → "Variety nudges" tickbox (`chat.varietyNudges`, default on).
+- **Example messages fade** after `EXAMPLE_MESSAGES_FADE_AFTER = 8` real replies.
+- **Presence Penalty** (`chat.presencePenalty`, default 0; `presence_penalty` sent only when
+  non-zero) and **Reasoning Effort** (`chat.reasoningEffort`, default `high`, nano-gpt only) in
+  Chat Settings. `frequency_penalty` is plumbed through the backend but has no UI.
+  Untested whether nano-gpt honours `presence_penalty`; the proxy already forwards it for Character
+  Gen, so it is expected to. `repetition_penalty` is a vLLM parameter nano-gpt may ignore.
+- All three chat payloads (send, regen, impersonate) now come from `_chatGenOptions()`.
+- **Tested:** headless Python tests of `build_chat_prompt` (fade, nudge rate, regen line, variety
+  off) and of the `LLMService` payload per host (stubbed FastAPI/SQLAlchemy, since this PC has
+  neither). No real generation; the Chat Settings modal not opened in a browser.
+- **To try:** a regen on a real chat and look at the api log's post-history block; Presence 0.4 and
+  Reasoning Effort medium side by side with the defaults.
+
+## Code review 2026-11-03 — open findings (nothing below is fixed yet)
+
+Roleplay Chat, in severity order. Client lines are in `chat-handler.js`, backend in `chat.py`:
+- **XSS via rich tags:** `formatMessage` lifts `<text-message>`/`<task>`/`<stat-bar>`/`<scene-image>`
+  out before escaping and restores them raw; the parser only rewrites tags whose attributes match,
+  so `<text-message><img onerror=…>` runs. The scene-image URL is also spliced into an inline
+  `onclick`. A downloaded card's first message is enough. Fix: only restore tags the parser consumed,
+  and build the scene-image wrapper with DOM calls.
+- **Stop only drops the socket.** The detached backend task finishes and saves the full reply (paid
+  in full); the bubble shows a fragment; Edit + Save overwrites the full text. Needs a cancel route.
+- **Failed generations are stored** as `[Generation error: …]` and fed to the model next turn.
+- **Cards reach the model with literal `{{char}}`/`{{user}}`** (only story mode and the first
+  message substitute them), so `{{user}}` never becomes the persona name.
+- **Output cap vs reasoning:** chat defaults to 1024 output tokens with no floor (the proxy floors
+  its own calls at 4096); GLM 5.3 reasoning can use 1,600. `finish_reason == "length"` is never
+  checked in chat. Long replies likely truncate mid-sentence.
+- Impersonate never sets `isGenerating` (overlapping streams share one abort controller); streams
+  aren't pinned to the chat they started in; the watchdog resets `lastByteAt` on hidden ticks so
+  `syncOnWake`'s fast check never fires; settings can't store 0 (`parseFloat(v) || default`); old
+  chats keep the pre-August CoT wording in their stored system prompt so the native-reasoning swap
+  never applies (plausible, DB-dependent); the summary grows without bound; the lorebook keyword
+  scan reads `<think>` text; speaker routing matches "Ann" inside "Annabel".
+
+Character Gen (`character-generator.js`, `api-character.js`, `main.js`):
+- **"The …" names break macro enforcement:** the first-word regex turns every "The" in a group or
+  scenario card into `{{char}}`.
+- **`ec485d2` regressed scenario titles starting "The …":** scenario headers have no "'s Profile",
+  the old "X is…" scan accepted "The Haunted Lighthouse is…", the new one rejects "The" and then
+  the unanchored first-person regex scans the whole card and can pick a name out of dialogue.
+- Revise, Remaster, field Redo, example messages and alt greetings stream without `resumable`;
+  Inspire Me and batch ideas are non-streamed (iOS 60 s cut, double charge).
+- Example Messages textarea has no input listener, so edits are lost on Save.
+- A failed generation collapses the inputs panel (blank phone screen); Stop between the prompt
+  save and the card call still pays for a card; the name shortlist contradicts a typed name; Redo
+  and Remaster use single-character field rules on group/scenario cards; every first-person card
+  opens with the hard-coded "You want to know about me? Fine." line.
 
 ## Known open issues
 
