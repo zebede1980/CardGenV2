@@ -138,11 +138,17 @@ class LLMService:
         )
 
 
-    async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None, top_p: float = None, request_reasoning: bool = False, yield_reasoning: bool = False) -> AsyncGenerator[str, None]:
+    async def generate(self, messages: list, stream: bool = False, max_tokens: int = None, temperature: float = None, repetition_penalty: float = None, top_p: float = None, request_reasoning: bool = False, yield_reasoning: bool = False, presence_penalty: float = None, frequency_penalty: float = None, reasoning_effort: str = None) -> AsyncGenerator[str, None]:
         """request_reasoning: ask the provider to switch on the model's native
         reasoning (only sent to REASONING_FLAG_HOSTS).
         yield_reasoning: stream that reasoning back as ReasoningChunk items
-        instead of discarding it (streaming only)."""
+        instead of discarding it (streaming only).
+        presence_penalty / frequency_penalty: the OpenAI-style penalties, sent
+        only when non-zero. repetition_penalty is a vLLM parameter that an
+        OpenAI-compatible host may ignore; presence_penalty is the one most
+        providers honour.
+        reasoning_effort: low/medium/high for hosts that take it (nano-gpt);
+        None keeps the measured default of "high"."""
         url = f"{self.api_base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -165,6 +171,10 @@ class LLMService:
             payload["top_p"] = effective_top_p
         if repetition_penalty is not None and repetition_penalty != 1.0:
             payload["repetition_penalty"] = repetition_penalty
+        if presence_penalty:
+            payload["presence_penalty"] = presence_penalty
+        if frequency_penalty:
+            payload["frequency_penalty"] = frequency_penalty
         if request_reasoning and supports_reasoning_flag(self.api_base_url):
             # [GLM-5.3 2026-10-12] GLM 5.3 cannot switch reasoning off and
             # defaults to a "low" tier, where 12/50 Roleplay replies reasoned
@@ -175,7 +185,7 @@ class LLMService:
             # reasoned about a fifth as much (median ~270 chars vs ~1700).
             # OpenRouter keeps the old flag — the effort field is untested there.
             if "nano-gpt.com" in self.api_base_url:
-                payload["reasoning_effort"] = "high"
+                payload["reasoning_effort"] = reasoning_effort if reasoning_effort in ("low", "medium", "high") else "high"
             else:
                 payload["reasoning"] = {"enabled": True}
         if stream:

@@ -183,6 +183,9 @@ class RoleplayChatHandler {
             globalTemp: document.getElementById('chat-global-temperature'),
             globalTopP: document.getElementById('chat-global-top-p'),
             globalRepPen: document.getElementById('chat-global-rep-penalty'),
+            globalPresencePen: document.getElementById('chat-global-presence-penalty'),
+            globalReasoningEffort: document.getElementById('chat-global-reasoning-effort'),
+            globalVariety: document.getElementById('chat-global-variety'),
             globalFilterCJK: document.getElementById('chat-global-filter-cjk'),
             globalEnableCot: document.getElementById('chat-global-enable-cot'),
             globalPromptSegments: document.getElementById('chat-global-prompt-segments'),
@@ -629,6 +632,9 @@ class RoleplayChatHandler {
         this.els.globalTemp.value = window.config.get("chat.temperature") ?? 0.8;
         this.els.globalTopP.value = window.config.get("chat.topP") ?? 0.95;
         this.els.globalRepPen.value = window.config.get("chat.repetitionPenalty") ?? 1.0;
+        if (this.els.globalPresencePen) this.els.globalPresencePen.value = window.config.get("chat.presencePenalty") ?? 0;
+        if (this.els.globalReasoningEffort) this.els.globalReasoningEffort.value = window.config.get("chat.reasoningEffort") || "high";
+        if (this.els.globalVariety) this.els.globalVariety.checked = window.config.get("chat.varietyNudges") !== false;
         this.els.globalFilterCJK.checked = window.config.get("chat.filterCJK") ?? false;
         this.els.globalEnableCot.checked = window.config.get("chat.enableCot") !== false;
 
@@ -781,6 +787,12 @@ class RoleplayChatHandler {
         window.config.set("chat.temperature", parseFloat(this.els.globalTemp.value) || 0.8);
         window.config.set("chat.topP", parseFloat(this.els.globalTopP.value) || 0.95);
         window.config.set("chat.repetitionPenalty", parseFloat(this.els.globalRepPen.value) || 1.0);
+        if (this.els.globalPresencePen) {
+            const pp = parseFloat(this.els.globalPresencePen.value);
+            window.config.set("chat.presencePenalty", Number.isFinite(pp) ? pp : 0);
+        }
+        if (this.els.globalReasoningEffort) window.config.set("chat.reasoningEffort", this.els.globalReasoningEffort.value || "high");
+        if (this.els.globalVariety) window.config.set("chat.varietyNudges", this.els.globalVariety.checked);
         window.config.set("chat.filterCJK", this.els.globalFilterCJK.checked);
         window.config.set("chat.enableCot", this.els.globalEnableCot.checked);
         window.config.set("chat.systemPromptSegments", this.systemPromptSegments);
@@ -1636,7 +1648,7 @@ class RoleplayChatHandler {
             regenBtn.innerHTML = '🔄 Regen';
             regenBtn.title = 'Regenerate this response';
             regenBtn.style.display = 'none'; // hidden by default; _updateRegenButtons shows it on the last AI msg
-            regenBtn.onclick = () => this.regenerateLastMessage(msg.id, wrapper);
+            regenBtn.onclick = () => this.regenerateLastMessage(msg.id, wrapper, msg.content);
             actionsEl.appendChild(regenBtn);
         }
 
@@ -1665,7 +1677,39 @@ class RoleplayChatHandler {
      * Delete the last AI message from the server then generate a brand-new response
      * in its place — without sending any new user message.
      */
-    async regenerateLastMessage(messageId, wrapper) {
+    /** The per-request generation options every chat call sends, from the
+     *  global chat settings. One place, so Send, Regen and Impersonate can't
+     *  drift apart (Regen used to leave out enable_cot). */
+    _chatGenOptions() {
+        if (!window.config) return {};
+        const num = (key) => {
+            const v = window.config.get(key);
+            return Number.isFinite(v) ? v : null;
+        };
+        return {
+            max_input_tokens: window.config.get('chat.maxInputTokens'),
+            max_output_tokens: window.config.get('chat.maxOutputTokens'),
+            temperature: window.config.get('chat.temperature'),
+            top_p: window.config.get('chat.topP'),
+            repetition_penalty: window.config.get('chat.repetitionPenalty'),
+            presence_penalty: num('chat.presencePenalty'),
+            reasoning_effort: window.config.get('chat.reasoningEffort') || null,
+            enable_cot: window.config.get('chat.enableCot') !== false,
+            variety: window.config.get('chat.varietyNudges') !== false,
+        };
+    }
+
+    /** What the reader saw of a reply, trimmed for the regen payload: no
+     *  reasoning block, no scene images (base64 data URIs can run to megabytes). */
+    _replyTextForRegen(content) {
+        return String(content || '')
+            .replace(/<think>[\s\S]*?<\/think>/gi, '')
+            .replace(/<scene-image[\s\S]*?(?:<\/scene-image>|\/?>)/gi, '')
+            .trim()
+            .slice(0, 1500);
+    }
+
+    async regenerateLastMessage(messageId, wrapper, previousContent = '') {
         if (!this.activeChatId || this.isGenerating) return;
 
         // 1. Delete the existing assistant message from the server
@@ -1708,16 +1752,13 @@ class RoleplayChatHandler {
             const payload = {
                 content: '',          // no new user text
                 ooc_note: '',
-                character_name: characterName
+                character_name: characterName,
+                // The backend tells the model what it is replacing, so a regen
+                // is a different take rather than a re-roll of the same prompt.
+                regenerate: true,
+                previous_reply: this._replyTextForRegen(previousContent),
             };
-
-            if (window.config) {
-                payload.max_input_tokens = window.config.get('chat.maxInputTokens');
-                payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
-                payload.temperature = window.config.get('chat.temperature');
-                payload.top_p = window.config.get('chat.topP');
-                payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
-            }
+            Object.assign(payload, this._chatGenOptions());
 
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
                 method: 'POST',
@@ -2440,14 +2481,7 @@ class RoleplayChatHandler {
                 impersonate: true,
             };
 
-            if (window.config) {
-                payload.max_input_tokens = window.config.get('chat.maxInputTokens');
-                payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
-                payload.temperature = window.config.get('chat.temperature');
-                payload.top_p = window.config.get('chat.topP');
-                payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
-                payload.enable_cot = window.config.get('chat.enableCot') !== false;
-            }
+            Object.assign(payload, this._chatGenOptions());
 
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
                 method: 'POST',
@@ -2546,14 +2580,7 @@ class RoleplayChatHandler {
                 character_name: characterName
             };
 
-            if (window.config) {
-                payload.max_input_tokens = window.config.get('chat.maxInputTokens');
-                payload.max_output_tokens = window.config.get('chat.maxOutputTokens');
-                payload.temperature = window.config.get('chat.temperature');
-                payload.top_p = window.config.get('chat.topP');
-                payload.repetition_penalty = window.config.get('chat.repetitionPenalty');
-                payload.enable_cot = window.config.get('chat.enableCot') !== false;
-            }
+            Object.assign(payload, this._chatGenOptions());
 
             const res = await window.authFetch(`/api/sw/chats/${this.activeChatId}/message`, {
                 method: 'POST',

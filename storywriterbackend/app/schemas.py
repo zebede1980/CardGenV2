@@ -245,8 +245,16 @@ class SendMessageRequest(BaseModel):
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
     top_p: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = None
+    reasoning_effort: Optional[str] = None
     impersonate: Optional[bool] = False
     enable_cot: Optional[bool] = True
+    # Variety: per-turn beat nudges and the recent-openings list (see chat.py).
+    variety: Optional[bool] = True
+    # Regenerate: the reply the reader rejected, so the new one can be told to differ.
+    regenerate: Optional[bool] = False
+    previous_reply: Optional[str] = None
 
 class AdventureActionOut(BaseModel):
     id: str

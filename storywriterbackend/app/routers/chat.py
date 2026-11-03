@@ -10,6 +10,7 @@ import base64
 import urllib.parse
 import uuid
 import logging
+import random
 
 from app.database import get_db, SessionLocal
 from app import models, schemas
@@ -346,7 +347,96 @@ RESPONSE_LENGTH_PRESETS = {
     }
 }
 
-def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None, enable_cot: bool = True, native_reasoning: bool = False):
+# ── Variety ──────────────────────────────────────────────────────────────────
+# Apart from the history, everything the model sees is identical from turn to
+# turn, so at a given temperature replies drift towards the same beats and the
+# same openings, and a Regenerate re-rolls the very same prompt. Three per-turn
+# additions to the post-history block break that up:
+#   - a "beat" nudge drawn at random (a few blanks in the pool, so not every turn),
+#   - the openings of recent replies, which the model is told not to reuse,
+#   - on Regenerate, the rejected attempt's opening, with an order to diverge.
+# They sit in the post-history system message, which already changes every
+# turn, so prompt caching of the system block and history is unaffected.
+VARIETY_NUDGES = [
+    "Open with spoken dialogue, not description.",
+    "Open in the middle of a physical action.",
+    "Have your character take an initiative the user did not prompt.",
+    "Introduce one concrete new detail of the scene (an object, a sound, a smell) and let it matter.",
+    "Let something from outside the conversation intrude: a noise, a person, an interruption.",
+    "Change the pace: if recent replies were slow, move; if they were fast, linger on one moment.",
+    "Shift the emotional temperature a notch from the previous reply.",
+    "Show what the character wants through what they do, not through what they say.",
+    "Let the character withhold or deflect instead of answering directly.",
+    "End on something unresolved: an action in progress, a question, a decision not yet made.",
+    "Give the character a small, specific physical habit or gesture this turn.",
+    "Surprise the reader once, within character.",
+]
+VARIETY_NUDGE_BLANKS = 3       # blanks mixed into the pool: ~1 turn in 5 gets no nudge
+VARIETY_RECENT_OPENINGS = 5    # how many recent replies' openings are listed as off-limits
+VARIETY_OPENING_WORDS = 8
+
+# Example messages set the voice early on; after that the history carries it
+# and the examples only pin the phrasing. Dropped once the chat has this many
+# real replies (SillyTavern's "gradual push-out" of examples does the same).
+EXAMPLE_MESSAGES_FADE_AFTER = 8
+
+# <scene-image> tags carry base64 data URIs: never part of what the model reads.
+_SCENE_IMAGE_RE = _cot_re.compile(r'\s*<scene-image\s+[^>]*/?>\s*|</scene-image>\s*', _cot_re.IGNORECASE)
+
+
+def _reply_text(content: str) -> str:
+    """A reply as the reader saw it: no reasoning block, no scene-image tags."""
+    return _SCENE_IMAGE_RE.sub('', strip_think(content or '')).strip()
+
+
+def _opening(text: str, words: int = VARIETY_OPENING_WORDS) -> str:
+    parts = text.split()
+    return " ".join(parts[:words]) + ("…" if len(parts) > words else "")
+
+
+def _first_sentence(text: str, limit: int = 240, min_len: int = 8) -> str:
+    """The first sentence, at most `limit` chars. A sentence end inside the
+    first `min_len` chars is taken for an abbreviation ("Mr. Okafor…")."""
+    text = " ".join(text.split())[:limit]
+    for m in _cot_re.finditer(r'[.!?…]["”’)\]]*(?=\s|$)', text):
+        if m.end() >= min_len:
+            return text[:m.end()]
+    return text
+
+
+def _variety_parts(chat: models.RoleplayChat, regenerate_from: str = None, nudges: bool = True) -> list:
+    """Post-history lines that push this reply away from the recent ones."""
+    parts = []
+    openings = []
+    if nudges:
+        replies = [m for m in sorted(chat.messages, key=lambda m: m.created_at)
+                   if m.role == "assistant" and _reply_text(m.content)]
+        openings = [f'“{_opening(_reply_text(m.content))}”' for m in replies[-VARIETY_RECENT_OPENINGS:]]
+    if regenerate_from:
+        rejected = _reply_text(regenerate_from)
+        if rejected:
+            parts.append(
+                "[Regeneration]: The reader rejected the previous attempt at this reply, which opened: "
+                f"“{_first_sentence(rejected)}”. Write a genuinely different reply: a different opening, "
+                "and a different choice, beat or reaction for the character. Do not paraphrase the rejected attempt."
+            )
+            if nudges:
+                openings.append(f'“{_opening(rejected)}”')
+    if openings:
+        parts.append(
+            "[Variety]: Do not open this reply the way recent replies opened: " + ", ".join(openings) + ". "
+            "Vary sentence rhythm and vocabulary, and do not mirror the user's phrasing back at them."
+        )
+    if nudges:
+        # A regenerate always gets a nudge: it exists to be different.
+        pool = VARIETY_NUDGES if regenerate_from else VARIETY_NUDGES + [None] * VARIETY_NUDGE_BLANKS
+        nudge = random.choice(pool)
+        if nudge:
+            parts.append(f"[This turn]: {nudge}")
+    return parts
+
+
+def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str = None, max_input_tokens: int = None, enable_cot: bool = True, native_reasoning: bool = False, variety: bool = True, regenerate_from: str = None):
     messages = []
 
     system_parts = []
@@ -384,11 +474,14 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     # Pre-calculate recent history text for lorebook extraction
     recent_history_text = " ".join([m.content for m in sorted(chat.messages, key=lambda m: m.created_at)[-5:]])
 
+    reply_count = sum(1 for m in chat.messages if m.role == "assistant" and (m.content or "").strip())
+    include_examples = reply_count < EXAMPLE_MESSAGES_FADE_AFTER
+
     # 2. Character Cards
     for card in chat.characters:
         card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
 
-        if card.mes_example:
+        if card.mes_example and include_examples:
             card_text += f"\nExample Messages:\n{card.mes_example}"
 
         # Per-card system prompt (card-level instructions set by the card author,
@@ -429,7 +522,7 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
         
     # 4. Chat History
     import re as _re
-    _scene_image_re = _re.compile(r'\s*<scene-image\s+[^>]*/?>\s*|</scene-image>\s*', _re.IGNORECASE)
+    _scene_image_re = _SCENE_IMAGE_RE
     # Strip <think>...</think> reasoning blocks from assistant history.
     # The story text (after </think>) is preserved in full; only the transient
     # internal planning text is removed.  Keeping think blocks in context causes
@@ -489,6 +582,8 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     if getattr(chat, 'response_length', None) and chat.response_length in RESPONSE_LENGTH_PRESETS:
         length_info = RESPONSE_LENGTH_PRESETS[chat.response_length]
         post_history_parts.append(f"[Response Length Instruction]: {length_info['post_reminder']}")
+
+    post_history_parts.extend(_variety_parts(chat, regenerate_from, nudges=variety))
 
     # Unconditional (not a per-chat toggle, unlike writing style/length) — this
     # is a correctness fix, not a preference. Reinforces _PERCEPTION_BOUNDARY_TEXT
@@ -1215,6 +1310,18 @@ async def send_message(
             finally:
                 await llm.close()
 
+    # Per-request sampling overrides from the frontend (global chat settings);
+    # None falls through to the stored Settings defaults in LLMService.
+    gen_kwargs = dict(
+        max_tokens=req.max_output_tokens,
+        temperature=req.temperature,
+        repetition_penalty=req.repetition_penalty,
+        top_p=req.top_p,
+        presence_penalty=req.presence_penalty,
+        frequency_penalty=req.frequency_penalty,
+        reasoning_effort=req.reasoning_effort,
+    )
+
     # ── Impersonate Mode ────────────────────────────────────────────────────
     # In impersonate mode we DON'T save any messages to the DB.  We build a
     # prompt that uses the existing chat history as context but appends a
@@ -1244,15 +1351,10 @@ async def send_message(
 
         queue.put_nowait({"type": "metadata", "character_name": None, "character_card_id": None, "user_message_id": None, "assistant_message_id": None})
 
-        gen_max_tokens = req.max_output_tokens
-        gen_temperature = req.temperature
-        gen_repetition_penalty = req.repetition_penalty
-        gen_top_p = req.top_p
-
         async def impersonate_generate_task():
             llm = LLMService(settings)
             try:
-                async for chunk in llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
+                async for chunk in llm.generate(prompt_messages, stream=True, **gen_kwargs):
                     await queue.put(chunk)
                 await queue.put(None)
             except Exception as e:
@@ -1299,7 +1401,9 @@ async def send_message(
     
     # 2. Build Prompt Context (Ensuring strict caching order)
     prompt_messages = build_chat_prompt(chat, db, speaker_name, getattr(req, 'max_input_tokens', None), getattr(req, 'enable_cot', True),
-                                        native_reasoning=supports_reasoning_flag(settings.api_base_url))
+                                        native_reasoning=supports_reasoning_flag(settings.api_base_url),
+                                        variety=req.variety is not False,
+                                        regenerate_from=req.previous_reply if req.regenerate else None)
     
     # 3. Create Placeholder Assistant Message
     assistant_msg = models.ChatMessage(
@@ -1339,12 +1443,6 @@ async def send_message(
         "assistant_message_id": assistant_msg_id
     })
     
-    # Capture per-request overrides from the frontend (global chat settings)
-    gen_max_tokens = req.max_output_tokens
-    gen_temperature = req.temperature
-    gen_repetition_penalty = req.repetition_penalty
-    gen_top_p = req.top_p
-
     async def generate_task():
         llm = LLMService(settings)
         full_content = ""
@@ -1357,12 +1455,14 @@ async def send_message(
         logger.info(
             f"[{request_id}] LLM request started for chat {chat_id}, message {assistant_msg_id}. "
             f"Prompt msgs: {len(prompt_messages)}, Est tokens: ~{est_tokens}, "
-            f"max_input: {getattr(req, 'max_input_tokens', 'None')}, rep_penalty: {gen_repetition_penalty}"
+            f"max_input: {getattr(req, 'max_input_tokens', 'None')}, rep_penalty: {gen_kwargs['repetition_penalty']}, "
+            f"presence_penalty: {gen_kwargs['presence_penalty']}, effort: {gen_kwargs['reasoning_effort']}, "
+            f"variety: {req.variety is not False}, regenerate: {bool(req.regenerate)}"
         )
-        
+
         try:
             # [NATIVE-REASONING 2026-10-01] see with_think_tags() in llm_service
-            stream = llm.generate(prompt_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p,
+            stream = llm.generate(prompt_messages, stream=True, **gen_kwargs,
                                   request_reasoning=getattr(req, 'enable_cot', True), yield_reasoning=True)
             async for chunk in with_think_tags(stream):
                 full_content += chunk
@@ -1371,7 +1471,7 @@ async def send_message(
             # Reasoning but no reply after it — ask for the reply on its own.
             if needs_prose(full_content):
                 logger.info(f"[{request_id}] Reasoning with no prose — requesting the reply")
-                async for chunk in prose_after_reasoning(llm, prompt_messages, full_content, _CONTINUE_PROSE_INSTRUCTION, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
+                async for chunk in prose_after_reasoning(llm, prompt_messages, full_content, _CONTINUE_PROSE_INSTRUCTION, **gen_kwargs):
                     full_content += chunk
                     await queue.put(chunk)
 
@@ -1410,7 +1510,7 @@ async def send_message(
                             ]
                             try:
                                 continuation = ""
-                                async for cchunk in llm.generate(continuation_messages, stream=True, max_tokens=gen_max_tokens, temperature=gen_temperature, repetition_penalty=gen_repetition_penalty, top_p=gen_top_p):
+                                async for cchunk in llm.generate(continuation_messages, stream=True, **gen_kwargs):
                                     continuation += cchunk
                                 continuation = continuation.strip()
                                 full_content = f"{folded_think}\n{continuation}" if continuation else folded_think

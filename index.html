@@ -2800,7 +2800,7 @@
         <script src="src/scripts/adventure-handler.js?v=1"></script>
         <script src="src/scripts/inspire-me.js?v=20261015-stop"></script>
         <script src="src/scripts/gallery-mode.js"></script>
-        <script src="src/scripts/chat-handler.js?v=20261023-chatshell"></script>
+        <script src="src/scripts/chat-handler.js?v=20261103-variety"></script>
         <script src="src/scripts/chat-settings.js"></script>
         <script src="src/scripts/chat-character-cards.js?v=20260805"></script>
         <script src="src/scripts/home-handler.js?v=20260729-2"></script>
@@ -3979,6 +3979,31 @@
                     <div class="form-group">
                         <label>Repetition Penalty</label>
                         <input type="number" step="0.05" id="chat-global-rep-penalty" class="content-box" style="width: 100%;">
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                            A vLLM-style setting that OpenAI-compatible hosts often ignore. <em>1.0 = off.</em> Prefer Presence Penalty below.
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label>Presence Penalty</label>
+                        <input type="number" step="0.1" min="-2" max="2" id="chat-global-presence-penalty" class="content-box" style="width: 100%;">
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                            Nudges the model towards words it hasn't used yet in the reply. <em>0 = off; 0.3–0.6 is the usual range for more varied replies.</em> Above ~1 the prose starts to wander.
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label>Reasoning Effort</label>
+                        <select id="chat-global-reasoning-effort" class="content-box" style="width: 100%;">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high" selected>High</option>
+                        </select>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                            How hard a reasoning model (GLM 5.3) plans before writing. <em>High</em> is the tested default; it is thorough but tends to pick the expected beat. Try <em>Medium</em> for looser, cheaper replies.
+                        </p>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+                        <input type="checkbox" id="chat-global-variety" style="width: 1.2rem; height: 1.2rem; cursor: pointer;" checked>
+                        <label for="chat-global-variety" style="margin: 0; cursor: pointer;">Variety nudges (a random beat each turn; recent openings off-limits)</label>
                     </div>
                     <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
                         <input type="checkbox" id="chat-global-filter-cjk" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
