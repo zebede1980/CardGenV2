@@ -138,6 +138,14 @@ def run_migrations():
         if not _column_exists(conn, "story_segments", "is_summarized"):
             conn.execute(text("ALTER TABLE story_segments ADD COLUMN is_summarized BOOLEAN NOT NULL DEFAULT false"))
 
+        # Auto-written stories: hidden outline, run state, chapter numbers
+        if not _column_exists(conn, "stories", "plan"):
+            conn.execute(text("ALTER TABLE stories ADD COLUMN plan TEXT NOT NULL DEFAULT ''"))
+        if not _column_exists(conn, "stories", "autowrite"):
+            conn.execute(text("ALTER TABLE stories ADD COLUMN autowrite TEXT NOT NULL DEFAULT ''"))
+        if not _column_exists(conn, "story_segments", "chapter"):
+            conn.execute(text("ALTER TABLE story_segments ADD COLUMN chapter INTEGER"))
+
 def init_db():
     run_migrations()
 

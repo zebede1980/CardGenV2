@@ -543,6 +543,7 @@ class StoryWriterApp {
             document.getElementById('sw-list-view').style.display = 'block';
             document.getElementById('sw-workspace-view').style.display = 'none';
             this.currentStoryId = null;
+            this.autowriter?.onLeave();
             this.loadStories();
             // Stop any active TTS when leaving workspace
             if (this.ttsPlayer) {
@@ -553,7 +554,11 @@ class StoryWriterApp {
 
         const titleInput = document.getElementById('sw-title');
         if (titleInput) {
-            titleInput.addEventListener('change', (e) => this.updateStory(e.target.value, this.story.synopsis));
+            titleInput.addEventListener('change', (e) => {
+                // An emptied title isn't saved (the server keeps the old one).
+                if (!e.target.value.trim()) { e.target.value = this.story.title; return; }
+                this.updateStory(e.target.value, this.story.synopsis);
+            });
         }
 
         const synopsisInput = document.getElementById('sw-synopsis');
@@ -715,7 +720,6 @@ class StoryWriterApp {
     async loadSettings() {
         try {
             const s = await this.apiCall('/settings/');
-            document.getElementById('sw-max-tokens').value = s.max_tokens ?? 2048;
             document.getElementById('sw-temperature').value = s.temperature ?? 0.8;
             document.getElementById('sw-top-p').value = s.top_p ?? 0.95;
             document.getElementById('sw-context-window').value = s.context_window ?? 8000;
@@ -822,15 +826,14 @@ class StoryWriterApp {
         const btn = document.getElementById('sw-save-settings-btn');
         const status = document.getElementById('sw-settings-status');
 
-        const maxTokens = parseInt(document.getElementById('sw-max-tokens').value, 10);
         const temperature = parseFloat(document.getElementById('sw-temperature').value);
         const topP = parseFloat(document.getElementById('sw-top-p').value);
         const contextWindow = parseInt(document.getElementById('sw-context-window').value, 10);
         const systemPrompt = document.getElementById('sw-system-prompt').value.trim();
         const imageModel = (document.getElementById('sw-image-model')?.value || '').trim();
 
-        if (isNaN(maxTokens) || isNaN(temperature) || isNaN(contextWindow) || isNaN(topP)) {
-            status.textContent = 'Max Tokens, Temperature, Top-P and Context Window must be valid numbers.';
+        if (isNaN(temperature) || isNaN(contextWindow) || isNaN(topP)) {
+            status.textContent = 'Temperature, Top-P and Context Window must be valid numbers.';
             status.style.color = 'var(--error-color, #e55)';
             return;
         }
@@ -861,7 +864,6 @@ class StoryWriterApp {
         localStorage.removeItem('sw-tts-nanogpt-voice');
 
         const payload = {
-            max_tokens: maxTokens,
             temperature,
             top_p: topP,
             context_window: contextWindow,
@@ -1099,7 +1101,7 @@ class StoryWriterApp {
             list.innerHTML = '';
 
             if (stories.length === 0) {
-                list.innerHTML = '<p style="color: var(--text-secondary);">No stories yet. Create one above!</p>';
+                list.innerHTML = '<p style="color: var(--text-secondary);">No stories yet. Tap ✨ New story to start one.</p>';
                 return;
             }
 
@@ -1109,7 +1111,7 @@ class StoryWriterApp {
                 card.style.cursor = 'pointer';
                 card.style.position = 'relative';
                 card.innerHTML = `
-                    <h3 style="margin-top: 0; margin-bottom: 0.5rem; padding-right: 2.5rem;">${story.title}</h3>
+                    <h3 style="margin-top: 0; margin-bottom: 0.5rem; padding-right: 2.5rem;">${story.is_autowritten ? '✨ ' : ''}${this._escapeHtml(story.title)}</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Updated: ${new Date(story.updated_at).toLocaleDateString()}</p>
                 `;
 
@@ -1137,14 +1139,10 @@ class StoryWriterApp {
         } catch (e) { console.error("Failed to load stories", e); }
     }
 
-    async createStory() {
-        const title = document.getElementById('sw-new-title').value.trim();
-        if (!title) return alert("Enter a title");
-        try {
-            const story = await this.apiCall('/stories/', 'POST', { title, synopsis: "", card_ids: [] });
-            document.getElementById('sw-new-title').value = '';
-            this.openStory(story.id);
-        } catch (e) { console.error(e); }
+    // The New Story sheet (story-autowriter.js) covers both modes: write the
+    // whole story automatically, or start an empty one to write together.
+    createStory() {
+        this.autowriter?.openSetup();
     }
 
     async openStory(id) {
@@ -1171,6 +1169,7 @@ class StoryWriterApp {
 
             this.renderCards();
             this.renderSegments();
+            this.autowriter?.onStoryLoaded(this.story);
 
             // Deliberately not awaited: attribution is a nice-to-have that
             // should never hold up rendering the story the user is waiting to
@@ -1210,6 +1209,26 @@ class StoryWriterApp {
         } finally {
             this._attributingSegments = false;
         }
+    }
+
+    // The backend names an untitled story from its first chunk, a few seconds
+    // after it is saved. Look a couple of times; a late timer after the phone
+    // slept only means one extra GET.
+    _pickUpAutoTitle(storyId, attempt = 0) {
+        if (attempt >= 3) return;
+        setTimeout(async () => {
+            if (this.currentStoryId !== storyId) return;
+            try {
+                const s = await this.apiCall(`/stories/${storyId}`);
+                const input = document.getElementById('sw-title');
+                if (s.title !== 'Untitled story') {
+                    if (this.story) this.story.title = s.title;
+                    if (input && document.activeElement !== input) input.value = s.title;
+                    return;
+                }
+            } catch (_) { /* try again */ }
+            this._pickUpAutoTitle(storyId, attempt + 1);
+        }, 6000);
     }
 
     async updateStory(title, synopsis) {
@@ -1512,11 +1531,18 @@ class StoryWriterApp {
             actions.appendChild(saveBtn);
             
             div.appendChild(actions);
+            if (seg.chapter) {
+                const heading = document.createElement('div');
+                heading.className = 'sw-chapter-heading';
+                heading.textContent = `Chapter ${seg.chapter}`;
+                div.appendChild(heading);
+            }
             div.appendChild(content);
             div.appendChild(editor);
             div.appendChild(imageArea);
             area.appendChild(div);
         });
+        this.autowriter?.afterRender();
 
         // Re-apply the active playback indicator after rendering segments
         if (this.currentPlayingSegmentId !== null) {
@@ -1885,6 +1911,9 @@ ${text}`;
 
     async generateNext() {
         if (this.isFetchingLLM || !this.story || this._pollingInterval) return;
+        // An auto-written story is being written on the server; narration's
+        // auto mode must not start a second, hand-driven generation.
+        if (this.autowriter?.isLive()) return;
         const steeringInput = document.getElementById('sw-steering');
         let steering = steeringInput.value.trim();
         const btn = document.getElementById('sw-generate-btn');
@@ -2147,6 +2176,7 @@ ${text}`;
                 steeringInput.value = '';
             }
             await this.refreshWorkspace();
+            if (this.story?.title === 'Untitled story') this._pickUpAutoTitle(this.story.id);
         } catch (e) {
             console.error('[StoryWriter] Generation stream error:', e);
             const isAbort = e.name === 'AbortError' || e.message?.includes('abort') || e.message?.includes('stopped by user');

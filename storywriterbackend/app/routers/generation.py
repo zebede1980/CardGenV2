@@ -9,6 +9,7 @@ from app.models import Story, StorySegment, Settings, SteeringInstruction, User
 from app.schemas import GenerateRequest, StorySegmentOut, ImagePromptRequest
 from app.services.llm_service import LLMService, UTILITY_TEMPERATURE
 from app.services.context_manager import ContextManager
+from app.services.story_autowriter import active_run, name_story_task
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/generate", tags=["generation"])
@@ -37,11 +38,13 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
     story = db.query(Story).filter(Story.id == req.story_id, Story.user_id == current_user.id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
-    
+    if active_run(story.id):
+        raise HTTPException(status_code=409, detail="This story is being written automatically. Stop it first.")
+
     settings = get_or_create_settings(db, current_user.id)
     if not settings.api_key:
         raise HTTPException(status_code=400, detail="API key not configured. Please set it in Settings.")
-    
+
     # Save steering instruction if provided
     if req.steering:
         steering = SteeringInstruction(story_id=req.story_id, instruction=req.steering)
@@ -135,7 +138,10 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
                     bg_db.add(seg)
                     bg_db.commit()
                     bg_db.refresh(seg)
-                    
+                    if max_order == 0:
+                        # Untitled stories get a name from their first chunk.
+                        asyncio.create_task(name_story_task(req.story_id))
+
                     done_payload = {
                         'type': 'done',
                         'segment': {

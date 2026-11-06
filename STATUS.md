@@ -1,10 +1,67 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-03. Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-06. Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03, **not yet
-deployed** (needs a backend rebuild as well as the frontend). Update this file when you ship
+deployed** (needs a backend rebuild as well as the frontend). Auto-written stories and the
+output-token change committed 2026-11-06, **not yet deployed** (frontend + storywriterbackend
+rebuild; the backend adds three columns on start). Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## ✨ Auto-written stories (2026-11-06) — committed, not deployed, never run on a real model
+
+Story Writer's "Create Story" (which demanded a title) is now **✨ New story**, a sheet
+(`src/scripts/story-autowriter.js`, `.saw-*` styles) with characters (picked through the card
+gallery), an optional idea, length (Short 4 / Medium 7 / Long 11 / Epic 18 chapters at
+800–1,600 words), ending (AI decides / happy / bittersweet / dark / twist), a 1–5 "how closely to
+follow the cards" slider and an optional title. Two buttons: **✨ Write the whole story** and
+**✍️ Write it with me** (the old hand-driven mode, now without a title; it is named from its first
+chunk by `name_story_task`).
+
+- **Runs on the server** (`storywriterbackend/app/services/story_autowriter.py`,
+  routes in `routers/autowrite.py`): one planning call returns the outline as JSON (title, blurb,
+  setting, voice, cast arcs, ending, one entry per chapter), retried once if unusable, failing before
+  any chapter is paid for. Then one call per chapter, with the cards and whole outline as a fixed
+  system prefix, and the chapter's brief, earlier chapters' notes, the end of the previous chapter,
+  earlier openings to avoid and any steering notes in the user message. Chapters before the last are
+  told not to resolve or wrap up; the last must deliver the planned ending. After each chapter a
+  utility call writes its continuity notes into `story_segments.summary`.
+- **The slider changes the planner's brief** (`FAITHFULNESS`), not sampling; the top two stops
+  also nudge the planner's temperature (`PLANNER_TEMPERATURE`). Chapter calls use the user's own
+  temperature. Untested whether neighbouring stops differ enough in practice.
+- **Storage:** `stories.plan` (outline JSON, only ever sent by `GET /stories/{id}/outline`),
+  `stories.autowrite` (setup choices + run state JSON), `story_segments.chapter`. Every finished
+  chapter is an ordinary segment, so the reader, narration, images and editing work unchanged;
+  chapters show a "Chapter N" heading.
+- **iPhone:** the run is an asyncio task in `_RUNS` (single uvicorn process). The page polls
+  `GET /stories/{id}/autowrite?from=<chars>` every 2.5 s while visible, never while hidden, and
+  catches up on wake. A backend restart shows "Interrupted" and **Resume** carries on from the next
+  unwritten chapter with the same outline (only the half-written chapter is paid twice). **Stop**
+  cancels the server task and drops the half chapter. Manual Generate is refused (409) and hidden
+  during a run; narration's auto mode is blocked from starting one. New chapters join a running
+  narration queue.
+- **Tested:** 15 backend tests (`storywriterbackend/tests/`, fake model; run with
+  `uv run --with-requirements requirements.txt --with pytest python -m pytest tests -q`), and the real
+  page in headless WebKit at 390 px light and 320 px dark against a fake backend (66 checks: sheet
+  layout, gallery above the sheet, double tap starts one story, live text, steering, no polling while
+  hidden, an outage during unlock, restart → Resume, outline gated and escaped, write-with-me).
+  **Not run against GLM, deployed, or on a real iPhone.**
+- **To try first:** a Short story with a card you know. Then check: did it end properly, did
+  chapters repeat their openings, did the planner soften an adult premise, and does Off the rails
+  feel different from Balanced.
+- **Not built yet:** "✨ Finish this story" for an existing hand-written story; re-planning when
+  chapters drift; using the outline in hand-driven Generate. `context_window` is not applied to
+  auto-written prompts (cards + outline + notes for 18 chapters is roughly 10k tokens).
+
+## Output-token ceiling (2026-11-06) — committed, not deployed
+
+Every storywriterbackend call (Story Writer, Roleplay Chat, Adventure) now sends
+`max_tokens = max(asked, 32768)` (`MAX_OUTPUT_TOKENS` in `llm_service.py`): reasoning models count
+their thinking against it, so the old caps (Story Writer 2048, Chat 1024, Adventure 512) cut prose
+short. A host that rejects the ceiling (400/422 naming max_tokens) is asked once more without one.
+The Max Tokens / Max Output Tokens fields are gone from Story Writer, Chat and Adventure settings.
+Story Writer's history budget reserves `min(8192, context_window / 4)` for the reply instead of
+max_tokens. Untested whether nano-gpt accepts 32768 for GLM 5.3; if not, the retry covers it.
 
 ## Shipped recently, not yet tried for real
 

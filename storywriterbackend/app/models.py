@@ -71,10 +71,24 @@ class Story(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
     synopsis = Column(Text, default="")
+    # Auto-written stories (app/services/story_autowriter.py). `plan` is the
+    # hidden outline the writer works to, as JSON; it is only ever sent to the
+    # browser by GET /stories/{id}/outline, so the story can stay a surprise.
+    # `autowrite` is JSON too: the setup choices and the run's progress.
+    plan = Column(Text, default="")
+    autowrite = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     segments = relationship("StorySegment", back_populates="story", order_by="StorySegment.order_index", cascade="all, delete-orphan")
     cards = relationship("StoryCard", back_populates="story", cascade="all, delete-orphan")
+
+    @property
+    def has_outline(self) -> bool:
+        return bool(self.plan)
+
+    @property
+    def is_autowritten(self) -> bool:
+        return bool(self.autowrite)
 
 class StoryCard(Base):
     __tablename__ = "story_cards"
@@ -98,6 +112,8 @@ class StorySegment(Base):
     # re-derived by an LLM call every time the segment is played. Empty string
     # means "not attributed yet" — playback falls back to doing it on demand.
     speaker_map = Column(Text, default="")
+    # 1-based chapter of an auto-written story; empty for hand-driven segments.
+    chapter = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     story = relationship("Story", back_populates="segments")
 

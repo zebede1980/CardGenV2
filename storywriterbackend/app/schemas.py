@@ -51,7 +51,8 @@ class PlaygroundImageOut(BaseModel):
         from_attributes = True
 
 class StoryCreate(BaseModel):
-    title: str
+    # Optional: an untitled story is named by the AI once it has a first chunk.
+    title: str = ""
     synopsis: str = ""
     card_ids: Optional[List[int]] = []
 
@@ -61,8 +62,25 @@ class StoryOut(BaseModel):
     synopsis: str
     created_at: datetime
     updated_at: datetime
+    # True when the story has a hidden outline (it was auto-written, or
+    # planned for finishing). The outline itself is never in this model.
+    has_outline: bool = False
+    is_autowritten: bool = False
     class Config:
         from_attributes = True
+
+class AutowriteStartRequest(BaseModel):
+    """The setup sheet's choices. Every field is optional: no idea means
+    "surprise me from the cards", no title means the AI names it."""
+    title: str = ""
+    card_ids: List[int] = []
+    idea: str = ""
+    length: str = "medium"        # short | medium | long | epic
+    ending: str = "any"           # any | happy | bittersweet | dark | twist
+    faithfulness: int = 3         # 1 (stick to the cards) … 5 (off the rails)
+
+class AutowriteSteerRequest(BaseModel):
+    note: str
 
 class StorySegmentCreate(BaseModel):
     content: str
@@ -76,6 +94,7 @@ class StorySegmentOut(BaseModel):
     summary: str
     is_summary: bool
     speaker_map: str = ""
+    chapter: Optional[int] = None
     created_at: datetime
     class Config:
         from_attributes = True

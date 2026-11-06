@@ -4278,3 +4278,35 @@ html.pb-open, html.pb-open body { overflow: hidden; }
 .pb-look-row .pb-look-meta { flex: 1 1 12rem; min-width: 0; }
 .pb-look-row strong { display: block; font-size: 0.88rem; }
 .pb-look-row span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; color: var(--text-secondary); }
+
+/* ── ✨ Auto-written stories (src/scripts/story-autowriter.js) ────────────────
+   The sheets reuse the Prompt Builder's .pb-overlay/.pb-sheet layout. Buttons
+   with a pressed state are styled under the sheet's id: main.js's dark-theme
+   button rule outranks plain class selectors. */
+html.saw-open, html.saw-open body { overflow: hidden; }
+/* Below the character gallery (z-index 2000), which opens on top of it. */
+#sw-setup-sheet { z-index: 1990; }
+#sw-setup-sheet .saw-icon, #sw-outline-sheet .saw-icon { width: 2.25rem; height: 2.25rem; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text-primary); font-size: 1rem; cursor: pointer; }
+#sw-setup-sheet .saw-lengths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+#sw-setup-sheet .saw-length { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-width: 0; padding: 0.6rem 0.7rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-muted); color: var(--text-primary); font: inherit; font-size: 0.78rem; text-align: left; cursor: pointer; }
+#sw-setup-sheet .saw-length b { font-size: 0.92rem; }
+#sw-setup-sheet .saw-length[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#sw-setup-sheet .saw-chip { min-height: 2.25rem; padding: 0.4rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-strong); color: var(--text-primary); font: inherit; font-size: 0.85rem; cursor: pointer; }
+#sw-setup-sheet .saw-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+#sw-setup-sheet .saw-picked { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+#sw-setup-sheet .saw-picked-chip { display: inline-flex; align-items: center; gap: 0.3rem; max-width: 100%; padding: 0.25rem 0.3rem 0.25rem 0.7rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); font-size: 0.85rem; font-weight: 600; }
+#sw-setup-sheet .saw-drop { width: 1.75rem; height: 1.75rem; display: grid; place-items: center; border: none; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+#sw-setup-sheet .saw-range { width: 100%; accent-color: var(--accent); }
+#sw-setup-sheet .saw-range-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-soft); margin-top: -0.3rem; }
+.saw-panel { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; }
+.saw-panel[hidden], #sw-auto-panel [hidden] { display: none !important; }
+.saw-status { font-weight: 600; font-size: 0.9rem; line-height: 1.4; }
+.saw-progress { height: 0.35rem; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
+.saw-progress > div { height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
+.saw-steer { display: flex; gap: 0.5rem; align-items: center; }
+.saw-steer .input { flex: 1; min-width: 0; }
+.sw-chapter-heading { margin: 0.25rem 0 0.6rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft); }
+.saw-live { border: 1px dashed var(--accent); }
+.saw-live-text { line-height: 1.7; white-space: pre-wrap; }
+.saw-live-text.saw-waiting { color: var(--text-soft); font-style: italic; }
+@media (min-width: 700px) { .saw-steer .pb-input { font-size: 0.9rem; } }

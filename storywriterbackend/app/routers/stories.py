@@ -8,12 +8,13 @@ from app.database import get_db
 from app.models import Story, StorySegment, StoryCard, CharacterCard, User, SteeringInstruction
 from app.schemas import StoryCreate, StoryOut, StoryDetailOut, StorySegmentOut, StoryCardOut, EditSegmentRequest, SpeakerMapRequest
 from app.routers.auth import get_current_user
+from app.services.story_autowriter import UNTITLED, active_run
 
 router = APIRouter(prefix="/stories", tags=["stories"])
 
 @router.post("/", response_model=StoryOut)
 def create_story(story: StoryCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    db_story = Story(user_id=current_user.id, title=story.title, synopsis=story.synopsis)
+    db_story = Story(user_id=current_user.id, title=story.title.strip()[:200] or UNTITLED, synopsis=story.synopsis)
     db.add(db_story)
     db.commit()
     
@@ -44,7 +45,7 @@ def update_story(story_id: int, story_update: StoryCreate, db: Session = Depends
     story = db.query(Story).filter(Story.id == story_id, Story.user_id == current_user.id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
-    story.title = story_update.title
+    story.title = story_update.title.strip()[:200] or story.title
     story.synopsis = story_update.synopsis
     
     if story_update.card_ids:
@@ -65,6 +66,11 @@ def delete_story(story_id: int, db: Session = Depends(get_db), current_user: Use
     story = db.query(Story).filter(Story.id == story_id, Story.user_id == current_user.id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    run = active_run(story_id)
+    if run:
+        # This handler runs on a worker thread; the task lives on the event loop.
+        # Its own save then finds no story and does nothing.
+        run.task.get_loop().call_soon_threadsafe(run.task.cancel)
     # Delete steering instructions manually (no cascade relationship defined on Story)
     db.query(SteeringInstruction).filter(SteeringInstruction.story_id == story_id).delete()
     db.delete(story)
