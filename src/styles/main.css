@@ -4310,3 +4310,7 @@ html.saw-open, html.saw-open body { overflow: hidden; }
 .saw-live-text { line-height: 1.7; white-space: pre-wrap; }
 .saw-live-text.saw-waiting { color: var(--text-soft); font-style: italic; }
 @media (min-width: 700px) { .saw-steer .pb-input { font-size: 0.9rem; } }
+/* 📐 Angle buttons in the Playground's Edit and Reimagine tabs (_initPlaygroundAngles). */
+.pg-angle-row { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin: 0 0 0.45rem; }
+.pg-angle-label { font-size: 0.78rem; color: var(--text-soft); margin-right: 0.15rem; }
+.pg-angle-row .pg-angle-btn { min-height: 2rem; padding: 0.25rem 0.55rem; font-size: 0.78rem; white-space: nowrap; }

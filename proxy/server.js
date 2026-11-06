@@ -2850,8 +2850,9 @@ const LOCAL_COMFY_OUTPUT_NODE = "56";
 const LOCAL_COMFY_MODELS = {
   "local/qwen-image-2.1": {
     name: "Qwen-Image 2.1",
-    capabilities: { generate: true, edit: true },
+    capabilities: { generate: true, edit: true, combine: true },
     steps: { default: 25, min: 8, max: 50 },
+    maxReferences: 3,
     buildGraph: buildQwenImageGraph,
     buildReimagineGraph: buildQwenReimagineGraph,
   },
@@ -2861,8 +2862,9 @@ const LOCAL_COMFY_MODELS = {
   // good on 3 prompts and 3 edits. Steps are fixed by its sigma schedule.
   "local/qwen-image-2.1-lightning": {
     name: "Qwen-Image 2.1 Lightning",
-    capabilities: { generate: true, edit: true },
+    capabilities: { generate: true, edit: true, combine: true },
     steps: { default: 4, min: 4, max: 4 },
+    maxReferences: 3,
     buildGraph: buildQwenLightningGraph,
     buildReimagineGraph: buildQwenLightningReimagineGraph,
   },
@@ -3027,7 +3029,9 @@ async function uploadLocalComfyImage({ mime, buffer }) {
 // API-format workflow, built from Comfy's official Qwen-Image 2.1 templates.
 // Node ids are arbitrary but kept equal to the template's so the two can be
 // compared side by side when the template changes.
-function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage }) {
+function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage, sourceImages }) {
+  const combining = sourceImages?.length > 1;
+  if (combining) prompt = nameReferencesAs(prompt, "plain");
   const graph = {
     37: { class_type: "UNETLoader", inputs: { unet_name: "qwen_image_2.1_int8_convrot.safetensors", weight_dtype: "default" } },
     38: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3vl_8b_int8_convrot.safetensors", type: "qwen_image", device: "default" } },
@@ -3066,6 +3070,15 @@ function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage }
     });
     graph[64].inputs.resolution = 0;
     graph[64].inputs["images.image_1"] = ["77", 0];
+    // Combine: the other pictures join as image_2, image_3… at about the same
+    // size. The result takes the first picture's size. Measured on the PC
+    // (2026-11-06): plain Qwen 2.1 put a coat from picture 2 onto the woman in
+    // picture 1 with 3% of her face changed, and swapped a head convincingly.
+    if (combining) {
+      addLocalComfyReferences(graph, sourceImages.slice(1)).forEach((ref, i) => {
+        graph[64].inputs[`images.image_${i + 2}`] = ref;
+      });
+    }
   } else {
     graph[62] = { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } };
   }
@@ -3159,8 +3172,23 @@ const QWEN_LIGHTNING = {
 // 3 the face and hair drifted (younger, different fringe), as "loose" does.
 const QWEN_LIGHTNING_REIMAGINE_SPLIT = { close: 1, balanced: 2 };
 
-function addQwenLightningNodes(graph) {
-  graph[90] = { class_type: "LoraLoaderModelOnly", inputs: { model: ["37", 0], lora_name: QWEN_LIGHTNING.lora, strength_model: 1.0 } };
+// ausboss's Outfit Swap Consistency LoRA (HF ausboss/Qwen-Image-2.1-Outfit-Swap-Consistency-LoRA,
+// Qwen Research licence), added under Lightning for a combine that is about
+// clothes. Measured on the PC (2026-11-06, coat from picture 2 onto the woman
+// in picture 1): plain Lightning shifted the whole picture 6 px and changed 24%
+// of her face; with this LoRA, 0 px and 2.8%. The 25-step model doesn't need it
+// (3.4% without). It pins the result to picture 1's frame, so it stays out of
+// combines that should move things (group shots, a person into a new scene).
+const QWEN_OUTFIT_LORA = "qwen-image-2.1-outfit-swap.safetensors";
+const OUTFIT_INSTRUCTION_RE = /\b(outfit|cloth(es|ing)?|wear(ing)?|dress(ed)?|garment|costume|uniform|coat|jacket|shirt|t-shirt|blouse|hoodie|sweater|jumper|cardigan|skirt|trousers|pants|jeans|shorts|shoes|boots|hat)\b/i;
+
+function addQwenLightningNodes(graph, { outfit = false } = {}) {
+  let model = ["37", 0];
+  if (outfit) {
+    graph[89] = { class_type: "LoraLoaderModelOnly", inputs: { model, lora_name: QWEN_OUTFIT_LORA, strength_model: 1.0 } };
+    model = ["89", 0];
+  }
+  graph[90] = { class_type: "LoraLoaderModelOnly", inputs: { model, lora_name: QWEN_LIGHTNING.lora, strength_model: 1.0 } };
   graph[91] = { class_type: "KSamplerSelect", inputs: { sampler_name: "euler" } };
   graph[92] = { class_type: "ManualSigmas", inputs: { sigmas: QWEN_LIGHTNING.sigmas } };
 }
@@ -3182,7 +3210,7 @@ function addQwenLightningSampler(graph, { id, conditioning, latent, sigmas, seed
 // The base graph with its KSampler (node 3) swapped for the 4-step sampler.
 function buildQwenLightningGraph(args) {
   const graph = buildQwenImageGraph(args);
-  addQwenLightningNodes(graph);
+  addQwenLightningNodes(graph, { outfit: args.sourceImages?.length > 1 && OUTFIT_INSTRUCTION_RE.test(args.prompt) });
   addQwenLightningSampler(graph, { id: 3, conditioning: ["64", 0], latent: ["62", 0], sigmas: ["92", 0], seed: args.seed });
   return graph;
 }

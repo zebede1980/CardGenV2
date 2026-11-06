@@ -33,6 +33,28 @@ const PLAYGROUND_BUILTIN_PRESETS = {
   ],
 };
 
+// 📐 Angle buttons for Edit and Reimagine. `pose` goes into an edit instruction
+// in the wording tested on the PC (2026-11-06, Qwen-Image 2.1 Lightning, a
+// photo and an anime character, scene and style kept): from behind, from
+// below and full body worked on both, close-up on the anime one, from above on
+// the photo. "Left side" and "right side" both gave the same profile, so there
+// is one side button; the quarter views barely moved sources that were already
+// near three-quarter. `phrase` fills Reimagine's "what should the new picture
+// show" box, which the vision model then writes a full prompt from.
+const PLAYGROUND_ANGLES = [
+  { label: "◀ Side view", pose: "left side view, eye-level shot", phrase: "seen from the side, in profile, at eye level" },
+  { label: "↩ From behind", pose: "back view, eye-level shot", phrase: "seen from behind" },
+  { label: "◥ ¾ view", pose: "front-right quarter view, eye-level shot", phrase: "a three-quarter view" },
+  { label: "⬇ From above", pose: "front view, high-angle shot", phrase: "from a high angle, looking down" },
+  { label: "⬆ From below", pose: "front view, low-angle shot", phrase: "from a low angle, looking up" },
+  { label: "🔍 Close-up", pose: "front view, eye-level shot close-up", phrase: "a close-up of the face" },
+  { label: "🧍 Full body", pose: "front view, eye-level shot, full body in frame", phrase: "full body in frame, head to toe" },
+];
+
+function playgroundAngleInstruction(angle) {
+  return `Show the same person from this camera position: ${angle.pose}. Keep everything else the same.`;
+}
+
 Object.assign(CharacterGeneratorApp.prototype, {
 
   initPlaygroundTab() {
@@ -172,6 +194,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Prompt presets for each of the three text-driven tools.
     ["generate", "edit", "combine"].forEach(tool => this._initPlaygroundPresets(tool));
+    this._initPlaygroundAngles();
 
     this._updatePlaygroundUpscaleModelDropdown();
     const upscaleModelSelect = document.getElementById("playground-upscale-model");
@@ -1246,6 +1269,33 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // retyped constantly and are fiddly to type on a phone, which is this app's
   // primary client. Built-ins plus whatever the user saves, per tool — an Edit
   // instruction is no use in the Generate box, so the lists are kept separate.
+
+  // Fills each .pg-angle-row with a button per PLAYGROUND_ANGLES entry. A tap
+  // replaces the target box's text (Edit: a full instruction; Reimagine: the
+  // short phrase) and fires input/change so anything listening sees it.
+  _initPlaygroundAngles() {
+    document.querySelectorAll(".pg-angle-row[data-angle-target]").forEach((row) => {
+      const field = document.getElementById(row.dataset.angleTarget);
+      if (!field || row.dataset.ready) return;
+      row.dataset.ready = "1";
+      const forReimagine = row.dataset.angleMode === "reimagine";
+      PLAYGROUND_ANGLES.forEach((angle) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-small pg-angle-btn";
+        btn.textContent = angle.label;
+        const text = forReimagine ? angle.phrase : playgroundAngleInstruction(angle);
+        btn.title = text;
+        btn.addEventListener("click", () => {
+          field.value = text;
+          field.dispatchEvent(new Event("input", { bubbles: true }));
+          field.dispatchEvent(new Event("change", { bubbles: true }));
+          field.focus();
+        });
+        row.appendChild(btn);
+      });
+    });
+  },
 
   _playgroundPresetFieldId(tool) {
     return tool === "generate" ? "playground-generate-prompt"

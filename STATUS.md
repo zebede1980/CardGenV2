@@ -7,6 +7,40 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Qwen Combine + 📐 angle buttons (2026-11-06) — committed, not deployed
+
+From a LoRA survey of every local model (HF likes/downloads, cards read, the best tested on the
+PC with and without, same seeds; contact sheets and pixel-drift numbers in that session's temp
+folder). The LoRAs mostly lost to plain Qwen-Image 2.1, which is what got built:
+
+- **Combine on both Qwen entries** (`combine: true`, `maxReferences: 3`): `buildQwenImageGraph`
+  adds pictures 2–3 as `images.image_2…` (`addLocalComfyReferences`, ~1 MP each, result at
+  picture 1's size) and rewrites `<image_N>` to "image N". On Lightning a combine whose instruction
+  names clothing (`OUTFIT_INSTRUCTION_RE`) also loads ausboss's Outfit Swap LoRA
+  (`qwen-image-2.1-outfit-swap`, 159 MB, in `models\loras`): plain Lightning shifted the picture
+  6 px and changed 24% of the face; with it 0 px and 1.6–2.8%. The 25-step model managed
+  3.4–5.7% without. Tested through the real builders: coat swap ✓, two people into one shot ✓,
+  **"redraw in the style of image 2" ✗** (a photo with a faint painted look; Qwen copies people
+  and clothes from a second picture, not art style).
+  **To finish (Joe):** on `local/qwen-image-2.1` (and Lightning, if added before this deploy) tick
+  🔀 Combine in Settings → Image API: saved ticks override the new default.
+- **📐 angle buttons** in Playground Edit (fill the instruction with
+  `Show the same person from this camera position: <pose>. Keep everything else the same.`) and
+  Reimagine (fill "What should the new picture show?" with a short phrase). `PLAYGROUND_ANGLES` in
+  `image-playground.js`. On Lightning: from behind, from below and full body worked on a photo
+  and an anime character; close-up on the anime one; from above on the photo; "left" and "right"
+  gave the same profile, so there is one Side button; the ¾ button barely moves a source that is
+  already near ¾. This contradicts the Reimagine note below that an edit "keeps the old
+  composition": with ComfyUI 0.44 a plain Qwen edit does turn the camera.
+- **LoRAs tried and not built:** akhaliq's Multiple-Angles v2 (grey studio backgrounds, tiny
+  full-body figures; worse than a plain prompt); ausboss's Consistency LoRA (face change 6.5% →
+  1.9% on a restyle, but its card says it blocks pose changes); BFS head swap (plain Qwen swaps
+  heads convincingly; the LoRA matches the source's light and head turn a little better). All
+  four files are in `models\loras`; `qwen21_multiple_angles_v2_1500` can be deleted.
+- **Parked:** Krea-2 Identity Edit V2 needs the third-party `comfyui-krea2edit` node pack.
+- **Tested:** ComfyUI on the PC via the real builders; the buttons in headless WebKit at 390 px
+  light and 320 px dark against the fake server. Not yet in the deployed app or on the iPhone.
+
 ## Local GPU: ComfyUI 0.44, Qwen Lightning, Z-Image fp8 (2026-11-06) — deployed
 
 Tested on the PC by running the proxy's real graph builders straight against ComfyUI (harness in

@@ -40,11 +40,11 @@ function guessImageModelCapabilities(modelId, apiModel) {
   // The proxy's local ComfyUI models are known exactly rather than guessed: the
   // proxy's /api/image/local-models says what each workflow does. Without that
   // entry (a model added by hand), Qwen-Image, MOSS-Image, FIBO and Klein edit,
-  // and FIBO and Klein combine. Never Enhance: the proxy pins edit output to
+  // and Qwen-Image, FIBO and Klein combine. Never Enhance: the proxy pins edit output to
   // COMFYUI_EDIT_MEGAPIXELS, so it can't return the larger image an upscale asks for.
   if (id.startsWith("local/")) {
     const local = apiModel?.local_capabilities
-      || { generate: true, edit: /^local\/(qwen-image|moss-image|fibo|flux3-klein)/.test(id), combine: /^local\/(fibo|flux3-klein)/.test(id) };
+      || { generate: true, edit: /^local\/(qwen-image|moss-image|fibo|flux3-klein)/.test(id), combine: /^local\/(qwen-image|fibo|flux3-klein)/.test(id) };
     return { generate: !!local.generate, edit: !!local.edit, combine: !!local.combine, upscale: false };
   }
   const looksEdit = IMAGE_EDIT_NAME_MARKERS.some(marker => id.includes(marker));
