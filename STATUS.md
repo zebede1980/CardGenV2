@@ -1,18 +1,18 @@
 # CardGenV2 — where things stand
 
 Last updated 2026-11-06. Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
-Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03, **not yet
-deployed** (needs a backend rebuild as well as the frontend). Auto-written stories and the
-output-token change committed 2026-11-06, **not yet deployed** (frontend + storywriterbackend
-rebuild; the backend adds three columns on start). Update this file when you ship
+Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
+output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
+chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Local GPU: ComfyUI 0.44, Qwen Lightning, Z-Image fp8 (2026-11-06) — committed, not deployed
+## Local GPU: ComfyUI 0.44, Qwen Lightning, Z-Image fp8 (2026-11-06) — deployed
 
 Tested on the PC by running the proxy's real graph builders straight against ComfyUI (harness in
 the session's temp folder: builders sliced out of `server.js`, timed from ComfyUI's own execution
-stamps). Not through the gateway, the browser or the iPhone.
+stamps). After deploying, one Lightning picture from inside the proxy container through the gateway:
+14 s including the model load. Not yet tried from the browser or the iPhone.
 
 - **ComfyUI is master `v0.44.0-23` (`63e5bf59`)**, 69 commits past the last tested `0b05cd8a`. No
   node the app uses was renamed or removed. All 7 local models generated and all 4 edit models
@@ -41,7 +41,7 @@ stamps). Not through the gateway, the browser or the iPhone.
   It also needs ~21 GB VRAM at 8 MP. The PC already has MiniMax-H3 FL2VA files, so the 2 GB
   P-H3 LoRA route would be cheap if the licence ever changes.
 
-## ✨ Auto-written stories (2026-11-06) — committed, not deployed, never run on a real model
+## ✨ Auto-written stories (2026-11-06) — deployed, never run on a real model
 
 Story Writer's "Create Story" (which demanded a title) is now **✨ New story**, a sheet
 (`src/scripts/story-autowriter.js`, `.saw-*` styles) with characters (picked through the card
@@ -78,7 +78,7 @@ chunk by `name_story_task`).
   page in headless WebKit at 390 px light and 320 px dark against a fake backend (66 checks: sheet
   layout, gallery above the sheet, double tap starts one story, live text, steering, no polling while
   hidden, an outage during unlock, restart → Resume, outline gated and escaped, write-with-me).
-  **Not run against GLM, deployed, or on a real iPhone.**
+  **Not yet run against GLM or on a real iPhone.**
 - **To try first:** a Short story with a card you know. Then check: did it end properly, did
   chapters repeat their openings, did the planner soften an adult premise, and does Off the rails
   feel different from Balanced.
@@ -86,7 +86,7 @@ chunk by `name_story_task`).
   chapters drift; using the outline in hand-driven Generate. `context_window` is not applied to
   auto-written prompts (cards + outline + notes for 18 chapters is roughly 10k tokens).
 
-## Output-token ceiling (2026-11-06) — committed, not deployed
+## Output-token ceiling (2026-11-06) — deployed
 
 Every storywriterbackend call (Story Writer, Roleplay Chat, Adventure) now sends
 `max_tokens = max(asked, 32768)` (`MAX_OUTPUT_TOKENS` in `llm_service.py`): reasoning models count
