@@ -190,7 +190,6 @@ class RoleplayChatHandler {
             globalSettingsContent: document.querySelector('#chat-global-settings-modal .api-settings-modal'),
             globalSettingsClose: document.getElementById('chat-global-settings-close'),
             globalMaxInput: document.getElementById('chat-global-max-input'),
-            globalMaxOutput: document.getElementById('chat-global-max-output'),
             globalTemp: document.getElementById('chat-global-temperature'),
             globalTopP: document.getElementById('chat-global-top-p'),
             globalRepPen: document.getElementById('chat-global-rep-penalty'),
@@ -639,7 +638,6 @@ class RoleplayChatHandler {
     openGlobalSettings() {
         if (!window.config) return;
         this.els.globalMaxInput.value = window.config.get("chat.maxInputTokens") ?? 8192;
-        this.els.globalMaxOutput.value = window.config.get("chat.maxOutputTokens") ?? 1024;
         this.els.globalTemp.value = window.config.get("chat.temperature") ?? 0.8;
         this.els.globalTopP.value = window.config.get("chat.topP") ?? 0.95;
         this.els.globalRepPen.value = window.config.get("chat.repetitionPenalty") ?? 1.0;
@@ -794,7 +792,6 @@ class RoleplayChatHandler {
 
     saveGlobalSettings() {
         window.config.set("chat.maxInputTokens", parseInt(this.els.globalMaxInput.value) || 8192);
-        window.config.set("chat.maxOutputTokens", parseInt(this.els.globalMaxOutput.value) || 1024);
         window.config.set("chat.temperature", parseFloat(this.els.globalTemp.value) || 0.8);
         window.config.set("chat.topP", parseFloat(this.els.globalTopP.value) || 0.95);
         window.config.set("chat.repetitionPenalty", parseFloat(this.els.globalRepPen.value) || 1.0);
@@ -1699,7 +1696,6 @@ class RoleplayChatHandler {
         };
         return {
             max_input_tokens: window.config.get('chat.maxInputTokens'),
-            max_output_tokens: window.config.get('chat.maxOutputTokens'),
             temperature: window.config.get('chat.temperature'),
             top_p: window.config.get('chat.topP'),
             repetition_penalty: window.config.get('chat.repetitionPenalty'),

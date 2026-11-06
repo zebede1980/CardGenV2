@@ -732,7 +732,6 @@ class AdventureHandler {
         
         // Get settings from config, defaulting to some sensible values if not set
         const maxInput = window.config?.get("adventure.maxInputTokens") || 2048;
-        const maxOutput = window.config?.get("adventure.maxOutputTokens") || 512;
         const repPenalty = window.config?.get("adventure.repetitionPenalty") || 1.0;
         
         this._abortController = new AbortController();
@@ -745,7 +744,6 @@ class AdventureHandler {
                     content: content,
                     role: role,
                     max_input_tokens: maxInput,
-                    max_output_tokens: maxOutput,
                     repetition_penalty: repPenalty,
                     enable_cot: window.config?.get("adventure.enableCot") !== false
                 }),
@@ -872,10 +870,6 @@ class AdventureHandler {
                         <input type="number" id="adv-global-max-input" class="content-box" style="width: 100%;">
                     </div>
                     <div class="form-group">
-                        <label>Max Output Tokens</label>
-                        <input type="number" id="adv-global-max-output" class="content-box" style="width: 100%;">
-                    </div>
-                    <div class="form-group">
                         <label>Repetition Penalty</label>
                         <input type="number" step="0.05" id="adv-global-rep-penalty" class="content-box" style="width: 100%;">
                     </div>
@@ -928,7 +922,6 @@ class AdventureHandler {
         this.renderSystemPromptSegments();
         
         document.getElementById('adv-global-max-input').value = window.config.get("adventure.maxInputTokens") ?? 8192;
-        document.getElementById('adv-global-max-output').value = window.config.get("adventure.maxOutputTokens") ?? 1024;
         document.getElementById('adv-global-rep-penalty').value = window.config.get("adventure.repetitionPenalty") ?? 1.0;
         
         const enableCotCheckbox = document.getElementById('adv-global-enable-cot');
@@ -1053,7 +1046,6 @@ class AdventureHandler {
         window.config.set("adventure.systemPromptSegments", this.systemPromptSegments);
         
         window.config.set("adventure.maxInputTokens", parseInt(document.getElementById('adv-global-max-input').value, 10) || 8192);
-        window.config.set("adventure.maxOutputTokens", parseInt(document.getElementById('adv-global-max-output').value, 10) || 1024);
         window.config.set("adventure.repetitionPenalty", parseFloat(document.getElementById('adv-global-rep-penalty').value) || 1.0);
         
         const enableCotCheckbox = document.getElementById('adv-global-enable-cot');

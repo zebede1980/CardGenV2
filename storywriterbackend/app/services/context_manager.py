@@ -119,7 +119,7 @@ class ContextManager:
 
         # ── Token budget ──────────────────────────────────────────────────────
         # Reserve space for: system header parts (already built), final instruction,
-        # the user continuation prompt, AND the model's output (max_tokens).
+        # the user continuation prompt, AND the model's output.
         # This ensures we never push so much story history that the model has no
         # room left for its output — which is what causes gibberish.
         system_text_so_far = "\n\n".join(system_parts) + "\n\n" + final_system_instruction
@@ -129,8 +129,7 @@ class ContextManager:
         last_segment = segments[-1] if segments and not segments[-1].is_summary else None
         user_msg_tokens = (len(last_segment.content) // 4 + 50) if last_segment else 50
 
-        # max_tokens is the output budget the LLM needs
-        output_tokens = self.settings.max_tokens
+        output_tokens = self.output_reserve_tokens()
 
         available_context_tokens = max(
             500,
@@ -163,6 +162,12 @@ class ContextManager:
             messages.append({"role": "user", "content": "Continue the story from where it left off."})
 
         return messages
+
+    def output_reserve_tokens(self) -> int:
+        """Room kept free in the context window for the reply. Not max_tokens:
+        that is now a generous ceiling (llm_service.MAX_OUTPUT_TOKENS), and
+        reserving all of it would leave no room for the story so far."""
+        return min(8192, max(1024, (self.context_window or 8000) // 4))
 
     def _build_story_context(self, segments: List[StorySegment], max_tokens: int) -> str:
         if not segments:

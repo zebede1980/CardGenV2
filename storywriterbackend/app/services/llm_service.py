@@ -16,6 +16,23 @@ UTILITY_TEMPERATURE = 0.3
 # only ever sent to these.
 REASONING_FLAG_HOSTS = ("nano-gpt.com", "openrouter.ai")
 
+# Output ceiling for every call. Reasoning models count their hidden thinking
+# against max_tokens, so the old per-user setting (default 2048) cut replies
+# and story chunks off mid-sentence. Billing is per token generated, not per
+# token allowed, so a high ceiling costs nothing; a caller asking for more
+# still gets more. A host that refuses a ceiling this high for the chosen model
+# is asked again with none (its own maximum): see _rejects_token_ceiling.
+MAX_OUTPUT_TOKENS = 32768
+
+_TOKEN_CEILING_ERROR_RE = re.compile(
+    r"max_tokens|max_completion_tokens|max_output_tokens|maximum.{0,40}tokens|tokens.{0,40}(exceed|too (large|many|high)|limit)",
+    re.IGNORECASE,
+)
+
+
+def _rejects_token_ceiling(status_code: int, body: str) -> bool:
+    return status_code in (400, 422) and bool(_TOKEN_CEILING_ERROR_RE.search(body or ""))
+
 
 def supports_reasoning_flag(api_base_url: str) -> bool:
     return any(h in (api_base_url or "") for h in REASONING_FLAG_HOSTS)
@@ -123,7 +140,6 @@ class LLMService:
         self.api_base_url = settings.api_base_url.rstrip("/")
         self.api_key = settings.api_key
         self.model = settings.model
-        self.max_tokens = settings.max_tokens
         self.temperature = settings.temperature
         self.top_p = getattr(settings, "top_p", None)
         self.finish_reason: Optional[str] = None
@@ -157,7 +173,7 @@ class LLMService:
         payload = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
+            "max_tokens": max(max_tokens or 0, MAX_OUTPUT_TOKENS),
             "temperature": temperature if temperature is not None else self.temperature,
             "stream": stream,
         }
@@ -195,45 +211,60 @@ class LLMService:
             # error mid-stream. Usage is read opportunistically below.
             self.finish_reason = None
             self.last_usage = None
-            async with self.client.stream("POST", url, headers=headers, json=payload) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data = line[6:]
-                        if data == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data)
-                            if "error" in chunk:
-                                err_msg = chunk["error"].get("message", str(chunk["error"])) if isinstance(chunk["error"], dict) else str(chunk["error"])
-                                raise Exception(f"API Error: {err_msg}")
-                            
-                            if "usage" in chunk and chunk["usage"]:
-                                self.last_usage = chunk["usage"]
-                            
-                            if "choices" in chunk and len(chunk["choices"]) > 0:
-                                choice = chunk["choices"][0]
-                                fr = choice.get("finish_reason")
-                                if fr:
-                                    self.finish_reason = fr
-                                delta = choice.get("delta", {})
-                                if yield_reasoning:
-                                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-                                    if reasoning:
-                                        yield ReasoningChunk(reasoning)
-                                content = delta.get("content", "")
-                                if content:
-                                    yield content
-                        except json.JSONDecodeError:
+            for attempt in range(2):
+                async with self.client.stream("POST", url, headers=headers, json=payload) as response:
+                    if response.status_code >= 400:
+                        body = (await response.aread()).decode(errors="replace")
+                        if attempt == 0 and _rejects_token_ceiling(response.status_code, body):
+                            payload.pop("max_tokens")
                             continue
+                        response.raise_for_status()
+                    async for chunk in self._read_stream(response, yield_reasoning):
+                        yield chunk
+                    return
         else:
             response = await self.client.post(url, headers=headers, json=payload)
+            if _rejects_token_ceiling(response.status_code, response.text):
+                payload.pop("max_tokens")
+                response = await self.client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
             if "usage" in data:
                 self.last_usage = data["usage"]
             content = data["choices"][0]["message"]["content"]
             yield content
+
+    async def _read_stream(self, response, yield_reasoning: bool):
+        async for line in response.aiter_lines():
+            if not line.startswith("data: "):
+                continue
+            data = line[6:]
+            if data == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            if "error" in chunk:
+                err_msg = chunk["error"].get("message", str(chunk["error"])) if isinstance(chunk["error"], dict) else str(chunk["error"])
+                raise Exception(f"API Error: {err_msg}")
+
+            if "usage" in chunk and chunk["usage"]:
+                self.last_usage = chunk["usage"]
+
+            if "choices" in chunk and len(chunk["choices"]) > 0:
+                choice = chunk["choices"][0]
+                fr = choice.get("finish_reason")
+                if fr:
+                    self.finish_reason = fr
+                delta = choice.get("delta", {})
+                if yield_reasoning:
+                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                    if reasoning:
+                        yield ReasoningChunk(reasoning)
+                content = delta.get("content", "")
+                if content:
+                    yield content
 
     async def summarize(self, text: str) -> str:
         messages = [
