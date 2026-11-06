@@ -8,6 +8,39 @@ rebuild; the backend adds three columns on start). Update this file when you shi
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Local GPU: ComfyUI 0.44, Qwen Lightning, Z-Image fp8 (2026-11-06) — committed, not deployed
+
+Tested on the PC by running the proxy's real graph builders straight against ComfyUI (harness in
+the session's temp folder: builders sliced out of `server.js`, timed from ComfyUI's own execution
+stamps). Not through the gateway, the browser or the iPhone.
+
+- **ComfyUI is master `v0.44.0-23` (`63e5bf59`)**, 69 commits past the last tested `0b05cd8a`. No
+  node the app uses was renamed or removed. All 7 local models generated and all 4 edit models
+  edited correctly (warm: Qwen 8–20 s, Z-Image 5 s, Krea 5.4 s, MOSS 21.5 s / edit 18.6 s, FIBO
+  19.6 s / edit 9.9 s, Klein 7–11 s / edit 7.2 s, Illustrious 5 s).
+- **`local/qwen-image-2.1-lightning`** (new): the same int8 Qwen-Image 2.1 plus lightx2v's
+  `qwen_image_21_lightning_v2_rl_4steps_lora_rank64` (688 MB, in `J:\…\models\loras`; from
+  `lightx2v/Qwen-Image-2.1-Lightning-v2-RL`, which also ships a 28 GB fp32 transformer we don't
+  need). 4 steps, CFG 1, the release's own sigmas through `ManualSigmas` +
+  `SamplerCustomAdvanced`. Warm: **2–3 s per picture against 8–9 s, edits ~3 s against 14–17 s,
+  Reimagine ~3 s against 17 s**; at least as good on 3 prompts (sign text right) and 3 edits (face
+  kept). Reimagine splits the 4 sigmas with `SplitSigmas`: references join after step 1 (close) or
+  2 (balanced); after 3 the face drifted. A "from the side, walking" reimagine kept the likeness
+  but barely moved the pose. Licence: Qwen Research (non-commercial), as for the base.
+  **To finish (Joe):** Settings → Image API → Fetch models, add `local/qwen-image-2.1-lightning`,
+  tick ✨ Edit and Natural-language prompts. The base entry stays for comparison.
+- **VRAM:** nothing measurable beyond the base model (+0.7 GB LoRA). nvidia-smi read 15.1–15.6 GB
+  used during every run of every model, because ComfyUI keeps whatever fits cached, so that number is
+  the card being full, not what a model needs.
+- **Z-Image-Turbo now loads as `fp8_e4m3fn_fast`** (the 0.44 fix, #16941): 3.5–4.5 s against
+  4.9–6.5 s warm, 4 s first load against 17 s, pictures near-identical. No other app workflow
+  used fp8 weights (the rest are int8_convrot), so this is the only one that gains. A true
+  before/after across ComfyUI versions wasn't possible: the update was already installed.
+- **P-H3-Image: not installed, licence.** The MiniMax H3 Community Licence's "Applicable Territory"
+  excludes the UK (and EU, US, Korea) and §V.4 forbids any use outside it, personal use included.
+  It also needs ~21 GB VRAM at 8 MP. The PC already has MiniMax-H3 FL2VA files, so the 2 GB
+  P-H3 LoRA route would be cheap if the licence ever changes.
+
 ## ✨ Auto-written stories (2026-11-06) — committed, not deployed, never run on a real model
 
 Story Writer's "Create Story" (which demanded a title) is now **✨ New story**, a sheet

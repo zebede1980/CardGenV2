@@ -2855,6 +2855,17 @@ const LOCAL_COMFY_MODELS = {
     buildGraph: buildQwenImageGraph,
     buildReimagineGraph: buildQwenReimagineGraph,
   },
+  // The same model with lightx2v's 4-step Lightning v2 RL LoRA (see
+  // QWEN_LIGHTNING). Measured on the PC (2026-11-06, ComfyUI 0.44, warm):
+  // 2-3 s per picture against 8-9 s, edits ~3 s against 14-17 s, at least as
+  // good on 3 prompts and 3 edits. Steps are fixed by its sigma schedule.
+  "local/qwen-image-2.1-lightning": {
+    name: "Qwen-Image 2.1 Lightning",
+    capabilities: { generate: true, edit: true },
+    steps: { default: 4, min: 4, max: 4 },
+    buildGraph: buildQwenLightningGraph,
+    buildReimagineGraph: buildQwenLightningReimagineGraph,
+  },
   "local/z-image-turbo": {
     name: "Z-Image-Turbo",
     capabilities: { generate: true, edit: false },
@@ -3131,10 +3142,78 @@ function buildQwenReimagineGraph({ prompt, seed, steps, width, height, sourceIma
   return graph;
 }
 
-// From Comfy's "Z-Image-Turbo: Text to Image" template (bf16 model).
+// lightx2v's Qwen-Image 2.1 Lightning v2 RL (HF lightx2v/Qwen-Image-2.1-Lightning-v2-RL),
+// as the 4-step LoRA from that repo on the same int8 model: generation and
+// edits in 4 steps at CFG 1. The sigmas are the release's own
+// (inference_config.json), already shifted, so ManualSigmas passes them as they
+// are; KSampler's 4-step "simple" schedule is a different one. Licence: the
+// Qwen Research License (non-commercial), as for the base model.
+const QWEN_LIGHTNING = {
+  lora: "qwen_image_21_lightning_v2_rl_4steps_lora_rank64.safetensors",
+  sigmas: "1.0, 0.95418, 0.89508, 0.704534, 0.0",
+};
+
+// Reimagine on the 4-step schedule: the step after which the reference latents
+// join. Measured on the PC (2026-11-06, same prompt and seed): after step 1 the
+// face matched the base model's "close"; after 2 it was a little looser; after
+// 3 the face and hair drifted (younger, different fringe), as "loose" does.
+const QWEN_LIGHTNING_REIMAGINE_SPLIT = { close: 1, balanced: 2 };
+
+function addQwenLightningNodes(graph) {
+  graph[90] = { class_type: "LoraLoaderModelOnly", inputs: { model: ["37", 0], lora_name: QWEN_LIGHTNING.lora, strength_model: 1.0 } };
+  graph[91] = { class_type: "KSamplerSelect", inputs: { sampler_name: "euler" } };
+  graph[92] = { class_type: "ManualSigmas", inputs: { sigmas: QWEN_LIGHTNING.sigmas } };
+}
+
+// A SamplerCustomAdvanced at node `id`, its guider and noise at id*10+1 and
+// id*10+2. No seed means no fresh noise: the second half of a split run.
+function addQwenLightningSampler(graph, { id, conditioning, latent, sigmas, seed }) {
+  const [guider, noise] = [id * 10 + 1, id * 10 + 2];
+  graph[guider] = { class_type: "BasicGuider", inputs: { model: ["90", 0], conditioning } };
+  graph[noise] = seed === undefined
+    ? { class_type: "DisableNoise", inputs: {} }
+    : { class_type: "RandomNoise", inputs: { noise_seed: seed } };
+  graph[id] = {
+    class_type: "SamplerCustomAdvanced",
+    inputs: { noise: [String(noise), 0], guider: [String(guider), 0], sampler: ["91", 0], sigmas, latent_image: latent },
+  };
+}
+
+// The base graph with its KSampler (node 3) swapped for the 4-step sampler.
+function buildQwenLightningGraph(args) {
+  const graph = buildQwenImageGraph(args);
+  addQwenLightningNodes(graph);
+  addQwenLightningSampler(graph, { id: 3, conditioning: ["64", 0], latent: ["62", 0], sigmas: ["92", 0], seed: args.seed });
+  return graph;
+}
+
+// The base model's two-stage reimagine (see above), on the 4-step schedule:
+// SplitSigmas does what start/end_at_step do there.
+function buildQwenLightningReimagineGraph(args) {
+  const split = QWEN_LIGHTNING_REIMAGINE_SPLIT[args.likeness];
+  // "close" gives both encodes (64 without latents, 65 with); "loose" only 64.
+  const graph = buildQwenReimagineGraph({ ...args, likeness: split ? "close" : "loose" });
+  delete graph[3];
+  delete graph[4];
+  addQwenLightningNodes(graph);
+  if (!split) {
+    addQwenLightningSampler(graph, { id: 4, conditioning: ["64", 0], latent: ["62", 0], sigmas: ["92", 0], seed: args.seed });
+    return graph;
+  }
+  graph[93] = { class_type: "SplitSigmas", inputs: { sigmas: ["92", 0], step: split } };
+  addQwenLightningSampler(graph, { id: 3, conditioning: ["64", 0], latent: ["62", 0], sigmas: ["93", 0], seed: args.seed });
+  addQwenLightningSampler(graph, { id: 4, conditioning: ["65", 0], latent: ["3", 0], sigmas: ["93", 1] });
+  return graph;
+}
+
+// From Comfy's "Z-Image-Turbo: Text to Image" template (bf16 model), loaded as
+// fp8_e4m3fn_fast: the 4080's fp8 units then do the maths. Since ComfyUI 0.44
+// (#16941) that works with dynamic VRAM instead of falling back to bf16.
+// Measured on the PC (2026-11-06, warm, same seeds): 3.5-4.5 s against
+// 4.9-6.5 s, a 4 s first load against 17 s, pictures near-identical.
 function buildZImageTurboGraph({ prompt, seed, steps, width, height }) {
   return {
-    28: { class_type: "UNETLoader", inputs: { unet_name: "z_image_turbo_bf16.safetensors", weight_dtype: "default" } },
+    28: { class_type: "UNETLoader", inputs: { unet_name: "z_image_turbo_bf16.safetensors", weight_dtype: "fp8_e4m3fn_fast" } },
     30: { class_type: "CLIPLoader", inputs: { clip_name: "qwen_3_4b.safetensors", type: "lumina2", device: "default" } },
     29: { class_type: "VAELoader", inputs: { vae_name: "ae.safetensors" } },
     11: { class_type: "ModelSamplingAuraFlow", inputs: { model: ["28", 0], shift: 3 } },
