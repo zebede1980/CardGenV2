@@ -3,6 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
+import json
 import uuid
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./storywriter.db")
@@ -202,6 +203,14 @@ class ChatMemory(Base):
     
     chat = relationship("RoleplayChat", back_populates="memories")
 
+def _json_dict(raw) -> dict:
+    try:
+        value = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 class AdventureCharacterLink(Base):
     __tablename__ = "adventure_character_links"
     adventure_id = Column(String(36), ForeignKey("adventure_sessions.id", ondelete="CASCADE"), primary_key=True)
@@ -215,11 +224,26 @@ class AdventureSession(Base):
     starting_scenario = Column(Text, default="")
     summary = Column(Text, default="")
     system_prompt = Column(Text, default="")
+    # JSON: play style, persona, length/style presets, dice, ending arc (see adventure.py _config).
+    play_config = Column(Text, default="")
+    # JSON journal (goals, items, people, threads) and how many beats it covers.
+    journal = Column(Text, default="")
+    journal_at = Column(Integer, default=0)
+    # Named automatically after the first beat until the user renames it.
+    title_auto = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     actions = relationship("AdventureAction", back_populates="session", cascade="all, delete-orphan", order_by="AdventureAction.order_index")
     characters = relationship("CharacterCard", secondary="adventure_character_links")
+
+    @property
+    def config(self) -> dict:
+        return _json_dict(self.play_config)
+
+    @property
+    def journal_data(self) -> dict:
+        return _json_dict(self.journal)
 
 class AdventureAction(Base):
     __tablename__ = "adventure_actions"
@@ -228,8 +252,15 @@ class AdventureAction(Base):
     order_index = Column(Integer, nullable=False)
     content = Column(Text, default="")  # The generated story text or the user's choice text
     role = Column(String, nullable=False)  # 'system', 'user' (choice), 'assistant' (story)
-    options = Column(Text, default="")  # JSON array of the 4 options if role is 'assistant'
+    options = Column(Text, default="")  # JSON list of {text, risk} (older rows: plain strings)
     is_summarized = Column(Boolean, default=False)
+    roll = Column(Text, default="")  # JSON dice roll on a risky choice (user rows)
+    image = Column(Text, default="")  # scene picture URL or data URI (assistant rows)
+    image_prompt = Column(Text, default="")
+    
+    @property
+    def has_image(self) -> bool:
+        return bool(self.image)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     session = relationship("AdventureSession", back_populates="actions")

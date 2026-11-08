@@ -293,6 +293,10 @@ class AdventureActionOut(BaseModel):
     role: str
     options: str
     is_summarized: bool
+    roll: str = ""
+    # The picture itself is fetched on its own (GET .../image): data URIs are big.
+    has_image: bool = False
+    image_prompt: str = ""
     created_at: datetime
     class Config:
         from_attributes = True
@@ -306,44 +310,76 @@ class AdventureActionUpdate(BaseModel):
     content: str
 
 class AdventureSessionCreate(BaseModel):
-    title: str
+    title: str = ""
     starting_scenario: str = ""
     system_prompt: str = ""
     card_ids: List[int] = []
+    config: dict = {}
 
 class AdventureSessionUpdate(BaseModel):
     title: Optional[str] = None
     starting_scenario: Optional[str] = None
     summary: Optional[str] = None
     system_prompt: Optional[str] = None
+    config: Optional[dict] = None
+    journal: Optional[dict] = None
+
+class AdventureCharacterOut(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
+class AdventureSessionListOut(BaseModel):
+    """The adventure list: enough for a card, without the full card text."""
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    characters: List[AdventureCharacterOut] = []
+    beats: int = 0
+    excerpt: str = ""
+    class Config:
+        from_attributes = True
 
 class AdventureSessionOut(BaseModel):
     id: str
     user_id: int
     title: str
+    title_auto: bool = True
     starting_scenario: str
     summary: str
     system_prompt: str
+    config: dict = {}
+    journal_data: dict = {}
     created_at: datetime
     updated_at: datetime
-    characters: List[CharacterCardOut] = []
+    characters: List[AdventureCharacterOut] = []
     class Config:
         from_attributes = True
 
 class AdventureSessionDetailOut(AdventureSessionOut):
     actions: List[AdventureActionOut] = []
-    characters: List[CharacterCardOut] = []
 
 class AdventureSendActionRequest(BaseModel):
-    content: str
-    role: str
+    content: str = ""
+    role: str = "system"
+    # option | custom | start | retry | regen
+    kind: Optional[str] = None
+    risk: Optional[str] = None
+    previous_reply: Optional[str] = None
     options: Optional[str] = ""
     max_input_tokens: Optional[int] = None
     max_output_tokens: Optional[int] = None
     temperature: Optional[float] = None
     repetition_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
     top_p: Optional[float] = None
     enable_cot: Optional[bool] = True
+
+class AdventureImageIn(BaseModel):
+    image: str
+    prompt: str = ""
 
 class GlobalConfigCreate(BaseModel):
     config_data: dict

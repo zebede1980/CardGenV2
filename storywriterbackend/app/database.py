@@ -146,6 +146,20 @@ def run_migrations():
         if not _column_exists(conn, "story_segments", "chapter"):
             conn.execute(text("ALTER TABLE story_segments ADD COLUMN chapter INTEGER"))
 
+        # Adventure overhaul: per-adventure play settings, journal, auto title,
+        # dice rolls and scene pictures
+        for table, column, ddl in (
+            ("adventure_sessions", "play_config", "TEXT NOT NULL DEFAULT ''"),
+            ("adventure_sessions", "journal", "TEXT NOT NULL DEFAULT ''"),
+            ("adventure_sessions", "journal_at", "INTEGER NOT NULL DEFAULT 0"),
+            ("adventure_sessions", "title_auto", "BOOLEAN NOT NULL DEFAULT true"),
+            ("adventure_actions", "roll", "TEXT NOT NULL DEFAULT ''"),
+            ("adventure_actions", "image", "TEXT NOT NULL DEFAULT ''"),
+            ("adventure_actions", "image_prompt", "TEXT NOT NULL DEFAULT ''"),
+        ):
+            if _table_exists(conn, table) and not _column_exists(conn, table, column):
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
 def init_db():
     run_migrations()
 
