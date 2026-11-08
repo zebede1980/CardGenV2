@@ -8,6 +8,7 @@ import asyncio
 import json
 import uuid
 import logging
+import random
 import re
 
 from app.database import get_db, SessionLocal
@@ -18,6 +19,7 @@ from app.services.gen_stream import sse_from_queue, close_open_think, trim_cut_r
 from app.services.story_autowriter import name_story
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
+from app.routers.chat import WRITING_STYLE_PRESETS
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])
 logger = logging.getLogger(__name__)
@@ -31,15 +33,6 @@ _STARTING = object()  # placeholder committed, task not created yet
 
 DEFAULT_TITLE_PREFIX = "Adventure "
 DEFAULT_MAX_INPUT_TOKENS = 8192
-
-ADVENTURE_NATIVE_COT_PROMPT = (
-    "CHAIN OF THOUGHT (5-Phase Logic):\n"
-    "Before writing, think privately through the 5-Phase Logic: "
-    "1) Ground Truth (setting, time, current reality), 2) NPC Knowledge (what the characters know and don't), "
-    "3) Intent (goal for this turn), 4) Draft (plan the action/dialogue), "
-    "5) Self-Correct (persona fit, avoid repetition). "
-    "Your visible response is only the story section followed by the four [OPTION] choices."
-)
 
 
 def _sub_macros(text: str, char_name: str, user_name: str = "the user") -> str:
@@ -65,152 +58,323 @@ def _options_list(raw) -> list:
     return out
 
 
-def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None, enable_cot: bool = True, native_reasoning: bool = False):
-    messages = []
-    history_messages = []
-    user_name = "the user"
+# ── The narrator's prompt ────────────────────────────────────────────────────
+# 2026-11-08 rewrite. The old prompt borrowed Roleplay Chat's 5-phase CoT
+# ("NPC knowledge", "roleplay dialogue"), forced every card into every beat,
+# and said nothing about what makes a good set of choices. This one plans the
+# beat *and* the choices, keeps the cast in play without crowding it, and asks
+# for four different kinds of choice, short enough for a phone, never repeated.
+
+ADVENTURE_LENGTHS = {
+    "short": ("about 150-250 words (2-3 paragraphs)", "Keep this beat short: about 2-3 paragraphs."),
+    "medium": ("about 300-450 words (4-5 paragraphs)", "Keep this beat to about 4-5 paragraphs."),
+    "long": ("about 500-800 words (6-8 paragraphs)", "Write a long, immersive beat: about 6-8 paragraphs."),
+}
+DEFAULT_LENGTH = "medium"
+
+# One drawn per beat (with a few blanks), so beats don't settle into one shape.
+ADVENTURE_NUDGES = [
+    "Open with spoken dialogue.",
+    "Open in the middle of an action, not with scenery.",
+    "Introduce one concrete new detail (an object, a sound, a smell) that will matter later.",
+    "Let something from outside intrude: weather, a stranger, an animal, an accident.",
+    "Give one of the cast a move of their own that nobody asked for.",
+    "Change the pace: if the last beat was slow, move; if it was fast, linger on one moment.",
+    "Reveal something a character has been hiding, or hint that they are.",
+    "Make the choice cost something: time, trust, safety or an advantage.",
+    "Shift the mood a notch from the last beat.",
+    "Bring back a detail or a character from earlier in the story.",
+]
+ADVENTURE_NUDGE_BLANKS = 3
+ADVENTURE_RECENT_OPENINGS = 4
+ADVENTURE_OPENING_WORDS = 8
+
+_PLAN_STEPS = (
+    "1) where the scene stands right now: place, time, who is present and what each of them knows; "
+    "2) what the reader's choice changes, and what it costs; "
+    "3) this beat's turn: the one thing that moves the story on, and the moment of tension it ends on; "
+    "4) the four choices: four different kinds, specific to this moment, none repeating earlier ones."
+)
+ADVENTURE_NATIVE_COT_PROMPT = (
+    "PLANNING: Before you write, plan privately: " + _PLAN_STEPS + " "
+    "Your visible reply is only the story section followed by the <options> block."
+)
+ADVENTURE_TAG_COT_PROMPT = (
+    "PLANNING: Start your reply with your plan inside <think> and </think> tags: " + _PLAN_STEPS + " "
+    "Closing </think> is NOT the end of your reply: the story section and the <options> block must follow it."
+)
+
+# Follow-up instruction when a generation stopped after its plan with no story.
+ADVENTURE_CONTINUE_INSTRUCTION = (
+    "Continue directly from your plan above. Write ONLY the next story section now: "
+    "no reasoning, no tags, no restating the plan. Then end with the <options> block of four tagged choices."
+)
+
+_OPTIONS_FORMAT = (
+    "<options>\n1. [risky] First choice\n2. [safe] Second choice\n3. [risky] Third choice\n4. [safe] Fourth choice\n</options>"
+)
+
+
+def _options_rules(how: str) -> str:
+    return (
+        "After the story section, end your reply with exactly four choices for what happens next, "
+        "in this block and nothing after it:\n" + _OPTIONS_FORMAT + "\n"
+        "Make the four choices:\n"
+        "- four different kinds: a bold move, a careful one, a twist from outside (an arrival, an accident, "
+        "a discovery), and one driven by what a character wants;\n"
+        "- specific to this exact moment, naming who or what is involved; never generic like 'Keep exploring';\n"
+        f"- short: under 15 words each, written as {how};\n"
+        "- new: never repeat or rephrase a choice offered before;\n"
+        "- tagged [safe] or [risky]: a risky one could go badly. At least one is risky."
+    )
+
+
+# Follow-up when a beat arrived without (all of) its choices.
+OPTIONS_REPAIR_INSTRUCTION = (
+    "Your story section is above, but its four choices are missing or incomplete. "
+    "Do not continue or repeat the story. Reply with ONLY the four choices, four different kinds, "
+    "each under 15 words and tagged [safe] or [risky], in this block:\n" + _OPTIONS_FORMAT
+)
+
+
+def adventure_config(session_data) -> dict:
+    """The adventure's play settings with defaults filled in."""
+    c = getattr(session_data, "config", None) or {}
+    persona = c.get("persona") if isinstance(c.get("persona"), dict) else {}
+    mode = c.get("mode") if c.get("mode") in ("director", "protagonist") else "director"
+    name = str(persona.get("name") or "").strip()[:80]
+    if mode == "protagonist" and not name:
+        name = "the hero"
+    try:
+        arc = max(0, min(200, int(c.get("arc") or 0)))
+    except (TypeError, ValueError):
+        arc = 0
+    return {
+        "mode": mode,
+        "persona_name": name,
+        "persona_detail": str(persona.get("detail") or "").strip()[:2000],
+        "length": c.get("length") if c.get("length") in ADVENTURE_LENGTHS else DEFAULT_LENGTH,
+        "style": c.get("style") if c.get("style") in WRITING_STYLE_PRESETS else "",
+        "variety": c.get("variety") is not False,
+        "dice": bool(c.get("dice")),
+        "arc": arc,
+    }
+
+
+def _opening_words(text: str) -> str:
+    words = strip_think(text or "").split()
+    return " ".join(words[:ADVENTURE_OPENING_WORDS]) + ("…" if len(words) > ADVENTURE_OPENING_WORDS else "")
+
+
+def _options_block(options: list) -> str:
+    lines = [f"{i+1}. " + (f"[{o['risk']}] " if o.get("risk") else "") + o["text"] for i, o in enumerate(options)]
+    return "<options>\n" + "\n".join(lines) + "\n</options>"
+
+
+def _journal_text(journal: dict) -> str:
+    parts = []
+    for key, label in (("goals", "Goals"), ("threads", "Open threads"), ("items", "Items carried"),
+                       ("people", "People and how they stand"), ("places", "Places")):
+        vals = [str(v).strip() for v in (journal.get(key) or []) if str(v).strip()]
+        if vals:
+            parts.append(f"{label}:\n" + "\n".join(f"- {v}" for v in vals[:12]))
+    return "\n".join(parts)
+
+
+def _arc_note(arc: int, beats_done: int) -> Optional[str]:
+    """Steer the story towards an ending when the adventure has a set length."""
+    if not arc:
+        return None
+    n = beats_done + 1  # the beat being written
+    if n >= arc + 3:
+        return ("[Ending]: The story has run past its planned length. Bring it to its ending in this beat: "
+                "resolve the main thread and close on a final image. Still offer four choices, for an epilogue.")
+    if n >= arc:
+        return (f"[Ending]: This is beat {n} of about {arc}: the climax and resolution. Resolve the main "
+                "conflict now, whichever way the choices have led. Offer four choices for how it ends.")
+    if n >= int(arc * 0.75):
+        return (f"[Ending]: Beat {n} of about {arc}: heading for the climax. Tighten the threads and raise the "
+                "stakes; no new subplots.")
+    if n >= int(arc * 0.4):
+        return f"[Arc]: Beat {n} of about {arc}: the middle. Complicate things; the main conflict should be clear by now."
+    return f"[Arc]: Beat {n} of about {arc}: the opening act. Establish the place, the cast and what's at stake."
+
+
+def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None,
+                           enable_cot: bool = True, native_reasoning: bool = False,
+                           previous_reply: str = None, roll: dict = None, nudge: bool = True):
+    cfg = adventure_config(session_data)
+    protagonist = cfg["mode"] == "protagonist"
+    hero = cfg["persona_name"]
+    user_name = hero if protagonist else "the user"
     actions = sorted(session_data.actions, key=lambda x: x.order_index)
+    beats = [a for a in actions if a.role == "assistant" and a.content]
+    cast = list(session_data.characters)
 
-    # 1. System Prompt & Character Cards
-    system_parts = [
-        "You are an interactive fiction narrator running a 'Pick Your Own Adventure' story.",
-        "You write in the 3rd person like a novel. You act as the game master and narrator.",
-        "Always adhere strictly to the character definitions provided."
-    ]
+    if protagonist:
+        intro = (
+            f"You are the narrator and game master of an interactive adventure. The reader plays {hero}, the "
+            "protagonist. Write in the second person, present tense ('You push the door open'). You play everyone "
+            f"else and the whole world. Never decide what {hero} says, thinks or does beyond the choice the reader "
+            "made: show how the world answers, and stop at the next decision."
+        )
+        how = f"what {hero} does next, in the second person ('You climb the bell tower', 'You tell Mira the truth')"
+    else:
+        intro = (
+            "You are the narrator and game master of an interactive adventure. The reader steers the story: at the "
+            "end of every beat they pick what happens next from your four choices, or write their own. You play "
+            "every character and the whole world. Write like a novel, in the third person, past tense."
+        )
+        how = "what happens next ('A stranger bursts in', 'Mira lies to the captain')"
+    system_parts = [intro]
 
-    # Lorebook keywords are matched against the recent story, not the model's planning.
+    # Cards. Lorebook keywords are matched against the recent story, not the model's planning.
     recent_history_text = " ".join(strip_think(a.content or "") for a in actions[-5:])
-
-    for card in session_data.characters:
+    for card in cast:
         name = card.name or "Character"
-        sub = lambda t: _sub_macros(t, name, user_name)
-        card_text = f"Name: {name}\nDescription: {sub(card.description)}\nPersonality: {sub(card.personality)}\nScenario: {sub(card.scenario)}"
-
-        if card.mes_example:
+        sub = lambda t, n=name: _sub_macros(t, n, user_name)
+        card_text = f"Name: {name}" + "".join(
+            f"\n{label}: {sub(value)}" for label, value in
+            (("Description", card.description), ("Personality", card.personality), ("Scenario", card.scenario))
+            if value and value.strip())
+        if card.mes_example and len(beats) < 8:  # sets the voice early; after that it only pins phrasing
             card_text += f"\nExample Messages:\n{sub(card.mes_example)}"
-
-        # Per-card system prompt (card-level instructions from the card author)
         if card.system_prompt:
             card_text += f"\nCharacter Instructions:\n{sub(card.system_prompt)}"
-
         if card.character_book:
             relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
             if relevant_lore:
                 card_text += "\nLorebook:\n" + "\n".join(sub(entry) for entry in relevant_lore)
-
         system_parts.append(f"Character: {name}\n{card_text}")
 
+    if protagonist:
+        detail = cfg["persona_detail"] or "Their story is theirs to discover."
+        system_parts.append(f"The protagonist (played by the reader): {hero}\n{_sub_macros(detail, hero, hero)}")
+
     if session_data.summary:
-        system_parts.append(f"Story Summary:\n{session_data.summary}")
+        system_parts.append(f"The story so far (summary of earlier beats):\n{session_data.summary}")
+    journal = _journal_text(getattr(session_data, "journal_data", None) or {})
+    if journal:
+        system_parts.append("Journal (what the story has established; keep to it):\n" + journal)
 
-    cot_prompt = "CHAIN OF THOUGHT (5-Phase Logic):\nBefore you write any roleplay dialogue or actions, you MUST process your reasoning. You must wrap your entire reasoning process within <think> and </think> tags. Inside the <think> block, strictly follow this 5-Phase Logic:\n- Phase 1: Build Ground Truth (Establish the physical setting, time, and current reality)\n- Phase 2: Map NPC Knowledge (Determine exactly what your character(s) know and don't know right now)\n- Phase 3: Identify Intent (Decide the goal or motivation for this specific turn)\n- Phase 4: Draft the Action/Dialogue (Plan what the character will do or say)\n- Phase 5: Self-Correct (Review against character persona and constraints, adjusting if necessary to avoid repetition or breaking character)\n\nOnly after closing the </think> tag should you write the actual prose for the user. Closing </think> is NOT the end of your response: the story section and the four [OPTION] choices must always follow it."
-
-    # [NATIVE-REASONING 2026-10-01] When the provider returns the model's own
-    # reasoning, the phases go there instead. Telling such a model to *start its
-    # response* with <think> made it treat the reasoning as the whole turn and
-    # stop: measured 6/6 needing a follow-up call (median 31s) vs 0/6 (17s) with
-    # this wording. The tag-based wording stays for providers without it.
-    if native_reasoning:
-        cot_prompt = ADVENTURE_NATIVE_COT_PROMPT
-
-    sys_prompt = getattr(session_data, "system_prompt", "") or ""
-    if enable_cot:
-        if sys_prompt and "CHAIN OF THOUGHT" not in sys_prompt:
-            sys_prompt = sys_prompt + "\n\n" + cot_prompt
-        elif not sys_prompt:
-            sys_prompt = cot_prompt
-
+    sys_prompt = (getattr(session_data, "system_prompt", "") or "").strip()
+    cot_prompt = ADVENTURE_NATIVE_COT_PROMPT if native_reasoning else ADVENTURE_TAG_COT_PROMPT
+    own_cot = "CHAIN OF THOUGHT" in sys_prompt  # an older custom prompt brings its own
     if sys_prompt:
         system_parts.append(sys_prompt)
+    if enable_cot and not own_cot:
+        system_parts.append(cot_prompt)
 
-    prompt_base = [
-        "CRITICAL INSTRUCTION FOR EVERY RESPONSE:\n",
-        "First, write a substantial, well-developed next section of the story. ",
-        "Format your output as flowing prose: use standard paragraph breaks (one blank line between paragraphs). ",
-        "Do not use bullet points, numbered lists, headers, bold text, or any other special formatting for the story text. ",
-        "Keep paragraphs dense and readable — avoid single-sentence paragraphs or excessive line breaks. ",
-        "Do not include meta-commentary, do not acknowledge the user or instructions. ",
-        "You control all characters and the world itself.\n"
+    rules = [
+        "HOW TO WRITE EACH BEAT:",
+        f"- Length: {ADVENTURE_LENGTHS[cfg['length']][0]}.",
+        "- Flowing prose with a blank line between paragraphs: no headings, lists, bold, or commentary about the "
+        "story or the game.",
+        "- Start exactly where the last beat ended and make the reader's choice happen, with real consequences. "
+        "Every beat moves the story on: a change, a discovery, a cost or a decision.",
+        "- End on a moment of tension or decision, not a neat resolution.",
     ]
+    if len(cast) > 1:
+        rules.append("- Keep the whole cast in play across the story, but bring characters in when the scene "
+                     "calls for them: not everyone has to act in every beat.")
+    elif len(cast) == 1:
+        rules.append(f"- {cast[0].name} is at the heart of the story; stay true to their card.")
+    else:
+        rules.append("- No characters were chosen: create a small, vivid cast and keep them consistent.")
+    if cfg["dice"]:
+        rules.append("- Some choices are settled by a dice roll. When a [Dice] note tells you the outcome, honour "
+                     "it: a failure really fails, a partial success comes with a cost.")
+    system_parts.append("\n".join(rules))
+    if cfg["style"]:
+        system_parts.append(WRITING_STYLE_PRESETS[cfg["style"]]["guidelines"])
+    system_parts.append(_options_rules(how))
 
-    if session_data.characters:
-        char_names = ", ".join([c.name for c in session_data.characters])
-        prompt_base.append(f"\nYou MUST include and actively involve ALL {len(session_data.characters)} characters ({char_names}) in the story and scene. Do not leave anyone out.\n")
+    messages = [{"role": "system", "content": "\n\n".join(system_parts)}]
 
-    prompt_base.extend([
-        "\nThen, you MUST end your response by providing exactly 4 distinct choices for the NARRATIVE DIRECTION of the story.\n",
-        "The choices should dictate what happens next in the scene, rather than just being a single character's dialogue or action. For example, an option could be 'Lightning strikes the tree', or 'A stranger interrupts', or 'The characters find a hidden trapdoor'.\n",
-        "Format the choices EXACTLY like this at the very end of your response:\n",
-        "[OPTION 1] First choice here\n",
-        "[OPTION 2] Second choice here\n",
-        "[OPTION 3] Third choice here\n",
-        "[OPTION 4] Fourth choice here"
-    ])
+    if not beats:
+        opening = (session_data.starting_scenario or "").strip()
+        messages.append({"role": "user", "content": f"Begin the adventure. The opening: {opening}" if opening
+                         else "Begin the adventure with an opening that suits the cast."})
 
-    system_parts.append("".join(prompt_base))
-
-    messages.append({"role": "system", "content": "\n\n".join(system_parts)})
-
-    # 2. Starting scenario if no actions exist
-    if not [a for a in actions if a.role == "assistant" and a.content] and session_data.starting_scenario:
-        messages.append({"role": "user", "content": f"Begin the adventure with this starting scenario: {session_data.starting_scenario}"})
-
-    # 3. Action History
+    history_messages = []
+    chooser = f"{hero}'s choice" if protagonist else "Reader's choice"
     for action in actions:
         if action.is_summarized or not action.content:
             continue
         if action.role == "user":
-            history_messages.append({"role": "user", "content": f"The user directs the story to: {action.content}"})
+            history_messages.append({"role": "user", "content": f"{chooser}: {action.content}"})
         elif action.role == "assistant":
-            # The options go back in so the model knows what the next choice was
-            # picked from. Reasoning is dropped: it's transient planning, and
-            # keeping it in context makes models echo it outside the tags.
+            # The choices go back in so the model knows what the next pick was made from.
+            # Reasoning is dropped: it's transient planning, and keeping it in context
+            # makes models echo it outside the tags.
             content = strip_think(action.content)
             options = _options_list(action.options)
             if options:
-                content += "\n\n" + "\n".join(f"[OPTION {i+1}] {o['text']}" for i, o in enumerate(options))
+                content += "\n\n" + _options_block(options)
             history_messages.append({"role": "assistant", "content": content})
 
-    # Truncate history to fit within max_input_tokens if provided
     if max_input_tokens:
         def estimate_tokens(msg_list):
             return sum(len(m.get("content", "")) // 4 for m in msg_list)
 
         system_tokens = estimate_tokens(messages)
-        # Always keep at least the very last message
         while history_messages and (estimate_tokens(history_messages) + system_tokens > max_input_tokens) and len(history_messages) > 1:
             history_messages.pop(0)
-
     messages.extend(history_messages)
 
-    post_history_parts = []
-    for card in session_data.characters:
+    # Per-beat notes, after the history (this message changes every turn anyway,
+    # so prompt caching of the system block and history is unaffected).
+    post = []
+    for card in cast:
         if card.post_history_instructions:
-            post_history_parts.append(f"[{card.name} Note]: {_sub_macros(card.post_history_instructions, card.name or 'Character', user_name)}")
-
-    if post_history_parts:
-        messages.append({"role": "system", "content": "\n\n".join(post_history_parts)})
-
-    if enable_cot and not native_reasoning and ("CHAIN OF THOUGHT" in sys_prompt or "CHAIN OF THOUGHT" in cot_prompt):
-        messages.append({"role": "system", "content": "Reminder: You MUST start your response with <think> to process your 5-Phase Logic, and only write the story prose/actions after closing the </think> tag. "
-            "Finishing the 5 phases is not the end of your turn — the story section and the four [OPTION] choices must always follow."})
-
+            post.append(f"[{card.name} Note]: {_sub_macros(card.post_history_instructions, card.name or 'Character', user_name)}")
+    if roll:
+        post.append(f"[Dice]: The reader's choice was risky, so it was rolled for: d20 = {roll['d']}. {DICE_MEANING[roll['outcome']]}")
+    arc_note = _arc_note(cfg["arc"], len(beats))
+    if arc_note:
+        post.append(arc_note)
+    post.append(ADVENTURE_LENGTHS[cfg["length"]][1])
+    if cfg["style"]:
+        post.append(WRITING_STYLE_PRESETS[cfg["style"]]["post_reminder"])
+    openings = [f"“{_opening_words(b.content)}”" for b in beats[-ADVENTURE_RECENT_OPENINGS:]] if cfg["variety"] else []
+    if previous_reply:
+        post.append(
+            f"[Regeneration]: The reader asked for a different version of this beat. The rejected one began: "
+            f"“{_opening_words(previous_reply)}”. Write a clearly different take: a different opening, a different "
+            "turn of events, and different choices. Do not paraphrase it."
+        )
+    if openings:
+        post.append("[Variety]: Don't open this beat the way recent beats opened: " + ", ".join(openings) + ".")
+    if nudge and cfg["variety"]:
+        pool = ADVENTURE_NUDGES if previous_reply else ADVENTURE_NUDGES + [None] * ADVENTURE_NUDGE_BLANKS
+        pick = random.choice(pool)
+        if pick:
+            post.append(f"[This beat]: {pick}")
+    reminder = "Finish with the <options> block: four short, different, tagged choices."
+    if enable_cot and not native_reasoning and not own_cot:
+        reminder = ("Start with your plan inside <think> tags; after </think>, write the story section, then finish "
+                    "with the <options> block: four short, different, tagged choices.")
+    post.append(reminder)
+    messages.append({"role": "system", "content": "\n\n".join(post)})
     return messages
 
-# Follow-up instruction when a generation stopped after its plan with no story.
-ADVENTURE_CONTINUE_INSTRUCTION = (
-    "Continue directly from your plan above. Write ONLY the next story section now — "
-    "no reasoning, no tags, no restating the plan — then end with exactly 4 choices "
-    "in the [OPTION 1] … [OPTION 4] format."
-)
 
-# Follow-up when a beat arrived without (all of) its choices.
-OPTIONS_REPAIR_INSTRUCTION = (
-    "Your story section is above, but its four choices are missing or incomplete. "
-    "Do not continue or repeat the story. Reply with ONLY four short, distinct choices for "
-    "what happens next, one per line, exactly like this:\n"
-    "[OPTION 1] First choice\n[OPTION 2] Second choice\n[OPTION 3] Third choice\n[OPTION 4] Fourth choice"
-)
+# ── Dice ─────────────────────────────────────────────────────────────────────
+# With dice on, a risky choice is rolled for on the server (d20) and the
+# narrator is told the outcome; the roll is stored on the pick and shown.
+DICE_MEANING = {
+    "crit": "A natural 20: it succeeds beyond hope, with an extra stroke of luck.",
+    "success": "Success: it works as intended.",
+    "mixed": "Partial success: it works, but at a real cost or with a complication.",
+    "fail": "Failure: it doesn't work, and the situation gets worse.",
+    "fumble": "A natural 1: it fails badly, with a painful twist.",
+}
+
+
+def roll_d20(rng=random) -> dict:
+    d = rng.randint(1, 20)
+    outcome = "crit" if d == 20 else "fumble" if d == 1 else "success" if d >= 14 else "mixed" if d >= 8 else "fail"
+    return {"d": d, "outcome": outcome}
 
 # ── Splitting the choices off a beat ─────────────────────────────────────────
 # Models write the markers in many shapes: [OPTION 1], **[Option 1]:**,
@@ -472,6 +636,14 @@ def list_sessions(db: Session = Depends(get_db), current_user: models.User = Dep
         for s in sessions
     ]
 
+@router.get("/presets")
+def presets(current_user: models.User = Depends(get_current_user)):
+    """The writing styles and beat lengths a new adventure can pick from."""
+    return {
+        "styles": [{"key": k, "name": v["name"]} for k, v in WRITING_STYLE_PRESETS.items()],
+        "lengths": [{"key": k, "name": k.capitalize(), "hint": v[0]} for k, v in ADVENTURE_LENGTHS.items()],
+    }
+
 @router.post("/", response_model=schemas.AdventureSessionDetailOut)
 def create_session(session_in: schemas.AdventureSessionCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     title = (session_in.title or "").strip()
@@ -559,6 +731,7 @@ async def send_action(
     next_order_index = _next_index(db, session_id)
 
     user_action = None
+    roll = None
     if req.content and req.role == "user":
         user_action = models.AdventureAction(
             session_id=session_id,
@@ -566,6 +739,10 @@ async def send_action(
             role="user",
             content=req.content.strip()[:2000],
         )
+        # Dice: a risky pick is rolled for and the narrator told the outcome.
+        if adventure_config(session_data)["dice"] and (req.risk or "").lower() == "risky":
+            roll = roll_d20()
+            user_action.roll = json.dumps(roll)
         db.add(user_action)
         next_order_index += 1
 
@@ -576,7 +753,8 @@ async def send_action(
     max_input = req.max_input_tokens or DEFAULT_MAX_INPUT_TOKENS
     enable_cot = req.enable_cot is not False
     prompt_messages = build_adventure_prompt(session_data, db, max_input, enable_cot,
-                                             native_reasoning=supports_reasoning_flag(settings.api_base_url))
+                                             native_reasoning=supports_reasoning_flag(settings.api_base_url),
+                                             previous_reply=previous_reply, roll=roll)
 
     assistant_action = models.AdventureAction(
         session_id=session_id,
@@ -603,7 +781,7 @@ async def send_action(
         "type": "metadata",
         "user_action_id": user_action.id if user_action else None,
         "assistant_action_id": assistant_action_id,
-        "roll": None,
+        "roll": roll,
     })
 
     gen_kwargs = {
@@ -847,10 +1025,10 @@ def rewind(session_id: str, action_id: str, db: Session = Depends(get_db), curre
 
 
 NEW_OPTIONS_INSTRUCTION = (
-    "Offer four NEW choices for what happens next, different from these: {old}. "
-    "Do not continue or repeat the story. Reply with ONLY the four choices, one per line, exactly like this:\n"
-    "[OPTION 1] First choice\n[OPTION 2] Second choice\n[OPTION 3] Third choice\n[OPTION 4] Fourth choice"
-)
+    "Offer four NEW choices for what happens next, clearly different from these: {old}. "
+    "Do not continue or repeat the story. Reply with ONLY the four choices, four different kinds, each under "
+    "15 words and tagged [safe] or [risky], in this block:\n"
+) + _OPTIONS_FORMAT
 
 
 @router.post("/{session_id}/actions/{action_id}/options")
@@ -863,7 +1041,7 @@ async def new_options(session_id: str, action_id: str, req: schemas.AdventureSen
         raise HTTPException(status_code=400, detail="API key not configured.")
     old = "; ".join(f'"{o["text"]}"' for o in _options_list(beat.options)) or "none"
     messages = build_adventure_prompt(session_data, db, req.max_input_tokens or DEFAULT_MAX_INPUT_TOKENS, False,
-                                      native_reasoning=supports_reasoning_flag(settings.api_base_url))
+                                      native_reasoning=supports_reasoning_flag(settings.api_base_url), nudge=False)
     messages.append({"role": "user", "content": NEW_OPTIONS_INSTRUCTION.format(old=old)})
 
     async def work(queue):

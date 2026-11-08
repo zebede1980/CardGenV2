@@ -331,7 +331,7 @@
             document.getElementById('adv-inspire-note').textContent = '';
             document.getElementById('adv-new-error').hidden = true;
             this.startBtn.disabled = false;
-            this.onNewSheetOpen?.();
+            this.onNewSheetOpen();
             this.newModal.hidden = false;
             document.documentElement.classList.add('saw-open');
         }
@@ -1417,8 +1417,19 @@
             sheet.addEventListener('click', (e) => { if (e.target === sheet) this._closeSheet(sheet); });
             sheet.addEventListener('keydown', (e) => { if (e.key === 'Escape') this._closeSheet(sheet); });
             sheet.querySelectorAll('[data-sheet-close]').forEach((b) => b.addEventListener('click', () => this._closeSheet(sheet)));
-            document.body.appendChild(sheet);
+            this._sheetHost().appendChild(sheet);
             return sheet;
+        }
+
+        /** Sheets live in #adv-sheets so their CSS can be scoped by id (see main.css). */
+        _sheetHost() {
+            let host = document.getElementById('adv-sheets');
+            if (!host) {
+                host = document.createElement('div');
+                host.id = 'adv-sheets';
+                document.body.appendChild(host);
+            }
+            return host;
         }
 
         _openSheet(sheet) {
@@ -1492,6 +1503,189 @@
                 name.innerHTML = `<b>${esc(c.name)}</b>`;
                 row.appendChild(name);
                 list.appendChild(row);
+            });
+            this._openSheet(sheet);
+        }
+
+        // ── How it plays: style, length, presets, dice, ending ─────────────────
+
+        async _presets() {
+            if (this._presetCache) return this._presetCache;
+            try {
+                const r = await window.authFetch('/api/sw/adventures/presets');
+                if (r.ok) this._presetCache = await r.json();
+            } catch (_) { /* offline: the selects just have fewer entries */ }
+            return this._presetCache || { styles: [], lengths: [] };
+        }
+
+        /**
+         * Render the play settings into box and return { get() } for the
+         * resulting config. Shared by the New adventure sheet and "This adventure".
+         */
+        _playControls(box, cfg = {}) {
+            const persona = cfg.persona || {};
+            const uid = `advp${Math.random().toString(36).slice(2, 8)}`;
+            box.innerHTML = `
+                <section class="pb-panel">
+                    <div class="pb-label">How you play</div>
+                    <div class="pb-seg" role="group" aria-label="How you play">
+                        <button type="button" data-mode="director">🎬 Director</button>
+                        <button type="button" data-mode="protagonist">🧭 Protagonist</button>
+                    </div>
+                    <p class="pb-hint" data-mode-hint></p>
+                    <div class="adv-persona" data-persona>
+                        <label class="pb-label" for="${uid}-name">Your character’s name</label>
+                        <input type="text" id="${uid}-name" class="input pb-input" maxlength="80" placeholder="e.g. Wren" data-p-name>
+                        <label class="pb-label" for="${uid}-detail">Who they are <span class="pb-soft">(optional)</span></label>
+                        <textarea id="${uid}-detail" class="input pb-input" rows="3" maxlength="2000" placeholder="A smuggler’s daughter with a debt to pay…" data-p-detail></textarea>
+                        <select class="input pb-input" data-p-saved aria-label="Use a saved persona" hidden><option value="">Use a saved persona…</option></select>
+                    </div>
+                </section>
+                <section class="pb-panel">
+                    <div class="pb-label">Narration</div>
+                    <div class="pb-seg" role="group" aria-label="Beat length">
+                        <button type="button" data-length="short">Short</button>
+                        <button type="button" data-length="medium">Medium</button>
+                        <button type="button" data-length="long">Long</button>
+                    </div>
+                    <p class="pb-hint" data-length-hint></p>
+                    <label class="pb-label" for="${uid}-style">Writing style</label>
+                    <select id="${uid}-style" class="input pb-input" data-style><option value="">Narrator’s choice</option></select>
+                    <label class="adv-check"><input type="checkbox" data-variety> <span>Vary each beat <span class="pb-soft">(a fresh angle every time, recommended)</span></span></label>
+                </section>
+                <section class="pb-panel">
+                    <div class="pb-label">Game</div>
+                    <label class="adv-check"><input type="checkbox" data-dice> <span>🎲 Roll for risky choices <span class="pb-soft">(a d20 decides whether they work)</span></span></label>
+                    <label class="pb-label" for="${uid}-arc">Ending</label>
+                    <select id="${uid}-arc" class="input pb-input" data-arc>
+                        <option value="0">Open-ended: carry on as long as you like</option>
+                        <option value="8">Short tale: about 8 beats</option>
+                        <option value="15">Novella: about 15 beats</option>
+                        <option value="25">Epic: about 25 beats</option>
+                    </select>
+                </section>`;
+            const q = (sel) => box.querySelector(sel);
+            const state = {
+                mode: cfg.mode === 'protagonist' ? 'protagonist' : 'director',
+                length: ['short', 'medium', 'long'].includes(cfg.length) ? cfg.length : 'medium',
+            };
+            const paint = () => {
+                box.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)));
+                box.querySelectorAll('[data-length]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.length === state.length)));
+                q('[data-persona]').hidden = state.mode !== 'protagonist';
+                q('[data-mode-hint]').textContent = state.mode === 'protagonist'
+                    ? 'You are the hero. The story is told to you (“You open the door…”), and the choices are what you do.'
+                    : 'You steer the story from above: each choice is what happens next, to anyone in it.';
+                const hint = (this._presetCache?.lengths || []).find((l) => l.key === state.length)?.hint;
+                q('[data-length-hint]').textContent = hint ? `Each beat: ${hint}.` : '';
+            };
+            box.addEventListener('click', (e) => {
+                const b = e.target.closest('[data-mode], [data-length]');
+                if (!b) return;
+                if (b.dataset.mode) state.mode = b.dataset.mode;
+                if (b.dataset.length) state.length = b.dataset.length;
+                paint();
+            });
+            q('[data-p-name]').value = persona.name || '';
+            q('[data-p-detail]').value = persona.detail || '';
+            q('[data-variety]').checked = cfg.variety !== false;
+            q('[data-dice]').checked = !!cfg.dice;
+            const arc = q('[data-arc]');
+            arc.value = String(cfg.arc || 0);
+            if (arc.value !== String(cfg.arc || 0)) arc.value = '0';
+            paint();
+
+            this._presets().then((p) => {
+                const sel = q('[data-style]');
+                p.styles.forEach((s) => sel.insertAdjacentHTML('beforeend', `<option value="${esc(s.key)}">${esc(s.name)}</option>`));
+                sel.value = cfg.style || '';
+                paint();
+            });
+            window.authFetch('/api/sw/personas').then((r) => (r.ok ? r.json() : [])).then((list) => {
+                const sel = q('[data-p-saved]');
+                if (!Array.isArray(list) || !list.length) return;
+                list.forEach((p, i) => sel.insertAdjacentHTML('beforeend', `<option value="${i}">${esc(p.name)}</option>`));
+                sel.hidden = false;
+                sel.addEventListener('change', () => {
+                    const p = list[Number(sel.value)];
+                    if (!p) return;
+                    q('[data-p-name]').value = p.name || '';
+                    const bits = [p.age && `Age ${p.age}`, p.gender, p.detail].filter(Boolean);
+                    q('[data-p-detail]').value = bits.join('. ');
+                    sel.value = '';
+                });
+            }).catch(() => {});
+
+            return {
+                get: () => ({
+                    mode: state.mode,
+                    persona: { name: q('[data-p-name]').value.trim(), detail: q('[data-p-detail]').value.trim() },
+                    length: state.length,
+                    style: q('[data-style]').value,
+                    variety: q('[data-variety]').checked,
+                    dice: q('[data-dice]').checked,
+                    arc: Number(q('[data-arc]').value) || 0,
+                }),
+                styleName: () => {
+                    const sel = q('[data-style]');
+                    return sel.value ? sel.options[sel.selectedIndex].textContent : '';
+                },
+            };
+        }
+
+        onNewSheetOpen() {
+            const last = window.config?.get('adventure.lastPlay') || {};
+            this._newPlay = this._playControls(document.getElementById('adv-new-play'), last);
+        }
+
+        newSheetConfig() {
+            const cfg = this._newPlay ? this._newPlay.get() : {};
+            if (cfg.mode === 'protagonist' && !cfg.persona.name) cfg.persona.name = 'Wren';
+            try { window.config?.set('adventure.lastPlay', cfg); } catch (_) { /* not critical */ }
+            return cfg;
+        }
+
+        newSheetGenre() {
+            return this._newPlay ? this._newPlay.styleName() : '';
+        }
+
+        openAdventureSettings() {
+            const s = this.session;
+            if (!s) return;
+            const sheet = this._simpleSheet('🎛️ This adventure', `
+                <div data-play></div>
+                <details class="pb-panel adv-advanced">
+                    <summary class="pb-label">Advanced</summary>
+                    <label class="pb-label" for="adv-this-prompt">System prompt</label>
+                    <textarea id="adv-this-prompt" class="input pb-input pb-mono" rows="6"></textarea>
+                </details>
+                <p class="pb-hint">Changes apply from the next beat.</p>
+                <div class="pb-error" hidden></div>`,
+                '<button type="button" class="btn-primary pb-wide" data-act="save">Save</button>');
+            const controls = this._playControls(sheet.querySelector('[data-play]'), s.config || {});
+            sheet.querySelector('#adv-this-prompt').value = s.system_prompt || '';
+            sheet.querySelector('[data-act="save"]').addEventListener('click', async (e) => {
+                const btn = e.currentTarget;
+                btn.disabled = true;
+                try {
+                    const config = controls.get();
+                    if (config.mode === 'protagonist' && !config.persona.name) config.persona.name = 'Wren';
+                    const r = await window.authFetch(`/api/sw/adventures/${s.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ config, system_prompt: sheet.querySelector('#adv-this-prompt').value }),
+                    });
+                    if (!r.ok) throw new Error(await this._errorText(r));
+                    const updated = await r.json();
+                    s.config = updated.config;
+                    s.system_prompt = updated.system_prompt;
+                    this._closeSheet(sheet);
+                } catch (err) {
+                    const el = sheet.querySelector('.pb-error');
+                    el.textContent = `Couldn’t save: ${err.message}`;
+                    el.hidden = false;
+                    btn.disabled = false;
+                }
             });
             this._openSheet(sheet);
         }
@@ -1612,7 +1806,7 @@
                     </div>
                     <div class="pb-footer"><button type="button" id="adv-global-save-btn" class="btn-primary pb-wide">Save settings</button></div>
                 </div>`;
-            document.body.appendChild(modal);
+            this._sheetHost().appendChild(modal);
             document.getElementById('adv-open-global-settings')?.addEventListener('click', () => this.openGlobalSettings());
             const close = () => { modal.hidden = true; if (!document.querySelector('.adv-sheet:not([hidden]):not(#adv-global-settings-modal), #adv-new-modal:not([hidden])')) document.documentElement.classList.remove('saw-open'); };
             this._closeGlobalSettings = close;

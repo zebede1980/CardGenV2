@@ -63,7 +63,7 @@ class FakeModel:
         monkeypatch.setattr(LLMService, "generate", generate)
 
     def beat_prompts(self):
-        return [c["messages"] for c in self.calls if "interactive fiction narrator" in c["messages"][0]["content"]]
+        return [c["messages"] for c in self.calls if "game master of an interactive adventure" in c["messages"][0]["content"]]
 
 
 @pytest.fixture()
@@ -310,3 +310,73 @@ def test_inspire_returns_three_openings(client, model, monkeypatch):
     r = client.post("/api/adventures/inspire", json={"card_ids": [1]}, headers=HEADERS)
     ev = next(e for e in _events(r.text) if e["type"] == "openings")
     assert len(ev["openings"]) == 3 and ev["openings"][1].startswith("The circus")
+
+
+# ── The narrator's prompt: play styles, presets, variety, dice, arc ─────────
+
+def _system(model):
+    return model.beat_prompts()[-1][0]["content"]
+
+
+def _post(model):
+    return model.beat_prompts()[-1][-1]["content"]
+
+
+def test_director_prompt_asks_for_four_kinds_of_tagged_choice(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    system = _system(model)
+    assert "third person, past tense" in system and "<options>" in system
+    assert "four different kinds" in system and "[safe] or [risky]" in system
+    assert "You MUST include and actively involve ALL" not in system  # the cast is no longer forced into every beat
+    assert "about 300-450 words" in system  # medium by default
+
+
+def test_protagonist_mode_writes_in_second_person_for_the_persona(client, model):
+    adv = _new(client, config={"mode": "protagonist", "persona": {"name": "Wren", "detail": "A smuggler's daughter."}})
+    _act(client, adv["id"])
+    _act(client, adv["id"], role="user", content="You climb the tower")
+    system = _system(model)
+    assert "The reader plays Wren" in system and "second person" in system and "A smuggler's daughter." in system
+    assert "Mira is a courier who distrusts Wren." in system  # {{user}} is the protagonist now
+    assert any(m["content"] == "Wren's choice: You climb the tower" for m in model.beat_prompts()[-1])
+
+
+def test_length_and_style_presets_reach_the_prompt(client, model):
+    adv = _new(client, config={"length": "short", "style": "hardboiled_noir"})
+    _act(client, adv["id"])
+    assert "about 150-250 words" in _system(model) and "Hardboiled Noir" in _system(model)
+    assert "Keep this beat short" in _post(model)
+
+
+def test_history_shows_the_choices_in_the_options_format(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    _act(client, adv["id"], role="user", content="A stranger interrupts")
+    history = model.beat_prompts()[-1]
+    beat = next(m for m in history if m["role"] == "assistant")
+    assert "<options>\n1. A stranger interrupts" in beat["content"] and "<think>" not in beat["content"]
+
+
+def test_redo_asks_for_a_different_take(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    _act(client, adv["id"], kind="regen")
+    assert "[Regeneration]" in _post(model) and "The lanterns swung on their hooks" in _post(model)
+
+
+def test_variety_lists_recent_openings_and_can_be_turned_off(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    _act(client, adv["id"], role="user", content="Run")
+    assert "[Variety]" in _post(model) and "The lanterns swung" in _post(model)
+    adv2 = _new(client, config={"variety": False})
+    _act(client, adv2["id"])
+    _act(client, adv2["id"], role="user", content="Run")
+    assert "[Variety]" not in _post(model) and "[This beat]" not in _post(model)
+
+
+def test_presets_route_lists_styles_and_lengths(client, model):
+    p = client.get("/api/adventures/presets", headers=HEADERS).json()
+    assert {"key": "hardboiled_noir", "name": "Hardboiled Noir"} in p["styles"]
+    assert [l["key"] for l in p["lengths"]] == ["short", "medium", "long"]
