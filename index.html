@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20261108-adv4" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261108-msg2" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -209,6 +209,7 @@
                     <button id="tab-storywriter" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">✍️ Story Writer</button>
                     <button id="tab-roleplaychat" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">💬 Roleplay Chat</button>
                     <button id="tab-adventure" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🎲 Adventure</button>
+                    <button id="tab-messenger" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">💌 Messenger</button>
                     <button id="tab-playground" class="btn-outline" style="padding: 0.6rem 1.5rem; font-size: 1rem;">🖼️ Playground</button>
                 </div>
 
@@ -2315,6 +2316,53 @@
                         </div>
                     </section>
                 </div>
+                <!-- 💌 Messenger (messenger-handler.js, plans/chat-bot-messenger.md) -->
+                <div id="view-messenger" class="tab-content" style="display: none;">
+                    <div id="msg-lobby">
+                        <div class="msg-lobby-head">
+                            <h2 class="section-title">💌 Messenger</h2>
+                            <button type="button" id="msg-new-btn" class="btn-primary">＋ New</button>
+                        </div>
+                        <div id="msg-list" class="msg-list"></div>
+                    </div>
+                    <div id="msg-chat" class="msg-chat" hidden>
+                        <header class="msg-head">
+                            <button type="button" id="msg-back" class="msg-icon" aria-label="Back to conversations">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            </button>
+                            <button type="button" id="msg-who" class="msg-who" title="Who you're talking to">
+                                <span id="msg-who-avatars" class="msg-who-avatars"></span>
+                                <span class="msg-who-text"><b id="msg-name"></b><small id="msg-sub"></small></span>
+                            </button>
+                            <button type="button" id="msg-more" class="msg-icon" aria-label="More" aria-expanded="false" aria-controls="msg-menu">⋯</button>
+                            <div id="msg-menu" class="msg-menu" role="menu" hidden>
+                                <div class="msg-size-row">
+                                    <button type="button" data-menu="smaller" aria-label="Smaller text"><span style="font-size:0.8em">A</span>−</button>
+                                    <span id="msg-size-label">100%</span>
+                                    <button type="button" data-menu="larger" aria-label="Larger text"><span style="font-size:1.15em">A</span>+</button>
+                                </div>
+                                <button type="button" role="menuitem" data-menu="cards">🃏 Who you're talking to</button>
+                                <button type="button" role="menuitem" data-menu="settings">⚙️ Chat settings</button>
+                                <button type="button" role="menuitem" data-menu="delete">🗑️ Delete conversation</button>
+                            </div>
+                        </header>
+                        <div id="msg-timeline" class="msg-timeline" data-style="texting" aria-live="polite"></div>
+                        <button type="button" id="msg-jump" class="msg-jump" aria-label="Jump to the latest" hidden>↓</button>
+                        <div class="msg-bottom">
+                            <div id="msg-tray" class="msg-tray" hidden>
+                                <input type="text" id="msg-ooc" class="input" maxlength="1000" placeholder="Note to the AI (they won't see it as a text)" aria-label="Note to the AI">
+                                <button type="button" id="msg-impersonate" class="btn-small btn-outline">✨ Write my next text</button>
+                            </div>
+                            <form id="msg-composer" class="msg-composer">
+                                <button type="button" id="msg-plus" class="msg-icon" aria-label="More options" aria-expanded="false" aria-controls="msg-tray">＋</button>
+                                <textarea id="msg-input" class="input" rows="1" maxlength="8000" placeholder="Text message" enterkeyhint="send" aria-label="Message"></textarea>
+                                <button type="submit" id="msg-send" class="msg-send" aria-label="Send">↑</button>
+                                <button type="button" id="msg-stop" class="msg-send msg-stop" aria-label="Stop" hidden>■</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Image Playground View -->
                 <div id="view-playground" class="tab-content" style="display: none;">
                     <section style="max-width: 960px; margin: 0 auto;">
@@ -2898,12 +2946,14 @@
         <script src="src/scripts/story-autowriter.js?v=20261108-reader"></script>
         <script src="src/scripts/story-reader.js?v=20261108-reader"></script>
         <script src="src/scripts/adventure-handler.js?v=20261108-adv4"></script>
+        <script src="src/scripts/chat-core.js?v=20261108-msg2"></script>
+        <script src="src/scripts/messenger-handler.js?v=20261108-msg2"></script>
         <script src="src/scripts/inspire-me.js?v=20261015-stop"></script>
         <script src="src/scripts/gallery-mode.js"></script>
         <script src="src/scripts/chat-handler.js?v=20261106-tokens"></script>
         <script src="src/scripts/chat-settings.js"></script>
         <script src="src/scripts/chat-character-cards.js?v=20260805"></script>
-        <script src="src/scripts/home-handler.js?v=20261108-story"></script>
+        <script src="src/scripts/home-handler.js?v=20261108-msg2"></script>
         <!-- API Settings Modal -->
 
         <!-- Overwrite confirmation modal with card image comparison -->

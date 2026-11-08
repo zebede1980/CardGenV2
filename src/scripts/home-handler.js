@@ -122,7 +122,7 @@ class HomeHandler {
                         justify-content: center;
                     }
                     @media (max-width: 768px) {
-                        #tab-home, #tab-cardgen, #tab-storywriter, #tab-roleplaychat, #tab-adventure {
+                        #tab-home, #tab-cardgen, #tab-storywriter, #tab-roleplaychat, #tab-adventure, #tab-messenger {
                             flex: 1 1 30% !important; /* Creates a responsive grid */
                             padding: 0.6rem 0.5rem !important;
                             font-size: 0.85rem !important;
@@ -370,6 +370,7 @@ class HomeHandler {
                     <button class="btn-small btn-outline edit-btn" style="border-radius: 0.4rem; padding: 0.5rem;">✏️ Edit</button>
                     <button class="btn-small btn-primary story-btn" style="border-radius: 0.4rem; padding: 0.5rem;">📖 Story</button>
                     <button class="btn-small btn-primary chat-btn" style="border-radius: 0.4rem; padding: 0.5rem;">💬 Chat</button>
+                    <button class="btn-small btn-outline text-btn" style="border-radius: 0.4rem; padding: 0.5rem; grid-column: 1 / -1;" title="Text this character in 💌 Messenger">💌 Text</button>
                 </div>
             `;
 
@@ -407,6 +408,12 @@ class HomeHandler {
                 window.storyWriterApp?.autowriter?.openSetup({ cards: [{ id: card.id, name: cardName }] });
             });
             
+            // Text Button: opens 💌 Messenger's New sheet with this character picked
+            tile.querySelector('.text-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.messengerHandler?.openNewWith({ id: card.id, name: cardName });
+            });
+
             // Chat Button: Swaps to Chat tab and fetches history to resume or start a new chat
             tile.querySelector('.chat-btn').addEventListener('click', async (e) => {
                 e.stopPropagation();

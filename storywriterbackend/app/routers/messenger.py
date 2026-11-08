@@ -171,10 +171,14 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
     if any(m.role == "assistant" and not m.content for m in chat.messages):
         raise HTTPException(status_code=409, detail="A reply is already on its way.")
 
-    kind = req.kind if req.kind in ("send", "opener", "checkin", "regen") else "send"
+    kind = req.kind if req.kind in ("send", "opener", "checkin", "regen", "retry") else "send"
     content = (req.content or "").strip()
     if kind == "send" and not content and not (req.ooc_note or "").strip():
         raise HTTPException(status_code=400, detail="Nothing to send.")
+    if kind == "retry":
+        msgs = sorted([m for m in chat.messages if (m.content or "").strip()], key=lambda m: m.created_at)
+        if not msgs or msgs[-1].role != "user":
+            raise HTTPException(status_code=409, detail="Nothing to answer.")
     if kind == "checkin" and not _checkin_due(chat):
         raise HTTPException(status_code=409, detail="No check-in due.")
     if kind == "opener" and any((m.content or "").strip() for m in chat.messages):
@@ -206,7 +210,7 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
     enable_cot = req.enable_cot is not False
     memories = [m.fact for m in chat.memories if m.is_active]
     max_input = req.max_input_tokens or 16384
-    prompt = mp.build_messenger_prompt(chat, memories, max_input, kind=kind, client_time=req.client_time,
+    prompt = mp.build_messenger_prompt(chat, memories, max_input, kind="send" if kind == "retry" else kind, client_time=req.client_time,
                                        native_reasoning=native, enable_cot=enable_cot, previous_reply=previous,
                                        ooc_note=req.ooc_note or "")
 
