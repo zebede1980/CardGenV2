@@ -34,6 +34,7 @@ class FakeModel:
         self.beats = []
         self.repair_reply = "[OPTION 1] Run\n[OPTION 2] Hide\n[OPTION 3] Fight\n[OPTION 4] Talk"
         self.gate = None  # threading.Event a beat waits on before its last chunk
+        self.journal_prompts = []
 
     def install(self, monkeypatch):
         model = self
@@ -46,6 +47,10 @@ class FakeModel:
                 return
             if last.startswith(("Your story section is above", "Offer four NEW choices")):
                 yield model.repair_reply
+                return
+            if "keep the journal" in messages[0]["content"]:
+                model.journal_prompts.append(last)
+                yield '{"goals": ["Find the twelfth lantern"], "threads": ["Who took it?"], "items": ["Ledger"], "people": ["Tobias: evasive"], "places": []}'
                 return
             if "summarizes narrative adventures" in messages[0]["content"]:
                 yield "Summary."
@@ -380,3 +385,74 @@ def test_presets_route_lists_styles_and_lengths(client, model):
     p = client.get("/api/adventures/presets", headers=HEADERS).json()
     assert {"key": "hardboiled_noir", "name": "Hardboiled Noir"} in p["styles"]
     assert [l["key"] for l in p["lengths"]] == ["short", "medium", "long"]
+
+
+# ── Dice, ending arc, journal ────────────────────────────────────────────────
+
+def test_dice_rolls_a_risky_pick_and_tells_the_narrator(client, model, monkeypatch):
+    monkeypatch.setattr(adventure, "roll_d20", lambda: {"d": 3, "outcome": "fail"})
+    adv = _new(client, config={"dice": True})
+    _act(client, adv["id"])
+    events = _act(client, adv["id"], role="user", content="Tobias lies", risk="risky")
+    meta = next(e for e in events if e["type"] == "metadata")
+    assert meta["roll"] == {"d": 3, "outcome": "fail"}
+    assert "[Dice]" in _post(model) and "d20 = 3" in _post(model) and "Failure" in _post(model)
+    pick = [a for a in _detail(client, adv["id"])["actions"] if a["role"] == "user"][-1]
+    assert json.loads(pick["roll"]) == {"d": 3, "outcome": "fail"}
+    # A safe pick, or dice off, is never rolled.
+    events = _act(client, adv["id"], role="user", content="Hide", risk="safe")
+    assert next(e for e in events if e["type"] == "metadata")["roll"] is None
+
+
+def test_d20_outcome_bands():
+    class R:
+        def __init__(self, n): self.n = n
+        def randint(self, a, b): return self.n
+    got = {n: adventure.roll_d20(R(n))["outcome"] for n in (1, 2, 7, 8, 13, 14, 19, 20)}
+    assert got == {1: "fumble", 2: "fail", 7: "fail", 8: "mixed", 13: "mixed", 14: "success", 19: "success", 20: "crit"}
+
+
+def test_ending_arc_steers_towards_a_climax():
+    assert "opening act" in adventure._arc_note(15, 0)
+    assert "the middle" in adventure._arc_note(15, 7)
+    assert "heading for the climax" in adventure._arc_note(15, 12)
+    assert "climax and resolution" in adventure._arc_note(15, 14)
+    assert "Bring it to its ending" in adventure._arc_note(15, 18)
+    assert adventure._arc_note(0, 40) is None
+
+
+def test_journal_fills_in_every_few_beats_and_reaches_the_prompt(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    _act(client, adv["id"], role="user", content="Run")
+    assert model.journal_prompts == []  # not yet due
+    _act(client, adv["id"], role="user", content="Hide")
+    deadline = time.time() + 5
+    while not _detail(client, adv["id"])["journal_data"] and time.time() < deadline:
+        time.sleep(0.05)
+    d = _detail(client, adv["id"])
+    assert d["journal_data"]["goals"] == ["Find the twelfth lantern"] and d["journal_at"] == 3
+    assert "[The reader chose: Run]" in model.journal_prompts[0]
+    _act(client, adv["id"], role="user", content="Fight")
+    assert "Journal (what the story has established" in _system(model) and "Find the twelfth lantern" in _system(model)
+
+
+def test_journal_refresh_and_edit(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    r = client.post(f"/api/adventures/{adv['id']}/journal/refresh", headers=HEADERS)
+    ev = next(e for e in _events(r.text) if e["type"] == "journal")
+    assert ev["journal"]["threads"] == ["Who took it?"]
+    client.patch(f"/api/adventures/{adv['id']}", json={"journal": {"goals": ["Go home"]}}, headers=HEADERS)
+    assert _detail(client, adv["id"])["journal_data"] == {"goals": ["Go home"]}
+
+
+def test_rewinding_past_the_journal_resets_it(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    _act(client, adv["id"], role="user", content="Run")
+    client.post(f"/api/adventures/{adv['id']}/journal/refresh", headers=HEADERS)
+    first = _detail(client, adv["id"])["actions"][0]
+    client.post(f"/api/adventures/{adv['id']}/rewind/{first['id']}", headers=HEADERS)
+    d = _detail(client, adv["id"])
+    assert d["journal_data"] == {} and d["journal_at"] == 0

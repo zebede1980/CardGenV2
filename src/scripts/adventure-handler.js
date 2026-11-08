@@ -158,8 +158,8 @@
                 const what = b.dataset.advMore;
                 if (what === 'rename') this.openRename();
                 else if (what === 'cast') this.openCast();
-                else if (what === 'journal') this.openJournal?.();
-                else if (what === 'adventure') this.openAdventureSettings?.();
+                else if (what === 'journal') this.openJournal();
+                else if (what === 'adventure') this.openAdventureSettings();
                 else if (what === 'settings') this.openGlobalSettings();
             });
             document.addEventListener('click', (e) => {
@@ -1685,6 +1685,91 @@
                     el.textContent = `Couldn’t save: ${err.message}`;
                     el.hidden = false;
                     btn.disabled = false;
+                }
+            });
+            this._openSheet(sheet);
+        }
+
+        // ── Journal ──────────────────────────────────────────────────────────
+
+        openJournal() {
+            const s = this.session;
+            if (!s) return;
+            const sections = [
+                ['goals', '🎯 Goals'], ['threads', '🧵 Open threads'], ['items', '🎒 Items'],
+                ['people', '👥 People'], ['places', '🗺️ Places'],
+            ];
+            const beats = (s.actions || []).filter((a) => a.role === 'assistant' && a.content).length;
+            const sheet = this._simpleSheet('📜 Journal', `
+                <p class="pb-hint" data-journal-hint></p>
+                <div class="adv-journal" data-journal></div>
+                <div class="pb-error" hidden></div>`,
+                `<button type="button" class="btn-outline pb-wide" data-act="refresh">🔄 Update now</button>
+                 <button type="button" class="btn-primary pb-wide" data-act="save">Save</button>`);
+            const box = sheet.querySelector('[data-journal]');
+            const hint = sheet.querySelector('[data-journal-hint]');
+            const err = sheet.querySelector('.pb-error');
+            const paint = (journal, at) => {
+                box.innerHTML = '';
+                sections.forEach(([key, label]) => {
+                    const sec = document.createElement('section');
+                    sec.className = 'pb-panel';
+                    sec.innerHTML = `<h3>${label}</h3>`;
+                    const ta = document.createElement('textarea');
+                    ta.className = 'input pb-input';
+                    ta.rows = 3;
+                    ta.dataset.key = key;
+                    ta.placeholder = 'One per line';
+                    ta.value = (journal[key] || []).join('\n');
+                    ta.setAttribute('aria-label', label);
+                    sec.appendChild(ta);
+                    box.appendChild(sec);
+                });
+                hint.textContent = at
+                    ? `The narrator keeps this up to date every few beats and sticks to it. Last updated after beat ${at} of ${beats}. Edit anything that’s wrong.`
+                    : 'Fills itself in after a few beats; the narrator keeps to it. You can also write in it now.';
+            };
+            paint(s.journal_data || {}, s.journal_at || 0);
+            const collect = () => {
+                const out = {};
+                box.querySelectorAll('textarea[data-key]').forEach((ta) => {
+                    out[ta.dataset.key] = ta.value.split('\n').map((l) => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean).slice(0, 12);
+                });
+                return out;
+            };
+            sheet.querySelector('[data-act="save"]').addEventListener('click', async (e) => {
+                const btn = e.currentTarget;
+                btn.disabled = true;
+                try {
+                    const journal = collect();
+                    const r = await window.authFetch(`/api/sw/adventures/${s.id}`, {
+                        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ journal }),
+                    });
+                    if (!r.ok) throw new Error(await this._errorText(r));
+                    s.journal_data = journal;
+                    this._closeSheet(sheet);
+                } catch (ex) {
+                    err.textContent = `Couldn’t save: ${ex.message}`;
+                    err.hidden = false;
+                    btn.disabled = false;
+                }
+            });
+            sheet.querySelector('[data-act="refresh"]').addEventListener('click', async (e) => {
+                const btn = e.currentTarget;
+                btn.disabled = true;
+                btn.textContent = '🔄 Updating…';
+                err.hidden = true;
+                try {
+                    const ev = await this._utilityCall(`/api/sw/adventures/${s.id}/journal/refresh`, {}, 'journal');
+                    s.journal_data = ev.journal;
+                    s.journal_at = beats;
+                    paint(ev.journal, beats);
+                } catch (ex) {
+                    err.textContent = `Couldn’t update: ${ex.message}`;
+                    err.hidden = false;
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Update now';
                 }
             });
             this._openSheet(sheet);

@@ -5398,3 +5398,4 @@ body:has(#view-adventure:not([style*="none"]) #adv-play-view:not([style*="none"]
 #adv-sheets .adv-sheet .adv-segment-del { width: 2.25rem; height: 2.25rem; flex: none; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
 [data-theme="dark"] :is(#adv-sheets, #adv-new-modal) select { color-scheme: dark; }
 [data-theme="dark"] :is(#adv-sheets .adv-sheet, #adv-new-modal) .pb-seg button[aria-pressed="true"] { color: #120a2a; }
+.adv-journal { display: flex; flex-direction: column; gap: 0.6rem; }

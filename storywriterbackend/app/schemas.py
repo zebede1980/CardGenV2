@@ -352,6 +352,7 @@ class AdventureSessionOut(BaseModel):
     system_prompt: str
     config: dict = {}
     journal_data: dict = {}
+    journal_at: int = 0
     created_at: datetime
     updated_at: datetime
     characters: List[AdventureCharacterOut] = []

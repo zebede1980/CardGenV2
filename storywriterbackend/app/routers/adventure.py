@@ -886,6 +886,7 @@ async def send_action(
         await asyncio.wait({gen_task})
         # [ADVENTURE-CONTEXT-SCALING 2026-08-12] the input budget scales the summary trigger.
         await summarize_adventure_task(session_id, user_id, max_input)
+        await update_journal(session_id, user_id)
 
     asyncio.create_task(after())
     return StreamingResponse(sse_from_queue(queue), media_type="text/event-stream")
@@ -1191,5 +1192,123 @@ async def inspire(req: schemas.AdventureInspireIn, db: Session = Depends(get_db)
             await queue.put({"type": "openings", "openings": openings})
         finally:
             await llm.close()
+
+    return _sse_job(work)
+
+
+# ── Journal ──────────────────────────────────────────────────────────────────
+# Goals, open threads, items, people and places the story has established,
+# kept up to date every few beats by a short utility call and fed back to the
+# narrator (see _journal_text) so a long adventure keeps its facts straight.
+JOURNAL_EVERY = 3        # beats between automatic updates
+JOURNAL_KEYS = ("goals", "threads", "items", "people", "places")
+JOURNAL_MAX_ITEMS = 8
+JOURNAL_SOURCE_CHARS = 14000
+
+
+def _parse_journal(text: str) -> Optional[dict]:
+    text = strip_think(close_open_think(text or ""))
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start:end + 1])
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    out = {}
+    for key in JOURNAL_KEYS:
+        vals = data.get(key) or []
+        if isinstance(vals, str):
+            vals = [vals]
+        out[key] = [re.sub(r"\s+", " ", str(v)).strip()[:160] for v in vals if str(v).strip()][:JOURNAL_MAX_ITEMS]
+    return out
+
+
+async def update_journal(session_id: str, user_id: int, force: bool = False) -> Optional[dict]:
+    """Bring the journal up to date with the beats since its last update.
+    Returns the new journal, or None when nothing was due or it failed."""
+    with SessionLocal() as bg_db:
+        s = bg_db.query(models.AdventureSession).filter(
+            models.AdventureSession.id == session_id, models.AdventureSession.user_id == str(user_id)).first()
+        if not s:
+            return None
+        actions = sorted(s.actions, key=lambda a: a.order_index)
+        beats = [a for a in actions if a.role == "assistant" and a.content]
+        done = s.journal_at or 0
+        if not beats or (not force and len(beats) - done < JOURNAL_EVERY):
+            return None
+        old = s.journal_data
+        # The beats since the last update, with the picks between them.
+        seen = 0
+        lines = []
+        for a in actions:
+            if a.role == "assistant" and a.content:
+                seen += 1
+                if seen > done:
+                    lines.append(strip_think(a.content))
+            elif a.role == "user" and a.content and seen >= done:
+                lines.append(f"[The reader chose: {a.content}]")
+        source = "\n\n".join(lines)[-JOURNAL_SOURCE_CHARS:]
+        summary = s.summary if not old and s.summary else ""
+        cast = ", ".join(c.name for c in s.characters if c.name) or "none chosen"
+        settings = get_or_create_settings(bg_db, user_id)
+        beat_count = len(beats)
+
+    prompt = (
+        f"Cast: {cast}\n\n"
+        + (f"Summary of the story before this:\n{summary}\n\n" if summary else "")
+        + "Current journal (JSON):\n" + json.dumps(old or {k: [] for k in JOURNAL_KEYS}) + "\n\n"
+        + "New story since the journal was last updated:\n" + source + "\n\n"
+        "Update the journal for this adventure. Keep entries that are still true, drop resolved or "
+        "outdated ones, and add what the new story established. Each entry is a short phrase (under 15 "
+        f"words); at most {JOURNAL_MAX_ITEMS} per list. Lists:\n"
+        "- goals: what the heroes are trying to achieve\n"
+        "- threads: open mysteries, promises, threats and loose ends\n"
+        "- items: notable things the heroes carry or have found\n"
+        "- people: who matters and how they stand towards the heroes\n"
+        "- places: places that matter and what is known about them\n"
+        'Reply with JSON only: {"goals": [], "threads": [], "items": [], "people": [], "places": []}'
+    )
+    messages = [
+        {"role": "system", "content": "You keep the journal of an interactive adventure. You reply with JSON only."},
+        {"role": "user", "content": prompt},
+    ]
+    llm = LLMService(settings)
+    try:
+        out = ""
+        async for chunk in llm.generate(messages, stream=True, request_reasoning=True, temperature=UTILITY_TEMPERATURE):
+            out += chunk
+    except Exception as e:
+        logger.warning(f"Adventure journal update failed: {e}")
+        return None
+    finally:
+        await llm.close()
+    journal = _parse_journal(out)
+    if journal is None:
+        logger.warning("Adventure journal update: no JSON in the reply")
+        return None
+    with SessionLocal() as bg_db:
+        s = bg_db.query(models.AdventureSession).filter(models.AdventureSession.id == session_id).first()
+        if not s:
+            return None
+        s.journal = json.dumps(journal)
+        s.journal_at = beat_count
+        bg_db.commit()
+    return journal
+
+
+@router.post("/{session_id}/journal/refresh")
+async def refresh_journal(session_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Update the journal now rather than waiting for the next few beats."""
+    _get_session(db, session_id, current_user)
+    user_id = current_user.id
+
+    async def work(queue):
+        journal = await update_journal(session_id, user_id, force=True)
+        if journal is None:
+            raise RuntimeError("The journal couldn't be updated. Try again after the next beat.")
+        await queue.put({"type": "journal", "journal": journal})
 
     return _sse_job(work)
