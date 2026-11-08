@@ -4783,9 +4783,62 @@ body:has(#view-storywriter:not([style*="none"]) #sw-workspace-view.sw-reader-ope
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.95rem 3.1rem 0.95rem 1rem;
+    padding: 0;
+    overflow: hidden;
     cursor: pointer;
+}
+#sw-story-list .sw-story-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.8rem 1rem 0.95rem;
+}
+/* Portrait strip, as on the chat lobby's cards. */
+.sw-story-cover {
+    position: relative;
+    display: flex;
+    height: 112px;
+    flex: none;
+    background: var(--surface-muted);
+    border-bottom: 1px solid var(--border);
+}
+.sw-story-cover.is-empty {
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    opacity: 0.7;
+}
+.sw-story-cover-slot {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: var(--surface-strong);
+    color: var(--text-secondary);
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+.sw-story-cover-slot + .sw-story-cover-slot { border-left: 2px solid var(--surface-strong); }
+.sw-story-cover-slot img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+}
+/* "+N" sits low so the delete button above it stays clear. */
+.sw-story-cover-slot.is-more { flex: 0 0 3.25rem; place-items: end center; padding-bottom: 0.7rem; font-size: 1rem; background: var(--surface-muted); }
+.sw-story-card-cast {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent-strong);
 }
 .sw-story-card-title {
     display: -webkit-box;
@@ -4833,13 +4886,14 @@ body:has(#view-storywriter:not([style*="none"]) #sw-workspace-view.sw-reader-ope
     padding: 0;
     border: 0;
     border-radius: 999px;
-    background: transparent;
+    /* Sits on the portraits, so it carries its own backing. */
+    background: rgba(13, 17, 23, 0.55);
     font-size: 1.05rem;
-    opacity: 0.6;
+    opacity: 0.85;
     cursor: pointer;
 }
 #sw-story-list .sw-story-card-delete:hover,
 #sw-story-list .sw-story-card-delete:focus-visible {
     opacity: 1;
-    background: color-mix(in srgb, var(--error) 12%, transparent);
+    background: rgba(201, 61, 74, 0.85);
 }

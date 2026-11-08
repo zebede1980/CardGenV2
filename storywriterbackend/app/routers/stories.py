@@ -1,12 +1,12 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List
 
 from app.database import get_db
 from app.models import Story, StorySegment, StoryCard, CharacterCard, User, SteeringInstruction
-from app.schemas import StoryCreate, StoryOut, StoryDetailOut, StorySegmentOut, StoryCardOut, EditSegmentRequest, SpeakerMapRequest
+from app.schemas import StoryCreate, StoryOut, StoryListOut, StoryDetailOut, StorySegmentOut, StoryCardOut, EditSegmentRequest, SpeakerMapRequest
 from app.routers.auth import get_current_user
 from app.services.story_autowriter import UNTITLED, active_run
 
@@ -29,9 +29,16 @@ def create_story(story: StoryCreate, db: Session = Depends(get_db), current_user
     db.refresh(db_story)
     return db_story
 
-@router.get("/", response_model=List[StoryOut])
+@router.get("/", response_model=List[StoryListOut])
 def list_stories(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(Story).filter(Story.user_id == current_user.id).order_by(Story.updated_at.desc()).all()
+    # Cards in two extra queries in all, not two per story.
+    return (
+        db.query(Story)
+        .options(selectinload(Story.cards).selectinload(StoryCard.card))
+        .filter(Story.user_id == current_user.id)
+        .order_by(Story.updated_at.desc())
+        .all()
+    )
 
 @router.get("/{story_id}", response_model=StoryDetailOut)
 def get_story(story_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

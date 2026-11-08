@@ -90,6 +90,11 @@ class Story(Base):
     def is_autowritten(self) -> bool:
         return bool(self.autowrite)
 
+    @property
+    def characters(self):
+        """The attached cards in the order they were added (for the story list)."""
+        return [sc.card for sc in sorted(self.cards, key=lambda sc: sc.id) if sc.card is not None]
+
 class StoryCard(Base):
     __tablename__ = "story_cards"
     id = Column(Integer, primary_key=True, index=True)

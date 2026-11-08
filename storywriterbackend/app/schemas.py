@@ -69,6 +69,16 @@ class StoryOut(BaseModel):
     class Config:
         from_attributes = True
 
+class StoryCharacterOut(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
+class StoryListOut(StoryOut):
+    """A story in the list: who's in it, for the portraits, but no text."""
+    characters: List[StoryCharacterOut] = []
+
 class AutowriteStartRequest(BaseModel):
     """The setup sheet's choices. Every field is optional: no idea means
     "surprise me from the cards", no title means the AI names it."""

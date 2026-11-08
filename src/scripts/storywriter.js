@@ -1124,11 +1124,16 @@ class StoryWriterApp {
                 const when = updated.toLocaleDateString(undefined, sameYear
                     ? { day: 'numeric', month: 'short' }
                     : { day: 'numeric', month: 'short', year: 'numeric' });
+                const characters = story.characters || [];
                 card.innerHTML = `
-                    <h3 class="sw-story-card-title">${this._escapeHtml(story.title)}</h3>
-                    ${story.synopsis ? `<p class="sw-story-card-blurb">${this._escapeHtml(story.synopsis)}</p>` : ''}
-                    <p class="sw-story-card-meta">${story.is_autowritten ? '<span class="sw-story-card-pill">✨ Auto-written</span>' : ''}<span>Updated ${this._escapeHtml(when)}</span></p>
+                    <div class="sw-story-card-body">
+                        <h3 class="sw-story-card-title">${this._escapeHtml(story.title)}</h3>
+                        ${characters.length ? `<p class="sw-story-card-cast">${this._escapeHtml(characters.map(c => c.name).join(', '))}</p>` : ''}
+                        ${story.synopsis ? `<p class="sw-story-card-blurb">${this._escapeHtml(story.synopsis)}</p>` : ''}
+                        <p class="sw-story-card-meta">${story.is_autowritten ? '<span class="sw-story-card-pill">✨ Auto-written</span>' : ''}<span>Updated ${this._escapeHtml(when)}</span></p>
+                    </div>
                 `;
+                card.prepend(this._buildStoryCover(characters));
                 const delBtn = document.createElement('button');
                 delBtn.type = 'button';
                 delBtn.className = 'sw-story-card-delete';
@@ -1147,10 +1152,55 @@ class StoryWriterApp {
                 });
 
                 card.addEventListener('click', () => this.openStory(story.id));
+                card.addEventListener('keydown', (e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); this.openStory(story.id); }
+                });
                 card.appendChild(delBtn);
                 list.appendChild(card);
             });
         } catch (e) { console.error("Failed to load stories", e); }
+    }
+
+    /**
+     * The portrait strip across the top of a story card, split between its
+     * characters like the chat lobby's. Each slot shows the initial until the
+     * portrait loads, and keeps it if the card has none. Over four, the last
+     * slot says how many more.
+     */
+    _buildStoryCover(characters) {
+        const MAX = 4;
+        const cover = document.createElement('div');
+        cover.className = 'sw-story-cover';
+        cover.setAttribute('aria-hidden', 'true');
+        if (!characters.length) {
+            cover.classList.add('is-empty');
+            cover.textContent = '📖';
+            return cover;
+        }
+        const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || '';
+        const shown = characters.length > MAX ? characters.slice(0, MAX - 1) : characters;
+        shown.forEach(char => {
+            const slot = document.createElement('div');
+            slot.className = 'sw-story-cover-slot';
+            const initial = document.createElement('span');
+            initial.textContent = (char.name || '?').trim().charAt(0).toUpperCase() || '?';
+            slot.appendChild(initial);
+            const img = document.createElement('img');
+            img.alt = '';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.src = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(char.id)}&token=${encodeURIComponent(token)}`;
+            img.onerror = () => img.remove();
+            slot.appendChild(img);
+            cover.appendChild(slot);
+        });
+        if (characters.length > MAX) {
+            const more = document.createElement('div');
+            more.className = 'sw-story-cover-slot is-more';
+            more.textContent = `+${characters.length - shown.length}`;
+            cover.appendChild(more);
+        }
+        return cover;
     }
 
     // The New Story sheet (story-autowriter.js) covers both modes: write the
