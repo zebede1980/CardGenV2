@@ -541,7 +541,11 @@ class StoryWriterApp {
         document.getElementById('sw-create-btn')?.addEventListener('click', () => this.createStory());
         document.getElementById('sw-back-btn')?.addEventListener('click', () => {
             document.getElementById('sw-list-view').style.display = 'block';
-            document.getElementById('sw-workspace-view').style.display = 'none';
+            const workspace = document.getElementById('sw-workspace-view');
+            workspace.style.display = 'none';
+            workspace.classList.remove('sw-reader-open');
+            this.reader?.closeAll();
+            window.scrollTo(0, 0);
             this.currentStoryId = null;
             this.autowriter?.onLeave();
             this.loadStories();
@@ -558,6 +562,7 @@ class StoryWriterApp {
                 // An emptied title isn't saved (the server keeps the old one).
                 if (!e.target.value.trim()) { e.target.value = this.story.title; return; }
                 this.updateStory(e.target.value, this.story.synopsis);
+                this._showTitle(e.target.value);
             });
         }
 
@@ -590,16 +595,20 @@ class StoryWriterApp {
         document.getElementById('sw-stop-btn')?.addEventListener('click', () => this.stopGeneration());
         document.getElementById('sw-save-settings-btn')?.addEventListener('click', () => this.saveSettings());
 
-        // ── Sticky mobile convenience toolbar ──────────────────────────────────
-        document.getElementById('sw-toolbar-generate-btn')?.addEventListener('click', () => {
-            document.getElementById('sw-generate-btn')?.click();
+        // Return in the steer box generates, unless a generation is already running.
+        document.getElementById('sw-steering')?.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' || e.isComposing) return;
+            e.preventDefault();
+            const btn = document.getElementById('sw-generate-btn');
+            if (btn && !btn.disabled && btn.style.display !== 'none') btn.click();
         });
+
+        // ⋯ → Character cards
         document.getElementById('sw-view-cards-btn')?.addEventListener('click', () => {
+            this.reader?.closePopovers();
             const characters = (this.story?.cards || []).map(sc => sc.card).filter(Boolean);
             window.openCharacterCardsViewer?.(characters);
         });
-        document.getElementById('sw-prev-segment-btn')?.addEventListener('click', () => this._scrollToAdjacentSegment(-1));
-        document.getElementById('sw-next-segment-btn')?.addEventListener('click', () => this._scrollToAdjacentSegment(1));
 
         // ── TTS playback control bindings ──────────────────────────────────────
         document.getElementById('sw-tts-pause-btn')?.addEventListener('click', () => this._togglePause());
@@ -1107,20 +1116,25 @@ class StoryWriterApp {
 
             stories.forEach(story => {
                 const card = document.createElement('div');
-                card.className = 'content-box';
-                card.style.cursor = 'pointer';
-                card.style.position = 'relative';
+                card.className = 'content-box sw-story-card';
+                card.setAttribute('role', 'button');
+                card.tabIndex = 0;
+                const updated = new Date(story.updated_at);
+                const sameYear = updated.getFullYear() === new Date().getFullYear();
+                const when = updated.toLocaleDateString(undefined, sameYear
+                    ? { day: 'numeric', month: 'short' }
+                    : { day: 'numeric', month: 'short', year: 'numeric' });
                 card.innerHTML = `
-                    <h3 style="margin-top: 0; margin-bottom: 0.5rem; padding-right: 2.5rem;">${story.is_autowritten ? '✨ ' : ''}${this._escapeHtml(story.title)}</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Updated: ${new Date(story.updated_at).toLocaleDateString()}</p>
+                    <h3 class="sw-story-card-title">${this._escapeHtml(story.title)}</h3>
+                    ${story.synopsis ? `<p class="sw-story-card-blurb">${this._escapeHtml(story.synopsis)}</p>` : ''}
+                    <p class="sw-story-card-meta">${story.is_autowritten ? '<span class="sw-story-card-pill">✨ Auto-written</span>' : ''}<span>Updated ${this._escapeHtml(when)}</span></p>
                 `;
-
                 const delBtn = document.createElement('button');
-                delBtn.textContent = '\ud83d\uddd1';
+                delBtn.type = 'button';
+                delBtn.className = 'sw-story-card-delete';
+                delBtn.textContent = '🗑';
                 delBtn.title = 'Delete story';
-                delBtn.style.cssText = 'position:absolute; top:0.6rem; right:0.6rem; background:none; border:1px solid transparent; border-radius:4px; cursor:pointer; font-size:1rem; color:var(--error-color,#e55); opacity:0.55; padding:0.2rem 0.35rem; line-height:1;';
-                delBtn.addEventListener('mouseenter', () => { delBtn.style.opacity = '1'; delBtn.style.borderColor = 'var(--error-color,#e55)'; delBtn.style.background = 'rgba(220,50,50,0.1)'; });
-                delBtn.addEventListener('mouseleave', () => { delBtn.style.opacity = '0.55'; delBtn.style.borderColor = 'transparent'; delBtn.style.background = 'none'; });
+                delBtn.setAttribute('aria-label', `Delete ${story.title}`);
                 delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     if (!confirm(`Delete "${story.title}"? This cannot be undone.`)) return;
@@ -1148,8 +1162,18 @@ class StoryWriterApp {
     async openStory(id) {
         this.currentStoryId = id;
         document.getElementById('sw-list-view').style.display = 'none';
-        document.getElementById('sw-workspace-view').style.display = 'flex';
+        const workspace = document.getElementById('sw-workspace-view');
+        workspace.style.display = 'flex';
+        workspace.classList.add('sw-reader-open');
+        this._showTitle('');
+        window.scrollTo(0, 0);
         await this.refreshWorkspace();
+    }
+
+    /** The title in the reader's top bar (the editable one is in Story details). */
+    _showTitle(title) {
+        const el = document.getElementById('sw-topbar-title-text');
+        if (el) el.textContent = title || 'Story';
     }
 
     async refreshWorkspace() {
@@ -1158,8 +1182,13 @@ class StoryWriterApp {
             this.story = await this.apiCall(`/stories/${this.currentStoryId}`);
             this.allCards = await this.apiCall('/cards/').catch(() => []);
 
-            document.getElementById('sw-title').value = this.story.title;
-            document.getElementById('sw-synopsis').value = this.story.synopsis;
+            // A refresh on wake must not wipe a field the user is typing in.
+            const titleInput = document.getElementById('sw-title');
+            const synopsisInput = document.getElementById('sw-synopsis');
+            if (document.activeElement !== titleInput) titleInput.value = this.story.title;
+            if (document.activeElement !== synopsisInput) synopsisInput.value = this.story.synopsis;
+            this._showTitle(this.story.title);
+            this.reader?.onStoryLoaded(this.story);
 
             const scriptModeMap = window.config?.get('api.tts.scriptModeMap') || {};
             const scriptModeCheckbox = document.getElementById('sw-script-mode');
@@ -1224,6 +1253,7 @@ class StoryWriterApp {
                 if (s.title !== 'Untitled story') {
                     if (this.story) this.story.title = s.title;
                     if (input && document.activeElement !== input) input.value = s.title;
+                    this._showTitle(s.title);
                     return;
                 }
             } catch (_) { /* try again */ }
@@ -1250,24 +1280,21 @@ class StoryWriterApp {
         const voicesConfig = window.config?.get('api.tts.characterVoices') || {};
         const mainSelect = document.getElementById('sw-tts-voice');
 
+        if (!this.story.cards.length) {
+            container.innerHTML = '<p class="pb-hint">No characters yet. The AI writes from the synopsis alone.</p>';
+        }
+
         this.story.cards.forEach(sc => {
-            const tag = document.createElement('span');
-            tag.className = 'tag';
-            tag.style.display = 'inline-flex';
-            tag.style.alignItems = 'center';
-            tag.style.gap = '5px';
-            tag.innerHTML = `<span>${sc.card.name}</span> <button style="background:none; border:none; cursor:pointer; color:var(--error);" title="Detach">\u00d7</button>`;
+            const tag = document.createElement('div');
+            tag.className = 'sw-cast-row';
+            tag.innerHTML = `<span class="sw-cast-name">${this._escapeHtml(sc.card.name)}</span><button type="button" class="sw-cast-remove" title="Remove from this story" aria-label="Remove ${this._escapeHtml(sc.card.name)}">\u00d7</button>`;
             tag.querySelector('button').addEventListener('click', () => this.detachCard(sc.card_id));
-            
+
             if (mainSelect && mainSelect.options.length > 1) {
                 const voiceSelect = document.createElement('select');
                 voiceSelect.className = 'input sw-character-voice-inline';
-                voiceSelect.style.padding = '0.1rem 0.5rem';
-                voiceSelect.style.fontSize = '0.8rem';
-                voiceSelect.style.height = 'auto';
-                voiceSelect.style.marginLeft = '5px';
-                voiceSelect.style.background = 'var(--bg-primary)';
-                
+                voiceSelect.setAttribute('aria-label', `Voice for ${sc.card.name}`);
+
                 const defaultOpt = document.createElement('option');
                 defaultOpt.value = '';
                 defaultOpt.textContent = 'Default Voice';
@@ -1312,15 +1339,16 @@ class StoryWriterApp {
         if (!galleryBtn) {
             galleryBtn = document.createElement('button');
             galleryBtn.id = 'sw-add-card-gallery-btn';
+            galleryBtn.type = 'button';
             galleryBtn.className = 'btn-small btn-outline';
             galleryBtn.textContent = '🖼️ Gallery';
-            galleryBtn.style.marginLeft = '0.5rem';
+            // The button outlives this render, so work out who's free at click time.
             galleryBtn.addEventListener('click', () => {
-                if (window.cardGallery) {
-                    window.cardGallery.open(available, (cardId) => {
-                        this.attachCard(cardId);
-                    });
-                }
+                if (!window.cardGallery || !this.story) return;
+                const taken = new Set(this.story.cards.map(sc => sc.card_id));
+                window.cardGallery.open(this.allCards.filter(c => !taken.has(c.id)), (cardId) => {
+                    this.attachCard(cardId);
+                });
             });
             select.parentNode.insertBefore(galleryBtn, select.nextSibling);
         }
@@ -1333,20 +1361,6 @@ class StoryWriterApp {
 
     async detachCard(cardId) {
         try { await this.apiCall(`/stories/${this.story.id}/cards/${cardId}`, 'DELETE'); await this.refreshWorkspace(); } catch (e) { console.error(e); }
-    }
-
-    // Jump the page to the previous/next story section, relative to whichever
-    // segment currently sits at the top of the viewport.
-    _scrollToAdjacentSegment(direction) {
-        const segments = Array.from(document.querySelectorAll('#sw-story-area [data-segment-id]'));
-        if (!segments.length) return;
-
-        const viewportTop = window.scrollY + 80;
-        let currentIndex = segments.findIndex(el => el.offsetTop + el.offsetHeight > viewportTop);
-        if (currentIndex === -1) currentIndex = segments.length - 1;
-
-        const targetIndex = Math.min(Math.max(currentIndex + direction, 0), segments.length - 1);
-        segments[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     _escapeHtml(str) {
@@ -1371,107 +1385,89 @@ class StoryWriterApp {
         const area = document.getElementById('sw-story-area');
         area.innerHTML = '';
 
-        this.story.segments.forEach(seg => {
-            if (seg.is_summary) return; // Do not render summary segments to the user
+        const visible = this.story.segments.filter(seg => !seg.is_summary); // summaries are for the model only
+        if (!visible.length && !this.story.is_autowritten) {
+            area.innerHTML = '<p class="sw-empty">Nothing written yet. Add a note below if you like, then press <b>Continue</b>.</p>';
+        }
 
+        visible.forEach((seg, i) => {
+            const isLatest = i === visible.length - 1;
             const div = document.createElement('div');
             div.dataset.segmentId = seg.id;
-            div.className = 'sw-segment-card';
+            div.className = 'sw-segment-card' + (isLatest ? ' is-latest' : '');
+
+            const head = document.createElement('div');
+            head.className = 'sw-seg-head';
+            if (seg.chapter) {
+                const heading = document.createElement('div');
+                heading.className = 'sw-chapter-heading';
+                heading.textContent = `Chapter ${seg.chapter}`;
+                head.appendChild(heading);
+            }
+            const playingBadge = document.createElement('span');
+            playingBadge.className = 'sw-segment-playing-badge';
+            playingBadge.style.display = 'none';
+            playingBadge.textContent = '🔊 Playing';
+            head.appendChild(playingBadge);
 
             const content = document.createElement('div');
-            content.style.lineHeight = '1.7';
-            content.style.whiteSpace = 'pre-wrap';
+            content.className = 'sw-segment-text';
             content.innerHTML = this._renderSegmentHtml(seg.content);
-
-            // Inline editor (hidden by default)
-            const editor = document.createElement('textarea');
-            editor.className = 'textarea';
-            editor.style.display = 'none';
-            editor.style.width = '100%';
-            editor.style.minHeight = '8rem';
-            editor.style.marginTop = '0.5rem';
-            editor.style.background = 'var(--surface-color)';
-            editor.value = seg.content;
+            // Tap the text to show this passage's actions (the latest always shows them).
+            content.addEventListener('click', () => {
+                if (window.getSelection?.().toString()) return; // selecting text, not tapping
+                this._toggleSegmentActions(div);
+            });
 
             // Image area (hidden until generated)
             const imageArea = document.createElement('div');
-            imageArea.style.marginTop = '0.75rem';
+            imageArea.className = 'sw-segment-image';
             imageArea.style.display = 'none';
 
             const actions = document.createElement('div');
             actions.className = 'sw-segment-actions';
+            actions.setAttribute('role', 'toolbar');
+            actions.setAttribute('aria-label', 'Passage actions');
 
-            const playingBadge = document.createElement('span');
-            playingBadge.className = 'sw-segment-playing-badge';
-            playingBadge.style.cssText = 'font-size:0.75rem; color:var(--success-color,#2d9f66); font-weight:600; display:none;';
-            playingBadge.textContent = 'Playing';
-            actions.appendChild(playingBadge);
+            const makeBtn = (icon, label, title) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn-small';
+                b.title = title;
+                b.setAttribute('aria-label', title);
+                b.innerHTML = `<span aria-hidden="true">${icon}</span><span class="sw-act-label">${label}</span>`;
+                return b;
+            };
 
-            const editBtn = document.createElement('button');
-            editBtn.className = 'btn-small';
-            editBtn.textContent = '✏️';
-            editBtn.title = 'Edit segment';
-            editBtn.addEventListener('click', () => {
-                const editing = editor.style.display !== 'none';
-                if (editing) {
-                    editor.value = seg.content;
-                    editor.style.display = 'none';
-                    content.style.display = '';
-                    editBtn.textContent = '✏️';
-                    saveBtn.style.display = 'none';
-                } else {
-                    editor.style.display = 'block';
-                    content.style.display = 'none';
-                    editBtn.textContent = '❌';
-                    saveBtn.style.display = '';
-                    editor.focus();
-                }
-            });
-
-            const saveBtn = document.createElement('button');
-            saveBtn.className = 'btn-small btn-primary';
-            saveBtn.textContent = '💾';
-            saveBtn.title = 'Save changes';
-            saveBtn.style.display = 'none';
-            saveBtn.addEventListener('click', async () => {
-                const newText = editor.value;
-                saveBtn.disabled = true;
-                saveBtn.textContent = '⏳';
-                try {
-                    await this.apiCall(`/stories/${this.story.id}/segments/${seg.id}`, 'PUT', { content: newText });
-                    seg.content = newText;
-                    content.innerHTML = this._renderSegmentHtml(newText);
-                    editor.style.display = 'none';
-                    content.style.display = '';
-                    editBtn.textContent = '✏️';
-                    saveBtn.style.display = 'none';
-                } catch (e) {
-                    alert('Failed to save: ' + e.message);
-                } finally {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = '💾';
-                }
-            });
-
-            const playBtn = document.createElement('button');
-            playBtn.className = 'btn-small';
-            playBtn.textContent = '▶';
-            playBtn.title = 'Play from this point in the story';
+            const playBtn = makeBtn('▶', 'Play', 'Read aloud from here');
             playBtn.addEventListener('click', () => this.playFromSegmentIndex(this.story.segments.indexOf(seg)));
 
-            const imgBtn = document.createElement('button');
-            imgBtn.className = 'btn-small';
-            imgBtn.textContent = '🎨';
-            imgBtn.title = 'Generate Image';
+            const editBtn = makeBtn('✏️', 'Edit', 'Edit this passage');
+            editBtn.addEventListener('click', () => {
+                this.reader?.openEditor({
+                    heading: seg.chapter ? `Edit chapter ${seg.chapter}` : 'Edit passage',
+                    text: seg.content,
+                    onSave: async (newText) => {
+                        await this.apiCall(`/stories/${this.story.id}/segments/${seg.id}`, 'PUT', { content: newText });
+                        seg.content = newText;
+                        await this.refreshWorkspace();
+                    },
+                });
+            });
+
+            const imgBtn = makeBtn('🎨', 'Picture', 'Draw a picture of this scene');
+            const setImgLabel = (icon, label) => {
+                imgBtn.innerHTML = `<span aria-hidden="true">${icon}</span><span class="sw-act-label">${label}</span>`;
+            };
             imgBtn.addEventListener('click', async () => {
                 if (!window.apiHandler) {
-                    alert('Image API not available. Make sure your Image API is configured in \u2699\ufe0f API Settings.');
+                    alert('Image API not available. Make sure your Image API is configured in ⚙️ API Settings.');
                     return;
                 }
                 imgBtn.disabled = true;
-                imgBtn.textContent = '⏳';
+                setImgLabel('⏳', 'Drawing…');
                 imageArea.style.display = 'block';
-                imageArea.innerHTML = '<span style="font-size:0.85rem; color:var(--text-secondary);">Creating scene prompt\u2026</span>';
+                imageArea.innerHTML = '<span class="sw-image-note">Creating scene prompt…</span>';
                 try {
                     const res = await window.authFetch('/api/sw/generate/image-prompt', {
                         method: 'POST',
@@ -1484,62 +1480,43 @@ class StoryWriterApp {
                     }
                     const { prompt } = await res.json();
 
-                    imageArea.innerHTML = `<span style="font-size:0.75rem; color:var(--text-secondary); font-style:italic; display:block; margin-bottom:0.5rem;">Prompt: ${prompt}</span><span style="font-size:0.85rem; color:var(--text-secondary);">Generating image\u2026</span>`;
+                    imageArea.innerHTML = `<span class="sw-image-prompt">Prompt: ${this._escapeHtml(prompt)}</span><span class="sw-image-note">Generating image…</span>`;
 
                     const swImageModel = (document.getElementById('sw-image-model')?.value || '') || null;
                     const imageUrl = await window.apiHandler.generateImage(null, null, prompt, swImageModel);
 
                     const img = document.createElement('img');
                     img.src = imageUrl;
-                    img.style.maxWidth = '100%';
-                    img.style.borderRadius = '0.5rem';
-                    img.style.marginTop = '0.25rem';
-                    img.style.display = 'block';
+                    img.alt = 'Scene picture';
                     const promptNote = document.createElement('span');
-                    promptNote.style.cssText = 'font-size:0.72rem; color:var(--text-secondary); font-style:italic; display:block; margin-bottom:0.4rem;';
+                    promptNote.className = 'sw-image-prompt';
                     promptNote.textContent = `Prompt: ${prompt}`;
                     imageArea.innerHTML = '';
-                    imageArea.appendChild(promptNote);
                     imageArea.appendChild(img);
-
-                    imgBtn.textContent = '🎨';
+                    imageArea.appendChild(promptNote);
                 } catch (e) {
-                    imageArea.innerHTML = `<span style="font-size:0.85rem; color:var(--error-color,#e55);">Image generation failed: ${e.message}</span>`;
-                    imgBtn.textContent = '🎨';
+                    imageArea.innerHTML = `<span class="sw-image-note sw-image-error">Image generation failed: ${this._escapeHtml(e.message)}</span>`;
                     console.error('[StoryWriter] Image generation error:', e);
                 } finally {
+                    setImgLabel('🎨', 'Picture');
                     imgBtn.disabled = false;
                 }
             });
 
-            const delBtn = document.createElement('button');
-            delBtn.className = 'btn-small';
-            delBtn.textContent = '🗑️';
-            delBtn.title = 'Delete Segment';
+            // Delete sits apart from the others, at the far end.
+            const delBtn = makeBtn('🗑️', '', 'Delete this passage');
+            delBtn.classList.add('sw-act-delete');
+            delBtn.setAttribute('aria-label', 'Delete this passage');
             delBtn.addEventListener('click', async () => {
-                if (confirm('Delete segment?')) {
+                if (confirm('Delete this passage? This cannot be undone.')) {
                     await this.apiCall(`/stories/${this.story.id}/segments/${seg.id}`, 'DELETE');
                     await this.refreshWorkspace();
                 }
             });
 
-            actions.appendChild(playingBadge);
-            actions.appendChild(playBtn);
-            actions.appendChild(delBtn);
-            actions.appendChild(editBtn);
-            actions.appendChild(imgBtn);
-            actions.appendChild(saveBtn);
-            
-            div.appendChild(actions);
-            if (seg.chapter) {
-                const heading = document.createElement('div');
-                heading.className = 'sw-chapter-heading';
-                heading.textContent = `Chapter ${seg.chapter}`;
-                div.appendChild(heading);
-            }
-            div.appendChild(content);
-            div.appendChild(editor);
-            div.appendChild(imageArea);
+            actions.append(playBtn, editBtn, imgBtn, delBtn);
+
+            div.append(head, content, imageArea, actions);
             area.appendChild(div);
         });
         this.autowriter?.afterRender();
@@ -1548,6 +1525,13 @@ class StoryWriterApp {
         if (this.currentPlayingSegmentId !== null) {
             this._updateSegmentPlayingIndicator(this.currentPlayingSegmentId);
         }
+    }
+
+    /** Show one passage's actions (and hide any other passage's). */
+    _toggleSegmentActions(card) {
+        const open = !card.classList.contains('sw-actions-open');
+        document.querySelectorAll('#sw-story-area .sw-actions-open').forEach(el => el.classList.remove('sw-actions-open'));
+        card.classList.toggle('sw-actions-open', open);
     }
 
     _updateSegmentPlayingIndicator(segmentId) {
@@ -1559,7 +1543,7 @@ class StoryWriterApp {
             if (badge) {
                 badge.style.display = isActive ? 'inline-flex' : 'none';
             }
-            el.style.boxShadow = isActive ? '0 0 0 2px rgba(45,159,102,0.18)' : '';
+            el.classList.toggle('is-playing', isActive);
         });
     }
 
@@ -1989,14 +1973,11 @@ ${text}`;
             this._hideNarrationControls();
         }
 
+        // Holds the raw streamed text (textContent is read back below), styled
+        // like a passage so the reader's text size and font apply while it streams.
         const streamDiv = document.createElement('div');
-        streamDiv.style.padding = '1rem';
-        streamDiv.style.marginBottom = '1rem';
-        streamDiv.style.background = 'var(--bg-tertiary)';
-        streamDiv.style.borderRadius = '0.5rem';
-        streamDiv.style.border = '1px dashed var(--accent)';
-        streamDiv.style.whiteSpace = 'pre-wrap';
-        streamDiv.style.lineHeight = '1.7';
+        streamDiv.className = 'sw-segment-text sw-streaming';
+        area.querySelector('.sw-empty')?.remove();
         area.appendChild(streamDiv);
 
         // Auto-scroll to the bottom so the new segment and controls are visible
@@ -2037,7 +2018,7 @@ ${text}`;
                 // Must manually clean up fetching state since we return early
                 this.isFetchingLLM = false;
                 this.abortController = null;
-                btn.textContent = 'Generate Next';
+                btn.textContent = 'Continue';
                 btn.disabled = false;
                 if (stopBtn) stopBtn.style.display = 'none';
                 return;
@@ -2205,7 +2186,7 @@ ${text}`;
             this.isFetchingLLM = false;
             this.abortController = null;
             if (!this._pollingInterval) {
-                btn.textContent = 'Generate Next';
+                btn.textContent = 'Continue';
                 btn.disabled = false;
                 if (stopBtn) stopBtn.style.display = 'none';
             }
@@ -2245,7 +2226,7 @@ ${text}`;
                     await this.refreshWorkspace();
                     
                     if (btn) {
-                        btn.textContent = 'Generate Next';
+                        btn.textContent = 'Continue';
                         btn.disabled = false;
                     }
                     if (stopBtn) stopBtn.style.display = 'none';
@@ -2268,7 +2249,7 @@ ${text}`;
                 this._pollingInterval = null;
                 const genBtn = document.getElementById('sw-generate-btn');
                 if (genBtn) {
-                    genBtn.textContent = 'Generate Next';
+                    genBtn.textContent = 'Continue';
                     genBtn.disabled = false;
                 }
                 if (stopBtn) stopBtn.style.display = 'none';

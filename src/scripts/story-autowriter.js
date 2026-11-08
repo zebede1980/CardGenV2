@@ -290,19 +290,22 @@
             panel.className = 'saw-panel';
             panel.hidden = true;
             panel.innerHTML = `
-                <div class="saw-status" data-el="status" aria-live="polite"></div>
-                <div class="saw-progress"><div data-el="bar"></div></div>
-                <div class="pb-row">
-                    <button type="button" class="btn-small btn-stop" data-act="stop">⏹ Stop</button>
-                    <button type="button" class="btn-small btn-primary" data-act="resume">▶ Resume</button>
-                    <button type="button" class="btn-small btn-outline" data-act="outline">🗺️ Outline</button>
+                <div class="saw-head">
+                    <div class="saw-status" data-el="status" aria-live="polite"></div>
+                    <div class="saw-btns">
+                        <button type="button" class="btn-small btn-stop" data-act="stop">⏹ Stop</button>
+                        <button type="button" class="btn-small btn-primary" data-act="resume">▶ Resume</button>
+                        <button type="button" class="btn-small btn-outline" data-act="outline">🗺️ Outline</button>
+                    </div>
                 </div>
+                <div class="saw-progress"><div data-el="bar"></div></div>
                 <div class="saw-steer" data-el="steer">
                     <input type="text" class="input pb-input" maxlength="2000" data-el="steer-input"
-                        placeholder="Note for the next chapter">
+                        placeholder="Note for next chapter" enterkeyhint="send">
                     <button type="button" class="btn-small btn-outline" data-act="steer">Add note</button>
                 </div>
-                <p class="pb-hint" data-el="steer-hint"></p>`;
+                <p class="pb-hint" data-el="steer-hint"></p>
+                <p class="pb-hint" data-el="lock-hint" hidden>You can lock your phone; it keeps going.</p>`;
             const area = document.getElementById('sw-story-area');
             area.parentNode.insertBefore(panel, area);
             panel.addEventListener('click', (e) => {
@@ -373,6 +376,7 @@
             if (!title || !input || !this.app.story || document.activeElement === input) return;
             if (input.value !== title) input.value = title;
             this.app.story.title = title;
+            this.app._showTitle?.(title);
         }
 
         _wakeLock(on) {
@@ -384,7 +388,7 @@
         }
 
         _setManualControls(show) {
-            ['sw-generate-btn', 'sw-steering', 'sw-toolbar-generate-btn'].forEach((id) => {
+            ['sw-compose-row', 'sw-generate-btn', 'sw-steering'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = show ? '' : 'none';
             });
@@ -414,9 +418,10 @@
                     failed: `⚠️ It stopped with an error after chapter ${done}: ${s.error || 'unknown'}`,
                     none: '',
                 }[s.status] ?? '';
-                if (live && s.status === 'writing') text += ' You can lock your phone; it keeps going.';
             }
             q('status').textContent = text;
+            q('lock-hint').hidden = !(live && s?.status === 'writing');
+            this._placePanel(live);
             q('bar').style.width = total ? `${Math.round((done / total) * 100)}%` : '0%';
             btn('stop').hidden = !live;
             btn('resume').hidden = live || !s || s.status === 'done' || s.status === 'none';
@@ -427,6 +432,19 @@
                 ? `📌 ${s.steer_pending} note${s.steer_pending > 1 ? 's' : ''} waiting for the next chapter.` : '';
             this._setManualControls(!live);
             this._renderLive();
+        }
+
+        // While it writes, the panel sits in the reader's bottom bar so Stop and
+        // the note box stay in reach; otherwise it heads the story.
+        _placePanel(live) {
+            const composer = document.getElementById('sw-composer');
+            const area = document.getElementById('sw-story-area');
+            if (live && composer) {
+                if (this.panel.parentNode !== composer) composer.prepend(this.panel);
+            } else if (area && this.panel.nextElementSibling !== area) {
+                area.parentNode.insertBefore(this.panel, area);
+            }
+            this.panel.classList.toggle('saw-docked', !!(live && composer));
         }
 
         _renderLive() {

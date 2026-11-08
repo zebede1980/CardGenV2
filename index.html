@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20261106-angles" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261108-reader" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -1863,7 +1863,18 @@
                 <!-- Story Writer View -->
                 <div id="view-storywriter" style="display: none;">
 
-                    <!-- StoryWriter LLM Settings -->
+                    <section class="input-section" id="sw-list-view" style="margin-bottom: 1.1rem;">
+                        <div class="sw-list-head">
+                            <h2 class="section-title">Your Stories</h2>
+                            <button id="sw-create-btn" class="btn-primary">✨ New story</button>
+                        </div>
+                        <div id="sw-story-list">
+                            <!-- Story cards dynamically generated -->
+                        </div>
+                    </section>
+
+                    <!-- StoryWriter LLM Settings. While a story is open, ⋯ → Settings
+                         moves this whole section into a sheet and puts it back on close. -->
                     <section class="input-section" id="sw-settings-panel" style="margin-bottom: 1.5rem;">
                         <details id="sw-settings-details">
                             <summary style="cursor: pointer; font-weight: bold; padding: 0.4rem 0; user-select: none;">⚙️ Generation Settings</summary>
@@ -2016,66 +2027,108 @@
                         </details>
                     </section>
 
-                    <section class="input-section" id="sw-list-view" style="margin-bottom: 2rem;">
-                        <h2 class="section-title">Your Stories</h2>
-                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
-                            <button id="sw-create-btn" class="btn-primary">✨ New story</button>
-                        </div>
-                        <div id="sw-story-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
-                            <!-- Story cards dynamically generated -->
-                        </div>
-                    </section>
-
-                    <section class="result-section" id="sw-workspace-view" style="display: none; flex-direction: column; padding-bottom: 4rem;">
-                        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
-                            <button id="sw-back-btn" class="btn-outline" style="padding: 0.4rem 0.8rem;">← Back</button>
-                            <input type="text" id="sw-title" class="input" style="flex: 1; min-width: 150px; font-weight: bold; font-size: 1.1rem; background: var(--surface-color);">
-                            
-                            <div id="sw-attached-cards" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;"></div>
-                            <select id="sw-add-card-select" class="input" style="width: auto; background: var(--surface-color);">
-                                <option value="">+ Add Character</option>
-                            </select>
-
-                            <div style="display: flex; align-items: center; gap: 0.3rem; margin-left: auto;">
-                                <input type="checkbox" id="sw-script-mode" class="input" style="width: 1rem; height: 1rem; cursor: pointer;">
-                                <label for="sw-script-mode" style="font-size: 0.85rem; cursor: pointer;" title="Forces the AI to write in a screenplay format (Name: Dialogue). Enables real-time distinct voices.">Script Mode</label>
+                    <!-- The open story: a full-screen reader (2026-11-08). The class
+                         sw-reader-open hides the app header, tabs and footer; see the
+                         "Story Writer reader" block in main.css. Reading options and
+                         the sheets live in story-reader.js. -->
+                    <section class="result-section" id="sw-workspace-view" style="display: none;">
+                        <div class="sw-topbar">
+                            <button type="button" id="sw-back-btn" class="sw-icon-btn" title="Back to your stories" aria-label="Back to your stories">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            </button>
+                            <button type="button" id="sw-topbar-title" class="sw-topbar-title" title="Story details">
+                                <span id="sw-topbar-title-text">Story</span>
+                            </button>
+                            <div class="sw-pop-anchor">
+                                <button type="button" id="sw-aa-btn" class="sw-icon-btn" title="Reading options" aria-label="Reading options" aria-expanded="false" aria-controls="sw-aa-pop">Aa</button>
+                                <div id="sw-aa-pop" class="sw-popover" role="group" aria-label="Reading options" hidden>
+                                    <div class="sw-pop-label">Text size</div>
+                                    <div class="sw-size-row">
+                                        <button type="button" data-reader-size="-1" title="Smaller text" aria-label="Smaller text"><span style="font-size: 0.8em">A</span>−</button>
+                                        <button type="button" data-reader-size="0" title="Reset text size" aria-label="Reset text size" id="sw-size-label">100%</button>
+                                        <button type="button" data-reader-size="1" title="Larger text" aria-label="Larger text"><span style="font-size: 1.15em">A</span>+</button>
+                                    </div>
+                                    <div class="sw-pop-label">Font</div>
+                                    <div class="sw-seg" role="group" aria-label="Font">
+                                        <button type="button" data-reader-font="sans" aria-pressed="true">Sans</button>
+                                        <button type="button" data-reader-font="serif" aria-pressed="false" class="sw-serif-sample">Serif</button>
+                                    </div>
+                                    <div class="sw-pop-label">Line spacing</div>
+                                    <div class="sw-seg" role="group" aria-label="Line spacing">
+                                        <button type="button" data-reader-spacing="compact" aria-pressed="false">Compact</button>
+                                        <button type="button" data-reader-spacing="normal" aria-pressed="true">Normal</button>
+                                        <button type="button" data-reader-spacing="roomy" aria-pressed="false">Roomy</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="sw-pop-anchor">
+                                <button type="button" id="sw-more-btn" class="sw-icon-btn" title="More" aria-label="More" aria-expanded="false" aria-controls="sw-more-pop">⋯</button>
+                                <div id="sw-more-pop" class="sw-popover sw-menu" role="menu" hidden>
+                                    <button type="button" role="menuitem" data-reader-more="details">📝 Story details</button>
+                                    <button type="button" role="menuitem" data-reader-more="contents">📑 Contents</button>
+                                    <button type="button" role="menuitem" id="sw-view-cards-btn">🃏 Character cards</button>
+                                    <button type="button" role="menuitem" data-reader-more="outline" hidden>🗺️ Outline</button>
+                                    <button type="button" role="menuitem" data-reader-more="settings">⚙️ Story Writer settings</button>
+                                </div>
                             </div>
                         </div>
 
-                        <details style="margin-bottom: 1rem;">
-                            <summary style="cursor: pointer; font-weight: 600; padding: 0.25rem 0; user-select: none;">📝 Synopsis / Memo</summary>
-                            <textarea id="sw-synopsis" class="textarea" rows="3" placeholder="Map out your story premise, plot points, worldbuilding notes..." style="background: var(--surface-color); width: 100%; margin-top: 0.5rem;"></textarea>
-                        </details>
-
-                        <!-- Sticky mobile convenience toolbar + narration controls -->
-                        <div id="sw-sticky-stack" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
-                            <div id="sw-toolbar" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; flex-wrap: wrap; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                                <button id="sw-prev-segment-btn" class="btn-small" title="Jump to previous section">⬆ Prev</button>
-                                <button id="sw-next-segment-btn" class="btn-small" title="Jump to next section">⬇ Next</button>
-                                <button id="sw-view-cards-btn" class="btn-small" title="View attached character cards">🃏 Cards</button>
-                                <button id="sw-toolbar-generate-btn" class="btn-small btn-primary" style="margin-left: auto;" title="Generate the next section">▶ Generate Next</button>
-                            </div>
-
-                            <!-- Narration Playback Controls (hidden until TTS active) -->
-                            <div id="sw-narration-controls" style="display: none; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-strong); border: 1px solid var(--border-strong); border-radius: 0.5rem; flex-wrap: wrap; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                                <span style="font-weight: 600; font-size: 0.85rem;">🔊 Narrating</span>
-                                <button id="sw-tts-pause-btn" class="btn-small" title="Pause / Resume narration">⏸ Pause</button>
-                                <button id="sw-tts-skip-btn" class="btn-small" title="Skip current sentence">⏭ Skip</button>
-                                <button id="sw-tts-stop-btn" class="btn-small" style="color: var(--error-color, #e55); border-color: var(--error-color, #e55);" title="Stop narration completely">⏹ Stop</button>
-                                <span id="sw-tts-progress" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;"></span>
-                            </div>
-                        </div>
-
-                        <div id="sw-story-area" class="content-box" style="display: block; margin-bottom: 1rem; padding: 1rem; background: var(--surface-color); min-height: 300px;">
+                        <div id="sw-story-area">
                             <!-- Story Segments injected here -->
                         </div>
 
-                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                            <input type="text" id="sw-steering" class="input" placeholder="Steer the story (e.g. 'Make the villain reveal their motive')..." style="flex: 1; min-width: 150px; background: var(--surface-color);">
-                            <button id="sw-generate-btn" class="btn-primary" style="padding: 0.8rem 1.5rem; flex: 1; min-width: 140px;">Generate Next</button>
-                            <button id="sw-stop-btn" class="btn-stop" style="display: none; padding: 0.8rem 1.5rem; flex: 1; min-width: 120px;">⏹ Stop</button>
+                        <!-- Sticks to the bottom of the screen: narration player, the
+                             auto-writer's panel while it's writing, and the composer. -->
+                        <div id="sw-composer" class="sw-composer">
+                            <div id="sw-narration-controls" class="sw-player" style="display: none;">
+                                <span class="sw-player-label">🔊 <span id="sw-tts-progress"></span></span>
+                                <button id="sw-tts-pause-btn" class="btn-small" title="Pause / Resume narration">⏸ Pause</button>
+                                <button id="sw-tts-skip-btn" class="btn-small" title="Skip current sentence" aria-label="Skip sentence">⏭</button>
+                                <button id="sw-tts-stop-btn" class="btn-small sw-player-stop" title="Stop narration completely" aria-label="Stop narration">⏹</button>
+                            </div>
+                            <div id="sw-compose-row" class="sw-compose-row">
+                                <input type="text" id="sw-steering" class="input" placeholder="Where next? (optional)" enterkeyhint="send" autocomplete="off">
+                                <button id="sw-generate-btn" class="btn-primary" title="Write the next part">Continue</button>
+                                <button id="sw-stop-btn" class="btn-stop" style="display: none;">⏹ Stop</button>
+                            </div>
                         </div>
                     </section>
+
+                    <!-- Story details: title, characters and voices, synopsis, script mode. -->
+                    <div id="sw-details-sheet" class="pb-overlay" hidden>
+                        <div class="pb-sheet" role="dialog" aria-modal="true" aria-labelledby="sw-details-heading">
+                            <div class="pb-scroll">
+                                <div class="pb-head">
+                                    <h2 id="sw-details-heading">📝 Story details</h2>
+                                    <button type="button" class="saw-icon" data-sheet-close aria-label="Close">✕</button>
+                                </div>
+                                <section class="pb-panel">
+                                    <label class="pb-label" for="sw-title">Title</label>
+                                    <input type="text" id="sw-title" class="input pb-input" maxlength="200">
+                                </section>
+                                <section class="pb-panel">
+                                    <span class="pb-label">Characters</span>
+                                    <div id="sw-attached-cards"></div>
+                                    <div class="pb-row">
+                                        <select id="sw-add-card-select" class="input">
+                                            <option value="">+ Add Character</option>
+                                        </select>
+                                    </div>
+                                </section>
+                                <section class="pb-panel">
+                                    <label class="pb-label" for="sw-synopsis">Synopsis / memo</label>
+                                    <textarea id="sw-synopsis" class="textarea pb-input" rows="5" placeholder="Premise, plot points, worldbuilding notes…"></textarea>
+                                </section>
+                                <section class="pb-panel">
+                                    <label class="sw-check" for="sw-script-mode">
+                                        <input type="checkbox" id="sw-script-mode">
+                                        <span>Script mode</span>
+                                    </label>
+                                    <p class="pb-hint">The AI writes as a screenplay (Name: line), so narration can give each speaker their own voice as it streams.</p>
+                                </section>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Roleplay Chat View -->
@@ -2794,8 +2847,9 @@
         <script src="src/scripts/image-gallery.js?v=20261023-pick-lightbox"></script>
         <script src="src/scripts/character-gallery-panel.js?v=20261023-memos10"></script>
         <script src="src/scripts/url-import.js?v=20261014-lore"></script>
-        <script src="src/scripts/storywriter.js?v=20261106-autowrite"></script>
-        <script src="src/scripts/story-autowriter.js?v=20261108-preselect"></script>
+        <script src="src/scripts/storywriter.js?v=20261108-reader"></script>
+        <script src="src/scripts/story-autowriter.js?v=20261108-reader"></script>
+        <script src="src/scripts/story-reader.js?v=20261108-reader"></script>
         <script src="src/scripts/adventure-handler.js?v=20261106-tokens"></script>
         <script src="src/scripts/inspire-me.js?v=20261015-stop"></script>
         <script src="src/scripts/gallery-mode.js"></script>

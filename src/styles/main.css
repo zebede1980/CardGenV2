@@ -3968,75 +3968,8 @@ body.chat-kb-open #chat-edit-sheet .ces-text {
     #adv-options-area {
         grid-template-columns: 1fr !important;
     }
-    #sw-story-list {
-        grid-template-columns: 1fr !important;
-    }
-}/* Story Writer UI Improvements */
-#sw-sticky-stack {
-    position: -webkit-sticky;
-    position: sticky;
-    top: 0.5rem;
-    z-index: 20;
 }
-
-.sw-segment-card {
-    position: relative;
-    border-bottom: 1px solid var(--border-color, #3a3a4a);
-    padding-bottom: 1.5rem;
-    margin-bottom: 1.5rem;
-    overflow-wrap: break-word;
-    word-break: break-word;
-}
-
-/* A <select> is sized to its widest <option>, so a long character or voice name
-   made these balloon far past the viewport (measured 463px on a 375px screen).
-   A percentage max-width cannot clamp them because their flex parents are
-   shrink-to-fit — sized by this very select — so use a concrete cap. */
-#sw-add-card-select,
-.sw-character-voice-inline {
-    max-width: 14rem;
-    min-width: 0;
-    text-overflow: ellipsis;
-}
-
-#sw-attached-cards,
-#sw-attached-cards > * {
-    min-width: 0;
-    max-width: 100%;
-}
-
-.sw-segment-card:last-child {
-    border-bottom: none;
-}
-
-.sw-segment-actions {
-    position: -webkit-sticky;
-    position: sticky;
-    top: 0;
-    display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
-    align-items: center;
-    background: var(--bg-tertiary, #2a2a35);
-    padding: 0.5rem 0.25rem;
-    z-index: 10;
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-    border-radius: 0 0.5rem 0 0.5rem;
-}
-
-.sw-segment-actions:hover {
-    opacity: 1;
-}
-
-@media (max-width: 768px) {
-    .sw-segment-actions {
-        opacity: 1;
-        background: var(--bg-secondary, #22222a);
-        padding: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-}
+/* Story Writer: the reader styles are in the "Story Writer reader" block at the end. */
 /* ═══════════════════════════════════════════════════════════════════════════
    AI Reasoning / Chain-of-Thought Block  (.rich-ai-reasoning)
    Collapsed by default. Completely invisible to the user unless deliberately
@@ -4307,10 +4240,606 @@ html.saw-open, html.saw-open body { overflow: hidden; }
 .saw-steer .input { flex: 1; min-width: 0; }
 .sw-chapter-heading { margin: 0.25rem 0 0.6rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft); }
 .saw-live { border: 1px dashed var(--accent); }
-.saw-live-text { line-height: 1.7; white-space: pre-wrap; }
+.saw-live-text { white-space: pre-wrap; }
 .saw-live-text.saw-waiting { color: var(--text-soft); font-style: italic; }
 @media (min-width: 700px) { .saw-steer .pb-input { font-size: 0.9rem; } }
 /* 📐 Angle buttons in the Playground's Edit and Reimagine tabs (_initPlaygroundAngles). */
 .pg-angle-row { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin: 0 0 0.45rem; }
 .pg-angle-label { font-size: 0.78rem; color: var(--text-soft); margin-right: 0.15rem; }
 .pg-angle-row .pg-angle-btn { min-height: 2rem; padding: 0.25rem 0.55rem; font-size: 0.78rem; white-space: nowrap; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Story Writer reader — 2026-11-08, iPhone first
+
+   While a story is open, #sw-workspace-view has .sw-reader-open and the page
+   becomes a reader: slim sticky top bar (back, title, Aa, ⋯), the story in one
+   comfortable column, and a sticky bottom bar (narration player, the
+   auto-writer's panel while it writes, the steer box + Generate).
+
+   It's keyed off the open workspace inside a *visible* Story Writer view, so
+   any code that switches views releases the page without knowing about it.
+   The document still scrolls normally, which keeps Safari's own scrolling,
+   address-bar collapse and scroll restoration.
+
+   Reading options (story-reader.js) are --sw-text-scale, --sw-text-leading
+   and --sw-text-font on :root, so the editor sheet can use them too.
+
+   Buttons are styled under an id: main.js's dark-theme button rule has a long
+   :not() chain that outranks plain class selectors.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+body:has(#view-storywriter:not([style*="none"]) #sw-workspace-view.sw-reader-open) :is(.header, #view-tabs, .footer) {
+    display: none !important;
+}
+body:has(#view-storywriter:not([style*="none"]) #sw-workspace-view.sw-reader-open) .container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    gap: 0;
+}
+#view-storywriter:has(> #sw-workspace-view.sw-reader-open) > #sw-settings-panel {
+    display: none;
+}
+
+#sw-workspace-view {
+    --sw-gutter: max(1.1rem, env(safe-area-inset-left, 0px));
+    --sw-column: 44rem;
+}
+#sw-workspace-view.sw-reader-open {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+/* ── Top bar ── */
+#sw-workspace-view .sw-topbar {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: calc(0.3rem + env(safe-area-inset-top, 0px)) max(0.4rem, env(safe-area-inset-right, 0px)) 0.3rem max(0.4rem, env(safe-area-inset-left, 0px));
+    background: var(--bg-page);
+    border-bottom: 1px solid var(--border);
+}
+#sw-workspace-view .sw-icon-btn {
+    flex: none;
+    width: 2.75rem;
+    height: 2.75rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+#sw-workspace-view .sw-icon-btn:hover,
+#sw-workspace-view .sw-icon-btn[aria-expanded="true"] {
+    background: var(--surface-muted);
+}
+#sw-workspace-view #sw-more-btn { font-size: 1.45rem; line-height: 1; }
+#sw-workspace-view .sw-topbar-title {
+    flex: 1;
+    min-width: 0;
+    height: 2.75rem;
+    padding: 0 0.35rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+#sw-topbar-title-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Popovers (Aa, ⋯) ── */
+/* Popovers hang from the top bar's right edge, not their button, so they
+   can't run off the left of a 320px screen. */
+#sw-workspace-view .sw-pop-anchor { position: static; flex: none; }
+#sw-workspace-view .sw-popover {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: max(0.5rem, env(safe-area-inset-right, 0px));
+    z-index: 50;
+    width: min(17rem, calc(100vw - 1rem));
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.75rem;
+    background: var(--surface-strong);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
+}
+#sw-workspace-view .sw-popover[hidden] { display: none; }
+#sw-workspace-view .sw-pop-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+}
+#sw-workspace-view .sw-size-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    margin-bottom: 0.2rem;
+}
+#sw-workspace-view .sw-seg { display: flex; gap: 0.35rem; margin-bottom: 0.2rem; }
+#sw-workspace-view .sw-size-row button,
+#sw-workspace-view .sw-seg button {
+    min-height: 2.6rem;
+    padding: 0 0.4rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-muted);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+#sw-workspace-view .sw-seg button { flex: 1; min-width: 0; font-size: 0.82rem; }
+#sw-workspace-view .sw-seg button.sw-serif-sample {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 0.92rem;
+}
+#sw-workspace-view .sw-size-row button:disabled { opacity: 0.4; cursor: default; }
+#sw-workspace-view .sw-seg button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+#sw-workspace-view .sw-menu {
+    width: min(16rem, calc(100vw - 1rem));
+    gap: 0.1rem;
+    padding: 0.35rem;
+}
+#sw-workspace-view .sw-menu button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0 0.75rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.95rem;
+    text-align: left;
+    cursor: pointer;
+}
+#sw-workspace-view .sw-menu button:hover { background: var(--surface-muted); }
+#sw-workspace-view .sw-menu button[hidden] { display: none; }
+
+/* ── The story ── */
+#sw-workspace-view #sw-story-area {
+    flex: 1;
+    width: 100%;
+    max-width: var(--sw-column);
+    margin: 0 auto;
+    padding: 1.1rem var(--sw-gutter) 1.25rem;
+}
+#sw-story-area .sw-empty {
+    margin: 3rem 0;
+    text-align: center;
+    color: var(--text-soft);
+}
+.sw-segment-card {
+    position: relative;
+    margin: 0 0 1.6rem;
+    padding: 0 0 1.4rem;
+    border-bottom: 1px solid var(--border);
+    overflow-wrap: break-word;
+    scroll-margin-top: calc(4rem + env(safe-area-inset-top, 0px));
+}
+.sw-segment-card:last-child { margin-bottom: 0.25rem; border-bottom: 0; }
+.sw-segment-card.is-playing::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 1.4rem;
+    left: calc(-1 * var(--sw-gutter) + 0.35rem);
+    width: 3px;
+    border-radius: 3px;
+    background: var(--success, #1f9d66);
+}
+.sw-seg-head { display: flex; align-items: center; gap: 0.5rem; }
+.sw-segment-playing-badge {
+    margin: 0 0 0.6rem auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--success, #1f9d66);
+}
+.sw-segment-text,
+.saw-live-text {
+    font-family: var(--sw-text-font, inherit);
+    font-size: calc(1.0625rem * var(--sw-text-scale, 1));
+    line-height: var(--sw-text-leading, 1.7);
+    white-space: pre-wrap;
+    color: var(--text-primary);
+}
+.sw-streaming {
+    margin-bottom: 1rem;
+    padding: 0.9rem 1rem;
+    border: 1px dashed var(--accent);
+    border-radius: var(--radius-md);
+    background: var(--surface-muted);
+}
+.sw-segment-image { margin-top: 0.9rem; }
+.sw-segment-image img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius-md);
+}
+.sw-image-prompt {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    font-style: italic;
+    color: var(--text-soft);
+}
+.sw-image-note { font-size: 0.85rem; color: var(--text-secondary); }
+.sw-image-error { color: var(--error, #c93d4a); }
+
+/* Passage actions: hidden until the text is tapped; the latest passage always
+   shows them. A tapped-open row sticks just above the bottom bar, so it is in
+   reach wherever in a long chapter you tapped. */
+#sw-story-area .sw-segment-actions {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.8rem;
+    padding: 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-strong);
+    box-shadow: var(--shadow-sm);
+}
+#sw-story-area .sw-segment-card.is-latest .sw-segment-actions,
+#sw-story-area .sw-segment-card.sw-actions-open .sw-segment-actions { display: flex; }
+#sw-story-area .sw-segment-card.is-latest:not(.sw-actions-open) .sw-segment-actions {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+}
+#sw-story-area .sw-segment-card.sw-actions-open:not(.is-latest) .sw-segment-actions {
+    position: -webkit-sticky;
+    position: sticky;
+    bottom: calc(var(--sw-composer-h, 4.5rem) + 0.5rem);
+    z-index: 5;
+}
+#sw-story-area .sw-segment-actions .btn-small {
+    min-height: 2.5rem;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+}
+#sw-story-area .sw-segment-actions .sw-act-label:empty { display: none; }
+#sw-story-area .sw-segment-actions .sw-act-delete { margin-left: auto; min-width: 2.75rem; }
+@media (max-width: 359px) {
+    #sw-story-area .sw-segment-actions .sw-act-label { display: none; }
+    #sw-story-area .sw-segment-actions .btn-small { min-width: 2.75rem; }
+}
+
+/* The auto-writer's panel: heads the story when idle, docks into the bottom bar while writing. */
+.saw-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.saw-head .saw-status { flex: 1 1 12rem; min-width: 0; }
+.saw-btns { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+#sw-workspace-view > .saw-panel {
+    width: calc(min(100%, var(--sw-column)) - 2 * var(--sw-gutter));
+    margin: 1rem auto 0;
+}
+#sw-workspace-view .saw-panel.saw-docked {
+    width: 100%;
+    margin: 0 auto;
+    padding: 0;
+    gap: 0.4rem;
+    background: transparent;
+    border: 0;
+}
+.saw-panel.saw-docked .saw-status { font-size: 0.85rem; }
+.saw-panel.saw-docked [data-act="outline"] { display: none; }
+.saw-panel.saw-docked .pb-hint:empty { display: none; }
+
+/* ── Bottom bar ── */
+#sw-workspace-view .sw-composer {
+    position: -webkit-sticky;
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.55rem max(0.75rem, env(safe-area-inset-right, 0px)) calc(0.55rem + env(safe-area-inset-bottom, 0px)) max(0.75rem, env(safe-area-inset-left, 0px));
+    background: var(--bg-page);
+    border-top: 1px solid var(--border);
+}
+#sw-workspace-view .sw-composer > * {
+    width: 100%;
+    max-width: calc(var(--sw-column) - 1.5rem);
+    margin-inline: auto;
+}
+#sw-workspace-view .sw-compose-row { display: flex; align-items: center; gap: 0.45rem; }
+#sw-workspace-view #sw-steering {
+    flex: 1;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    font-size: 16px; /* under 16px, iOS zooms the page on focus */
+}
+#sw-workspace-view #sw-generate-btn,
+#sw-workspace-view #sw-stop-btn {
+    flex: none;
+    min-height: 2.75rem;
+    padding: 0 1.1rem;
+    border-radius: 999px;
+    font-size: 0.92rem;
+    white-space: nowrap;
+}
+/* While a part is being written its note has already gone, so the steer box
+   steps aside for "Generating…" and Stop. */
+#sw-workspace-view .sw-compose-row:has(#sw-generate-btn:disabled) #sw-steering { display: none; }
+#sw-workspace-view #sw-generate-btn:disabled { flex: 1; opacity: 0.75; }
+#sw-workspace-view .sw-player { align-items: center; gap: 0.4rem; }
+#sw-workspace-view .sw-player-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+#sw-tts-progress:empty::before { content: "Narrating"; }
+#sw-workspace-view .sw-player .btn-small { min-width: 2.6rem; min-height: 2.4rem; padding: 0.3rem 0.65rem; }
+#sw-workspace-view .sw-player .sw-player-stop { color: var(--error, #c93d4a); }
+
+/* ── Sheets ── */
+#sw-details-sheet #sw-attached-cards { display: flex; flex-direction: column; gap: 0.4rem; }
+#sw-details-sheet .sw-cast-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.35rem 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-muted);
+}
+#sw-details-sheet .sw-cast-name {
+    flex: 1 1 6rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+#sw-details-sheet .sw-character-voice-inline {
+    order: 1;
+    flex: 0 1 12rem;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.35rem 0.5rem;
+    font-size: 16px;
+}
+#sw-details-sheet .sw-cast-remove {
+    order: 2;
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--error, #c93d4a);
+    font-size: 1.35rem;
+    cursor: pointer;
+}
+@media (max-width: 479px) {
+    /* Name and ✕ on the first line, the voice picker across the second. */
+    #sw-details-sheet .sw-cast-remove { order: 0; }
+    #sw-details-sheet .sw-character-voice-inline { order: 1; flex: 1 1 100%; margin: 0 0.35rem 0.1rem 0; }
+}
+#sw-details-sheet .pb-row #sw-add-card-select { flex: 1 1 10rem; min-width: 0; max-width: none; font-size: 16px; }
+#sw-details-sheet select.input { background: var(--surface-muted); color: var(--text-primary); border-color: var(--border-strong); }
+/* Same close button as the New story sheet, which main.js's dark button rule would otherwise square off. */
+:is(#sw-details-sheet, #sw-contents-sheet, #sw-settings-sheet) .saw-icon { width: 2.25rem; height: 2.25rem; flex: none; display: grid; place-items: center; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text-primary); font-size: 1rem; cursor: pointer; }
+#sw-details-sheet .sw-check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+#sw-details-sheet .sw-check input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+#sw-contents-sheet .sw-contents {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+#sw-contents-sheet .sw-contents button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-strong);
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+#sw-contents-sheet .sw-contents-title { font-size: 0.9rem; font-weight: 700; }
+#sw-contents-sheet .sw-contents-snippet {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+#sw-settings-sheet #sw-settings-panel { margin: 0 !important; }
+
+#sw-edit-sheet .pb-sheet { padding-bottom: env(safe-area-inset-bottom, 0px); }
+#sw-edit-sheet .sw-edit-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem max(0.75rem, env(safe-area-inset-right, 0px)) 0.55rem max(0.75rem, env(safe-area-inset-left, 0px));
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-strong);
+}
+#sw-edit-sheet .sw-edit-head h2 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 1rem;
+}
+#sw-edit-sheet .sw-edit-head .btn-small { min-height: 2.5rem; padding: 0 0.95rem; }
+#sw-edit-sheet .sw-edit-head [data-act="save"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+#sw-edit-sheet .sw-edit-head [data-act="save"]:disabled { opacity: 0.7; }
+#sw-edit-sheet .sw-edit-error { padding: 0.5rem 1rem 0; color: var(--error, #c93d4a); }
+#sw-edit-sheet .sw-edit-error:empty { display: none; }
+#sw-edit-sheet .sw-edit-text {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    margin: 0;
+    padding: 1rem max(1rem, env(safe-area-inset-right, 0px)) 1rem max(1rem, env(safe-area-inset-left, 0px));
+    resize: none;
+    border: 0;
+    border-radius: 0;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--sw-text-font, inherit);
+    font-size: max(16px, calc(1.0625rem * var(--sw-text-scale, 1)));
+    line-height: var(--sw-text-leading, 1.7);
+}
+
+/* ── Story list ── */
+.sw-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.sw-list-head .section-title { margin: 0; }
+#sw-story-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    gap: 0.75rem;
+}
+#sw-story-list .sw-story-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.95rem 3.1rem 0.95rem 1rem;
+    cursor: pointer;
+}
+.sw-story-card-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0;
+    font-size: 1.02rem;
+    line-height: 1.3;
+}
+.sw-story-card-blurb {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+.sw-story-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--text-soft);
+}
+.sw-story-card-pill {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-weight: 600;
+}
+#sw-story-list .sw-story-card-delete {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.45rem;
+    width: 2.6rem;
+    height: 2.6rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    font-size: 1.05rem;
+    opacity: 0.6;
+    cursor: pointer;
+}
+#sw-story-list .sw-story-card-delete:hover,
+#sw-story-list .sw-story-card-delete:focus-visible {
+    opacity: 1;
+    background: color-mix(in srgb, var(--error) 12%, transparent);
+}
