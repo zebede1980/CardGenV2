@@ -410,3 +410,7 @@ class SavedUserPersonaOut(SavedUserPersonaCreate):
     created_at: datetime
     class Config:
         from_attributes = True
+
+class AdventureInspireIn(BaseModel):
+    card_ids: List[int] = []
+    genre: str = ""

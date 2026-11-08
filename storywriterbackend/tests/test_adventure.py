@@ -44,7 +44,7 @@ class FakeModel:
             if "evocative title" in last:
                 yield "\"The Eleventh Lantern\""
                 return
-            if last.startswith("Your story section is above"):
+            if last.startswith(("Your story section is above", "Offer four NEW choices")):
                 yield model.repair_reply
                 return
             if "summarizes narrative adventures" in messages[0]["content"]:
@@ -251,3 +251,62 @@ def test_stop_cancels_on_the_server_and_keeps_what_arrived(client, model):
     assert "lanterns swung" in res["content"] and res["options"] == []
     assert next(e for e in out["events"] if e["type"] == "final")["action_id"] == action_id
     assert len(model.beat_prompts()) == 1  # no options follow-up after a Stop
+
+
+# ── Rewind, regenerate, new options, pictures, openings ──────────────────────
+
+def test_rewind_removes_everything_after_the_beat(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    _act(client, adv["id"], role="user", content="Run")
+    _act(client, adv["id"], role="user", content="Hide")
+    first = _detail(client, adv["id"])["actions"][0]
+    r = client.post(f"/api/adventures/{adv['id']}/rewind/{first['id']}", headers=HEADERS)
+    assert r.status_code == 200
+    assert [a["id"] for a in r.json()["actions"]] == [first["id"]]
+
+
+def test_regen_replaces_the_latest_beat_and_quotes_it(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    old = _detail(client, adv["id"])["actions"][-1]
+    model.beats = [[ReasoningChunk("Plan."), "A different night entirely.", OPTS]]
+    _act(client, adv["id"], kind="regen")
+    actions = _detail(client, adv["id"])["actions"]
+    assert len(actions) == 1 and actions[0]["id"] != old["id"] and "different night" in actions[0]["content"]
+
+
+def test_new_options_for_the_latest_beat(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    beat = _detail(client, adv["id"])["actions"][-1]
+    model.repair_reply = "[OPTION 1] Swim\n[OPTION 2] Sing\n[OPTION 3] Sleep\n[OPTION 4] Steal"
+    r = client.post(f"/api/adventures/{adv['id']}/actions/{beat['id']}/options", json={}, headers=HEADERS)
+    ev = next(e for e in _events(r.text) if e["type"] == "options")
+    assert [o["text"] for o in ev["options"]] == ["Swim", "Sing", "Sleep", "Steal"]
+    assert json.loads(_detail(client, adv["id"])["actions"][-1]["options"])[0]["text"] == "Swim"
+    # Only the latest beat's choices can change.
+    _act(client, adv["id"], role="user", content="Swim")
+    r = client.post(f"/api/adventures/{adv['id']}/actions/{beat['id']}/options", json={}, headers=HEADERS)
+    assert r.status_code == 409
+
+
+def test_picture_is_stored_apart_from_the_story(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    beat = _detail(client, adv["id"])["actions"][-1]
+    url = f"/api/adventures/{adv['id']}/actions/{beat['id']}/image"
+    assert client.put(url, json={"image": "javascript:alert(1)"}, headers=HEADERS).status_code == 400
+    assert client.put(url, json={"image": "data:image/png;base64,AAAA", "prompt": "a quay"}, headers=HEADERS).status_code == 200
+    detail = _detail(client, adv["id"])
+    assert detail["actions"][-1]["has_image"] is True and "AAAA" not in json.dumps(detail)
+    assert client.get(url, headers=HEADERS).json() == {"image": "data:image/png;base64,AAAA", "prompt": "a quay"}
+
+
+def test_inspire_returns_three_openings(client, model, monkeypatch):
+    async def generate(llm, messages, stream=False, **kwargs):
+        yield "1. A lighthouse door appears in the rock overnight.\n2. The circus arrives one wagon short.\n3. A letter postmarked forty years ago arrives."
+    monkeypatch.setattr(LLMService, "generate", generate)
+    r = client.post("/api/adventures/inspire", json={"card_ids": [1]}, headers=HEADERS)
+    ev = next(e for e in _events(r.text) if e["type"] == "openings")
+    assert len(ev["openings"]) == 3 and ev["openings"][1].startswith("The circus")

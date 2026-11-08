@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20261108-covers" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261108-adv2" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -2227,52 +2227,94 @@
 
                 </div>
 
-                <!-- Adventure Mode View -->
+                <!-- Adventure Mode View (adventure-handler.js). The play view is a
+                     reader like Story Writer's: slim top bar, the story in one column,
+                     and the choice tray stuck to the bottom of the screen. -->
                 <div id="view-adventure" class="tab-content" style="display: none;">
 
                     <!-- Landing Page -->
                     <div id="adv-landing-view">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
-                            <h2 class="section-title" style="margin: 0;">⚔️ Adventures</h2>
-                            <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                <button id="adv-open-global-settings" class="btn-outline" style="font-size: 0.9rem;">⚙️ Settings</button>
-                                <button id="adv-new-btn" class="btn-primary" style="padding: 0.6rem 1.4rem; font-size: 1rem;">＋ New Adventure</button>
+                        <div class="adv-list-head">
+                            <h2 class="section-title">⚔️ Adventures</h2>
+                            <div class="adv-list-btns">
+                                <button type="button" id="adv-open-global-settings" class="btn-outline" title="Adventure settings" aria-label="Adventure settings">⚙️</button>
+                                <button type="button" id="adv-new-btn" class="btn-primary">＋ New adventure</button>
                             </div>
                         </div>
-
-                        <div id="adv-session-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
-                            <!-- Session cards injected here -->
+                        <div id="adv-session-grid" class="adv-list">
+                            <!-- Adventure cards injected here -->
                         </div>
                     </div>
 
                     <!-- Play View -->
-                    <section class="result-section" id="adv-play-view" style="display: none; flex-direction: column; padding-bottom: 4rem;">
-                        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
-                            <button id="adv-back-btn" class="btn-outline">← Exit</button>
-                            <input type="text" id="adv-title" class="input" style="flex: 1; font-weight: bold; font-size: 1.1rem; background: transparent; border: none;">
+                    <section id="adv-play-view" style="display: none;">
+                        <div class="adv-topbar">
+                            <button type="button" id="adv-back-btn" class="adv-icon-btn" title="Back to your adventures" aria-label="Back to your adventures">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            </button>
+                            <button type="button" id="adv-title-btn" class="adv-topbar-title" title="Rename">
+                                <span id="adv-title-text">Adventure</span>
+                            </button>
+                            <div class="adv-pop-anchor">
+                                <button type="button" id="adv-aa-btn" class="adv-icon-btn" title="Reading options" aria-label="Reading options" aria-expanded="false" aria-controls="adv-aa-pop">Aa</button>
+                                <div id="adv-aa-pop" class="adv-popover" role="group" aria-label="Reading options" hidden>
+                                    <div class="adv-pop-label">Text size</div>
+                                    <div class="adv-size-row">
+                                        <button type="button" data-reader-size="-1" title="Smaller text" aria-label="Smaller text"><span style="font-size: 0.8em">A</span>−</button>
+                                        <button type="button" data-reader-size="0" title="Reset text size" aria-label="Reset text size" data-size-label>100%</button>
+                                        <button type="button" data-reader-size="1" title="Larger text" aria-label="Larger text"><span style="font-size: 1.15em">A</span>+</button>
+                                    </div>
+                                    <div class="adv-pop-label">Font</div>
+                                    <div class="adv-seg" role="group" aria-label="Font">
+                                        <button type="button" data-reader-font="sans" aria-pressed="true">Sans</button>
+                                        <button type="button" data-reader-font="serif" aria-pressed="false" class="adv-serif-sample">Serif</button>
+                                    </div>
+                                    <div class="adv-pop-label">Line spacing</div>
+                                    <div class="adv-seg" role="group" aria-label="Line spacing">
+                                        <button type="button" data-reader-spacing="compact" aria-pressed="false">Compact</button>
+                                        <button type="button" data-reader-spacing="normal" aria-pressed="true">Normal</button>
+                                        <button type="button" data-reader-spacing="roomy" aria-pressed="false">Roomy</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="adv-pop-anchor">
+                                <button type="button" id="adv-more-btn" class="adv-icon-btn" title="More" aria-label="More" aria-expanded="false" aria-controls="adv-more-pop">⋯</button>
+                                <div id="adv-more-pop" class="adv-popover adv-menu" role="menu" hidden>
+                                    <button type="button" role="menuitem" data-adv-more="journal" hidden>📜 Journal</button>
+                                    <button type="button" role="menuitem" data-adv-more="cast">🃏 Cast</button>
+                                    <button type="button" role="menuitem" data-adv-more="rename">✏️ Rename</button>
+                                    <button type="button" role="menuitem" data-adv-more="adventure" hidden>🎛️ This adventure</button>
+                                    <button type="button" role="menuitem" data-adv-more="settings">⚙️ Adventure settings</button>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Active Characters Display -->
-                        <div id="adv-active-characters" style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border);">
+                        <div id="adv-story-area">
+                            <!-- Beats injected here -->
                         </div>
 
-                        <!-- Story History -->
-                        <div id="adv-story-area" class="content-box" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--surface-color); min-height: 300px; max-height: 50vh;">
-                            <!-- Segments go here -->
-                        </div>
-
-                        <!-- The 4 Options -->
-                        <div id="adv-options-area" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                            <!-- Buttons go here -->
-                        </div>
-
-                        <div id="adv-loading" style="display: none; justify-content: center; align-items: center; padding: 1rem;">
-                            <div class="loading-spinner"></div>
-                            <span style="margin-left: 0.5rem; color: var(--text-secondary);">The narrator is thinking...</span>
+                        <!-- Sticks to the bottom: narration, the "writing" status with
+                             Stop, then the four choices, Your own… and New options. -->
+                        <div id="adv-tray" class="adv-tray">
+                            <div id="adv-player" class="adv-player" hidden>
+                                <span class="adv-player-label">🔊 Reading aloud</span>
+                                <button type="button" id="adv-player-pause" class="btn-small">⏸ Pause</button>
+                                <button type="button" id="adv-player-stop" class="btn-small" aria-label="Stop reading">⏹</button>
+                            </div>
+                            <div id="adv-status" class="adv-status" hidden>
+                                <span class="adv-status-dot" aria-hidden="true"></span>
+                                <span id="adv-status-text" class="adv-status-text" role="status">The narrator is plotting…</span>
+                                <button type="button" id="adv-stop-btn" class="btn-stop">⏹ Stop</button>
+                            </div>
+                            <div id="adv-choices" class="adv-choices"></div>
+                            <form id="adv-own-row" class="adv-own-row" hidden>
+                                <textarea id="adv-own-input" class="input" rows="1" maxlength="1000" placeholder="What happens next?" enterkeyhint="send" aria-label="Your own choice"></textarea>
+                                <button type="submit" id="adv-own-send" class="btn-primary" aria-label="Send">➤</button>
+                                <button type="button" id="adv-own-cancel" class="adv-icon-btn" aria-label="Back to the choices">✕</button>
+                            </form>
                         </div>
                     </section>
                 </div>
-
                 <!-- Image Playground View -->
                 <div id="view-playground" class="tab-content" style="display: none;">
                     <section style="max-width: 960px; margin: 0 auto;">
@@ -2749,33 +2791,38 @@
                     </section>
                 </div>
 
-                <!-- New Adventure Modal -->
-                <div id="adv-new-modal" class="modal-overlay" style="display: none;">
-                    <div class="api-settings-modal" style="max-width: 560px; width: 94%; max-height: 90vh; overflow-y: auto;">
-                        <div class="modal-header">
-                            <h2 class="modal-title">⚔️ New Adventure</h2>
-                            <button id="adv-new-modal-close" class="modal-close" title="Close">×</button>
-                        </div>
-                        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
-                            <div>
-                                <label class="label">Characters</label>
-                                <div id="adv-selected-chars" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; min-height: 42px; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);">
-                                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin: auto;">No characters selected</span>
+                <!-- New Adventure sheet (adventure-handler.js) -->
+                <div id="adv-new-modal" class="pb-overlay" hidden>
+                    <div class="pb-sheet" role="dialog" aria-modal="true" aria-labelledby="adv-new-heading">
+                        <div class="pb-scroll">
+                            <div class="pb-head">
+                                <h2 id="adv-new-heading">⚔️ New adventure</h2>
+                                <button type="button" id="adv-new-modal-close" class="adv-sheet-x" aria-label="Close">✕</button>
+                            </div>
+                            <section class="pb-panel">
+                                <div class="pb-label">Cast</div>
+                                <div id="adv-selected-chars" class="adv-cast-chips"></div>
+                                <button type="button" id="adv-add-char-btn" class="btn-outline btn-small adv-add-char">＋ Add a character</button>
+                            </section>
+                            <section class="pb-panel">
+                                <label class="pb-label" for="adv-starting-scenario">How it begins <span class="pb-soft">(optional)</span></label>
+                                <textarea id="adv-starting-scenario" class="input pb-input" rows="4" placeholder="A storm, a stranger, a locked door…"></textarea>
+                                <div class="pb-row">
+                                    <button type="button" id="adv-inspire-btn" class="btn-outline btn-small">✨ Inspire me</button>
+                                    <span id="adv-inspire-note" class="pb-hint"></span>
                                 </div>
-                                <button id="adv-add-char-btn" class="btn-outline" style="font-size: 0.9rem;">🖼️ Add Character</button>
-                            </div>
-
-                            <div>
-                                <label class="label">Starting Scenario <span style="font-weight: 400; color: var(--text-secondary);">(optional)</span></label>
-                                <textarea id="adv-starting-scenario" class="input" rows="3" placeholder="Describe how the adventure begins..."></textarea>
-                            </div>
-
-                            <div>
-                                <label class="label">System Prompt <span style="font-weight: 400; color: var(--text-secondary);">(optional — overrides global settings)</span></label>
-                                <textarea id="adv-system-prompt" class="input" rows="4" placeholder="Custom system prompt for this adventure..."></textarea>
-                            </div>
-
-                            <button id="adv-start-btn" class="btn-primary" style="width: 100%; padding: 0.9rem; font-size: 1rem; margin-top: 0.25rem;">⚔️ Begin Adventure</button>
+                                <div id="adv-inspire-list" class="adv-inspire-list"></div>
+                            </section>
+                            <div id="adv-new-play"></div>
+                            <details class="pb-panel adv-advanced">
+                                <summary class="pb-label">Advanced</summary>
+                                <label class="pb-label" for="adv-system-prompt">System prompt <span class="pb-soft">(starts from your Adventure settings)</span></label>
+                                <textarea id="adv-system-prompt" class="input pb-input pb-mono" rows="5" placeholder="Custom system prompt for this adventure…"></textarea>
+                            </details>
+                            <div id="adv-new-error" class="pb-error" hidden></div>
+                        </div>
+                        <div class="pb-footer">
+                            <button type="button" id="adv-start-btn" class="btn-primary pb-wide">⚔️ Begin</button>
                         </div>
                     </div>
                 </div>
@@ -2850,7 +2897,7 @@
         <script src="src/scripts/storywriter.js?v=20261108-covers"></script>
         <script src="src/scripts/story-autowriter.js?v=20261108-reader"></script>
         <script src="src/scripts/story-reader.js?v=20261108-reader"></script>
-        <script src="src/scripts/adventure-handler.js?v=20261106-tokens"></script>
+        <script src="src/scripts/adventure-handler.js?v=20261108-adv2"></script>
         <script src="src/scripts/inspire-me.js?v=20261015-stop"></script>
         <script src="src/scripts/gallery-mode.js"></script>
         <script src="src/scripts/chat-handler.js?v=20261106-tokens"></script>

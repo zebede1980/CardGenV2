@@ -544,6 +544,18 @@ async def send_action(
         raise HTTPException(status_code=409, detail="The narrator is already writing the next beat.")
 
     queue = asyncio.Queue()
+
+    previous_reply = None
+    if req.kind == "regen":
+        # Replace the latest beat: delete it here, in the same request, so a
+        # dropped connection can't leave the story with no beat and no choice.
+        last = max(session_data.actions, key=lambda a: a.order_index, default=None)
+        if last is not None and last.role == "assistant":
+            previous_reply = (req.previous_reply or strip_think(last.content or ""))[:1500]
+            db.delete(last)
+            db.commit()
+            db.refresh(session_data)
+
     next_order_index = _next_index(db, session_id)
 
     user_action = None
@@ -680,8 +692,6 @@ async def send_action(
 
             await queue.put({"type": "final", "action_id": assistant_action_id, "deleted": not saved,
                              "story": story if saved else "", "options": options if saved else []})
-            if saved and options:  # the pre-overhaul client reads this one
-                await queue.put({"type": "parsed_options", "options": [o["text"] for o in options], "cleaned_story": story})
             if error is not None:
                 await queue.put(error)
             elif saved and not cancelled and want_title:
@@ -774,3 +784,234 @@ def delete_action(session_id: str, action_id: str, db: Session = Depends(get_db)
     db.delete(action)
     db.commit()
     return {'status': 'ok'}
+
+
+# ── Rewind, new options, pictures, openings ──────────────────────────────────
+
+def _sse_job(work) -> StreamingResponse:
+    """Run work(queue) as a task that outlives the browser's connection and
+    stream what it puts on the queue (with keep-alive pings). For the short
+    utility calls: a reasoning model can think past iOS's 60 s cut-off for a
+    request that sends nothing back."""
+    queue = asyncio.Queue()
+
+    async def run():
+        try:
+            await work(queue)
+        except Exception as e:
+            logger.error(f"Adventure utility call failed: {e}")
+            await queue.put(e)
+        finally:
+            await queue.put(None)
+
+    asyncio.create_task(run())
+    return StreamingResponse(sse_from_queue(queue), media_type="text/event-stream")
+
+
+def _latest_beat(session_data: models.AdventureSession, action_id: str) -> models.AdventureAction:
+    beat = next((a for a in session_data.actions if a.id == action_id), None)
+    if beat is None:
+        raise HTTPException(status_code=404, detail="Action not found")
+    last = max(session_data.actions, key=lambda a: a.order_index)
+    if beat.role != "assistant" or not beat.content or beat is not last:
+        raise HTTPException(status_code=409, detail="Only the latest beat's choices can be changed.")
+    return beat
+
+
+def _llm_text(out: str) -> str:
+    return strip_think(close_open_think(out)).strip()
+
+
+@router.post("/{session_id}/rewind/{action_id}", response_model=schemas.AdventureSessionDetailOut)
+def rewind(session_id: str, action_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Go back to a beat: everything after it goes, and its choices are offered again."""
+    session_data = _get_session(db, session_id, current_user)
+    _drop_orphans(db, session_data)
+    if any(a.role == "assistant" and not a.content for a in session_data.actions):
+        raise HTTPException(status_code=409, detail="The narrator is still writing.")
+    target = next((a for a in session_data.actions if a.id == action_id), None)
+    if target is None or target.role != "assistant":
+        raise HTTPException(status_code=404, detail="Beat not found")
+    if target.is_summarized:
+        raise HTTPException(status_code=409, detail="That part of the story has been folded into the summary.")
+    for a in [a for a in session_data.actions if a.order_index > target.order_index]:
+        db.delete(a)
+    beats_left = sum(1 for a in session_data.actions if a.role == "assistant" and a.order_index <= target.order_index)
+    if (session_data.journal_at or 0) > beats_left:
+        session_data.journal = ""  # it knows about beats that no longer happened
+        session_data.journal_at = 0
+    session_data.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(session_data)
+    return session_data
+
+
+NEW_OPTIONS_INSTRUCTION = (
+    "Offer four NEW choices for what happens next, different from these: {old}. "
+    "Do not continue or repeat the story. Reply with ONLY the four choices, one per line, exactly like this:\n"
+    "[OPTION 1] First choice\n[OPTION 2] Second choice\n[OPTION 3] Third choice\n[OPTION 4] Fourth choice"
+)
+
+
+@router.post("/{session_id}/actions/{action_id}/options")
+async def new_options(session_id: str, action_id: str, req: schemas.AdventureSendActionRequest, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Fresh choices for the latest beat, without rewriting the beat."""
+    session_data = _get_session(db, session_id, current_user)
+    beat = _latest_beat(session_data, action_id)
+    settings = get_or_create_settings(db, current_user.id)
+    if not settings.api_key:
+        raise HTTPException(status_code=400, detail="API key not configured.")
+    old = "; ".join(f'"{o["text"]}"' for o in _options_list(beat.options)) or "none"
+    messages = build_adventure_prompt(session_data, db, req.max_input_tokens or DEFAULT_MAX_INPUT_TOKENS, False,
+                                      native_reasoning=supports_reasoning_flag(settings.api_base_url))
+    messages.append({"role": "user", "content": NEW_OPTIONS_INSTRUCTION.format(old=old)})
+
+    async def work(queue):
+        llm = LLMService(settings)
+        try:
+            out = ""
+            async for chunk in llm.generate(messages, stream=True, request_reasoning=True, temperature=req.temperature):
+                out += chunk
+            _, options = split_adventure_options(close_open_think(out))
+            if not options:
+                raise RuntimeError("The model didn't send any choices. Try again.")
+            with SessionLocal() as bg_db:
+                row = bg_db.query(models.AdventureAction).filter(models.AdventureAction.id == action_id).first()
+                if row:
+                    row.options = json.dumps(options)
+                    bg_db.commit()
+            await queue.put({"type": "options", "options": options})
+        finally:
+            await llm.close()
+
+    return _sse_job(work)
+
+
+@router.post("/{session_id}/actions/{action_id}/image-prompt")
+async def image_prompt(session_id: str, action_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """An image prompt for one beat (the browser then draws it through the image API)."""
+    session_data = _get_session(db, session_id, current_user)
+    beat = next((a for a in session_data.actions if a.id == action_id and a.role == "assistant" and a.content), None)
+    if beat is None:
+        raise HTTPException(status_code=404, detail="Beat not found")
+    settings = get_or_create_settings(db, current_user.id)
+    if not settings.api_key:
+        raise HTTPException(status_code=400, detail="API key not configured.")
+
+    earlier = [strip_think(a.content) for a in session_data.actions
+               if a.role == "assistant" and a.content and a.order_index < beat.order_index][-2:]
+    chars = []
+    for c in session_data.characters:
+        name = c.name or "Character"
+        bits = [f"Name: {name}"] + [f"{label}: {_sub_macros(v, name)[:1200]}" for label, v in
+                                    (("Description", c.description), ("Personality", c.personality)) if v]
+        chars.append("\n".join(bits))
+    parts = []
+    if chars:
+        parts.append("Characters:\n" + "\n\n".join(chars))
+    if earlier:
+        parts.append("Story so far (the scenes just before):\n" + "\n\n---\n\n".join(earlier))
+    parts.append("Scene to illustrate:\n" + strip_think(beat.content))
+    parts.append("Write the image generation prompt:")
+    messages = [
+        {"role": "system", "content": (
+            "You are an expert at writing prompts for AI image generators. Given a story excerpt and character "
+            "descriptions, write a single concise image prompt that vividly captures the key moment of the scene. "
+            "Output ONLY the prompt text: no explanation, no preamble, no quotes. Focus on setting, lighting, mood, "
+            "the characters' appearance and pose, and composition. Under 200 words, descriptive comma-separated phrases.")},
+        {"role": "user", "content": "\n\n".join(parts)},
+    ]
+
+    async def work(queue):
+        llm = LLMService(settings)
+        try:
+            out = ""
+            async for chunk in llm.generate(messages, stream=True, request_reasoning=True, temperature=UTILITY_TEMPERATURE):
+                out += chunk
+            prompt = _llm_text(out).strip("\"' ")
+            if not prompt:
+                raise RuntimeError("The model didn't write a prompt. Try again.")
+            await queue.put({"type": "prompt", "prompt": prompt[:2000]})
+        finally:
+            await llm.close()
+
+    return _sse_job(work)
+
+
+MAX_IMAGE_CHARS = 12_000_000  # a data URI of a large PNG
+
+
+@router.put("/{session_id}/actions/{action_id}/image")
+def save_image(session_id: str, action_id: str, payload: schemas.AdventureImageIn, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    _get_session(db, session_id, current_user)
+    action = _get_action(db, session_id, action_id)
+    image = (payload.image or "").strip()
+    if not re.match(r"^(https?://|/|data:image/)", image) or len(image) > MAX_IMAGE_CHARS:
+        raise HTTPException(status_code=400, detail="Not an image URL.")
+    action.image = image
+    action.image_prompt = (payload.prompt or "")[:2000]
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/{session_id}/actions/{action_id}/image")
+def get_image(session_id: str, action_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    _get_session(db, session_id, current_user)
+    action = _get_action(db, session_id, action_id)
+    if not action.image:
+        raise HTTPException(status_code=404, detail="No picture")
+    return {"image": action.image, "prompt": action.image_prompt or ""}
+
+
+@router.delete("/{session_id}/actions/{action_id}/image")
+def delete_image(session_id: str, action_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    _get_session(db, session_id, current_user)
+    action = _get_action(db, session_id, action_id)
+    action.image = ""
+    action.image_prompt = ""
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/inspire")
+async def inspire(req: schemas.AdventureInspireIn, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Three possible openings for a new adventure with these characters."""
+    settings = get_or_create_settings(db, current_user.id)
+    if not settings.api_key:
+        raise HTTPException(status_code=400, detail="API key not configured.")
+    cards = db.query(models.CharacterCard).filter(
+        models.CharacterCard.id.in_(req.card_ids or [-1]), models.CharacterCard.user_id == current_user.id).all()
+    who = []
+    for c in cards:
+        name = c.name or "Character"
+        bits = [f"Name: {name}"] + [f"{label}: {_sub_macros(v, name)[:900]}" for label, v in
+                                    (("Description", c.description), ("Scenario", c.scenario)) if v]
+        who.append("\n".join(bits))
+    ask = ("Characters:\n" + "\n\n".join(who)) if who else "No characters are chosen: invent the cast."
+    if req.genre:
+        ask += f"\n\nGenre or tone wanted: {req.genre[:200]}"
+    messages = [
+        {"role": "system", "content": "You pitch openings for interactive adventure stories."},
+        {"role": "user", "content": ask + (
+            "\n\nWrite three different openings for an adventure with them. Each is two or three vivid sentences "
+            "setting the scene and the first spark of trouble: a place, a situation, a hook. Make the three differ "
+            "in tone and genre. Reply with only the three, numbered 1. 2. 3., one per line.")},
+    ]
+
+    async def work(queue):
+        llm = LLMService(settings)
+        try:
+            out = ""
+            async for chunk in llm.generate(messages, stream=True, request_reasoning=True, temperature=0.9):
+                out += chunk
+            text = _llm_text(out)
+            pieces = re.split(r"\n\s*(?=\d+[.)]\s)|\n\s*\n", "\n" + text)
+            openings = [re.sub(r"^\s*(?:\d+[.)]|[-*•])\s*", "", p).strip(" *\"") for p in pieces if p.strip()]
+            openings = [o for o in openings if len(o) > 20][:3]
+            if not openings:
+                raise RuntimeError("No openings came back. Try again.")
+            await queue.put({"type": "openings", "openings": openings})
+        finally:
+            await llm.close()
+
+    return _sse_job(work)
