@@ -1,13 +1,27 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-08 (Story Writer reader overhaul, uncommitted). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-08 (Story Writer reader deployed; story list portraits committed, not deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Story Writer reader overhaul (2026-11-08) — not yet committed or deployed
+## Story list portraits (2026-11-08) — committed, not yet deployed
+
+Each story card in Story Writer's list has a portrait strip on top, split between its characters
+like the chat lobby's (`_buildStoryCover` in `storywriter.js`, `.sw-story-cover*` in `main.css`),
+plus a line naming them. The initial shows until a portrait loads and stays if the card has none;
+over four characters the last slot reads "+N"; a story with no cards shows 📖.
+`GET /api/sw/stories/` now returns `characters: [{id, name}]` per story (`StoryListOut`, the
+`Story.characters` property; cards loaded with `selectinload`, so no query per story). Portraits
+come from `/api/storage/cards/thumbnail`, same as the chat lobby.
+**Deploying needs a storywriterbackend rebuild** (not just the frontend), which interrupts
+any running auto-write (Resume picks it up) and in-flight chat/story replies.
+Tested: 2 new backend tests (17 pass; run them with `--python 3.12`, as Pillow 11.0 won't
+install on 3.14), 18 headless WebKit checks at 390 light / 320 dark, the 98 reader checks again.
+
+## Story Writer reader overhaul (2026-11-08) — deployed (`787dc0d`)
 
 An open story is now a full-screen reader, iPhone first. New `src/scripts/story-reader.js`; the
 "Story Writer reader" block at the end of `main.css`; workspace markup in `index.html`.
