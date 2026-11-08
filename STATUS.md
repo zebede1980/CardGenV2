@@ -1,13 +1,50 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-08 (Story Writer reader deployed; story list portraits committed, not deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-08 (Adventure overhaul deployed; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Story list portraits (2026-11-08) — committed, not yet deployed
+## Adventure overhaul (2026-11-08) — deployed 2026-11-08 night (`6745e0e`..`f5af2a8`)
+
+Adventure mode rebuilt in four phases, overnight while Joe was away (he asked for all four, then deploy).
+Only two old adventures existed (June); they still open, and get an auto title on their next beat.
+
+- **Phase 1, under the hood (`6745e0e`):** Stop cancels the beat on the server; SSE keep-alive pings
+  (shared with Chat via `services/gen_stream.py`); errors no longer stored as story text; an empty
+  placeholder orphaned by a backend restart is dropped instead of "writing" for ever; choices parse from
+  `[OPTION n]`, `**[Option n]:**`, `OPTION n:` or an `<options>` block, and a short follow-up call asks
+  for them when they're missing; new beats use `max(order_index)+1`; title saves (PATCH) and is set
+  automatically after the first beat; the list sends names only; `{{char}}`/`{{user}}` filled in.
+  Context falls back to 8192 when a user never saved Adventure settings (it used to be 2048).
+- **Phase 2, iPhone reader (`cb8f2e1`):** like Story Writer's reader: sticky top bar (back, title,
+  Aa shared with Story Writer, ⋯), one column, and a tray at the bottom with four big choice cards
+  (Safe/Risky tags), ✍️ Your own…, 🎲 New options, ▶ Continue when a beat came without choices, and
+  "writing…" + timer + Stop while a beat streams. Picks show as chips (tap: the options not taken).
+  Tap a beat: Read aloud (Story Writer's TTS settings), Edit (full-screen sheet), Picture (stored per
+  beat, fetched separately), Rewind; the latest beat has Redo and Undo. Watchdog 45 s ignoring time
+  asleep; waking never aborts a live beat; a dropped beat is fetched by id. New adventure is a
+  full-screen sheet with ✨ Inspire me (three openings).
+- **Phase 3, the story (`d59fd1e`):** new narrator prompt that plans the beat *and* the choices (four
+  different kinds, specific, under 15 words, never repeated, tagged safe/risky), keeps the cast in play
+  without forcing everyone into every beat. Play styles Director (3rd person) and Protagonist (2nd
+  person, you play a persona; saved personas fill it). Beat length, Chat's writing styles, variety
+  nudges, Redo asks for a different take. 🎲 Dice (d20 on risky picks, honoured by the narrator,
+  badge on the pick) and an optional ending arc (~8/15/25 beats). ⋯ → 🎛️ This adventure edits it all.
+- **Phase 4, journal (`f5af2a8`):** goals / threads / items / people / places, updated every 3 beats,
+  fed back to the narrator; ⋯ → 📜 Journal to read, edit or Update now.
+- **Tested:** 51 backend tests (`tests/test_adventure.py`, fake model); 118 WebKit checks at 320/390 px
+  light/dark against a fake streaming backend (stream, Stop, error + Try again, dropped connection
+  recovered, wake mid-stream, Undo/Rewind, edit, Aa, rename, picture, XSS, pending beat on open, new
+  sheet, play settings, dice badge, journal); Story Writer's 98 + 18 checks unchanged.
+  **Not tested:** a real model (does GLM keep to the `<options>` block and 15 words?), a real iPhone,
+  a real lock.
+- **Try on the iPhone:** a new Protagonist adventure with dice on; lock mid-beat and come back; Your
+  own… with the keyboard open; Rewind from an early beat; a picture; the Journal after 3+ beats.
+
+## Story list portraits (2026-11-08) — deployed (`bf61268`)
 
 Each story card in Story Writer's list has a portrait strip on top, split between its characters
 like the chat lobby's (`_buildStoryCover` in `storywriter.js`, `.sw-story-cover*` in `main.css`),
@@ -683,8 +720,8 @@ Character Gen (`character-generator.js`, `api-character.js`, `main.js`):
 - **Root cause of the 2026-10-18 stall is unknown.** The proxy finished the job and NPM sent the
   full 55 KB, but the desktop browser stopped receiving it partway through. The watchdog now
   recovers resumable streams. It hasn't been reproduced on a real stalled network.
-- Story Writer and Adventure (`/api/sw/*`) have no stall watchdog (Roleplay Chat has one since
-  2026-10-23). They have their own readers.
+- Story Writer (`/api/sw/*`) has no stall watchdog (Roleplay Chat has one since 2026-10-23,
+  Adventure since 2026-11-08). It has its own reader.
 - Recovered card **Avril Downing** (History, `h_1792307637233_joudne`) has no example messages,
   creator's notes, post-history instructions or portrait yet. Generate those in-app.
 - Only new-character portraits fall back to a hosted model when the PC is off. Regenerate,
