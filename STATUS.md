@@ -1,11 +1,45 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-08 (Adventure overhaul deployed; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-08 night (💌 Messenger and the Adventure overhaul deployed; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## 💌 Messenger (2026-11-08) — deployed 2026-11-08 night (`90da154`, `69091c4`)
+
+Built overnight from `plans/chat-bot-messenger.md` (Joe asked for it to be built and deployed unattended).
+A new tab where you text your characters: dialogue only, no narration.
+
+- **Backend (`90da154`):** chats live in Roleplay Chat's tables with `roleplay_chats.mode = 'messenger'`
+  (+ `messenger` JSON settings, `chat_messages.reaction`). `GET /chats/` now returns roleplay chats only
+  unless `?mode=messenger`, so the two lobbies stay apart (all 51 existing chats are 'roleplay').
+  `routers/messenger.py` has its own send path (send / opener / checkin / regen / retry), list, settings,
+  read, tapback, impersonate; replies run in Chat's `_ACTIVE_GENERATIONS`, so Chat's cancel route stops
+  them. Prompt in `services/messenger_prompt.py`: per style, cards adapted, `{{char}}`/`{{user}}` filled,
+  relationship presets, time awareness, short private checklist for native reasoners (effort medium).
+  Replies are cleaned server-side: `*action*`-only lines dropped, a leading `<react>` becomes a tapback.
+  Memory prompt about you and the relationship, every 8 messages.
+- **Front end (`69091c4`):** 💌 Messenger tab and Home 💌 Text button. Texting bubbles with receipts,
+  a Discord-style chat room, a spoken transcript. Typing dots, bubbles appear as paragraphs finish,
+  double-texting with blank lines, tap for React / Redo / Edit / Copy / Delete, long-press for tapbacks,
+  ＋ for a note to the AI and ✨ Write my next text, ⋯ for text size, cards, chat settings, delete.
+  Fixed shell on the visual viewport like Roleplay Chat; check-ins only when you open the chat.
+- **Deviation from the plan:** decision 3 said move Roleplay Chat's resilience code into a shared
+  `chat-core.js`. `chat-core.js` exists and Messenger uses it, but **Roleplay Chat was not moved onto it**:
+  its 41-check WebKit suite isn't on this PC, and changing that code without it overnight was the wrong
+  risk. Do it with that suite to hand.
+- **Tested:** 15 backend tests (66 in all); 145 WebKit checks at 320/390/430 px light+dark and 1280 px
+  (keyboard stand-in, wake mid-reply, dropped socket recovered by id with no second request, Stop,
+  error + Try again, groups, check-in, opener, XSS). **Real model** (DeepSeek V4 Pro, 4 calls, nothing
+  saved): texting gave two short texts, no narration (5 s); a 2-card chat room had both reply with
+  names, @mentions and talk to each other (24 s); conversation gave one spoken turn (6 s). The same run
+  checked Adventure: a 321-word beat ending on tension with four tagged choices of different kinds (37 s).
+  **Not tested:** a real iPhone or lock, the 45 s stall itself (needs a 45 s test), push notifications
+  (not built: a Home Screen web app could get real iOS push; ask if wanted).
+- **Try on the iPhone:** start a chat from a Home card's 💌 Text; keyboard open/close; lock mid-reply;
+  long-press a bubble; a 2-card chat room; turn on Check in and come back the next day.
 
 ## Adventure overhaul (2026-11-08) — deployed 2026-11-08 night (`6745e0e`..`f5af2a8`)
 
