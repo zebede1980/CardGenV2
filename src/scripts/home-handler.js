@@ -400,32 +400,11 @@ class HomeHandler {
                 }
             });
 
-            // Story Button: Swaps to Story tab, auto-creates a story if needed, and attaches character
+            // Story Button: Swaps to Story tab and opens the New story sheet with this character picked
             tile.querySelector('.story-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
-                const tabStory = document.getElementById('tab-storywriter');
-                if (tabStory) tabStory.click();
-                
-                setTimeout(() => {
-                    const listView = document.getElementById('sw-list-view');
-                    // If on the list view, auto-create a new story
-                    if (listView && listView.style.display !== 'none') {
-                        const titleInput = document.getElementById('sw-new-title');
-                        const createBtn = document.getElementById('sw-create-btn');
-                        if (titleInput && createBtn) {
-                            titleInput.value = `Tale of ${cardName}`;
-                            createBtn.click();
-                        }
-                    }
-                    // Attach the character by triggering the selector
-                    setTimeout(() => {
-                        const swSelect = document.getElementById('sw-add-card-select');
-                        if (swSelect) {
-                            swSelect.value = card.id;
-                            swSelect.dispatchEvent(new Event('change'));
-                        }
-                    }, 300);
-                }, 100);
+                document.getElementById('tab-storywriter')?.click();
+                window.storyWriterApp?.autowriter?.openSetup({ cards: [{ id: card.id, name: cardName }] });
             });
             
             // Chat Button: Swaps to Chat tab and fetches history to resume or start a new chat

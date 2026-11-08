@@ -7,7 +7,15 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Qwen Combine + 📐 angle buttons (2026-11-06) — committed, not deployed
+## Home 📖 Story opens the New story sheet (2026-11-08) — deployed
+
+A home-screen card tile's 📖 Story still drove the old title box + Create button, which the
+✨ New story sheet replaced, so it did nothing. It now switches to Story Writer and calls
+`autowriter.openSetup({ cards: [{ id, name }] })` with that card picked; the user sets the rest and
+presses Write. Tested in headless WebKit at 390/320 px against the fake backend (preselect, picker
+hides the picked card, the run starts with that card id). Not yet tried on the iPhone.
+
+## Qwen Combine + 📐 angle buttons (2026-11-06) — deployed 2026-11-08 with the above
 
 From a LoRA survey of every local model (HF likes/downloads, cards read, the best tested on the
 PC with and without, same seeds; contact sheets and pixel-drift numbers in that session's temp

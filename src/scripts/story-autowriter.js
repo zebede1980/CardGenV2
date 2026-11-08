@@ -82,19 +82,23 @@
 
         // ── New Story sheet ──────────────────────────────────────────────────
 
-        async openSetup() {
+        /** `cards`: [{ id, name }] to start with, e.g. from a home-screen tile's 📖 Story. */
+        async openSetup({ cards = [] } = {}) {
             const prefs = loadPrefs();
             this.form = {
                 length: prefs.length || 'medium',
                 ending: prefs.ending || 'any',
                 faithfulness: prefs.faithfulness || 3,
             };
-            this.picked = [];
+            this.picked = cards.filter((c) => c && c.id != null).map((c) => ({ id: c.id, name: c.name }));
             this._buildSheet();
             this.sheet.hidden = false;
             document.documentElement.classList.add('saw-open');
             this._renderSheet();
+            this._renderPicked();
             this.allCards = await this.app.apiCall('/cards/').catch(() => []);
+            // Swap in the full card objects so the picker's "already taken" check matches them.
+            this.picked = this.picked.map((p) => this.allCards.find((c) => String(c.id) === String(p.id)) || p);
             this._renderPicked();
         }
 
