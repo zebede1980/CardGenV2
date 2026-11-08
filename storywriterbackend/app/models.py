@@ -171,9 +171,17 @@ class RoleplayChat(Base):
     user_persona_gender = Column(String, default="")
     user_persona_detail = Column(Text, default="")
     user_persona_card_id = Column(Integer, ForeignKey("character_cards.id"), nullable=True)
+    # 'roleplay' (Roleplay Chat) or 'messenger' (💌 Messenger: dialogue only, see messenger.py)
+    mode = Column(String, default="roleplay", nullable=False)
+    # Messenger settings as JSON: style, relationship, time awareness, check-ins, length…
+    messenger = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    @property
+    def messenger_config(self) -> dict:
+        return _json_dict(self.messenger)
+
     messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan")
     memories = relationship("ChatMemory", back_populates="chat", cascade="all, delete-orphan")
     characters = relationship("CharacterCard", secondary="chat_character_links")
@@ -187,6 +195,7 @@ class ChatMessage(Base):
     character_name = Column(String, nullable=True)  # To identify who spoke in group chats
     content = Column(Text, default="")
     ooc_note = Column(Text, default="")  # Hidden instruction sent alongside the message
+    reaction = Column(String, default="")  # Messenger tapback on this message (by the other side)
     is_summarized = Column(Boolean, default=False)
     is_extracted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

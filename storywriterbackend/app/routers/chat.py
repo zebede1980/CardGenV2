@@ -868,7 +868,8 @@ async def extract_chat_memory_task(chat_id: str, user_id: int):
             await llm.close()
 
 @router.get("/", response_model=List[schemas.RoleplayChatOut])
-def list_chats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def list_chats(mode: str = "roleplay", db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Each lobby lists only its own chats; Messenger chats share these tables.
     from sqlalchemy import func
     msg_count_sq = (
         db.query(func.count(models.ChatMessage.id))
@@ -879,6 +880,7 @@ def list_chats(db: Session = Depends(get_db), current_user: models.User = Depend
     rows = (
         db.query(models.RoleplayChat, msg_count_sq.label("message_count"))
         .filter(models.RoleplayChat.user_id == str(current_user.id))
+        .filter(models.RoleplayChat.mode == ("messenger" if mode == "messenger" else "roleplay"))
         .order_by(models.RoleplayChat.updated_at.desc())
         .all()
     )

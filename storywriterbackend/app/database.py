@@ -156,6 +156,10 @@ def run_migrations():
             ("adventure_actions", "roll", "TEXT NOT NULL DEFAULT ''"),
             ("adventure_actions", "image", "TEXT NOT NULL DEFAULT ''"),
             ("adventure_actions", "image_prompt", "TEXT NOT NULL DEFAULT ''"),
+            # Messenger (💌): chats share Roleplay Chat's tables
+            ("roleplay_chats", "mode", "VARCHAR NOT NULL DEFAULT 'roleplay'"),
+            ("roleplay_chats", "messenger", "TEXT NOT NULL DEFAULT ''"),
+            ("chat_messages", "reaction", "VARCHAR NOT NULL DEFAULT ''"),
         ):
             if _table_exists(conn, table) and not _column_exists(conn, table, column):
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))

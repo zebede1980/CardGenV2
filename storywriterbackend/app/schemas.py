@@ -199,6 +199,7 @@ class ChatMessageOut(BaseModel):
     character_name: Optional[str] = None
     content: str
     ooc_note: str
+    reaction: Optional[str] = ""
     is_summarized: bool = False
     is_extracted: bool = False
     created_at: datetime
@@ -254,6 +255,8 @@ class RoleplayChatOut(BaseModel):
     user_persona_gender: str
     user_persona_detail: str
     user_persona_card_id: Optional[int]
+    mode: Optional[str] = "roleplay"
+    messenger_config: dict = {}
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
@@ -415,3 +418,41 @@ class SavedUserPersonaOut(SavedUserPersonaCreate):
 class AdventureInspireIn(BaseModel):
     card_ids: List[int] = []
     genre: str = ""
+
+class MessengerChatCreate(BaseModel):
+    card_ids: List[int]
+    settings: dict = {}
+    user_persona_name: str = "User"
+    user_persona_age: str = ""
+    user_persona_gender: str = ""
+    user_persona_detail: str = ""
+
+class MessengerChatUpdate(BaseModel):
+    settings: Optional[dict] = None
+    title: Optional[str] = None
+    user_persona_name: Optional[str] = None
+    user_persona_age: Optional[str] = None
+    user_persona_gender: Optional[str] = None
+    user_persona_detail: Optional[str] = None
+
+class MessengerSendRequest(BaseModel):
+    content: str = ""
+    ooc_note: Optional[str] = ""
+    # send | opener | checkin | regen
+    kind: Optional[str] = "send"
+    previous_reply: Optional[str] = None
+    # The browser's local time, e.g. "Sunday 8 November 2026, 22:15" (for time awareness)
+    client_time: Optional[str] = None
+    max_input_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    reasoning_effort: Optional[str] = None
+    enable_cot: Optional[bool] = True
+
+class MessengerReactIn(BaseModel):
+    emoji: str = ""
+
+class MessengerImpersonateIn(BaseModel):
+    draft: str = ""
+    max_input_tokens: Optional[int] = None
