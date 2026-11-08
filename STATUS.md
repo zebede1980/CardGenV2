@@ -1,11 +1,47 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-06. Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-08 (Story Writer reader overhaul, uncommitted). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## Story Writer reader overhaul (2026-11-08) — not yet committed or deployed
+
+An open story is now a full-screen reader, iPhone first. New `src/scripts/story-reader.js`; the
+"Story Writer reader" block at the end of `main.css`; workspace markup in `index.html`.
+
+- **Layout:** `#sw-workspace-view.sw-reader-open` hides the app header, tabs, footer and the
+  settings panel (a `body:has(#view-storywriter:not([style*="none"]) …)` rule, so any code that
+  switches views releases the page). Sticky top bar: ‹ back, title (tap → Story details), **Aa**,
+  **⋯**. Sticky bottom bar: narration mini-player, then steer box + **Continue** (was "Generate
+  Next"); Return in the steer box generates; while generating the steer box steps aside for
+  Generating… + Stop. The document still scrolls normally (no fixed shell as in the chat).
+- **Aa:** text size 85–170% in 9 steps, Sans/Serif (Iowan Old Style → Palatino → Georgia, all
+  system fonts), Compact/Normal/Roomy spacing. Per device in localStorage
+  (`cardgen.storyReader.v1`), applied as `--sw-text-scale/-leading/-font` on `:root`; the edit
+  sheet and streaming text use them too. The passage at the top of the screen stays put on change.
+- **⋯:** Story details (sheet: title, characters + voices, synopsis, script mode, all the old
+  header controls with their ids), Contents (tap a part to jump), Character cards, Outline (auto
+  stories), Story Writer settings (borrows `#sw-settings-panel` into a sheet and puts it back).
+- **Passages:** actions hidden until you tap the text (the latest always shows them); a tapped row
+  sticks just above the bottom bar. Play / Edit / Picture, Delete set apart at the far end. Edit is
+  a full-screen sheet (Cancel / Save in the header, asks before discarding changes).
+- **Auto stories:** the run panel docks into the bottom bar while writing (Stop + note in reach),
+  back above the story when idle.
+- **Story list** above the settings: title, synopsis, ✨ Auto-written pill, date, bigger delete.
+- **Fixed on the way:** `--bg-tertiary` is undefined, so the old passage action bar was near-black
+  in light mode. The Gallery button reused the first render's card list, so it kept offering
+  cards already attached. The scene-picture prompt and card names were put into `innerHTML`
+  unescaped. A wake refresh no longer overwrites the title/synopsis while you're typing in them.
+- **Tested:** headless WebKit against a fake backend, 98 checks at 390 px light and 320 px dark
+  (reader chrome hidden/restored, Aa steps/limits/persistence, tap-to-reveal, edit save/cancel,
+  details rename, contents jump, settings borrow/return, one generate request, auto panel
+  docking, release when another view takes over), plus a 1280 px desktop look. **Not tried on
+  the iPhone.** Try there first: the steer box with the keyboard open (the bottom bar is
+  `position: sticky`, not following `visualViewport` like the chat), the edit sheet with the
+  keyboard open, and a tapped passage's action row while scrolling.
 
 ## Home 📖 Story opens the New story sheet (2026-11-08) — deployed
 
