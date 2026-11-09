@@ -47,6 +47,22 @@
     const stripThink = (t) => String(t || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '');
     const isTouch = () => window.matchMedia?.('(hover: none)').matches;
     const parseTime = (s) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s || '') ? s : `${s}Z`);
+    const byTime = (chat) => {
+        if (chat?.messages) chat.messages.sort((a, b) => parseTime(a.created_at) - parseTime(b.created_at));
+        return chat;
+    };
+
+    // Typed emoticons shown as emoji. Only when they stand alone, so https:// and 10:30 are left be.
+    const EMOTICONS = {
+        ':)': '🙂', ':-)': '🙂', '=)': '🙂', ':D': '😃', ':-D': '😃', '=D': '😃', ';)': '😉', ';-)': '😉',
+        ':(': '🙁', ':-(': '🙁', ":'(": '😢', ':’(': '😢', ":')": '🥲', ':’)': '🥲', '>:(': '😠', '>:-(': '😠',
+        ':P': '😛', ':-P': '😛', ':p': '😛', ':-p': '😛', ';P': '😜', ';p': '😜', ':O': '😮', ':-O': '😮', ':o': '😮',
+        ':-o': '😮', ':*': '😘', ':-*': '😘', ':|': '😐', ':-|': '😐', ':/': '😕', ':-/': '😕', ':\\': '😕',
+        'XD': '😆', 'xD': '😆', '^_^': '😊', 'B-)': '😎', 'o_O': '😳', 'O_o': '😳', '-_-': '😑', '<3': '❤️', '</3': '💔',
+    };
+    const EMOTICON_RE = new RegExp(`(^|[\\s("“])(${Object.keys(EMOTICONS).sort((a, b) => b.length - a.length)
+        .map((k) => k.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('|')})(?=$|[\\s.,!?)"”…])`, 'g');
+    const emoticons = (t) => String(t || '').replace(EMOTICON_RE, (m, pre, k) => pre + EMOTICONS[k]);
 
     function splitLines(text, names) {
         const byLower = new Map(names.map((n) => [n.toLowerCase(), n]));
@@ -178,7 +194,7 @@
                 <span class="msg-row-avatars"></span>
                 <span class="msg-row-main">
                     <span class="msg-row-top"><b>${esc(c.title)}</b><small>${esc(when)}</small></span>
-                    <span class="msg-row-last">${c.last_role === 'user' ? 'You: ' : ''}${esc(c.last || 'Say hello 👋')}</span>
+                    <span class="msg-row-last">${c.last_role === 'user' ? 'You: ' : ''}${esc(emoticons(c.last) || 'Say hello 👋')}</span>
                 </span>
                 <span class="msg-row-side"><span class="msg-row-style" title="${esc(c.style)}">${icon}</span>${c.unread ? '<span class="msg-unread" aria-label="Unread"></span>' : ''}</span>`;
             const av = row.querySelector('.msg-row-avatars');
@@ -442,7 +458,7 @@
             try {
                 const r = await window.authFetch(`/api/sw/chats/${id}`);
                 if (!r.ok) throw new Error(await errorText(r));
-                this.chat = await r.json();
+                this.chat = byTime(await r.json());
                 this.photos = new Map();
                 this.attach = null;
                 this._paintAttach();
@@ -628,7 +644,7 @@
         }
 
         _format(text) {
-            let t = esc(text);
+            let t = esc(emoticons(text));
             t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
             t = t.replace(/(^|\s)@([\w-]{2,30})/g, '$1<span class="msg-mention">@$2</span>');
             t = t.replace(/:(heart|joy|fire|thumbsup|wave|sob|smile|grin|wink|eyes|skull|pray|clap|100):/g, (m, k) => ({
@@ -884,7 +900,7 @@
             try {
                 const r = await window.authFetch(`/api/sw/chats/${id}`);
                 if (!r.ok || this.chat?.id !== id) return;
-                this.chat = await r.json();
+                this.chat = byTime(await r.json());
                 await this._loadPhotos();
                 this._paintHeader();
                 this.render();

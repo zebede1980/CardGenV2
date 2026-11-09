@@ -182,7 +182,7 @@ class RoleplayChat(Base):
     def messenger_config(self) -> dict:
         return _json_dict(self.messenger)
 
-    messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan")
+    messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
     memories = relationship("ChatMemory", back_populates="chat", cascade="all, delete-orphan")
     characters = relationship("CharacterCard", secondary="chat_character_links")
 

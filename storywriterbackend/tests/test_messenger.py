@@ -271,3 +271,18 @@ def test_impersonate_writes_your_next_text(client, model):
     r = client.post(f"/api/messenger/{m['id']}/impersonate", json={"draft": "omw"}, headers=HEADERS)
     assert next(e for e in _events(r.text) if e["type"] == "draft")["content"] == "on my way!!"
     assert len(_detail(client, m["id"])["messages"]) == 2  # nothing saved
+
+
+def test_messages_come_back_in_time_order_not_storage_order(client, model):
+    # Postgres can return an updated row last, which put a new text above the reply it answered.
+    from datetime import datetime, timedelta
+    from app.models import ChatMessage, SessionLocal
+    m = _new(client)
+    t = datetime.utcnow()
+    db = SessionLocal()
+    db.add(ChatMessage(chat_id=m["id"], role="user", content="second", created_at=t))
+    db.commit()
+    db.add(ChatMessage(chat_id=m["id"], role="assistant", content="first", created_at=t - timedelta(minutes=1)))
+    db.commit()
+    db.close()
+    assert [x["content"] for x in _detail(client, m["id"])["messages"]] == ["first", "second"]
