@@ -1102,7 +1102,7 @@
                     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                     URL.revokeObjectURL(url);
                     const ratio = RATIOS.reduce((best, r) => (Math.abs(Math.log(w / h / r[1])) < Math.abs(Math.log(w / h / best[1])) ? r : best))[0];
-                    resolve({ data: c.toDataURL('image/jpeg', quality), ratio });
+                    resolve({ data: c.toDataURL('image/jpeg', quality), ratio, wide: w / h });
                 };
                 img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That picture couldn’t be opened.')); };
                 img.src = url;
@@ -1184,11 +1184,16 @@
             // The wording tested on Qwen Lightning (plans/messenger-photos.md): the portrait carries face and style.
             p.prompt = `Make a new picture of this same character: ${p.description} `
                 + 'Keep the character’s face, hair and the art style of the picture exactly the same.';
+            // On the PC, a phone-shaped frame unlike the portrait's: in the portrait's own frame a photo
+            // of the scene it already shows came back as a near-copy. The hosted model keeps the portrait's.
+            const frame = portrait.wide > 0.8 ? '3:4' : '9:16';
             const run = (model) => {
                 const ref = window.ResumableJobs?.newRef?.() || `photo-${Date.now()}`;
                 this._rememberJob(p.id, ref);
+                const local = model.startsWith('local/');
                 return window.apiHandler.editImage({
-                    imageBase64: portrait.data, instruction: p.prompt, model, aspectRatio: portrait.ratio, clientRef: ref,
+                    imageBase64: portrait.data, instruction: p.prompt, model, clientRef: ref,
+                    aspectRatio: local ? frame : portrait.ratio, reframe: local,
                 });
             };
             try {

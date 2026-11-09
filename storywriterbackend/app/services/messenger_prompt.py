@@ -157,10 +157,13 @@ def build_messenger_prompt(chat, memories: list, max_input_tokens: Optional[int]
         rules.append(
             "You can send a photo from your phone: put <photo>what the photo shows</photo> on its own line"
             + (", after your name and a colon" if group else "") + ". Write it as a caption of what is visible, in "
-            "the third person, standing on its own (no \"the dress I mentioned\": say what it is): the framing "
-            "(selfie, mirror selfie, someone else took it), where you are, what you're wearing or not wearing, "
-            "your pose and expression, the light. One or two sentences, e.g. <photo>Mirror selfie in her bedroom, "
-            "red summer dress and white trainers, hip cocked, playful pout, warm lamp light.</photo> "
+            "the third person, standing on its own (no \"the dress I mentioned\": say what it is). Start with the "
+            "shot as the phone took it (an arm's-length selfie from above, a mirror selfie, a close-up, a full-length "
+            "shot someone else took, just the legs or the view), then where you are, what you're wearing or not "
+            "wearing, your pose and expression, the light. Make every photo a new shot: a different framing, angle "
+            "and pose from the photos before it, even in the same place. One or two sentences, e.g. <photo>Mirror "
+            "selfie in her bedroom, red summer dress and white trainers, hip cocked, playful pout, warm lamp "
+            "light.</photo> "
             + photos_on.format(user=user) + " A photo is the one place you describe yourself; your texts still don't.")
     if style != "conversation":
         rules.append(f"You may react to {user}'s last message with one emoji tapback by starting your reply with "

@@ -113,3 +113,24 @@ photos each (café selfie, mirror selfie in a new outfit, in bed, on a night out
 - Group chat room: who's in a photo? The sender only, unless the description names others with
   portraits too (Qwen takes up to 3 references). v1: sender only.
 - Cost: one image + one small text call per photo. "Often" could mean a photo every few replies.
+
+### Near-copies of the portrait (2026-11-09, first real chat)
+
+Rhonda's two photos came back almost the same as her portrait. Her portrait (1152×896, landscape) already shows
+her lying on a bed in lace lingerie in golden window light, and the chat had her in bed, so the captions asked
+for nearly that picture; an edit in the portrait's own frame then barely moves. Tested on the PC, same seeds
+(contact sheets in the session's `qwen-lightning-test/msgphoto/`):
+
+- **The frame matters.** The same edit drawn in a 3:4 frame (`reframe`) gave real phone selfies (arm in
+  shot, from above, a new crop) from the landscape portrait; 9:16 too. Rewording the instruction ("a different
+  shot … new pose and camera angle") added little. Reimagine "close" changed the pose most (sat up) but looked
+  less like a phone photo.
+- **The caption matters most.** On a 3:4 portrait in lingerie at a door, a caption of that same scene stayed
+  a near-copy at 3:4 and 2:3 (9:16 moved a little on one of two seeds), while "close-up selfie taken from
+  above" gave a new shot at every shape.
+- Card portraits on the server: 1,288 square, 695 tall, 49 wide.
+
+So: local photos are drawn at 3:4, or 9:16 when the portrait is already 3:4 or taller (`reframe: true`, honoured
+by the Qwen edit graphs only); the hosted fallback keeps the portrait's shape (untested whether it would follow
+another). The caption rule now asks for the shot first (arm's-length selfie from above, mirror selfie,
+close-up, full-length someone else took, just the legs or the view) and a new framing, angle and pose each time.

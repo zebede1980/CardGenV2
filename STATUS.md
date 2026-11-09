@@ -44,7 +44,11 @@ Claude's own memory does not travel between them.
   `created_at` (Roleplay Chat lists too) and Messenger also sorts on load. Typed emoticons (`:)` `;)` `:D`
   `<3` `:(` `:P` `XD` …, `EMOTICONS` in `messenger-handler.js`) show as emoji in bubbles and the lobby
   preview when they stand alone; the text sent and stored is unchanged.
-
+- **Photos too like the portrait (2026-11-09):** Rhonda's portrait is already in bed in lingerie and the
+  captions asked for that, so the edit, drawn in the portrait's own frame, barely changed it. Local photos now draw
+  in a phone frame unlike the portrait's (3:4, or 9:16 if the portrait is already tall) via a new `reframe` flag on
+  local Qwen edits (proxy), and the caption rule asks for the shot first and a new framing/angle/pose each time.
+  Tested on the PC (contact sheets; see `plans/messenger-photos.md`), 75 backend tests, 72 WebKit checks.
 ## 💌 Messenger (2026-11-08) — deployed 2026-11-08 night (`90da154`, `69091c4`)
 
 Built overnight from `plans/chat-bot-messenger.md` (Joe asked for it to be built and deployed unattended).

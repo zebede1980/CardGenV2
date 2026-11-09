@@ -3029,7 +3029,7 @@ async function uploadLocalComfyImage({ mime, buffer }) {
 // API-format workflow, built from Comfy's official Qwen-Image 2.1 templates.
 // Node ids are arbitrary but kept equal to the template's so the two can be
 // compared side by side when the template changes.
-function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage, sourceImages }) {
+function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage, sourceImages, reframe }) {
   const combining = sourceImages?.length > 1;
   if (combining) prompt = nameReferencesAs(prompt, "plain");
   const graph = {
@@ -3070,6 +3070,10 @@ function buildQwenImageGraph({ prompt, seed, steps, width, height, sourceImage, 
     });
     graph[64].inputs.resolution = 0;
     graph[64].inputs["images.image_1"] = ["77", 0];
+    // Reframe: draw at the size asked for instead. A frame of another shape
+    // makes Qwen compose a new shot; at the source's own shape a caption close
+    // to the source came back as a near-copy (Messenger photos, 2026-11-09).
+    if (reframe) graph[62] = { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } };
     // Combine: the other pictures join as image_2, image_3… at about the same
     // size. The result takes the first picture's size. Measured on the PC
     // (2026-11-06): plain Qwen 2.1 put a coat from picture 2 onto the woman in
@@ -3633,7 +3637,8 @@ async function runLocalComfyImage(body) {
 
   const build = likeness !== undefined ? spec.buildReimagineGraph : spec.buildGraph;
   const graph = build({
-    prompt: prompt.slice(0, 8000), seed, steps, sourceImage, sourceImages, likeness, ...localComfyDims(body, spec.maxMegapixels),
+    prompt: prompt.slice(0, 8000), seed, steps, sourceImage, sourceImages, likeness, reframe: body.reframe === true,
+    ...localComfyDims(body, spec.maxMegapixels),
   });
   const submit = await localComfyFetch("/prompt", {
     method: "POST",
