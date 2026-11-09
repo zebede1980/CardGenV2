@@ -19,7 +19,7 @@ icon), a mode badge, 🗑️, title, cast, how long ago, Continue. Two a row on 
 touch `updated_at` ("Wěn Mèilíng" read September with a message on 3 Nov). The roleplay lobby's own order is
 unchanged (still updated_at). Tested: 77 backend tests, 34 WebKit checks at 390 light / 320 dark / 1280 dark
 (order across modes, stale item left out, cast fetched, escaping, same parts and height, columns, delete route,
-Messenger tile opens the chat). Not tried on the iPhone yet.
+Messenger tile opens the chat). **Confirmed by Joe on the iPhone and PC 2026-11-09**: layout good, Messenger and Story tiles open the right item; Roleplay and Adventure tiles and delete not yet tried.
 
 ## 💌 Messenger photos (2026-11-09) — deployed 2026-11-09 (`8e64355`, frontend + storywriterbackend)
 
