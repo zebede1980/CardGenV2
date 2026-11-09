@@ -5610,6 +5610,8 @@ body.msg-kb-open .msg-bottom { padding-bottom: 0.45rem; }
 #view-messenger .msg-stop { background: var(--error, #c93d4a); font-size: 0.85rem; }
 
 /* ── Sheets ── */
+/* Below the character gallery (z-index 2000), which opens on top of the New sheet. */
+#msg-sheets .msg-sheet { z-index: 1990; }
 #msg-sheets .msg-sheet .msg-sheet-x {
     width: 2.25rem; height: 2.25rem; flex: none; display: grid; place-items: center; padding: 0; border: 1px solid var(--border);
     border-radius: 50%; background: var(--surface-strong); color: var(--text-primary); font-size: 1rem; cursor: pointer;
