@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## 🏠 Home: Recent activity (2026-11-09) — not deployed yet
+## 🏠 Home: Recent activity (2026-11-09) — deployed (`d03df0c`)
 
 The "SillyTavern Character Generator" title and its four page buttons are gone from Home (the tabs above
 already link to every page). "Recent Roleplay Chats" is now **🕘 Recent activity**: the four latest things
@@ -19,7 +19,7 @@ icon), a mode badge, 🗑️, title, cast, how long ago, Continue. Two a row on 
 touch `updated_at` ("Wěn Mèilíng" read September with a message on 3 Nov). The roleplay lobby's own order is
 unchanged (still updated_at). Tested: 77 backend tests, 34 WebKit checks at 390 light / 320 dark / 1280 dark
 (order across modes, stale item left out, cast fetched, escaping, same parts and height, columns, delete route,
-Messenger tile opens the chat). Deploy needs frontend + storywriterbackend. Not tried on the iPhone.
+Messenger tile opens the chat). Not tried on the iPhone yet.
 
 ## 💌 Messenger photos (2026-11-09) — deployed 2026-11-09 (`8e64355`, frontend + storywriterbackend)
 
