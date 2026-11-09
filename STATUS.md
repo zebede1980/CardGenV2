@@ -1,13 +1,13 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-09 (📱 Home Screen app + push Stages 1–2 built, not deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-09 (📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## 📱 Home Screen app + push notifications, Stages 1–2 (2026-11-09) — built, not deployed
+## 📱 Home Screen app + push notifications, Stages 1–2 (2026-11-09) — deployed 2026-11-09 (`42f2fbb`, frontend + storywriterbackend)
 
 `plans/ios-app.md` has the five stages; Stages 1 and 2 are built. Stage 3 ("it's done" pushes) is next.
 
@@ -37,7 +37,9 @@ Claude's own memory does not travel between them.
   device name); 9 Node checks of `sw.js`; the built frontend image's headers. **Not tested:** a real
   iPhone, a real push through Apple, whether Safari shows a declarative push twice (it shouldn't), real
   push on desktop Chrome/Edge.
-- **Deploy:** frontend + storywriterbackend rebuild. Then on the iPhone: Safari → Share → Add to Home
+- **After deploying:** manifest, sw.js, version.json and icons served with the right types; `/api/push/key` and
+  `/devices` answered inside the backend container. `main` was fast-forwarded to `ChatTest` the same day.
+  **To try on the iPhone:** Safari → Share → Add to Home
   Screen, open it, sign in again (separate storage from Safari), 🔔 → Turn on → Send a test.
 
 ## 🏠 Home: Recent activity (2026-11-09) — deployed (`d03df0c`)

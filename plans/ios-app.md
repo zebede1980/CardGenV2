@@ -12,7 +12,7 @@ app do" at the end).
 
 ## Progress
 
-- **Stages 1 and 2 built 2026-11-09**, not yet deployed or tried on the iPhone. See STATUS.md.
+- **Stages 1 and 2 built and deployed 2026-11-09**, not yet tried on the iPhone. See STATUS.md.
   Changes from the plan below: the padding is gated on an `html.pwa` class set from
   `display-mode: standalone` (same effect, but tests can force it); the VAPID key is generated
   and stored in `app_secrets` rather than set in `.env`; the internal push route for the proxy
