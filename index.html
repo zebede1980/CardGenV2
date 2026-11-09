@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Zebede's Roleplay Tool</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20261109-msg3" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261109-photos" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -2352,6 +2352,9 @@
                             <div id="msg-tray" class="msg-tray" hidden>
                                 <input type="text" id="msg-ooc" class="input" maxlength="1000" placeholder="Note to the AI (they won't see it as a text)" aria-label="Note to the AI">
                                 <button type="button" id="msg-impersonate" class="btn-small btn-outline">✨ Write my next text</button>
+                                <button type="button" id="msg-photo-btn" class="btn-small btn-outline">📷 Photo</button>
+                                <button type="button" id="msg-describe-btn" class="btn-small btn-outline">📝 Describe a photo</button>
+                                <input type="file" id="msg-photo-file" accept="image/*" hidden>
                             </div>
                             <form id="msg-composer" class="msg-composer">
                                 <button type="button" id="msg-plus" class="msg-icon" aria-label="More options" aria-expanded="false" aria-controls="msg-tray">＋</button>
@@ -2910,13 +2913,13 @@
         <script src="src/scripts/config.js?v=20261106-qwencombine"></script>
         <script src="src/scripts/wake-lock.js?v=20260804-resilience"></script>
         <script src="src/scripts/resumable-jobs.js?v=20260804-resilience"></script>
-        <script src="src/scripts/api.js?v=20261018-freestatus"></script>
+        <script src="src/scripts/api.js?v=20261109-photos"></script>
         <script src="src/scripts/name-bank-data.js?v=20260919-namebank"></script>
         <script src="src/scripts/name-bank.js?v=20260919-namebank"></script>
         <script src="src/scripts/api-character.js?v=20261015-cap16k"></script>
         <script src="src/scripts/character-search.js?v=20260526"></script>
         <script src="src/scripts/prompt-look.js?v=20261018-cardlooks"></script>
-        <script src="src/scripts/api-image.js?v=20261026-captionfallback"></script>
+        <script src="src/scripts/api-image.js?v=20261109-photos"></script>
         <script src="src/scripts/api-lorebook.js?v=20261016-castretry"></script>
         <script src="src/scripts/character-generator.js?v=20261102-name"></script>
         <script src="src/scripts/image-generator.js?v=20260922-imagefixes"></script>
@@ -2947,7 +2950,7 @@
         <script src="src/scripts/story-reader.js?v=20261108-reader"></script>
         <script src="src/scripts/adventure-handler.js?v=20261108-adv4"></script>
         <script src="src/scripts/chat-core.js?v=20261108-msg2"></script>
-        <script src="src/scripts/messenger-handler.js?v=20261108-msg2"></script>
+        <script src="src/scripts/messenger-handler.js?v=20261109-photos"></script>
         <script src="src/scripts/inspire-me.js?v=20261015-stop"></script>
         <script src="src/scripts/gallery-mode.js"></script>
         <script src="src/scripts/chat-handler.js?v=20261106-tokens"></script>

@@ -471,7 +471,7 @@ Object.assign(APIHandler.prototype, {
   // source as a base64 data URI.
   // captioned: the instruction is already a full caption (Reimagine's written
   // prompt), so a model that needs one doesn't get it rewritten.
-  async editImage({ imageBase64, instruction, model, aspectRatio, captioned = false }) {
+  async editImage({ imageBase64, instruction, model, aspectRatio, captioned = false, clientRef = null }) {
     if (!imageBase64) throw new Error("An image is required to edit.");
     let trimmedInstruction = (instruction || "").trim();
     if (!trimmedInstruction) throw new Error("An edit instruction is required.");
@@ -503,6 +503,7 @@ Object.assign(APIHandler.prototype, {
     // what lets a returning client collect it instead of losing it.
     data.resumable = true;
     data.__jobLabel = "Image edit";
+    if (clientRef) data.clientRef = clientRef;
     const startedAt = performance.now();
     const response = await this.makeRequest("/api/image/generations", data, true);
 

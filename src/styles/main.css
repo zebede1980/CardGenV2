@@ -5530,6 +5530,24 @@ body.msg-kb-open .msg-head { padding-top: 0.3rem; }
 }
 .msg-b-row.me .msg-reaction { right: auto; left: -0.4rem; }
 .msg-receipt { align-self: flex-end; margin-right: 0.3rem; font-size: 0.7rem; color: var(--text-soft); }
+
+/* Photos: a picture, a placeholder while it's drawn, or a described photo (words on a card) */
+#view-messenger .msg-bubble.msg-photo-b { padding: 0; overflow: hidden; background: transparent; border-color: var(--border); }
+.msg-b-row.me .msg-bubble.msg-photo-b { background: transparent; border-color: var(--border); color: var(--text-primary); }
+.msg-photo-img { display: block; width: min(15rem, 62vw); max-height: 22rem; object-fit: cover; cursor: zoom-in; background: var(--surface-muted); }
+.msg-photo-img:not([src]) { aspect-ratio: 3 / 4; }
+.msg-photo-ph, .msg-photo-words {
+    width: min(15rem, 62vw); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.45rem;
+    padding: 1rem; text-align: center; font-size: 0.85rem; line-height: 1.35; color: var(--text-secondary);
+}
+.msg-photo-ph { aspect-ratio: 3 / 4; background: linear-gradient(110deg, var(--surface-muted) 30%, var(--surface-strong) 50%, var(--surface-muted) 70%); background-size: 250% 100%; animation: msg-shimmer 1.6s linear infinite; }
+.msg-photo-ph.is-failed { animation: none; background: var(--surface-muted); }
+.msg-photo-words { min-height: 9rem; font-style: italic; color: var(--text-primary);
+    background: linear-gradient(150deg, color-mix(in srgb, var(--msg-me) 22%, var(--surface-muted)), var(--surface-muted)); }
+.msg-photo-icon { font-size: 1.6rem; font-style: normal; }
+.msg-timeline[data-style="chatroom"] .msg-bubble.msg-photo-b { border: 1px solid var(--border); border-radius: 0.75rem; margin-top: 0.2rem; }
+@keyframes msg-shimmer { to { background-position: -150% 0; } }
+@media (prefers-reduced-motion: reduce) { .msg-photo-ph { animation: none; } }
 .msg-msg.is-live:empty { display: none; }
 
 /* Chat room: one column, names and times */
@@ -5596,7 +5614,15 @@ body.msg-kb-open .msg-bottom { padding-bottom: 0.45rem; }
 .msg-tray { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem; }
 .msg-tray[hidden] { display: none; }
 #view-messenger #msg-ooc { flex: 1 1 14rem; min-height: 2.6rem; font-size: 16px; border-radius: var(--radius-sm); }
-#view-messenger #msg-impersonate { min-height: 2.6rem; }
+#view-messenger #msg-impersonate, #view-messenger #msg-photo-btn, #view-messenger #msg-describe-btn { min-height: 2.6rem; }
+/* The photo you're about to send, above the composer */
+.msg-attach { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; padding: 0.35rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted); }
+.msg-attach-thumb { flex: none; width: 3rem; height: 3rem; border-radius: 0.5rem; object-fit: cover; }
+.msg-attach-icon { flex: none; width: 3rem; height: 3rem; display: grid; place-items: center; font-size: 1.4rem; }
+.msg-attach-body { flex: 1; min-width: 0; }
+#view-messenger .msg-attach input { width: 100%; min-height: 2.5rem; font-size: 16px; border-radius: var(--radius-sm); }
+.msg-attach-status { font-size: 0.85rem; color: var(--text-secondary); }
+#view-messenger .msg-attach-x { flex: none; width: 2.5rem; height: 2.5rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-secondary); font-size: 1rem; cursor: pointer; }
 .msg-composer { display: flex; align-items: flex-end; gap: 0.35rem; }
 #view-messenger #msg-input {
     flex: 1; min-width: 0; min-height: 2.6rem; max-height: 8.75rem; padding: 0.55rem 0.9rem; border-radius: 1.3rem;

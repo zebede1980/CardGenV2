@@ -105,7 +105,8 @@ class APIHandler {
     const resumable = !!data.resumable && !!window.ResumableJobs;
     let clientRef = null;
     if (resumable) {
-      clientRef = window.ResumableJobs.newRef();
+      // A caller may pick the ref up front, to find the job again after a reload.
+      clientRef = data.clientRef || window.ResumableJobs.newRef();
       data = { ...data, clientRef };
       window.ResumableJobs.add({ clientRef, label: data.__jobLabel || "Generation" });
       if (!isImageRequest) this.activeClientRefs.add(clientRef);
