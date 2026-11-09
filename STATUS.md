@@ -7,6 +7,39 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## 💌 Messenger photos (2026-11-09) — built, not deployed yet
+
+`plans/messenger-photos.md` has the design and the test results. Texting and chat-room styles only.
+
+- **Characters send photos:** the chat model writes `<photo>third-person caption</photo>` when asked,
+  and now and then on its own (per chat: 📷 Never / Only when I ask / Sometimes (default) / Often).
+  The backend lifts each into `chat_photos` (pending) and leaves `<photo id="…"/>` in the message; the
+  model sees `[Mira sent a photo: …]`. The **browser draws it as an edit of the card portrait**:
+  "Make a new picture of this same character: <caption> Keep the character's face, hair and the art
+  style of the picture exactly the same." on `local/qwen-image-2.1-lightning`, and on
+  `qwen-edit-uncensored` (nano-gpt, $0.04) when the PC is off. Both can be changed in Chat settings →
+  More (global). No portrait or no edit model: the caption shows as a words card.
+- **Why a plain edit:** tested on 3 of Joe's cards × 5 photos (PC, 60 pictures). The edit kept face,
+  tattoos and the anime/cartoon style while changing place, outfit and pose; Reimagine kept the
+  portrait's background and outfit. NSFW drawn as asked on both models. Hosted (9 paid calls) kept
+  style but weaker likeness and slimmer figures. Edits come out at the portrait's shape.
+- **You send photos:** ＋ → 📷 Photo (shrunk to ≤1600 px JPEG on the phone; the vision model writes the
+  caption the character goes by, editable; if it refuses you write one) or 📝 Describe a photo (words
+  only, free). Tap a photo for the lightbox (swipe through the chat's photos); 🎨 Redraw in the actions.
+- **iPhone:** never draws while hidden; drawn once on wake. Each draw's job ref is kept in localStorage
+  by photo id (`cardgen.messenger.photoJobs`), so a tab discarded mid-draw collects the result on reopen
+  instead of paying again; a job that can't be found asks "Draw it again" rather than paying silently.
+  `editImage` takes a `clientRef` for this (and `makeRequest` honours one).
+- **Tested:** 9 backend tests (74 in all); 68 WebKit checks at 390 light / 320 dark against a fake
+  backend (draw once, PC off → fallback, hidden then wake, tab discarded mid-draw, lost job, failure +
+  Try again, no portrait, XSS in a caption, your photo + vision caption, described photo, settings,
+  lightbox, Redraw), plus a dark-mode look. **Not tested:** a real chat model sending `<photo>` (does
+  it use it when asked, and not too often?), the vision caption on a real photo, the whole thing
+  through the deployed proxy, the iPhone.
+- **Deploy needs** frontend + storywriterbackend rebuilds (new `chat_photos` table is created on start).
+- **Not built:** photos in group chat rooms show only the sender's portrait (Qwen takes up to 3);
+  re-cropping square portraits to a phone shape; the Roleplay-Chat-style summary still sees raw markers.
+
 ## 💌 Messenger (2026-11-08) — deployed 2026-11-08 night (`90da154`, `69091c4`)
 
 Built overnight from `plans/chat-bot-messenger.md` (Joe asked for it to be built and deployed unattended).
