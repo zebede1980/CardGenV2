@@ -53,14 +53,6 @@ class HomeHandler {
 
         viewHome.innerHTML = `
             <div style="max-width: 1400px; margin: 0 auto; padding: 2rem;">
-                <h1 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem; color: var(--text-primary);">SillyTavern Character Generator</h1>
-                <div style="display: flex; justify-content: center; gap: 1.5rem; margin-bottom: 3rem; flex-wrap: wrap;">
-                    <button id="home-btn-cardgen" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">✨ Character Generator</button>
-                    <button id="home-btn-story" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📖 Story Mode</button>
-                    <button id="home-btn-chat" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">💬 Roleplay Chat</button>
-                    <button id="home-btn-adventure" class="btn-primary" style="padding: 1.2rem 2.5rem; font-size: 1.2rem; border-radius: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🎲 Adventure</button>
-                </div>
-
                 <!-- Recent Roleplay Chats Section -->
                 <div id="home-recent-chats-section" style="margin-bottom: 3rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
@@ -136,15 +128,6 @@ class HomeHandler {
                         #view-home > div {
                             padding: 1rem !important;
                         }
-                        #view-home h1 {
-                            font-size: 1.8rem !important;
-                        }
-                        #view-home button[id^="home-btn-"] {
-                            padding: 0.8rem 1rem !important;
-                            font-size: 1rem !important;
-                            width: 100%;
-                            max-width: 100%;
-                        }
                         #view-home #home-grid {
                             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
                             gap: 1rem !important;
@@ -198,12 +181,6 @@ class HomeHandler {
             switchView(viewAdventure, tabAdventure);
             if(window.adventureHandler) window.adventureHandler.showView();
         });
-
-        // Home Hero Buttons
-        document.getElementById('home-btn-cardgen')?.addEventListener('click', () => { if (tabCardGen) tabCardGen.click(); });
-        document.getElementById('home-btn-story')?.addEventListener('click', () => { if (tabStoryWriter) tabStoryWriter.click(); });
-        document.getElementById('home-btn-chat')?.addEventListener('click', () => { if (tabChat) tabChat.click(); });
-        document.getElementById('home-btn-adventure')?.addEventListener('click', () => { if (tabAdventure) tabAdventure.click(); });
 
         document.getElementById('home-view-all-chats-btn')?.addEventListener('click', () => { if (tabChat) tabChat.click(); });
 
