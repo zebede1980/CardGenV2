@@ -38,6 +38,9 @@ A new tab where you text your characters: dialogue only, no narration.
   checked Adventure: a 321-word beat ending on tension with four tagged choices of different kinds (37 s).
   **Not tested:** a real iPhone or lock, the 45 s stall itself (needs a 45 s test), push notifications
   (not built: a Home Screen web app could get real iOS push; ask if wanted).
+- **Fixed 2026-11-09 (first iPhone try):** the card gallery opened *behind* the New conversation
+  sheet (both z-index 2000, the sheet later in the DOM). Messenger sheets are now 1990, as Story
+  Writer's setup sheet. Checked in headless WebKit (390 light / 320 dark); not yet re-tried on the iPhone.
 - **Try on the iPhone:** start a chat from a Home card's 💌 Text; keyboard open/close; lock mid-reply;
   long-press a bubble; a 2-card chat room; turn on Check in and come back the next day.
 
