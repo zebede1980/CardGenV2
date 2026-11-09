@@ -877,17 +877,24 @@ def list_chats(mode: str = "roleplay", db: Session = Depends(get_db), current_us
         .correlate(models.RoleplayChat)
         .scalar_subquery()
     )
+    last_sq = (
+        db.query(func.max(models.ChatMessage.created_at))
+        .filter(models.ChatMessage.chat_id == models.RoleplayChat.id)
+        .correlate(models.RoleplayChat)
+        .scalar_subquery()
+    )
     rows = (
-        db.query(models.RoleplayChat, msg_count_sq.label("message_count"))
+        db.query(models.RoleplayChat, msg_count_sq.label("message_count"), last_sq.label("last_at"))
         .filter(models.RoleplayChat.user_id == str(current_user.id))
         .filter(models.RoleplayChat.mode == ("messenger" if mode == "messenger" else "roleplay"))
         .order_by(models.RoleplayChat.updated_at.desc())
         .all()
     )
     results = []
-    for chat, count in rows:
+    for chat, count, last in rows:
         out = schemas.RoleplayChatOut.from_orm(chat)
         out.message_count = count or 0
+        out.last_at = max(last, chat.updated_at) if last and chat.updated_at else (last or chat.updated_at)
         results.append(out)
     return results
 

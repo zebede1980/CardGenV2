@@ -286,3 +286,17 @@ def test_messages_come_back_in_time_order_not_storage_order(client, model):
     db.commit()
     db.close()
     assert [x["content"] for x in _detail(client, m["id"])["messages"]] == ["first", "second"]
+
+
+def test_the_chat_list_says_when_the_last_message_was(client, model):
+    # Home's Recent activity sorts by this: a new message doesn't touch updated_at.
+    from datetime import datetime, timedelta
+    from app.models import ChatMessage, RoleplayChat, SessionLocal
+    rp = client.post("/api/chats/", json={"title": "RP", "card_ids": [1]}, headers=HEADERS).json()
+    later = datetime.utcnow() + timedelta(hours=2)
+    db = SessionLocal()
+    db.add(ChatMessage(chat_id=rp["id"], role="user", content="hi", created_at=later))
+    db.commit()
+    db.close()
+    listed = client.get("/api/chats/", headers=HEADERS).json()[0]
+    assert listed["last_at"].startswith(later.isoformat()[:16]) and listed["updated_at"] < listed["last_at"]

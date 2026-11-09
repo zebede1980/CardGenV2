@@ -5676,3 +5676,85 @@ body.msg-kb-open .msg-bottom { padding-bottom: 0.45rem; }
 .msg-edit-text { flex: 1; width: 100%; min-height: 0; padding: 1rem; border: 0; background: var(--bg-page); color: var(--text-primary); font: inherit; font-size: 16px; line-height: 1.5; resize: none; outline: none; }
 /* 16px everywhere (an iPad zooms on smaller fields too; the desktop .input rule is 14.4px) */
 :is(#msg-sheets, #adv-sheets, #adv-new-modal) :is(input.input, textarea.input, select.input), #view-messenger :is(input.input, textarea.input), #adv-play-view textarea.input { font-size: 16px; }
+
+/* ── Home: Recent activity ─────────────────────────────────────────────────
+   One tile for every mode (roleplay, messenger, story, adventure). Shrinks to
+   two a row on a phone, like the character cards below it. */
+#view-home .hr-section { margin-bottom: 3rem; }
+#view-home .hr-heading { margin: 0 0 1.25rem; font-size: 1.8rem; color: var(--text-primary); }
+#view-home .hr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+    gap: 1.5rem;
+}
+#view-home .hr-note {
+    grid-column: 1 / -1; margin: 0; padding: 2rem 1rem; text-align: center;
+    color: var(--text-secondary); border: 1px dashed var(--border); border-radius: 0.8rem;
+}
+#view-home .hr-tile {
+    display: flex; flex-direction: column; gap: 0.5rem; min-width: 0;
+    padding: 1rem; border-radius: 0.8rem; cursor: pointer;
+    background: var(--surface-color); border: 1px solid var(--border);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+#view-home .hr-tile:hover, #view-home .hr-tile:focus-visible {
+    transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); outline: none;
+}
+#view-home .hr-art {
+    position: relative; display: flex; aspect-ratio: 4 / 3; overflow: hidden;
+    border-radius: 0.5rem; background: var(--surface-muted);
+}
+#view-home .hr-slot {
+    position: relative; flex: 1 1 0; min-width: 0; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; font-weight: 600; color: var(--text-secondary);
+}
+#view-home .hr-slot + .hr-slot { border-left: 1px solid var(--border); }
+#view-home .hr-slot img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+#view-home .hr-slot.hr-noimg::before { content: attr(data-initial); }
+#view-home .hr-slot.hr-empty { font-size: 2.6rem; }
+#view-home .hr-slot.hr-more { flex: 0 0 22%; font-size: 1.1rem; }
+#view-home .hr-mode {
+    position: absolute; left: 0.45rem; bottom: 0.45rem; max-width: calc(100% - 0.9rem);
+    padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.78rem; line-height: 1.3;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: #fff; background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(4px);
+}
+#view-home .hr-del {
+    position: absolute; top: 0.45rem; right: 0.45rem; z-index: 1;
+    width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    color: #fff; background: rgba(0, 0, 0, 0.6); cursor: pointer; transition: background 0.2s;
+}
+#view-home .hr-del:hover, #view-home .hr-del:focus-visible { background: rgba(220, 50, 50, 0.9); }
+#view-home .hr-title {
+    margin: 0.15rem 0 0; font-size: 1.1rem; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#view-home .hr-who {
+    font-size: 0.85rem; color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#view-home .hr-foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
+    margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border);
+    font-size: 0.78rem; color: var(--text-secondary);
+}
+#view-home .hr-go { color: var(--accent); font-weight: 600; white-space: nowrap; }
+@media (max-width: 768px) {
+    #view-home .hr-heading { font-size: 1.4rem; }
+    #view-home .hr-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
+    #view-home .hr-tile { padding: 0.6rem; gap: 0.35rem; }
+    #view-home .hr-title { font-size: 0.95rem; }
+    #view-home .hr-who { font-size: 0.75rem; }
+    #view-home .hr-mode { font-size: 0.7rem; padding: 0.15rem 0.45rem; }
+    #view-home .hr-del { width: 2rem; height: 2rem; font-size: 0.9rem; }
+    #view-home .hr-foot { font-size: 0.72rem; }
+    #view-home .hr-go { font-size: 0; }
+    #view-home .hr-go::after { content: "➔"; font-size: 0.9rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #view-home .hr-tile { transition: none; }
+    #view-home .hr-tile:hover { transform: none; }
+}

@@ -24,7 +24,7 @@ class HomeHandler {
             if (window.characterStorage && window.app) {
                 clearInterval(checkStorage);
                 this.loadCards();
-                this.loadRecentChats();
+                this.loadRecent();
             }
         }, 100);
     }
@@ -53,18 +53,13 @@ class HomeHandler {
 
         viewHome.innerHTML = `
             <div style="max-width: 1400px; margin: 0 auto; padding: 2rem;">
-                <!-- Recent Roleplay Chats Section -->
-                <div id="home-recent-chats-section" style="margin-bottom: 3rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-                        <h2 style="margin: 0; font-size: 1.8rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.6rem;">
-                            💬 Recent Roleplay Chats
-                        </h2>
-                        <button id="home-view-all-chats-btn" class="btn-outline" style="font-size: 0.9rem; padding: 0.4rem 0.9rem; border-radius: 0.5rem;">View All Chats ➔</button>
+                <!-- Recent activity: the latest roleplay chats, messenger chats, stories and adventures -->
+                <section id="home-recent-section" class="hr-section">
+                    <h2 class="hr-heading">🕘 Recent activity</h2>
+                    <div id="home-recent-grid" class="hr-grid">
+                        <p class="hr-note">Loading…</p>
                     </div>
-                    <div id="home-recent-chats-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1.5rem;">
-                        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 2rem;">Loading recent chats...</div>
-                    </div>
-                </div>
+                </section>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
                     <h2 id="home-characters-heading" style="margin: 0; font-size: 1.8rem; color: var(--text-primary); scroll-margin-top: 120px;">Your Characters</h2>
@@ -172,7 +167,7 @@ class HomeHandler {
         if (tabHome) tabHome.addEventListener('click', () => {
             switchView(viewHome, tabHome);
             this.loadCards();
-            this.loadRecentChats();
+            this.loadRecent();
         });
         if (tabCardGen) tabCardGen.addEventListener('click', () => switchView(viewCardGen, tabCardGen));
         if (tabStoryWriter) tabStoryWriter.addEventListener('click', () => switchView(viewStoryWriter, tabStoryWriter));
@@ -181,8 +176,6 @@ class HomeHandler {
             switchView(viewAdventure, tabAdventure);
             if(window.adventureHandler) window.adventureHandler.showView();
         });
-
-        document.getElementById('home-view-all-chats-btn')?.addEventListener('click', () => { if (tabChat) tabChat.click(); });
 
         document.getElementById('home-search')?.addEventListener('input', (e) => this.filterCards(e.target.value));
 
@@ -444,157 +437,128 @@ class HomeHandler {
         });
     }
 
-    async loadRecentChats() {
-        const grid = document.getElementById('home-recent-chats-grid');
+    // The four latest things you were doing, from any mode, as one kind of tile.
+    async loadRecent() {
+        const grid = document.getElementById('home-recent-grid');
         if (!grid) return;
-        try {
-            const res = await window.authFetch('/api/sw/chats/');
-            if (!res.ok) {
-                grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 1.5rem;">Could not load recent chats</div>';
-                return;
-            }
-            const chats = await res.json();
-            if (!chats || chats.length === 0) {
-                grid.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; background: var(--surface-color); border: 1px dashed var(--border); padding: 2.5rem 1.5rem; border-radius: 0.8rem; color: var(--text-secondary);">
-                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">💬</div>
-                        <div style="font-size: 1.1rem; color: var(--text-primary); font-weight: 500; margin-bottom: 0.25rem;">No Roleplay Chats Yet</div>
-                        <div style="font-size: 0.9rem;">Pick a character card below and click <b>Chat</b> to start a roleplay session!</div>
-                    </div>
-                `;
-                return;
-            }
+        const get = async (url) => {
+            const res = await window.authFetch(url);
+            if (!res.ok) throw new Error(`${url} ${res.status}`);
+            return res.json();
+        };
+        const results = await Promise.allSettled([
+            get('/api/sw/chats/'), get('/api/sw/messenger/'), get('/api/sw/stories/'), get('/api/sw/adventures/'),
+        ]);
+        if (results.every((r) => r.status === 'rejected')) {
+            grid.innerHTML = '<p class="hr-note">Couldn’t load your recent activity.</p>';
+            return;
+        }
+        const [chats, texts, stories, adventures] = results.map((r) => (r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []));
+        const people = (list) => (list || []).map((c) => ({ id: c.id, name: c.name || '' }));
+        const items = [
+            ...chats.map((c) => ({ kind: 'roleplay', id: c.id, title: c.title, at: c.last_at || c.updated_at, characters: null })),
+            ...texts.map((c) => ({ kind: 'messenger', id: c.id, title: c.title, at: c.last_at, characters: people(c.characters) })),
+            ...stories.map((st) => ({ kind: 'story', id: st.id, title: st.title, at: st.updated_at, characters: people(st.characters) })),
+            ...adventures.map((a) => ({ kind: 'adventure', id: a.id, title: a.title, at: a.updated_at, characters: people(a.characters) })),
+        ].map((it) => ({ ...it, when: HomeHandler.parseUtc(it.at) }))
+            .sort((x, y) => (y.when || 0) - (x.when || 0))
+            .slice(0, 4);
 
-            // Get up to 4 most recent chat sessions
-            const recentChats = chats.slice(0, 4);
+        // The roleplay list has no cast: fetch it for the few that are shown.
+        await Promise.all(items.filter((it) => !it.characters).map(async (it) => {
+            try { it.characters = people((await get(`/api/sw/chats/${it.id}`)).characters); } catch (_) { it.characters = []; }
+        }));
+        this.renderRecent(items);
+    }
 
-            // Fetch character details for any chats missing character info
-            for (const chat of recentChats) {
-                if (!chat.characters || chat.characters.length === 0) {
-                    try {
-                        const detailRes = await window.authFetch(`/api/sw/chats/${chat.id}`);
-                        if (detailRes.ok) {
-                            const detail = await detailRes.json();
-                            chat.characters = detail.characters || [];
-                        }
-                    } catch (e) {
-                        chat.characters = [];
-                    }
-                }
-            }
+    static parseUtc(s) {
+        if (!s) return null;
+        const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+        return isNaN(d) ? null : d;
+    }
 
-            this.renderRecentChats(recentChats);
-        } catch (e) {
-            console.error("Home: Failed to load recent chats", e);
-            grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--error); padding: 1.5rem;">Failed to load recent chats</div>';
+    renderRecent(items) {
+        const grid = document.getElementById('home-recent-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        if (!items.length) {
+            grid.innerHTML = '<p class="hr-note">Nothing yet. Pick a character below to start a chat, a story or an adventure.</p>';
+            return;
+        }
+        const token = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || '';
+        const portrait = (id) => `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(id)}${token ? '&token=' + encodeURIComponent(token) : ''}`;
+
+        items.forEach((it) => {
+            const mode = HomeHandler.RECENT_MODES[it.kind];
+            const cast = it.characters || [];
+            const shown = cast.length > 4 ? cast.slice(0, 3) : cast;
+            const tile = document.createElement('div');
+            tile.className = 'hr-tile';
+            tile.tabIndex = 0;
+            tile.setAttribute('role', 'button');
+            tile.setAttribute('aria-label', `${mode.label}: ${it.title || mode.label}`);
+
+            const art = shown.length
+                ? shown.map((c) => `<span class="hr-slot" data-initial="${this.escapeHtml((c.name || '?').charAt(0).toUpperCase())}"><img src="${portrait(c.id)}" alt="" loading="lazy"></span>`).join('')
+                  + (cast.length > 4 ? `<span class="hr-slot hr-more">+${cast.length - 3}</span>` : '')
+                : `<span class="hr-slot hr-empty" aria-hidden="true">${mode.icon}</span>`;
+            const who = cast.map((c) => c.name).filter(Boolean).join(', ');
+
+            tile.innerHTML = `
+                <div class="hr-art">
+                    ${art}
+                    <span class="hr-mode">${mode.icon} ${mode.label}</span>
+                    <button type="button" class="hr-del" title="Delete" aria-label="Delete ${this.escapeHtml(it.title || mode.label)}">🗑️</button>
+                </div>
+                <h3 class="hr-title" title="${this.escapeHtml(it.title)}">${this.escapeHtml(it.title || mode.label)}</h3>
+                <div class="hr-who">${who ? '👤 ' + this.escapeHtml(who) : '&nbsp;'}</div>
+                <div class="hr-foot"><span class="hr-when">${it.when ? this.formatRelativeDate(it.when) : ''}</span><span class="hr-go">Continue ➔</span></div>`;
+
+            // A portrait that won't load shows the initial instead.
+            tile.querySelectorAll('.hr-slot img').forEach((img) => {
+                img.addEventListener('error', () => { img.parentElement.classList.add('hr-noimg'); img.remove(); });
+            });
+            tile.querySelector('.hr-del').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showDeleteConfirmation('activity', { ...it, characters: cast }, shown.length ? shown.map((c) => portrait(c.id)) : null);
+            });
+            const open = () => this.openRecent(it);
+            tile.addEventListener('click', open);
+            tile.addEventListener('keydown', (e) => {
+                if (e.target === tile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); }
+            });
+            grid.appendChild(tile);
+        });
+    }
+
+    async openRecent(it) {
+        if (it.kind === 'roleplay') {
+            document.getElementById('tab-roleplaychat')?.click();
+            await window.roleplayChatHandler?.selectChat(it.id);
+        } else if (it.kind === 'messenger') {
+            window.messengerHandler?.showView();
+            await window.messengerHandler?.openChat(it.id);
+        } else if (it.kind === 'story') {
+            document.getElementById('tab-storywriter')?.click();
+            await window.storyWriterApp?.openStory(it.id);
+        } else if (it.kind === 'adventure') {
+            document.getElementById('tab-adventure')?.click();
+            await window.adventureHandler?.openSession(it.id);
         }
     }
 
-    renderRecentChats(chats) {
-        const grid = document.getElementById('home-recent-chats-grid');
-        if (!grid) return;
-        grid.innerHTML = '';
-
-        const authToken = window.cardgenAuth?.getToken() || localStorage.getItem('cardgen_auth_token') || "";
-        const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%232d2d3d'/><text x='50' y='50' font-family='Arial' font-size='24' fill='%23888' text-anchor='middle' dominant-baseline='middle'>💬</text></svg>`;
-
-        chats.forEach(chat => {
-            const tile = document.createElement('div');
-            tile.className = 'content-box';
-            tile.style.cssText = `
-                display: flex;
-                flex-direction: column;
-                padding: 1rem;
-                gap: 0.75rem;
-                border-radius: 0.8rem;
-                background: var(--surface-color);
-                border: 1px solid var(--border);
-                transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                cursor: pointer;
-                position: relative;
-            `;
-
-            tile.onmouseenter = () => {
-                tile.style.transform = 'translateY(-2px)';
-                tile.style.borderColor = 'var(--accent)';
-                tile.style.boxShadow = '0 6px 12px rgba(0,0,0,0.15)';
-            };
-            tile.onmouseleave = () => {
-                tile.style.transform = 'translateY(0)';
-                tile.style.borderColor = 'var(--border)';
-                tile.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-            };
-
-            const characters = chat.characters || [];
-            const charNames = characters.map(c => c.name).join(', ') || 'Roleplay Chat';
-
-            // Avatar Container
-            let avatarHtml = '';
-            let modalImgSrc = fallbackSvg;
-            if (characters.length === 0) {
-                avatarHtml = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:2.5rem; color:var(--text-secondary);">💬</div>`;
-            } else if (characters.length === 1) {
-                const char = characters[0];
-                const imgSrc = char.id ? `/api/storage/cards/thumbnail?cardId=${char.id}${authToken ? '&token=' + encodeURIComponent(authToken) : ''}` : fallbackSvg;
-                modalImgSrc = imgSrc;
-                avatarHtml = `<img src="${imgSrc}" alt="${this.escapeHtml(char.name)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width:100%; height:100%; object-fit:cover; object-position:top;">`;
-            } else {
-                const widthPct = 100 / characters.length;
-                let slotsHtml = '';
-                modalImgSrc = [];
-                characters.forEach((char, i) => {
-                    const imgSrc = char.id ? `/api/storage/cards/thumbnail?cardId=${char.id}${authToken ? '&token=' + encodeURIComponent(authToken) : ''}` : fallbackSvg;
-                    modalImgSrc.push(imgSrc);
-                    slotsHtml += `
-                        <div style="position:absolute; top:0; left:${widthPct * i}%; width:${widthPct}%; height:100%; overflow:hidden; border-right:${i < characters.length - 1 ? '1px solid var(--border)' : 'none'};">
-                            <img src="${imgSrc}" alt="${this.escapeHtml(char.name)}" onerror="this.src='${fallbackSvg.replace(/'/g, "\\'")}'" style="width:100%; height:100%; object-fit:cover; object-position:top;">
-                        </div>
-                    `;
-                });
-                avatarHtml = `<div style="position:relative; width:100%; height:100%;">${slotsHtml}</div>`;
-            }
-
-            // Formatted Date
-            const d = new Date(chat.updated_at);
-            const dateStr = isNaN(d) ? '' : this.formatRelativeDate(d);
-
-            tile.innerHTML = `
-                <div style="position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 0.5rem; overflow: hidden; background: var(--bg-tertiary);">
-                    ${avatarHtml}
-                    <button class="delete-chat-btn" style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 2.2rem; height: 2.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: background 0.2s; z-index: 10;" onmouseover="this.style.background='rgba(220,50,50,0.9)'" onmouseout="this.style.background='rgba(0,0,0,0.6)'" title="Delete Chat">🗑️</button>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 0.25rem; flex: 1;">
-                    <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(chat.title)}">
-                        ${this.escapeHtml(chat.title)}
-                    </h3>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        👤 ${this.escapeHtml(charNames)}
-                    </div>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border);">
-                    <span style="font-size: 0.75rem; color: var(--text-secondary);">⏱️ ${dateStr}</span>
-                    <button class="btn-small btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; border-radius: 0.4rem;">Continue ➔</button>
-                </div>
-            `;
-
-            tile.querySelector('.delete-chat-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.showDeleteConfirmation('chat', chat, modalImgSrc);
-            });
-
-            // Click handler: opens chat view and selects active chat session
-            tile.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const tabChat = document.getElementById('tab-roleplaychat');
-                if (tabChat) tabChat.click();
-                if (window.roleplayChatHandler) {
-                    await window.roleplayChatHandler.selectChat(chat.id);
-                }
-            });
-
-            grid.appendChild(tile);
-        });
+    // Deleted from Home while it is open in its own tab: close it there.
+    _closeIfOpen(it) {
+        if (it.kind === 'roleplay' && window.roleplayChatHandler?.activeChatId === it.id) {
+            window.roleplayChatHandler.activeChatId = null;
+            window.roleplayChatHandler.showLobby?.();
+        } else if (it.kind === 'messenger' && window.messengerHandler?.chat?.id === it.id) {
+            window.messengerHandler.closeChat();
+        } else if (it.kind === 'story' && String(window.storyWriterApp?.currentStoryId) === String(it.id)) {
+            document.getElementById('sw-back-btn')?.click();
+        } else if (it.kind === 'adventure' && window.adventureHandler?.currentSessionId === it.id) {
+            window.adventureHandler.closeSession();
+        }
     }
 
     formatRelativeDate(date) {
@@ -624,7 +588,7 @@ class HomeHandler {
 
         const title = type === 'card' 
             ? (item.characterName || (item.character && item.character.name) || item.name || 'Unknown Character')
-            : (item.title || 'Roleplay Chat');
+            : (item.title || 'Untitled');
 
         const details = type === 'card'
             ? `<div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; max-height: 100px; overflow-y: auto;">
@@ -642,7 +606,9 @@ class HomeHandler {
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
         `;
 
-        const imgHtml = type === 'chat' && Array.isArray(imgSrc) 
+        const imgHtml = !imgSrc
+            ? `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:4rem;">${HomeHandler.RECENT_MODES[item.kind]?.icon || '🗂️'}</div>`
+            : type === 'activity' && Array.isArray(imgSrc) 
             ? `<div style="position:relative; width:100%; height:100%;">${imgSrc.map((src, i) => `<div style="position:absolute; top:0; left:${(100/imgSrc.length)*i}%; width:${100/imgSrc.length}%; height:100%; overflow:hidden; border-right:${i < imgSrc.length - 1 ? '1px solid var(--border)' : 'none'};"><img src="${src}" style="width:100%; height:100%; object-fit:cover; object-position:top;"></div>`).join('')}</div>`
             : `<img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover;">`;
 
@@ -675,10 +641,11 @@ class HomeHandler {
                 if (type === 'card') {
                     await window.characterStorage.deleteCard(item.id);
                     this.loadCards({ preservePage: true }); // refresh grid, staying on current page
-                } else if (type === 'chat') {
-                    const res = await window.authFetch(`/api/sw/chats/${item.id}`, { method: 'DELETE' });
-                    if (!res.ok) throw new Error('Failed to delete chat');
-                    this.loadRecentChats(); // refresh grid
+                } else if (type === 'activity') {
+                    const res = await window.authFetch(`${HomeHandler.RECENT_MODES[item.kind].api}${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Failed to delete');
+                    this._closeIfOpen(item);
+                    this.loadRecent();
                 }
                 modal.remove();
             } catch (err) {
@@ -690,5 +657,12 @@ class HomeHandler {
         });
     }
 }
+
+HomeHandler.RECENT_MODES = {
+    roleplay: { icon: '💬', label: 'Roleplay', api: '/api/sw/chats/' },
+    messenger: { icon: '💌', label: 'Messenger', api: '/api/sw/chats/' },
+    story: { icon: '📖', label: 'Story', api: '/api/sw/stories/' },
+    adventure: { icon: '🎲', label: 'Adventure', api: '/api/sw/adventures/' },
+};
 
 window.homeHandler = new HomeHandler();

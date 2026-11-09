@@ -260,6 +260,9 @@ class RoleplayChatOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
+    # The list only: when the newest message was written (a new message
+    # doesn't change updated_at), else updated_at.
+    last_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
