@@ -134,3 +134,16 @@ So: local photos are drawn at 3:4, or 9:16 when the portrait is already 3:4 or t
 by the Qwen edit graphs only); the hosted fallback keeps the portrait's shape (untested whether it would follow
 another). The caption rule now asks for the shot first (arm's-length selfie from above, mirror selfie,
 close-up, full-length someone else took, just the legs or the view) and a new framing, angle and pose each time.
+
+### Extra limbs and the missing photo (2026-11-09)
+
+- **Extra arms** (Joe spotted them in the test pictures): on Rhonda (fur-sleeved arms, a tail, a hand on her
+  cheek in the portrait) about 5 of ~40 reframed pictures had a third arm or a second phone hand; Fenne (anime)
+  0 of 16. Each clear case was a selfie whose caption also gave the free hand a job ("hand resting low on her
+  belly", "claw hooked in the lace band") while the edit kept the portrait's hand on her cheek: three hands
+  asked for. The 25-step Qwen 2.1 drew nearly the same picture per seed (24 pictures, 4 seeds × 3 captions,
+  no clear errors in either), 2.5× slower, so the model stays Lightning. The caption rule now says a selfie
+  leaves one hand free for at most one thing. 🎨 Redraw remains the cure for a bad one.
+- **A photo that arrived as words:** the history showed the character's own photos as "[Rhonda Kimmel sent a
+  photo: …]" and the model copied that form instead of writing <photo>. Their own photos now show in history as
+  the <photo>…</photo> they write, and a reply's "[Name sent a photo: …]" / "[Photo: …]" is lifted as a photo.

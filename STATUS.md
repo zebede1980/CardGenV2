@@ -49,7 +49,10 @@ Claude's own memory does not travel between them.
   in a phone frame unlike the portrait's (3:4, or 9:16 if the portrait is already tall) via a new `reframe` flag on
   local Qwen edits (proxy), and the caption rule asks for the shot first and a new framing/angle/pose each time.
   Tested on the PC (contact sheets; see `plans/messenger-photos.md`), 75 backend tests, 72 WebKit checks.
-## 💌 Messenger (2026-11-08) — deployed 2026-11-08 night (`90da154`, `69091c4`)
+- **A photo sent as words, and extra arms (2026-11-09):** the model copied the history's "[Rhonda sent a photo: …]"
+  form instead of <photo>; its own photos now show in history as <photo>…</photo> and the bracket form is lifted too.
+  Extra arms came from a selfie caption giving the free hand a job while the portrait's hand pose was kept; the rule
+  now allows the free hand one thing. 25-step Qwen drew the same pictures 2.5x slower, so Lightning stays. 76 tests.## 💌 Messenger (2026-11-08) — deployed 2026-11-08 night (`90da154`, `69091c4`)
 
 Built overnight from `plans/chat-bot-messenger.md` (Joe asked for it to be built and deployed unattended).
 A new tab where you text your characters: dialogue only, no narration.

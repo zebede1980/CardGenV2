@@ -161,7 +161,8 @@ def build_messenger_prompt(chat, memories: list, max_input_tokens: Optional[int]
             "shot as the phone took it (an arm's-length selfie from above, a mirror selfie, a close-up, a full-length "
             "shot someone else took, just the legs or the view), then where you are, what you're wearing or not "
             "wearing, your pose and expression, the light. Make every photo a new shot: a different framing, angle "
-            "and pose from the photos before it, even in the same place. One or two sentences, e.g. <photo>Mirror "
+            "and pose from the photos before it, even in the same place. In a selfie one hand holds the phone, so "
+            "give the other at most one thing to do. One or two sentences, e.g. <photo>Mirror "
             "selfie in her bedroom, red summer dress and white trainers, hip cocked, playful pout, warm lamp "
             "light.</photo> "
             + photos_on.format(user=user) + " A photo is the one place you describe yourself; your texts still don't.")
@@ -224,11 +225,11 @@ def build_messenger_prompt(chat, memories: list, max_input_tokens: Optional[int]
 
     messages = [{"role": "system", "content": "\n\n".join(system)}]
 
-    def with_photos(m, sender):
+    def with_photos(m, sender, as_tag=False):
         if "<photo" not in (m.content or ""):
             return m.content
         found = {p.id: (p.sender, p.description) for p in getattr(m, "photos", None) or []}
-        return photos_as_words(m.content, found, sender)
+        return photos_as_words(m.content, found, sender, as_tag)
 
     history = []
     for m in msgs:
@@ -237,7 +238,9 @@ def build_messenger_prompt(chat, memories: list, max_input_tokens: Optional[int]
         if m.role == "user":
             history.append({"role": "user", "content": with_photos(m, user)})
         elif m.role == "assistant":
-            content = strip_think(with_photos(m, m.character_name or names[0]))
+            # Their own photos as the tag they write: shown "[Mira sent a photo: …]", a model
+            # copied that form and the photo was never drawn.
+            content = strip_think(with_photos(m, m.character_name or names[0], as_tag=bool(photos_on)))
             history.append({"role": "assistant", "content": content})
             if m.reaction:
                 history.append({"role": "user", "content": f"[{user} reacted {m.reaction} to that]"})
@@ -314,6 +317,9 @@ def clean_reply(text: str, names: list, group: bool) -> tuple:
 
 
 _PHOTO_TAG = re.compile(r"<photo>\s*(.*?)\s*(?:</photo>|$)", re.IGNORECASE | re.DOTALL)
+# "[Mira sent a photo: …]" or "[Photo: …]", the way the history used to show photos.
+_PHOTO_BRACKET = re.compile(r"\[\s*(?:([^\[\]\n:]{1,60}?)\s+sent\s+(?:you\s+)?an?\s+)?(?:photo|pic|picture|selfie)\s*:"
+                            r"\s*([^\[\]\n]+?)\s*\]", re.IGNORECASE)
 PHOTO_MARKER = re.compile(r'<photo id="([0-9a-f-]{36})"\s*/>')
 MAX_PHOTOS_PER_REPLY = 2
 MAX_PHOTO_DESCRIPTION = 600
@@ -330,6 +336,7 @@ def lift_photos(text: str, names: list, group: bool, allowed: bool = True, new_i
     photo stays with its sender. Photos not allowed (setting Never, or a spoken
     conversation), past the cap, or with no description are dropped."""
     new_id = new_id or (lambda: str(uuid.uuid4()))
+    text = _PHOTO_BRACKET.sub(lambda m: f"<photo>{m.group(2)}</photo>", text or "")
     photos = []
     out = []
     speaker_pat = re.compile(r"^\s*\**(" + "|".join(re.escape(n) for n in names) + r")\**\s*:\s*", re.IGNORECASE) if group and names else None
@@ -386,11 +393,14 @@ def lift_photos(text: str, names: list, group: bool, allowed: bool = True, new_i
     return "\n\n".join(paras), photos
 
 
-def photos_as_words(text: str, photos: dict, default_sender: str) -> str:
+def photos_as_words(text: str, photos: dict, default_sender: str, as_tag: bool = False) -> str:
     """The model's view of a stored message: each marker becomes
-    "[Mira sent a photo: …]". photos maps id -> (sender, description)."""
+    "[Mira sent a photo: …]", or with as_tag "<photo>…</photo>" as the model
+    writes it. photos maps id -> (sender, description)."""
     def words(m):
         sender, desc = photos.get(m.group(1), (default_sender, ""))
+        if as_tag:
+            return f"<photo>{desc}</photo>" if desc else "[photo]"
         return f"[{sender or default_sender} sent a photo: {desc}]" if desc else f"[{sender or default_sender} sent a photo]"
     return PHOTO_MARKER.sub(words, text or "")
 

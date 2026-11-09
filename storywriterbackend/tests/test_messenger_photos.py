@@ -66,7 +66,8 @@ def test_a_reply_with_a_photo_is_stored_pending_and_drawn_later(client, model):
 
     _send(client, m["id"], "wow")
     history = [x["content"] for x in model.reply_prompts()[-1]]
-    assert "here u go\n\n[Mira sent a photo: Mirror selfie in her bedroom, red dress.]" in history
+    # Her own photo shows as the tag she writes, so she doesn't copy a "[Mira sent a photo: …]" form.
+    assert "here u go\n\n<photo>Mirror selfie in her bedroom, red dress.</photo>" in history
 
 
 def test_the_photo_rule_follows_the_setting_and_style(client, model):
@@ -121,3 +122,16 @@ def test_regen_and_delete_take_the_reply_photos_with_them(client, model):
     _send(client, m["id"], kind="regen")
     with SessionLocal() as db:
         assert db.query(ChatPhoto).count() == 0
+
+
+def test_a_photo_written_the_old_bracket_way_is_still_a_photo():
+    text, photos = mp.lift_photos("fine, one more\n\n[Rhonda Kimmel sent a photo: Close-up from above, on her stomach in bed.]\n\nmiss u",
+                                  ["Rhonda Kimmel"], False, new_id=_ids())
+    (pid, sender, desc), = photos
+    assert sender == "Rhonda Kimmel" and desc == "Close-up from above, on her stomach in bed."
+    assert text == f'fine, one more\n\n<photo id="{pid}"/>\n\nmiss u'
+    _, photos = mp.lift_photos("[Photo: the view from the balcony]", ["Mira"], False, new_id=_ids())
+    assert [d for _, _, d in photos] == ["the view from the balcony"]
+    # Ordinary brackets are left alone.
+    text, photos = mp.lift_photos("[laughs] ok [sent at 9pm]", ["Mira"], False, new_id=_ids())
+    assert photos == [] and text == "[laughs] ok [sent at 9pm]"
