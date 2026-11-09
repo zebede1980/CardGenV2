@@ -1,11 +1,44 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-09 (💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-09 (📱 Home Screen app + push Stages 1–2 built, not deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## 📱 Home Screen app + push notifications, Stages 1–2 (2026-11-09) — built, not deployed
+
+`plans/ios-app.md` has the five stages; Stages 1 and 2 are built. Stage 3 ("it's done" pushes) is next.
+
+- **Install (Stage 1):** `manifest.webmanifest`, `icons/` (the mug on cream; iOS turns transparency
+  black), `apple-*` metas, `theme-color` following the theme toggle, black-translucent status bar. An
+  inline script in `<head>` adds `html.pwa` when running from the Home Screen (or when localStorage
+  `cardgen.pwaTest` is `1`, for tests); all the new top padding is under `html.pwa`, so Safari and the PC
+  don't change. A strip under the status bar (`body::before`, z 35) hides content scrolling under the
+  clock. Bars that already padded for the inset (chat shells, readers, sheets) were left alone.
+  **"Update ready" bar:** the image writes `version.json` at build; `pwa.js` checks it on wake and every
+  30 min, and won't reload while a wake lock or resumable job is live.
+- **Push (Stage 2):** `sw.js` has **no fetch handler** (push, notificationclick, pushsubscriptionchange
+  only). Backend `routers/push.py` (`/api/sw/push/key|devices|subscribe|unsubscribe|test`) and
+  `services/push.py` (`notify_user()` for Stage 3), tables `push_subscriptions` and `app_secrets`. The
+  **VAPID key is made on first use and kept in `app_secrets`**: no `.env` change; deleting that row
+  orphans every device. Payload in Apple's declarative format. Endpoints must be a real push service
+  (Apple/Google/Mozilla/Microsoft), so Send a test can't be aimed at an internal host. New dependency
+  **`pywebpush==2.5.0`**. 🔔 in the header opens the sheet: turn on/off, Send a test, the device list.
+- **Links:** `?open=<home|cardgen|storywriter|roleplay|adventure|messenger|playground>` and
+  `&id=` for roleplay/messenger/story/adventure items (through `homeHandler.openRecent`). Waits for
+  login; removed from the URL; a tap while the app is open arrives as a message and opens in place.
+- **Not done from the plan:** the internal route for the proxy to request pushes (Stage 3 needs it).
+- **Tested:** 8 backend tests (85 in all), with real encryption decrypted by a fake device; 102 WebKit
+  checks at 320/390/430 px light and dark and 1280 px against a fake backend, with a 47 px status bar
+  stood in (gating, padding, no sideways scroll, update bar, links incl. signed out, the sheet's flows
+  with a faked PushManager: permission asked before any request, stale key replaced, refusal, XSS in a
+  device name); 9 Node checks of `sw.js`; the built frontend image's headers. **Not tested:** a real
+  iPhone, a real push through Apple, whether Safari shows a declarative push twice (it shouldn't), real
+  push on desktop Chrome/Edge.
+- **Deploy:** frontend + storywriterbackend rebuild. Then on the iPhone: Safari → Share → Add to Home
+  Screen, open it, sign in again (separate storage from Safari), 🔔 → Turn on → Send a test.
 
 ## 🏠 Home: Recent activity (2026-11-09) — deployed (`d03df0c`)
 
