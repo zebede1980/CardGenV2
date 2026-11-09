@@ -339,3 +339,25 @@ class SavedUserPersona(Base):
     detail = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class PushSubscription(Base):
+    """One device that gets push notifications (plans/ios-app.md, Stage 2).
+    endpoint/p256dh/auth are what the browser's PushManager hands over."""
+    __tablename__ = "push_subscriptions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
+    label = Column(String, default="")
+    origin = Column(String, default="")  # the site it subscribed from, for links and the VAPID subject
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_ok_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, default="")
+
+class AppSecret(Base):
+    """Server-wide values generated once and kept, e.g. the VAPID key pair."""
+    __tablename__ = "app_secrets"
+    name = Column(String, primary_key=True)
+    value = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
