@@ -1039,6 +1039,8 @@ class CharacterGeneratorApp {
   _applyTheme(isDark) {
     document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
     localStorage.setItem("cardgen-theme", isDark ? "dark" : "light");
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.content = isDark ? "#0d1117" : "#f3f7fb";
     const btn = document.getElementById("theme-toggle-btn");
     if (btn) {
       btn.textContent = isDark ? "☀️ Light" : "🌙 Dark";

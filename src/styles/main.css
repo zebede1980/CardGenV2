@@ -5758,3 +5758,67 @@ body.msg-kb-open .msg-bottom { padding-bottom: 0.45rem; }
     #view-home .hr-tile { transition: none; }
     #view-home .hr-tile:hover { transform: none; }
 }
+
+/* ── Installed app (Home Screen) ─────────────────────────────────────────────
+   html.pwa is set in index.html's <head> when running from the Home Screen.
+   With the black-translucent status bar the page starts under the clock, so
+   these keep the page clear of it. Bars that already pad for
+   env(safe-area-inset-top) (chat shells, readers, sheets) need nothing here.
+   Outside an installed app none of this applies. */
+html.pwa body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0px);
+    background: var(--bg-page);
+    z-index: 35; /* under the readers' sticky bars (40) and every overlay */
+    pointer-events: none;
+}
+html.pwa .container { margin-top: calc(1.25rem + env(safe-area-inset-top, 0px)); }
+@media (max-width: 980px) {
+    html.pwa .container { margin-top: calc(0.8rem + env(safe-area-inset-top, 0px)); }
+}
+html.pwa .notification { top: calc(20px + env(safe-area-inset-top, 0px)) !important; }
+html.pwa .modal-overlay { padding-top: calc(1rem + env(safe-area-inset-top, 0px)); }
+html.pwa #review-card-modal { padding-top: env(safe-area-inset-top, 0px); }
+html.pwa .gallery-toolbar { padding-top: calc(0.75rem + env(safe-area-inset-top, 0px)); }
+
+/* "Update ready" bar (pwa-update.js) */
+#app-update-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+    width: max-content;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    z-index: 10002;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: calc(100% - 2rem);
+    padding: 0.55rem 0.6rem 0.55rem 1rem;
+    border-radius: 999px;
+    background: var(--surface-strong);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-lg);
+    font-size: 0.9rem;
+}
+#app-update-bar[hidden] { display: none; }
+#app-update-bar .aub-reload { min-height: 2.25rem; padding: 0.35rem 0.9rem; border-radius: 999px; }
+#app-update-bar .aub-x { width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-soft); font-size: 1rem; cursor: pointer; }
+
+/* 🔔 Notifications sheet (pwa.js) */
+#notify-sheet .pb-scroll { display: flex; flex-direction: column; gap: 0.9rem; }
+#notify-sheet h3 { margin: 0; font-size: 0.95rem; }
+#notify-sheet .ns-state { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary); }
+#notify-sheet .pb-row button { min-height: 2.75rem; }
+#notify-sheet .ns-x, #notify-sheet .ns-rm { flex: none; width: 2.25rem; height: 2.25rem; display: grid; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--surface-strong); color: var(--text-primary); font-size: 0.95rem; cursor: pointer; }
+#notify-sheet .ns-devices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+#notify-sheet .ns-devices li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; }
+#notify-sheet .ns-name { flex: 1 1 0; min-width: 0; font-size: 0.9rem; font-weight: 600; overflow-wrap: anywhere; }
+#notify-sheet .ns-name em { font-weight: 400; color: var(--text-soft); }
+#notify-sheet .ns-devices .pb-hint { flex: 1 1 100%; order: 3; }
+#notify-sheet .ns-rm { order: 2; }

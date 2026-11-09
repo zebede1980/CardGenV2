@@ -10,7 +10,12 @@ COPY .docker/nginx/nginx-frontend.conf /etc/nginx/nginx.conf
 # Copy frontend files preserving directory structure
 COPY src/ /usr/share/nginx/html/src/
 COPY index.html /usr/share/nginx/html/
-COPY favicon.png /usr/share/nginx/html/
+COPY favicon.png manifest.webmanifest sw.js /usr/share/nginx/html/
+COPY icons/ /usr/share/nginx/html/icons/
+
+# Build id for the app's "Update ready" bar (pwa.js). Docker reuses this layer
+# while the files above are unchanged, so it only changes when the frontend does.
+RUN echo "{\"build\":\"$(date -u +%Y%m%d%H%M%S)\"}" > /usr/share/nginx/html/version.json
 
 # Set permissions
 RUN chmod -R 755 /usr/share/nginx/html
