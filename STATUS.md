@@ -39,6 +39,11 @@ Claude's own memory does not travel between them.
 - **Deploy needs** frontend + storywriterbackend rebuilds (new `chat_photos` table is created on start).
 - **Not built:** photos in group chat rooms show only the sender's portrait (Qwen takes up to 3);
   re-cropping square portraits to a phone shape; the Roleplay-Chat-style summary still sees raw markers.
+- **Fixed 2026-11-09 (`1a54a58`, deployed):** a sent text could show above the reply before it, because
+  `RoleplayChat.messages` had no order and Postgres returns an updated row last; it now orders by
+  `created_at` (Roleplay Chat lists too) and Messenger also sorts on load. Typed emoticons (`:)` `;)` `:D`
+  `<3` `:(` `:P` `XD` …, `EMOTICONS` in `messenger-handler.js`) show as emoji in bubbles and the lobby
+  preview when they stand alone; the text sent and stored is unchanged.
 
 ## 💌 Messenger (2026-11-08) — deployed 2026-11-08 night (`90da154`, `69091c4`)
 
