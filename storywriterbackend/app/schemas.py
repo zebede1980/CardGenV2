@@ -453,6 +453,17 @@ class MessengerSendRequest(BaseModel):
 class MessengerReactIn(BaseModel):
     emoji: str = ""
 
+class MessengerPhotoIn(BaseModel):
+    """A photo you send: a picture with what it shows, or words alone (a photo you describe)."""
+    description: str = ""
+    image: Optional[str] = None
+
+class MessengerPhotoUpdate(BaseModel):
+    """A character's photo once drawn (image), or given up on (status 'failed')."""
+    image: Optional[str] = None
+    prompt: Optional[str] = None
+    status: Optional[str] = None
+
 class MessengerImpersonateIn(BaseModel):
     draft: str = ""
     max_input_tokens: Optional[int] = None

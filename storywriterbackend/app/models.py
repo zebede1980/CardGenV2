@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Boolean, JSON, Float
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker, relationship, deferred
 from datetime import datetime
 import os
 import json
@@ -201,6 +201,26 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     chat = relationship("RoleplayChat", back_populates="messages")
+    photos = relationship("ChatPhoto", back_populates="message", cascade="all, delete-orphan")
+
+class ChatPhoto(Base):
+    """A 💌 Messenger photo. The message holds a `<photo id="…"/>` line where it
+    sits in the burst; the picture itself is fetched on its own (it can be MBs).
+    status: pending (a character's, not drawn yet), done, failed, described (yours,
+    words only: a photo you described rather than sent)."""
+    __tablename__ = "chat_photos"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    chat_id = Column(String(36), ForeignKey("roleplay_chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id = Column(String(36), ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=True, index=True)
+    owner = Column(String, nullable=False)  # 'char' or 'user'
+    sender = Column(String, default="")  # who sent it (a card name, or the persona)
+    description = Column(Text, default="")
+    prompt = Column(Text, default="")
+    image = deferred(Column(Text, default=""))  # data URI or URL; loaded only when asked for
+    status = Column(String, default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    message = relationship("ChatMessage", back_populates="photos")
 
 class ChatMemory(Base):
     __tablename__ = "chat_memories"

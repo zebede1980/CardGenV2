@@ -51,7 +51,8 @@ def _drop_orphans(db: Session, chat: models.RoleplayChat) -> None:
 
 
 def _preview(m) -> str:
-    text = re.sub(r"\s+", " ", strip_think(m.content or "")).strip()
+    text = mp.PHOTO_MARKER.sub("📷 Photo", strip_think(m.content or ""))
+    text = re.sub(r"\s+", " ", text).strip()
     return text[:120] + ("…" if len(text) > 120 else "")
 
 
@@ -196,8 +197,15 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
 
     user_msg = None
     if kind == "send":
+        content = _claim_user_photos(db, chat_id, content)
+        if not content.strip() and not (req.ooc_note or "").strip():
+            raise HTTPException(status_code=400, detail="Nothing to send.")
         user_msg = models.ChatMessage(chat_id=chat_id, role="user", content=content[:8000], ooc_note=req.ooc_note or "")
         db.add(user_msg)
+        db.flush()
+        db.query(models.ChatPhoto).filter(
+            models.ChatPhoto.id.in_(mp.PHOTO_MARKER.findall(content) or ["-"]),
+        ).update({models.ChatPhoto.message_id: user_msg.id}, synchronize_session=False)
     chat.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(chat)
@@ -206,6 +214,7 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
     names = [c.name or "Character" for c in cards]
     group = len(cards) > 1
     cfg = mp.config(chat)
+    photos_allowed = cfg["style"] != "conversation" and cfg["photos"] != "never"
     native = supports_reasoning_flag(settings.api_base_url)
     enable_cot = req.enable_cot is not False
     memories = [m.fact for m in chat.memories if m.is_active]
@@ -255,6 +264,7 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
                 error = e
                 logger.error(f"Messenger reply failed: {e}")
             text, reaction = mp.clean_reply(close_open_think(full), names, group)
+            text, photos = mp.lift_photos(text, names, group, allowed=photos_allowed)
             saved = bool(text)
             try:
                 with SessionLocal() as bg:
@@ -262,6 +272,9 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
                     if msg:
                         if saved:
                             msg.content = text
+                            for pid, sender, desc in photos:
+                                bg.add(models.ChatPhoto(id=pid, chat_id=chat_id, message_id=reply_id, owner="char",
+                                                        sender=sender, description=desc, status="pending"))
                         else:
                             bg.delete(msg)
                     if reaction and user_msg_id:
@@ -273,7 +286,9 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
                 saved = False
                 logger.error(f"Messenger save failed: {db_err}")
             await queue.put({"type": "final", "message_id": reply_id, "deleted": not saved, "content": text if saved else "",
-                             "reaction": reaction if user_msg_id else "", "user_message_id": user_msg_id})
+                             "reaction": reaction if user_msg_id else "", "user_message_id": user_msg_id,
+                             "photos": [_photo_out_raw(pid, reply_id, "char", sender, desc, "pending")
+                                        for pid, sender, desc in photos] if saved else []})
             if error is not None:
                 await queue.put(error)
         finally:
@@ -291,6 +306,95 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
 
     asyncio.create_task(after())
     return StreamingResponse(sse_from_queue(queue), media_type="text/event-stream")
+
+
+# ── Photos ──────────────────────────────────────────────────────────────────
+MAX_PHOTO_CHARS = 12_000_000  # a data URI of a large PNG, as Adventure's pictures
+_IMAGE_URL = re.compile(r"^(https?://|/|data:image/)")
+
+
+def _photo_out_raw(pid, message_id, owner, sender, description, status, has_image=False):
+    return {"id": pid, "message_id": message_id, "owner": owner, "sender": sender,
+            "description": description, "status": status, "has_image": has_image}
+
+
+def _photo_out(p: models.ChatPhoto, has_image: bool) -> dict:
+    return _photo_out_raw(p.id, p.message_id, p.owner, p.sender, p.description, p.status, has_image)
+
+
+def _get_photo(db: Session, chat_id: str, photo_id: str) -> models.ChatPhoto:
+    photo = db.query(models.ChatPhoto).filter(models.ChatPhoto.id == photo_id, models.ChatPhoto.chat_id == chat_id).first()
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return photo
+
+
+def _claim_user_photos(db: Session, chat_id: str, content: str) -> str:
+    """Keeps only markers for your own photos in this chat that no message holds
+    yet; anything else that looks like a marker is dropped."""
+    ids = mp.PHOTO_MARKER.findall(content or "")
+    if not ids:
+        return content or ""
+    free = {p.id for p in db.query(models.ChatPhoto).filter(
+        models.ChatPhoto.id.in_(ids), models.ChatPhoto.chat_id == chat_id,
+        models.ChatPhoto.owner == "user", models.ChatPhoto.message_id.is_(None))}
+    text = mp.PHOTO_MARKER.sub(lambda m: m.group(0) if m.group(1) in free else "", content)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+@router.get("/{chat_id}/photos")
+def list_photos(chat_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Every photo in the chat, without the pictures (see GET …/photos/{id})."""
+    _get_chat(db, chat_id, current_user)
+    rows = (db.query(models.ChatPhoto, models.ChatPhoto.image != "")
+            .filter(models.ChatPhoto.chat_id == chat_id).order_by(models.ChatPhoto.created_at).all())
+    return [_photo_out(p, bool(has)) for p, has in rows]
+
+
+@router.get("/{chat_id}/photos/{photo_id}")
+def get_photo(chat_id: str, photo_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    _get_chat(db, chat_id, current_user)
+    p = _get_photo(db, chat_id, photo_id)
+    return {**_photo_out(p, bool(p.image)), "image": p.image or "", "prompt": p.prompt or ""}
+
+
+@router.post("/{chat_id}/photos")
+def add_photo(chat_id: str, body: schemas.MessengerPhotoIn, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """A photo you're about to send. Put the returned marker in your message."""
+    chat = _get_chat(db, chat_id, current_user)
+    image = (body.image or "").strip()
+    description = (body.description or "").strip()[:mp.MAX_PHOTO_DESCRIPTION]
+    if image and (not _IMAGE_URL.match(image) or len(image) > MAX_PHOTO_CHARS):
+        raise HTTPException(status_code=400, detail="Not an image.")
+    if not image and not description:
+        raise HTTPException(status_code=400, detail="Say what's in the photo.")
+    p = models.ChatPhoto(chat_id=chat_id, owner="user", sender=chat.user_persona_name or "User",
+                         description=description, image=image, status="done" if image else "described")
+    db.add(p)
+    db.commit()
+    return {**_photo_out(p, bool(image)), "marker": mp.photo_marker(p.id)}
+
+
+@router.put("/{chat_id}/photos/{photo_id}")
+def update_photo(chat_id: str, photo_id: str, body: schemas.MessengerPhotoUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """A character's photo, drawn (image) or given up on (status 'failed'); a
+    'pending' status asks for it to be drawn again (Redraw)."""
+    _get_chat(db, chat_id, current_user)
+    p = _get_photo(db, chat_id, photo_id)
+    if p.owner != "char":
+        raise HTTPException(status_code=400, detail="Only a character's photo is drawn.")
+    image = (body.image or "").strip()
+    if image:
+        if not _IMAGE_URL.match(image) or len(image) > MAX_PHOTO_CHARS:
+            raise HTTPException(status_code=400, detail="Not an image.")
+        p.image = image
+        p.status = "done"
+    elif body.status in ("failed", "pending"):
+        p.status = body.status
+    if body.prompt is not None:
+        p.prompt = body.prompt[:4000]
+    db.commit()
+    return _photo_out(p, bool(p.image))
 
 
 @router.post("/{chat_id}/impersonate")
@@ -343,7 +447,11 @@ async def extract_messenger_memory(chat_id: str, user_id: int):
             return
         user = chat.user_persona_name or "User"
         names = ", ".join(c.name for c in chat.characters if c.name) or "the character"
-        lines = [f"{user if m.role == 'user' else (m.character_name or names)}: {strip_think(m.content)}" for m in fresh]
+        found = {p.id: (p.sender, p.description) for p in bg.query(models.ChatPhoto).filter(models.ChatPhoto.chat_id == chat_id)}
+        lines = []
+        for m in fresh:
+            who = user if m.role == "user" else (m.character_name or names)
+            lines.append(f"{who}: {mp.photos_as_words(strip_think(m.content), found, who)}")
         active = [m for m in chat.memories if m.is_active]
         current = "\n".join(f"- {m.fact}" for m in active) or "None."
         settings = get_or_create_settings(bg, user_id)

@@ -7,6 +7,7 @@ into bubbles. See plans/chat-bot-messenger.md.
 """
 import random
 import re
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -44,6 +45,15 @@ NUDGES = [
     "Change the subject to something on your mind.",
 ]
 NUDGE_BLANKS = 4
+# How often a character sends a photo without being asked (they always may when asked).
+PHOTO_FREQUENCY = {
+    "never": None,
+    "asked": "Only when {user} asks for one.",
+    "sometimes": "When {user} asks for one, and now and then on your own when it fits (where you are, what "
+                 "you're wearing, something you want to show them); not in most replies.",
+    "often": "When {user} asks for one, and fairly often on your own: a quick photo of where you are, your "
+             "outfit, your mood, the way people text pictures. Still not in every reply.",
+}
 
 
 def config(chat) -> dict:
@@ -62,6 +72,7 @@ def config(chat) -> dict:
         "length": c.get("length") if c.get("length") in LENGTHS else "normal",
         "variety": c.get("variety") is not False,
         "reasoning_effort": c.get("reasoning_effort") if c.get("reasoning_effort") in ("low", "medium", "high") else "medium",
+        "photos": c.get("photos") if c.get("photos") in PHOTO_FREQUENCY else "sometimes",
     }
 
 
@@ -86,7 +97,7 @@ def human_gap(seconds: float) -> str:
 
 
 def _opening(text: str, words: int = 6) -> str:
-    parts = strip_think(text or "").split()
+    parts = re.sub(r'<photo id="[^"]*"\s*/>', "[photo]", strip_think(text or "")).split()
     return " ".join(parts[:words]) + ("…" if len(parts) > words else "")
 
 
@@ -141,6 +152,16 @@ def build_messenger_prompt(chat, memories: list, max_input_tokens: Optional[int]
         emoji,
         "Adult content between adults is fine: everyone in this chat is an adult (18+).",
     ]
+    photos_on = style != "conversation" and PHOTO_FREQUENCY.get(cfg["photos"])
+    if photos_on:
+        rules.append(
+            "You can send a photo from your phone: put <photo>what the photo shows</photo> on its own line"
+            + (", after your name and a colon" if group else "") + ". Write it as a caption of what is visible, in "
+            "the third person, standing on its own (no \"the dress I mentioned\": say what it is): the framing "
+            "(selfie, mirror selfie, someone else took it), where you are, what you're wearing or not wearing, "
+            "your pose and expression, the light. One or two sentences, e.g. <photo>Mirror selfie in her bedroom, "
+            "red summer dress and white trainers, hip cocked, playful pout, warm lamp light.</photo> "
+            + photos_on.format(user=user) + " A photo is the one place you describe yourself; your texts still don't.")
     if style != "conversation":
         rules.append(f"You may react to {user}'s last message with one emoji tapback by starting your reply with "
                      f"<react>😂</react> (one of {' '.join(REACTIONS)}). Use it sometimes, not every time.")
@@ -200,14 +221,20 @@ def build_messenger_prompt(chat, memories: list, max_input_tokens: Optional[int]
 
     messages = [{"role": "system", "content": "\n\n".join(system)}]
 
+    def with_photos(m, sender):
+        if "<photo" not in (m.content or ""):
+            return m.content
+        found = {p.id: (p.sender, p.description) for p in getattr(m, "photos", None) or []}
+        return photos_as_words(m.content, found, sender)
+
     history = []
     for m in msgs:
         if m.is_summarized or not (m.content or "").strip():
             continue
         if m.role == "user":
-            history.append({"role": "user", "content": m.content})
+            history.append({"role": "user", "content": with_photos(m, user)})
         elif m.role == "assistant":
-            content = strip_think(m.content)
+            content = strip_think(with_photos(m, m.character_name or names[0]))
             history.append({"role": "assistant", "content": content})
             if m.reaction:
                 history.append({"role": "user", "content": f"[{user} reacted {m.reaction} to that]"})
@@ -220,7 +247,8 @@ def build_messenger_prompt(chat, memories: list, max_input_tokens: Optional[int]
 
     post = [
         ("Only dialogue: no narration, no *actions*." if style == "conversation" else
-         "Only the texts themselves: no narration, no *actions*, no descriptions."),
+         "Only the texts themselves: no narration, no *actions*, no descriptions"
+         + (" (except inside a <photo>)." if photos_on else ".")),
         LENGTHS[cfg["length"]] if style != "conversation" else
         {"oneliners": "Say just a line or two.", "normal": "Say a natural amount: a few sentences.",
          "chatty": "You can talk at some length this time."}[cfg["length"]],
@@ -280,6 +308,88 @@ def clean_reply(text: str, names: list, group: bool) -> tuple:
         if p:
             out.append(p)
     return "\n\n".join(out), reaction
+
+
+_PHOTO_TAG = re.compile(r"<photo>\s*(.*?)\s*(?:</photo>|$)", re.IGNORECASE | re.DOTALL)
+PHOTO_MARKER = re.compile(r'<photo id="([0-9a-f-]{36})"\s*/>')
+MAX_PHOTOS_PER_REPLY = 2
+MAX_PHOTO_DESCRIPTION = 600
+
+
+def photo_marker(photo_id: str) -> str:
+    return f'<photo id="{photo_id}"/>'
+
+
+def lift_photos(text: str, names: list, group: bool, allowed: bool = True, new_id=None) -> tuple:
+    """Pulls each <photo>what it shows</photo> out of a cleaned reply. Returns
+    (text with a <photo id="…"/> marker on its own line where each photo was,
+    [(id, sender, description)]). In a group the marker keeps its "Name:" so the
+    photo stays with its sender. Photos not allowed (setting Never, or a spoken
+    conversation), past the cap, or with no description are dropped."""
+    new_id = new_id or (lambda: str(uuid.uuid4()))
+    photos = []
+    out = []
+    speaker_pat = re.compile(r"^\s*\**(" + "|".join(re.escape(n) for n in names) + r")\**\s*:\s*", re.IGNORECASE) if group and names else None
+    for para in (text or "").split("\n\n"):
+        lines = []
+        for line in para.split("\n"):
+            if "<photo>" not in line.lower():
+                lines.append(line)
+                continue
+            sender = names[0] if names else ""
+            prefix = ""
+            body = line
+            if speaker_pat:
+                m = speaker_pat.match(line)
+                if m:
+                    sender = next((n for n in names if n.lower() == m.group(1).lower()), sender)
+                    prefix = f"{sender}: "
+                    body = line[m.end():]
+            pieces = []
+            last = 0
+            for m in _PHOTO_TAG.finditer(body):
+                before = body[last:m.start()].strip()
+                if before:
+                    pieces.append(before)
+                desc = m.group(1).strip()[:MAX_PHOTO_DESCRIPTION]
+                if allowed and desc and len(photos) < MAX_PHOTOS_PER_REPLY:
+                    pid = new_id()
+                    photos.append((pid, sender, desc))
+                    pieces.append(photo_marker(pid))
+                last = m.end()
+            after = body[last:].strip()
+            if after:
+                pieces.append(after)
+            lines.extend(prefix + p for p in pieces)
+        para = "\n".join(ln for ln in lines if ln.strip())
+        if para:
+            out.append(para)
+    if group:
+        return "\n\n".join(out), photos
+    # 1-to-1: every text is its own paragraph, so a photo gets its own bubble.
+    paras = []
+    for para in out:
+        chunk = []
+        for ln in para.split("\n"):
+            if PHOTO_MARKER.fullmatch(ln.strip()):
+                if chunk:
+                    paras.append("\n".join(chunk))
+                    chunk = []
+                paras.append(ln.strip())
+            else:
+                chunk.append(ln)
+        if chunk:
+            paras.append("\n".join(chunk))
+    return "\n\n".join(paras), photos
+
+
+def photos_as_words(text: str, photos: dict, default_sender: str) -> str:
+    """The model's view of a stored message: each marker becomes
+    "[Mira sent a photo: …]". photos maps id -> (sender, description)."""
+    def words(m):
+        sender, desc = photos.get(m.group(1), (default_sender, ""))
+        return f"[{sender or default_sender} sent a photo: {desc}]" if desc else f"[{sender or default_sender} sent a photo]"
+    return PHOTO_MARKER.sub(words, text or "")
 
 
 def split_lines(text: str, names: list) -> list:
