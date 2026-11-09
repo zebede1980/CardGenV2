@@ -40,7 +40,7 @@ A new tab where you text your characters: dialogue only, no narration.
   (not built: a Home Screen web app could get real iOS push; ask if wanted).
 - **Fixed 2026-11-09 (first iPhone try):** the card gallery opened *behind* the New conversation
   sheet (both z-index 2000, the sheet later in the DOM). Messenger sheets are now 1990, as Story
-  Writer's setup sheet. Checked in headless WebKit (390 light / 320 dark); not yet re-tried on the iPhone.
+  Writer's setup sheet. Deployed (`37af943`, frontend only). Checked in headless WebKit (390 light / 320 dark); not yet re-tried on the iPhone.
 - **Try on the iPhone:** start a chat from a Home card's 💌 Text; keyboard open/close; lock mid-reply;
   long-press a bubble; a 2-card chat room; turn on Check in and come back the next day.
 
