@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -19,6 +19,7 @@ from app.services.gen_stream import sse_from_queue, close_open_think, trim_cut_r
 from app.services.story_autowriter import name_story
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
+from app.services import push
 from app.routers.chat import WRITING_STYLE_PRESETS
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])
@@ -704,7 +705,8 @@ async def send_action(
     session_id: str,
     req: schemas.AdventureSendActionRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user),
+    x_page_id: str = Header(None),
 ):
     session_data = _get_session(db, session_id, current_user)
     settings = get_or_create_settings(db, current_user.id)
@@ -793,6 +795,7 @@ async def send_action(
     }
     user_id = current_user.id
     want_title = bool(session_data.title_auto) and _is_default_title(session_data.title)
+    adventure_title = session_data.title or "Adventure"
 
     async def generate_task():
         llm = LLMService(settings)
@@ -868,6 +871,11 @@ async def send_action(
                 saved = False
                 logger.error(f"[{request_id}] DB save failed: {db_err}")
 
+            if not cancelled and (saved or error is not None):
+                push.done(user_id, "adventure", x_page_id, name=f"🎲 {adventure_title}",
+                          generic="The next part is ready." if saved else "The next part failed.",
+                          preview=push.excerpt(strip_think(story)) if saved else "",
+                          path=f"/?open=adventure&id={session_id}", tag=f"adv-{session_id}", failed=not saved)
             await queue.put({"type": "final", "action_id": assistant_action_id, "deleted": not saved,
                              "story": story if saved else "", "options": options if saved else []})
             if error is not None:

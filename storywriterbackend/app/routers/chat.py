@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -18,6 +18,7 @@ from app.services.llm_service import LLMService, UTILITY_TEMPERATURE, with_think
 from app.services.card_parser import extract_relevant_lorebook_entries
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
+from app.services import push
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -1266,7 +1267,8 @@ async def send_message(
     chat_id: str,
     req: schemas.SendMessageRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user),
+    x_page_id: Optional[str] = Header(None),
 ):
     chat = db.query(models.RoleplayChat).filter(
         models.RoleplayChat.id == chat_id, 
@@ -1487,9 +1489,12 @@ async def send_message(
         "assistant_message_id": assistant_msg_id
     })
     
+    user_id = current_user.id
+
     async def generate_task():
         llm = LLMService(settings)
         full_content = ""
+        cancelled = failed = False
         request_id = str(uuid.uuid4())
         logger = logging.getLogger(__name__)
         
@@ -1587,11 +1592,13 @@ async def send_message(
         except asyncio.CancelledError:
             # Stop pressed in the browser (see cancel_generation). Keep what the
             # reader saw; the task ends normally so the save below still runs.
+            cancelled = True
             logger.info(f"[{request_id}] Generation cancelled by the user after {len(full_content)} chars")
         except Exception as e:
             # The error goes to the browser only. It used to be appended to the
             # stored reply, where the next turn fed it to the model as something
             # the character had said.
+            failed = True
             logger.error(f"[{request_id}] LLM request failed: {e}")
             await queue.put(e)
         finally:
@@ -1611,6 +1618,13 @@ async def send_message(
             except Exception as db_err:
                 logger.error(f"[{request_id}] DB save failed: {db_err}")
 
+            if not cancelled:
+                who = speaker_name or "Roleplay Chat"
+                push.done(user_id, "chat", x_page_id, name=f"💬 {who}",
+                          generic=f"{who} didn't reply: it failed." if failed and not strip_think(full_content).strip()
+                          else f"{who} replied.",
+                          preview=push.excerpt(strip_think(full_content)), path=f"/?open=roleplay&id={chat_id}",
+                          tag=f"chat-{chat_id}", failed=failed and not strip_think(full_content).strip())
             await llm.close()
             await queue.put(None)
 

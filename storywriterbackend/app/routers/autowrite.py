@@ -1,6 +1,7 @@
 """Routes for auto-written stories; the work itself is in
 app/services/story_autowriter.py."""
 import json
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -65,6 +66,8 @@ def autowrite_status(story_id: int, from_: int = Query(0, alias="from"), db: Ses
     story = _own_story(db, story_id, current_user)
     out = aw.status_for(story, db)
     run = aw.active_run(story_id)
+    if run:
+        run.last_poll = time.monotonic()
     partial = run.partial if run else ""
     start = from_ if 0 <= from_ <= len(partial) else 0
     out.update({"partial": partial[start:], "partial_from": start, "partial_len": len(partial)})

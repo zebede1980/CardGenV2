@@ -9,10 +9,14 @@ The VAPID key pair is made on first use and kept in app_secrets, so a deploy
 needs no new settings. Set VAPID_PRIVATE_KEY (PEM) to use a key of your own;
 changing the key orphans every existing subscription.
 """
+import asyncio
+import functools
 import json
 import logging
 import os
+import re
 import threading
+import time
 from base64 import urlsafe_b64encode
 from datetime import datetime
 from urllib.parse import urlparse
@@ -126,3 +130,144 @@ def notify_user(db, user_id: int, title: str, body: str, path: str = "/", tag: s
     for sub in db.query(models.PushSubscription).filter(models.PushSubscription.user_id == user_id).all():
         counts[send(db, sub, title, body, path, tag)] += 1
     return counts
+
+
+# ── "It's done" notifications (plans/ios-app.md, Stage 3) ───────────────────
+#
+# A generation that finishes while you're looking at the app needs no push. The
+# browser can't run anything while the phone is locked, so each page tells the
+# server when it is hidden or shown (POST /push/presence, keyed by a random id
+# per page load, sent as X-Page-Id with every request). A generation that ends
+# while the page that started it is hidden pushes to all of that user's devices.
+
+KINDS = ("cards", "pictures", "chat", "messenger", "adventure", "story")
+PRIVACY = ("preview", "name", "nothing")
+DEFAULT_PREFS = {"kinds": {k: True for k in KINDS}, "privacy": "name"}
+
+PRESENCE_TTL_SECONDS = 24 * 3600
+_presence: dict = {}  # page id -> (user_id, visible, time.monotonic())
+_presence_lock = threading.Lock()
+
+
+def clean_page_id(page) -> str:
+    page = (page or "").strip()
+    return page if 0 < len(page) <= 64 and all(c.isalnum() or c in "-_" for c in page) else ""
+
+
+def set_presence(user_id: int, page: str, visible: bool) -> None:
+    page = clean_page_id(page)
+    if not page:
+        return
+    now = time.monotonic()
+    with _presence_lock:
+        if len(_presence) > 500:
+            for k in [k for k, v in _presence.items() if now - v[2] > PRESENCE_TTL_SECONDS]:
+                del _presence[k]
+        _presence[page] = (user_id, bool(visible), now)
+
+
+def page_state(user_id: int, page) -> str:
+    """'visible', 'hidden', or '' when the page never said (an old client, or
+    the backend restarted since)."""
+    with _presence_lock:
+        entry = _presence.get(clean_page_id(page))
+    if not entry or entry[0] != user_id or time.monotonic() - entry[2] > PRESENCE_TTL_SECONDS:
+        return ""
+    return "visible" if entry[1] else "hidden"
+
+
+def away(user_id: int, page, reading=None) -> bool:
+    """Should a finished generation be pushed? Yes when its page is hidden. A page
+    that never reported falls back on `reading`: whether something was still
+    reading the result when it finished (None: no way to tell, so no push)."""
+    state = page_state(user_id, page)
+    if state:
+        return state == "hidden"
+    return reading is False
+
+
+def load_prefs(db, user_id: int) -> dict:
+    row = db.get(models.PushPrefs, user_id)
+    try:
+        saved = json.loads(row.prefs) if row and row.prefs else {}
+    except ValueError:
+        saved = {}
+    kinds = dict(DEFAULT_PREFS["kinds"])
+    for k, v in (saved.get("kinds") or {}).items():
+        if k in kinds:
+            kinds[k] = bool(v)
+    privacy = saved.get("privacy") if saved.get("privacy") in PRIVACY else DEFAULT_PREFS["privacy"]
+    return {"kinds": kinds, "privacy": privacy}
+
+
+def save_prefs(db, user_id: int, prefs: dict) -> dict:
+    merged = load_prefs(db, user_id)
+    for k, v in (prefs.get("kinds") or {}).items():
+        if k in merged["kinds"]:
+            merged["kinds"][k] = bool(v)
+    if prefs.get("privacy") in PRIVACY:
+        merged["privacy"] = prefs["privacy"]
+    row = db.get(models.PushPrefs, user_id)
+    if not row:
+        row = models.PushPrefs(user_id=user_id)
+        db.add(row)
+    row.prefs = json.dumps(merged)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    return merged
+
+
+_PHOTO_TAG = re.compile(r"<photo\b[^>]*/>|<photo\b[^>]*>.*?</photo>", re.S | re.I)
+
+
+def excerpt(text: str, limit: int = 140) -> str:
+    """The start of a reply as plain text, for a lock-screen preview."""
+    text = re.sub(r"<think>.*?(</think>|$)", "", text or "", flags=re.S)
+    text = _PHOTO_TAG.sub(" 📷 Photo ", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"[*_`#>~]+", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0]
+    return cut.rstrip(",;:—-") + "…"
+
+
+def compose(privacy: str, name: str, generic: str, preview: str = "", failed: bool = False) -> tuple:
+    """(title, body) for the lock screen. 'nothing' says only that something is
+    ready; 'name' says who or what; 'preview' adds the start of the text."""
+    if privacy == "nothing":
+        return "CardGen", ("Something you were waiting for didn't finish." if failed
+                           else "Something you were waiting for is ready.")
+    if privacy == "preview" and preview and not failed:
+        return name, preview
+    return name, generic
+
+
+def deliver(user_id: int, kind: str, *, name: str, generic: str, preview: str = "", path: str = "/",
+            tag: str = "", failed: bool = False) -> dict:
+    """Blocking: checks the user's prefs and pushes. Runs off the event loop."""
+    try:
+        with models.SessionLocal() as db:
+            prefs = load_prefs(db, user_id)
+            if not prefs["kinds"].get(kind, True):
+                return {"ok": 0, "gone": 0, "error": 0, "skipped": "off"}
+            title, body = compose(prefs["privacy"], name, generic, preview, failed)
+            return notify_user(db, user_id, title, body, path, tag)
+    except Exception:
+        logger.exception("done-push for user %s failed", user_id)
+        return {"ok": 0, "gone": 0, "error": 1}
+
+
+def done(user_id: int, kind: str, page=None, *, reading=None, **message) -> bool:
+    """Call when a generation ends (not when the user stopped it). Pushes in the
+    background if nobody is looking; returns whether it will push."""
+    if not away(user_id, page, reading):
+        return False
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        deliver(user_id, kind, **message)
+    else:
+        loop.run_in_executor(None, functools.partial(deliver, user_id, kind, **message))
+    return True

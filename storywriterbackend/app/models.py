@@ -355,6 +355,14 @@ class PushSubscription(Base):
     last_ok_at = Column(DateTime, nullable=True)
     last_error = Column(Text, default="")
 
+class PushPrefs(Base):
+    """What a user wants to be told about, and how much shows on the lock screen
+    (plans/ios-app.md, Stage 3). JSON; services/push.DEFAULT_PREFS fills gaps."""
+    __tablename__ = "push_prefs"
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    prefs = Column(Text, default="{}")
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
 class AppSecret(Base):
     """Server-wide values generated once and kept, e.g. the VAPID key pair."""
     __tablename__ = "app_secrets"

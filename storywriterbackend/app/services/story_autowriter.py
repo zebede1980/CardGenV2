@@ -27,10 +27,12 @@ import asyncio
 import json
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Optional
 
 from app.models import SessionLocal, Settings, Story, StorySegment
+from app.services import push
 from app.services.card_parser import extract_relevant_lorebook_entries
 from app.services.llm_service import (
     LLMService,
@@ -109,6 +111,11 @@ class Run:
         self.phase = "planning"  # planning | thinking | writing | summarising
         self.chapter = 0
         self.raw = ""  # the current call's output so far, think block included
+        self.last_poll = 0.0  # time.monotonic() of the browser's last status poll
+
+    def watched(self) -> bool:
+        """The page polls every 2.5 s while it's on screen, and never while hidden."""
+        return time.monotonic() - self.last_poll < 20
 
     @property
     def partial(self) -> str:
@@ -594,6 +601,7 @@ async def _run_story(run: Run):
 
         _save_state(story_id, status="done", error="")
         logger.info(f"[autowrite {story_id}] finished, {total} chapters")
+        _notify(run, f"Finished: {total} chapters. Tap to read it.")
     except asyncio.CancelledError:
         # Stop: the half-written chapter is dropped so the arc stays whole;
         # Resume writes it again.
@@ -602,10 +610,22 @@ async def _run_story(run: Run):
     except Exception as e:
         logger.exception(f"[autowrite {story_id}] failed")
         _save_state(story_id, status="failed", error=str(e)[:500])
+        _notify(run, f"Stopped at chapter {run.chapter or 1}: {str(e)[:120]}", failed=True)
     finally:
         run.raw = ""
         if llm:
             await llm.close()
+
+
+def _notify(run: Run, text: str, failed: bool = False):
+    try:
+        with SessionLocal() as db:
+            story = db.query(Story).filter(Story.id == run.story_id).first()
+            title = (story.title if story else "") or "Your story"
+        push.done(run.user_id, "story", None, reading=run.watched(), name=f"✨ {title}", generic=text,
+                  path=f"/?open=story&id={run.story_id}", tag=f"story-{run.story_id}", failed=failed)
+    except Exception:
+        logger.exception(f"[autowrite {run.story_id}] push failed")
 
 
 def start_run(story_id: int, user_id: int) -> Run:

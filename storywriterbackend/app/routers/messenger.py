@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 
@@ -23,6 +23,7 @@ from app.services.gen_stream import close_open_think, sse_from_queue
 from app.services.llm_service import (LLMService, UTILITY_TEMPERATURE, needs_prose, prose_after_reasoning,
                                       strip_think, supports_reasoning_flag, with_think_tags)
 from app.services import messenger_prompt as mp
+from app.services import push
 
 router = APIRouter(prefix="/messenger", tags=["messenger"])
 logger = logging.getLogger(__name__)
@@ -163,7 +164,8 @@ def react(chat_id: str, message_id: str, body: schemas.MessengerReactIn, db: Ses
 
 
 @router.post("/{chat_id}/message")
-async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user),
+                       x_page_id: str = Header(None)):
     chat = _get_chat(db, chat_id, current_user)
     settings = get_or_create_settings(db, current_user.id)
     if not settings.api_key:
@@ -239,11 +241,13 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
                       presence_penalty=req.presence_penalty,
                       reasoning_effort=req.reasoning_effort or cfg["reasoning_effort"])
     user_id = current_user.id
+    who = (chat.title if chat.title and chat.title != "New Chat" else ", ".join(names)) if group else names[0]
 
     async def generate_task():
         llm = LLMService(settings)
         full = ""
         error = None
+        stopped = False
         try:
             try:
                 stream = llm.generate(prompt, stream=True, **gen_kwargs, request_reasoning=enable_cot and native,
@@ -259,6 +263,7 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
                                                             "response": {"choices": [{"message": {"content": full}}]},
                                                             "usage": llm.last_usage}})
             except asyncio.CancelledError:
+                stopped = True
                 logger.info(f"Messenger reply {reply_id} stopped after {len(full)} chars")
             except Exception as e:
                 error = e
@@ -285,6 +290,12 @@ async def send_message(chat_id: str, req: schemas.MessengerSendRequest, db: Sess
             except Exception as db_err:
                 saved = False
                 logger.error(f"Messenger save failed: {db_err}")
+            if not stopped and (saved or error is not None):
+                push.done(user_id, "messenger", x_page_id, name=f"💌 {who}",
+                          generic=("New messages." if group else "Sent you a message.") if saved
+                          else f"{who}'s reply didn't come through.",
+                          preview=push.excerpt(text.split("\n\n")[0]) if saved else "",
+                          path=f"/?open=messenger&id={chat_id}", tag=f"msg-{chat_id}", failed=not saved)
             await queue.put({"type": "final", "message_id": reply_id, "deleted": not saved, "content": text if saved else "",
                              "reaction": reaction if user_msg_id else "", "user_message_id": user_msg_id,
                              "photos": [_photo_out_raw(pid, reply_id, "char", sender, desc, "pending")

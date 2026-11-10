@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.responses import StreamingResponse
 import json
@@ -11,6 +11,7 @@ from app.services.llm_service import LLMService, UTILITY_TEMPERATURE
 from app.services.context_manager import ContextManager
 from app.services.story_autowriter import active_run, name_story_task
 from app.routers.auth import get_current_user
+from app.services import push
 
 router = APIRouter(prefix="/generate", tags=["generation"])
 
@@ -34,7 +35,8 @@ def get_or_create_settings(db: Session, user_id: int) -> Settings:
     return settings
 
 @router.post("/")
-async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+                               x_page_id: str = Header(None)):
     story = db.query(Story).filter(Story.id == req.story_id, Story.user_id == current_user.id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
@@ -102,6 +104,14 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
     llm = LLMService(settings)
 
     model_name = getattr(settings, 'model', 'unknown')
+    user_id = current_user.id
+    story_title = story.title or "Story Writer"
+
+    def notify(text: str = "", failed: bool = False):
+        push.done(user_id, "story", x_page_id, name=f"✍️ {story_title}",
+                  generic="The next part failed." if failed else "The next part is written.",
+                  preview=push.excerpt(text), path=f"/?open=story&id={req.story_id}",
+                  tag=f"story-{req.story_id}", failed=failed)
 
     async def stream_generator():
         import uuid
@@ -155,9 +165,11 @@ async def generate_story_chunk(req: GenerateRequest, db: Session = Depends(get_d
                         }
                     }
                     queue.put_nowait(done_payload)
+                notify(full_content)
 
             except Exception as e:
                 queue.put_nowait(e)
+                notify(failed=True)
 
         read_task = asyncio.create_task(read_llm())
 
