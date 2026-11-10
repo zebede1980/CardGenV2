@@ -16,7 +16,18 @@ app do" at the end).
   Changes from the plan below: the padding is gated on an `html.pwa` class set from
   `display-mode: standalone` (same effect, but tests can force it); the VAPID key is generated
   and stored in `app_secrets` rather than set in `.env`; the internal push route for the proxy
-  moves to Stage 3, which is the first thing that needs it.
+  moves to Stage 3, which is the first thing that needs it. Joe tried Stages 1–2 on the iPhone
+  2026-11-10: "all looks good so far".
+- **Stage 3 built 2026-11-10, not yet deployed.** Changes from the plan below:
+  - "Nobody is watching" means **the page that started it is hidden**. Each page load has a random
+    id (`X-Page-Id` on every request) and reports hidden/shown (`POST /push/presence`, a keepalive
+    fetch). A reader still attached doesn't count: a locked iPhone can keep its socket open, and the
+    proxy's `/api/sw/*` forwarder never tells the backend that the browser went away.
+  - Lock-screen privacy is **one setting for all kinds**, not one per kind (default Name only).
+  - Proxy jobs from one page are reported **once, when the last of them finishes** (Generate 4,
+    Compare Models).
+  - Not built: clearing a notification when you open the item some other way; recovering a card or
+    picture after iOS closed the app (the page that would collect it is gone).
 
 ## Where the code stood before (2026-11-09)
 

@@ -1,11 +1,55 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-09 (📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-10 (🔔 push Stage 3 built, not deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## 🔔 "It's done" notifications, Stage 3 (2026-11-10) — built, NOT deployed
+
+`plans/ios-app.md` Stage 3. Joe tried Stages 1–2 on the iPhone first: "all looks good so far".
+
+- **When:** a push goes to all your devices when something you started finishes **while the page that
+  started it is hidden** (locked, another app, another tab). Each page load has a random id
+  (`window.cardgenPage` in `auth.js`, sent as `X-Page-Id` + `X-Page-View` by `authFetch` and
+  `api.js`) and reports hidden/shown to `POST /api/sw/push/presence` (`Presence` in `pwa.js`, keepalive
+  fetch on visibilitychange/pagehide/pageshow). Presence is in the backend's memory
+  (`services/push.py`); a restart forgets it until each page next hides. A page that never reported
+  falls back on "nobody was reading the result" (proxy jobs only). Stop never pushes.
+- **What:** Roleplay Chat replies (`chat.py`), Messenger replies (`messenger.py`), Adventure beats
+  (`adventure.py`), Story Writer parts (`generation.py`), auto-written stories finished or failed
+  (`story_autowriter._notify`, pushed unless the page polled in the last 20 s), and proxy jobs
+  (cards, lorebooks, pictures, anything resumable). The proxy reports a page's jobs **once, when the
+  last one finishes** (`onJobFinished`/`sendJobPush` in `server.js`) to
+  `POST /api/push/internal/jobs-done`. The browser can't reach that route: the `/api/sw/*` forwarder
+  404s it and the backend also wants `X-Proxy-Job: 1`, which the forwarder never sends. Failures
+  push too ("Character image failed: Local GPU is offline."). Tags per chat/story/adventure/view,
+  so a new push replaces the old one. The main card call now has `__jobLabel: "Character card"`.
+- **Settings** (🔔 sheet, per user, table `push_prefs`): on/off for six kinds; lock screen shows a
+  preview / name only (default) / nothing.
+- **Keeping results:** a proxy job that finished with nobody reading it, or that pushed, is kept
+  24 h instead of 10 min (`JOB_KEPT_RETENTION_MS`, capped at 128 MB in all, oldest dropped first).
+  `ResumableJobs.MAX_AGE_MS` is 24 h to match; the update bar ignores entries over 30 min old.
+  **Only a page still alive in the background can collect a card or picture.** If iOS closed the
+  app, the result is lost (no recovery UI). Backend items are in Postgres, so they are always there.
+- **Tested:** 14 backend tests in `tests/test_push_done.py` (99 in all): presence rules, Messenger
+  hidden/visible/no-id/failed, Roleplay reply, Adventure beat, auto story polling, privacy, prefs,
+  the jobs-done route. The real `server.js` against a fake model and backend (17 checks):
+  attached/detached reports, a dropped reader's result kept past retention and collected whole,
+  3 pictures → one report, no page id → nothing, Stop → nothing, the internal route blocked
+  (incl. `%69nternal`, `//internal`). WebKit 38 checks at 320/390/430 px light/dark (headers on
+  backend and card requests, presence on hide/show/pagehide, nothing when signed out, prefs
+  load/save/failure revert, layout), plus the Stage 1–2 suite again (102) and `sw.js` (9).
+  **Not tested:** a real lock on the iPhone (does the hidden report get out before iOS freezes the
+  page?), real pushes through Apple, Story Writer parts end to end (no test harness for
+  `generation.py`).
+- **Deploy needs frontend + storywriterbackend + proxy** (new `push_prefs` table is created on
+  start). Rebuilding the proxy drops in-flight jobs: check nothing is generating.
+- **To try on the iPhone:** start a Messenger reply and lock straight away; a card in Character Gen,
+  then switch to another app; an auto-written story, close nothing, lock. Then open the app and
+  generate while watching: there should be no push.
 
 ## 📱 Home Screen app + push notifications, Stages 1–2 (2026-11-09) — deployed 2026-11-09 (`42f2fbb`, frontend + storywriterbackend)
 
