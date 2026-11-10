@@ -1582,6 +1582,11 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
   // Strip /api/sw from the browser path, then prepend /api since FastAPI mounts all routers under /api
   const targetPath = "/api" + req.originalUrl.replace("/api/sw", "");
   const targetUrl = internalUrl + targetPath;
+  // The proxy's own report of finished jobs; never from the browser. (The
+  // backend also requires X-Proxy-Job, which this forwarder never sends.)
+  let decodedPath = targetPath;
+  try { decodedPath = decodeURIComponent(targetPath); } catch (_) { /* keep it raw */ }
+  if (/\/push\/+internal/i.test(decodedPath)) return res.status(404).json({ error: "Not found" });
 
   try {
     const fetchOptions = {
@@ -1593,6 +1598,9 @@ app.all("/api/sw/*", requireAuth, async (req, res) => {
         "X-Internal-Secret": INTERNAL_API_SECRET
       }
     };
+    // Which page asked, so a reply that finishes while it's hidden can push.
+    const pageId = String(req.headers["x-page-id"] || "");
+    if (PAGE_ID_RE.test(pageId)) fetchOptions.headers["X-Page-Id"] = pageId;
 
     // Only pass bodies for methods that allow them
     if (["POST", "PUT", "PATCH"].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
@@ -2000,6 +2008,11 @@ const JOB_LIMITS = {
   MAX_CONTENT_CHARS: envInt("JOB_MAX_CONTENT_CHARS", 1024 * 1024),
   // Long enough for a phone left locked for a while.
   RETENTION_MS: envInt("JOB_RETENTION_MS", 10 * 60 * 1000),
+  // A job that finished with nobody reading it, or that sent a "done" push, is
+  // kept this long so tapping the notification later still finds it...
+  KEPT_RETENTION_MS: envInt("JOB_KEPT_RETENTION_MS", 24 * 60 * 60 * 1000),
+  // ...up to this much in all (images are a few MB each); oldest go first.
+  KEPT_MAX_BYTES: envInt("JOB_KEPT_MAX_BYTES", 128 * 1024 * 1024),
   // Slack over the 10-minute upstream timeout.
   MAX_RUN_MS: envInt("JOB_MAX_RUN_MS", 20 * 60 * 1000),
   SWEEP_INTERVAL_MS: envInt("JOB_SWEEP_INTERVAL_MS", 60 * 1000),
@@ -2010,7 +2023,8 @@ const generationJobs = new Map();
 
 function jobIsExpired(job, now = Date.now()) {
   if (job.status === "running") return now - job.createdAt > JOB_LIMITS.MAX_RUN_MS;
-  return now - (job.completedAt || job.createdAt) > JOB_LIMITS.RETENTION_MS;
+  const keep = job.keptBytes ? JOB_LIMITS.KEPT_RETENTION_MS : JOB_LIMITS.RETENTION_MS;
+  return now - (job.completedAt || job.createdAt) > keep;
 }
 
 function countRunningJobsForUser(userId) {
@@ -2028,8 +2042,10 @@ function countRunningJobsForUser(userId) {
  * would be running and billing with the client unable to name it. Lookup is
  * always scoped to the authenticated user, so a guessed ref reveals nothing.
  */
-function createGenerationJob(userId, abortController, clientRef = null) {
+function createGenerationJob(userId, abortController, clientRef = null, req = null) {
   const job = {
+    notify: req ? jobNotifyInfo(req) : null,
+    keptBytes: 0, // > 0 once kept for KEPT_RETENTION_MS
     id: randomUUID(),
     clientRef: typeof clientRef === "string" ? clientRef.slice(0, 100) : null,
     userId,
@@ -2050,6 +2066,109 @@ function createGenerationJob(userId, abortController, clientRef = null) {
   };
   generationJobs.set(job.id, job);
   return job;
+}
+
+// ── "It's done" pushes (plans/ios-app.md, Stage 3) ──────────────────────────
+//
+// Each page load sends X-Page-Id (random) and X-Page-View (the tab it's on) with
+// its requests, and tells the backend when it is hidden or shown. When the last
+// job a page was running finishes, the backend is told; it pushes to the user's
+// devices if that page is hidden (or, for a page that never said, if nobody was
+// reading the result). A Stop is not reported.
+
+const PAGE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const PAGE_VIEWS = new Set(["home", "cardgen", "storywriter", "roleplay", "adventure", "messenger", "playground"]);
+const STOPPED_BY_USER = "Generation stopped by user.";
+
+function jobNotifyInfo(req) {
+  const page = String(req.headers["x-page-id"] || "");
+  if (!PAGE_ID_RE.test(page)) return null; // a page from before Stage 3
+  const view = String(req.headers["x-page-view"] || "");
+  const label = typeof req.body?.__jobLabel === "string" ? req.body.__jobLabel.slice(0, 80) : "";
+  return { page, view: PAGE_VIEWS.has(view) ? view : "", label };
+}
+
+/** userId:page -> finished jobs waiting for that page's other jobs to finish. */
+const pendingJobPushes = new Map();
+
+function onJobFinished(job) {
+  const n = job.notify;
+  if (!n) return;
+  job.attachedAtFinish = job.subscribers > 0;
+  const key = `${job.userId}:${n.page}`;
+  const batch = pendingJobPushes.get(key) || [];
+  if (job.error !== STOPPED_BY_USER) batch.push(job);
+  // "Generate 4" or Compare Models: one push when the last of them is done.
+  const othersRunning = [...generationJobs.values()].some(
+    (j) => j.status === "running" && j.userId === job.userId && j.notify?.page === n.page,
+  );
+  if (othersRunning) {
+    if (batch.length) pendingJobPushes.set(key, batch);
+    return;
+  }
+  pendingJobPushes.delete(key);
+  if (batch.length) {
+    sendJobPush(job.userId, batch).catch((err) => console.warn("[push] jobs-done report failed:", err.message));
+  }
+}
+
+function keepJob(job) {
+  if (job.keptBytes) return;
+  job.keptBytes = Math.max(1, job.content.length + (job.result ? JSON.stringify(job.result).length : 0));
+  capKeptJobs();
+}
+
+function capKeptJobs() {
+  const kept = [...generationJobs.values()].filter((j) => j.keptBytes).sort((a, b) => a.completedAt - b.completedAt);
+  let total = kept.reduce((sum, j) => sum + j.keptBytes, 0);
+  for (const j of kept) {
+    if (total <= JOB_LIMITS.KEPT_MAX_BYTES) break;
+    total -= j.keptBytes;
+    j.keptBytes = 0; // back to the normal retention window
+  }
+}
+
+async function sendJobPush(userId, jobs) {
+  const n = jobs[jobs.length - 1].notify;
+  const attached = jobs.some((j) => j.attachedAtFinish);
+  // A result nobody was reading when it finished is kept longer either way.
+  for (const j of jobs) if (!j.attachedAtFinish) keepJob(j);
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const r = await fetch(`${internalUrl}/api/push/internal/jobs-done`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(userId),
+        "X-Internal-Secret": INTERNAL_API_SECRET,
+        "X-Proxy-Job": "1",
+      },
+      body: JSON.stringify({
+        page: n.page,
+        view: n.view,
+        attached,
+        items: jobs.slice(-20).map((j) => ({
+          label: j.notify.label || "",
+          ok: j.status === "done",
+          error: String(j.error || "").slice(0, 300),
+        })),
+      }),
+      signal: controller.signal,
+    });
+    if (!r.ok) {
+      console.warn(`[push] jobs-done report refused: ${r.status}`);
+      return;
+    }
+    const out = await r.json();
+    if (out.pushed) {
+      for (const j of jobs) keepJob(j);
+      console.log(`[push] ${jobs.length} finished job(s) pushed to user ${userId} (${n.view || "?"})`);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const REASONING_TAIL_CHARS = 2000;
@@ -2137,6 +2256,7 @@ function finishGenerationJob(job, status, { finishReason, error } = {}) {
     error: job.error,
   });
   job.listeners.clear();
+  onJobFinished(job);
 }
 
 /**
@@ -2237,6 +2357,7 @@ const jobSweeper = setInterval(() => {
     }
     generationJobs.delete(id);
   }
+  capKeptJobs();
 }, JOB_LIMITS.SWEEP_INTERVAL_MS);
 // Don't hold the event loop open on shutdown.
 if (jobSweeper.unref) jobSweeper.unref();
@@ -2499,7 +2620,7 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
           error: { code: "409", message: "Generation stopped by user." },
         });
       }
-      job = createGenerationJob(req.user.userId, upstreamAbort, clientRef);
+      job = createGenerationJob(req.user.userId, upstreamAbort, clientRef, req);
     }
 
     // Abort the upstream generation if the browser goes away. Without this the
@@ -3680,6 +3801,7 @@ async function handleLocalComfyImage(req, res) {
   let clientGone = false;
   res.on("close", () => {
     clientGone = true;
+    if (job && job.status === "running") job.subscribers = Math.max(0, job.subscribers - 1);
   });
 
   try {
@@ -3689,7 +3811,7 @@ async function handleLocalComfyImage(req, res) {
           error: { code: "429", message: `Too many generations in flight (limit ${JOB_LIMITS.MAX_RUNNING_PER_USER}). Wait for one to finish.` },
         });
       }
-      job = createGenerationJob(req.user.userId, new AbortController(), clientRef);
+      job = createGenerationJob(req.user.userId, new AbortController(), clientRef, req);
     }
 
     const data = await runLocalComfyImage(req.body);
@@ -3858,10 +3980,11 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
       // No AbortController tied to the upstream fetch here (unlike text) —
       // the point is the opposite: let the image finish generating into the
       // job regardless of what the client's connection does.
-      job = createGenerationJob(req.user.userId, new AbortController(), clientRef);
+      job = createGenerationJob(req.user.userId, new AbortController(), clientRef, req);
     }
     res.on("close", () => {
       clientGone = true;
+      if (job && job.status === "running") job.subscribers = Math.max(0, job.subscribers - 1);
     });
 
     // Try Bearer auth first (most common for image APIs)
@@ -4001,10 +4124,11 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
       // Same reasoning as the image generations route: no AbortController wired
       // to the upstream fetch, because the whole point is that the combine keeps
       // running — and stays collectable — when the client's connection drops.
-      job = createGenerationJob(req.user.userId, new AbortController(), clientRef);
+      job = createGenerationJob(req.user.userId, new AbortController(), clientRef, req);
     }
     res.on("close", () => {
       clientGone = true;
+      if (job && job.status === "running") job.subscribers = Math.max(0, job.subscribers - 1);
     });
 
     let response = await fetch(targetUrl, {
