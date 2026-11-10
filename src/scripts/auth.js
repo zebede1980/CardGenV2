@@ -32,6 +32,29 @@ function setStoredUser(user) {
   localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
 }
 
+// ── This page load ────────────────────────────────────────────────────────────
+// A random id per page load and the view it's on go with every request, so a
+// generation that finishes while this page is hidden can send a notification
+// (plans/ios-app.md, Stage 3; pwa.js reports hidden/shown).
+window.cardgenPage = (() => {
+  const id = window.crypto?.randomUUID
+    ? window.crypto.randomUUID()
+    : `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  const VIEWS = {
+    "view-home": "home", "view-cardgen": "cardgen", "view-storywriter": "storywriter",
+    "view-roleplaychat": "roleplay", "view-adventure": "adventure", "view-messenger": "messenger",
+    "view-playground": "playground",
+  };
+  function view() {
+    for (const [el, name] of Object.entries(VIEWS)) {
+      const v = document.getElementById(el);
+      if (v && v.style.display !== "none" && v.offsetParent !== null) return name;
+    }
+    return "";
+  }
+  return { id, view, headers: () => ({ "X-Page-Id": id, "X-Page-View": view() }) };
+})();
+
 // ── Authenticated fetch wrapper ───────────────────────────────────────────────
 // Drop-in replacement for fetch() that injects the Bearer token and redirects
 // to the login screen on 401 responses.
@@ -39,6 +62,7 @@ function setStoredUser(user) {
 window.authFetch = async function authFetch(url, options = {}) {
   const token = getToken();
   const headers = {
+    ...window.cardgenPage.headers(),
     ...(options.headers || {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };

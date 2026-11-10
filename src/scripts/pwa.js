@@ -1,8 +1,10 @@
-// Installed-app support (plans/ios-app.md, Stages 1–2):
+// Installed-app support (plans/ios-app.md, Stages 1–3):
 //  - "Update ready" bar: an installed app has no reload button and iOS keeps it
 //    in memory for days, so a deploy would otherwise go unseen.
 //  - The push service worker (sw.js) and the 🔔 Notifications sheet.
 //  - ?open=<kind>&id=<id> links, which notifications open.
+//  - Presence: tells the server when this page is hidden or shown, so a
+//    generation that finishes while you're away sends a notification.
 (function () {
   "use strict";
 
@@ -15,8 +17,10 @@
     /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
   // Something still generating: a reload would interrupt it (resume would
-  // recover it, but don't make it).
-  const busy = () => (window.wakeLockManager?._count || 0) > 0 || (window.ResumableJobs?.list?.().length || 0) > 0;
+  // recover it, but don't make it). Job entries live 24 h now; one left over
+  // from a closed tab shouldn't block reloading for that long.
+  const busy = () => (window.wakeLockManager?._count || 0) > 0 ||
+    (window.ResumableJobs?.list?.() || []).some((j) => Date.now() - (j.startedAt || 0) < 30 * 60 * 1000);
 
   // Resolves once the app has booted, which waits for a login if needed.
   function whenAppReady(timeoutMs = 10 * 60 * 1000) {
@@ -225,7 +229,53 @@
     },
   };
 
+  // ── Presence ──────────────────────────────────────────────────────────────
+  // Sent as the page is hidden (the lock button, switching app) and shown. Not
+  // through authFetch: this can run while the page is being unloaded.
+
+  const Presence = {
+    last: null,
+
+    send(visible) {
+      const token = window.cardgenAuth?.getToken?.();
+      if (!token || !window.cardgenPage || this.last === visible) return;
+      this.last = visible;
+      try {
+        fetch("/api/sw/push/presence", {
+          method: "POST",
+          keepalive: true,
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...window.cardgenPage.headers() },
+          body: JSON.stringify({ page: window.cardgenPage.id, visible }),
+        }).then((r) => { if (!r.ok) this.last = null; }, () => { this.last = null; });
+      } catch (e) {
+        this.last = null;
+      }
+    },
+
+    init() {
+      const report = () => this.send(document.visibilityState === "visible");
+      document.addEventListener("visibilitychange", report);
+      window.addEventListener("pagehide", () => this.send(false));
+      window.addEventListener("pageshow", report);
+      whenAppReady().then((ok) => { if (ok) report(); });
+    },
+  };
+
   // ── 🔔 Notifications sheet ────────────────────────────────────────────────
+
+  const KINDS = [
+    ["cards", "🎭 Character cards and lorebooks"],
+    ["pictures", "🖼️ Playground pictures"],
+    ["chat", "💬 Roleplay Chat replies"],
+    ["messenger", "💌 Messenger texts"],
+    ["adventure", "🎲 Adventure"],
+    ["story", "✍️ Story Writer parts and ✨ finished stories"],
+  ];
+  const PRIVACY = [
+    ["preview", "Show a preview", "💌 Mira: hey, you still up?"],
+    ["name", "Name only", "💌 Mira: Sent you a message."],
+    ["nothing", "Nothing", "CardGen: Something you were waiting for is ready."],
+  ];
 
   const Sheet = {
     el: null,
@@ -249,9 +299,17 @@
               <h3>Devices with notifications on</h3>
               <ul class="ns-devices" data-devices><li class="pb-hint">Loading…</li></ul>
             </section>
-            <p class="pb-hint">For now there is only the test notification. Next: a notification when a card,
-              picture, reply or story chapter you're waiting for is ready, and Messenger characters
-              texting you first.</p>
+            <section class="pb-panel" data-prefs>
+              <h3>Tell me when it's done</h3>
+              <p class="pb-hint">When something you started finishes while CardGen is hidden or the phone is
+                locked. Sent to every device above.</p>
+              <div class="ns-opts" data-kinds><p class="pb-hint">Loading…</p></div>
+              <h3>On the lock screen</h3>
+              <div class="ns-opts" data-privacy></div>
+              <p class="pb-hint">Replies, story parts and adventures are saved on the server, so a notification
+                always leads to them. A finished card or picture waits 24 hours for the app to pick it up,
+                but only if the app is still open in the background. If it was closed, the result is lost.</p>
+            </section>
           </div>
         </div>`;
       el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-close]")) this.close(); });
@@ -263,7 +321,60 @@
       this.el = el;
       el.querySelector("[data-close]").focus();
       if (Push.supported()) Push.loadKey().catch(() => {}); // ready before the tap
+      this.renderPrefs();
       await this.render();
+    },
+
+    async renderPrefs() {
+      const kinds = this.el?.querySelector("[data-kinds]");
+      const privacy = this.el?.querySelector("[data-privacy]");
+      if (!kinds) return;
+      let prefs;
+      try {
+        prefs = await api("/prefs");
+      } catch (e) {
+        kinds.innerHTML = `<p class="pb-hint">Couldn't load these: ${esc(e.message)}</p>`;
+        return;
+      }
+      if (!this.el) return;
+      const save = async (patch, input, undo) => {
+        this.error("");
+        input.disabled = true;
+        try {
+          prefs = await api("/prefs", { method: "PUT", body: JSON.stringify(patch) });
+        } catch (e) {
+          undo();
+          this.error(`Not saved: ${e?.message || e}`);
+        } finally {
+          input.disabled = false;
+        }
+      };
+      kinds.replaceChildren(...KINDS.map(([key, text]) => {
+        const label = document.createElement("label");
+        label.className = "ns-opt";
+        label.innerHTML = `<input type="checkbox"><span>${esc(text)}</span>`;
+        const box = label.querySelector("input");
+        box.checked = prefs.kinds?.[key] !== false;
+        box.addEventListener("change", () =>
+          save({ kinds: { [key]: box.checked } }, box, () => { box.checked = !box.checked; }));
+        return label;
+      }));
+      privacy.replaceChildren(...PRIVACY.map(([key, text, example]) => {
+        const label = document.createElement("label");
+        label.className = "ns-opt";
+        label.innerHTML = `<input type="radio" name="ns-privacy" value="${key}">
+          <span>${esc(text)}<small class="pb-hint">${esc(example)}</small></span>`;
+        const radio = label.querySelector("input");
+        radio.checked = prefs.privacy === key;
+        radio.addEventListener("change", () => {
+          const before = prefs.privacy;
+          save({ privacy: key }, radio, () => {
+            const old = privacy.querySelector(`input[value="${before}"]`);
+            if (old) old.checked = true;
+          });
+        });
+        return label;
+      }));
     },
 
     close() {
@@ -384,10 +495,11 @@
     takeLaunchLink();
     Push.register().then(() => whenAppReady()).then((ok) => { if (ok) Push.sync(); });
     Update.init();
+    Presence.init();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 
-  window.cardgenPwa = { openLink, Push, Sheet, Update, installed };
+  window.cardgenPwa = { openLink, Push, Sheet, Update, Presence, installed };
 })();

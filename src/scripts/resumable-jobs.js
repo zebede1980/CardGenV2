@@ -13,9 +13,10 @@
 const ResumableJobs = {
   STORAGE_KEY: "cardgen.pendingJobs",
 
-  // Entries older than this are stale regardless of state — the server's own
-  // retention window is shorter, so anything beyond it is unrecoverable.
-  MAX_AGE_MS: 30 * 60 * 1000,
+  // Entries older than this are stale regardless of state. The proxy keeps a
+  // result nobody was reading for 24 hours (JOB_LIMITS.KEPT_RETENTION_MS), so
+  // a phone locked for hours can still collect it when it wakes.
+  MAX_AGE_MS: 24 * 60 * 60 * 1000,
 
   newRef() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();

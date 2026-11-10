@@ -5821,4 +5821,10 @@ html.pwa .gallery-toolbar { padding-top: calc(0.75rem + env(safe-area-inset-top,
 #notify-sheet .ns-name { flex: 1 1 0; min-width: 0; font-size: 0.9rem; font-weight: 600; overflow-wrap: anywhere; }
 #notify-sheet .ns-name em { font-weight: 400; color: var(--text-soft); }
 #notify-sheet .ns-devices .pb-hint { flex: 1 1 100%; order: 3; }
+#notify-sheet [data-prefs] h3 + .ns-opts, #notify-sheet [data-prefs] .ns-opts + h3 { margin-top: 0.2rem; }
+#notify-sheet .ns-opts { display: flex; flex-direction: column; }
+#notify-sheet .ns-opt { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.5rem 0; font-size: 0.92rem; line-height: 1.35; cursor: pointer; }
+#notify-sheet .ns-opt input { flex: none; width: 1.15rem; height: 1.15rem; margin: 0.1rem 0 0; accent-color: var(--accent, #6366f1); }
+#notify-sheet .ns-opt span { min-width: 0; overflow-wrap: anywhere; }
+#notify-sheet .ns-opt small { display: block; margin-top: 0.15rem; font-size: 0.8rem; }
 #notify-sheet .ns-rm { order: 2; }

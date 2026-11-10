@@ -200,6 +200,7 @@ Object.assign(APIHandler.prototype, {
       temperature: 0.8,
       max_tokens: MAIN_CARD_MAX_TOKENS,
       stream: !!onStream,
+      __jobLabel: "Character card",
     };
 
     if (onStream) {
@@ -298,6 +299,7 @@ Object.assign(APIHandler.prototype, {
       temperature: 0.8,
       max_tokens: MAIN_CARD_MAX_TOKENS,
       stream: !!onStream,
+      __jobLabel: "Character card",
     };
 
     if (onStream) {

@@ -450,6 +450,7 @@ class APIHandler {
         method: "POST",
         headers: {
           ...headers,
+          ...(window.cardgenPage?.headers() || {}),
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
         body: JSON.stringify(data),
