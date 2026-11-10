@@ -1,13 +1,13 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-10 (🔔 push Stage 3 built, not deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-10 (🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## 🔔 "It's done" notifications, Stage 3 (2026-11-10) — built, NOT deployed
+## 🔔 "It's done" notifications, Stage 3 (2026-11-10) — deployed 2026-11-10 (`94886f3`, frontend + storywriterbackend + proxy)
 
 `plans/ios-app.md` Stage 3. Joe tried Stages 1–2 on the iPhone first: "all looks good so far".
 
@@ -45,8 +45,8 @@ Claude's own memory does not travel between them.
   **Not tested:** a real lock on the iPhone (does the hidden report get out before iOS freezes the
   page?), real pushes through Apple, Story Writer parts end to end (no test harness for
   `generation.py`).
-- **Deploy needs frontend + storywriterbackend + proxy** (new `push_prefs` table is created on
-  start). Rebuilding the proxy drops in-flight jobs: check nothing is generating.
+- **After deploying:** backend and proxy started cleanly; `push_prefs` created; through the live
+  proxy as Joe: `/push/prefs` gave the defaults, `/push/presence` 200, `/push/internal/jobs-done` 404.
 - **To try on the iPhone:** start a Messenger reply and lock straight away; a card in Character Gen,
   then switch to another app; an auto-written story, close nothing, lock. Then open the app and
   generate while watching: there should be no push.

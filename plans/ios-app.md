@@ -18,7 +18,7 @@ app do" at the end).
   and stored in `app_secrets` rather than set in `.env`; the internal push route for the proxy
   moves to Stage 3, which is the first thing that needs it. Joe tried Stages 1–2 on the iPhone
   2026-11-10: "all looks good so far".
-- **Stage 3 built 2026-11-10, not yet deployed.** Changes from the plan below:
+- **Stage 3 built and deployed 2026-11-10.** Changes from the plan below:
   - "Nobody is watching" means **the page that started it is hidden**. Each page load has a random
     id (`X-Page-Id` on every request) and reports hidden/shown (`POST /push/presence`, a keepalive
     fetch). A reader still attached doesn't count: a locked iPhone can keep its socket open, and the
