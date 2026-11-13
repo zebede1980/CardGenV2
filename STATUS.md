@@ -40,7 +40,9 @@ images 129 MB, Postgres 72 MB (saved_prompts 43 MB). Every portrait, version and
 live card. Orphans: 678 history-item files (`h_…`, 107 MB) whose items are gone from `history_items`, nearly
 all from May–June 2026 (the history.json → DB move, 13 June). Legacy `proxy/data/cards.json` (74 cards, never
 read) and `users/<id>/cards.json` (76 cards, read only by the manual `POST /api/storage/migrate-cards`), 52 MB.
-Nothing deleted yet.
+**Deleted 2026-11-13 at Joe's request:** the 678 orphaned history files (106 MB, list re-checked just before;
+every live file re-verified after) and both `cards.json` files (the migrate route now just reports none).
+`proxy/data` went from 1.2 GB to 1.0 GB.
 
 ## 🖼️ MiniMax H3-Image (`local/minimax-h3-image`) (2026-11-13) — deployed 2026-11-13 (`8103b4b`, proxy + frontend)
 
