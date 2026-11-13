@@ -7,6 +7,19 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Saved prompts keep their reference image (2026-11-13) — committed, not deployed
+
+Creating a character from a picture often warned "Omitted large reference-image snapshot": the saved
+prompt drops any embedded image over 400,000 characters (~290 KB). `savePromptToLibrary` now first
+redraws a too-big image as a JPEG (≤1024 px, quality stepped down until it fits:
+`shrinkImageDataUrlToFit` in `library-handler.js`), white behind transparency. The full-size image stays
+in memory for the generation itself. The cap is unchanged (`PROMPT_MAX_EMBEDDED_CHARS`), because
+**every save downloads every saved prompt** (`listPrompts()` to find a duplicate by fingerprint):
+on 2026-11-13 that was 414 prompts, 213 with images, **41 MB per card generated**. Worth a lighter
+route (server-side fingerprint lookup) some time. Tested in WebKit (9 checks: a 2400×3000 PNG stored
+as a ≤400k-char JPEG with no warning, small image untouched, transparency → white, undecodable image
+still dropped with the old warning). Not tried on the iPhone.
+
 ## 🖼️ MiniMax H3-Image (`local/minimax-h3-image`) (2026-11-13) — deployed 2026-11-13 (`8103b4b`, proxy + frontend)
 
 MiniMax's open-weight image model (released 2026-11-10): one 33B checkpoint that generates and edits

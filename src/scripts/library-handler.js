@@ -1,4 +1,9 @@
 // Library / Storage Methods — extends CharacterGeneratorApp prototype
+
+// Every saved prompt is downloaded whole on each save (see savePromptToLibrary),
+// so embedded images and lorebooks are capped at this many characters each.
+const PROMPT_MAX_EMBEDDED_CHARS = 400000;
+
 Object.assign(CharacterGeneratorApp.prototype, {
 
   formatLibraryTime(isoString) {
@@ -10,6 +15,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async savePromptToLibrary(promptData) {
     if (!this.storageReady || !this.storage) return false;
     try {
+      // A reference image too big to store is shrunk to fit rather than dropped.
+      // The copy in memory stays full size for the rest of this generation.
+      const referenceImageDataUrl = await this.shrinkImageDataUrlToFit(
+        promptData?.referenceImageDataUrl || "", PROMPT_MAX_EMBEDDED_CHARS,
+      );
+      promptData = { ...promptData, referenceImageDataUrl };
       const normalized = this.preparePromptRecordForStorage(promptData);
       const fingerprint = [
         normalized.concept || "",
@@ -78,9 +89,42 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  // Redraws an image data URL as a JPEG no larger than 1024 px, lowering size
+  // and quality until it is at most maxChars long. Returns the original if it
+  // already fits or can't be decoded (the caller's own limit then applies).
+  async shrinkImageDataUrlToFit(dataUrl, maxChars) {
+    if (!dataUrl || dataUrl.length <= maxChars) return dataUrl;
+    let img;
+    try {
+      img = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = dataUrl;
+      });
+    } catch {
+      return dataUrl;
+    }
+    const steps = [[1024, 0.85], [1024, 0.72], [896, 0.7], [768, 0.68], [640, 0.65], [512, 0.6]];
+    for (const [maxSide, quality] of steps) {
+      const scale = Math.min(maxSide / img.width, maxSide / img.height, 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      // JPEG has no transparency; without this it turns black.
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const jpeg = canvas.toDataURL("image/jpeg", quality);
+      if (jpeg.length <= maxChars) return jpeg;
+    }
+    return dataUrl;
+  },
+
   preparePromptRecordForStorage(promptData, options = {}) {
     const minimal = Boolean(options.minimal);
-    const maxEmbeddedChars = 400000;
+    const maxEmbeddedChars = PROMPT_MAX_EMBEDDED_CHARS;
 
     const safe = {
       concept: promptData?.concept || "",
