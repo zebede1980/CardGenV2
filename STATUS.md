@@ -1,13 +1,13 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-13 (🖼️ MiniMax H3-Image added; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-13 (🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## 🖼️ MiniMax H3-Image (`local/minimax-h3-image`) (2026-11-13)
+## 🖼️ MiniMax H3-Image (`local/minimax-h3-image`) (2026-11-13) — deployed 2026-11-13 (`8103b4b`, proxy + frontend)
 
 MiniMax's open-weight image model (released 2026-11-10): one 33B checkpoint that generates and edits
 from 1–16 pictures, distilled to 6 steps without CFG. **Licence:** the MiniMax H3-Image Community
@@ -43,7 +43,10 @@ other users would also need MiniMax's written permission (its "Hosted Service" c
   - Text-to-image: an elf ranger with a lettered sign, very good at 1 and 2 MP.
   - **Speed (16 GB, warm):** generate ~14 s at 1–2 MP; edits 19–25 s; 2-picture combines 24–56 s; first
     run after a model swap ~80 s. Klein does the same edits in 3–6 s. The 21 GB DiT doesn't fit in VRAM.
-- **Not tested:** through the deployed proxy or the browser, the caption with the real vision model, NSFW,
+- **After deploying:** the deployed builder ran from inside the proxy container through the gateway to the
+  PC: generate 16.5 s, a captioned single edit 20.3 s (cat ears, fur and tail kept), a 2-picture coat
+  combine 24.3 s (right coat, right woman).
+- **Not tested:** the browser or the iPhone, the caption with the real vision model, NSFW,
   Messenger photos (still on Qwen Lightning), Reimagine (goes the "reference" route, as an edit), 3–4
   picture combines, edits above ~1 MP (the template uses 4 MP; MiniMax says it is best at 4–20 MP).
 - **To finish (Joe):** Settings → Image API → Fetch models, add `local/minimax-h3-image`, tick
