@@ -1,11 +1,53 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-10 (🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-13 (🖼️ MiniMax H3-Image added; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## 🖼️ MiniMax H3-Image (`local/minimax-h3-image`) (2026-11-13)
+
+MiniMax's open-weight image model (released 2026-11-10): one 33B checkpoint that generates and edits
+from 1–16 pictures, distilled to 6 steps without CFG. **Licence:** the MiniMax H3-Image Community
+Licence excludes the UK (and EU, US, Korea) and §V.4 forbids use outside its territory. That's why
+P-H3-Image was skipped on 2026-11-06; **Joe chose to install and run it anyway (2026-11-13).** Offering it to
+other users would also need MiniMax's written permission (its "Hosted Service" clause).
+
+- **Files on the PC** (from `Comfy-Org/MiniMax-H3-Image`, SHA-256 checked): `minimax_h3_image_pruned_int8_convrot`
+  (21 GB, `diffusion_models`) and `minimax_h3_image_vae_fp16` (1.2 GB). The text encoder is the H3 video
+  model's `qwen3vl_32b_minimax_h3_nvfp4_awq` (already there; the template's int8 is 27 GB). ComfyUI 0.45.0
+  has the core `MiniMaxH3ImageConditioning` node. Not downloaded: the template's local prompt expander
+  (`qwen3.5_9b_w4a8_gptq`), the bf16 (40 GB) and w4a8 (12.5 GB, untried on a 40-series card) DiTs.
+- **Graph** (`buildMinimaxH3ImageGraph`): from Comfy's `image_minimax_h3_image_t2i`/`_edit` templates minus
+  the expander branch: euler/simple, 6 steps, CFG 1, zeroed negative; the conditioning node returns the
+  latent too. Edits: references resized to ~1 MP (`H3_IMAGE.editMegapixels`), width/height 0, so the result
+  takes picture 1's shape; the node itself scales the short edge up to at least 1024. "image 2" /
+  `<image_2>` in a prompt becomes `<Picture 2>` (`nameReferencesAs(…, "picture")`). Combine up to 4.
+- **Captions:** like Klein, every H3 edit and combine goes through `writeEditCaption` first, with MiniMax's
+  own expander prompt (`src/scripts/h3-edit-caption-prompt.js`, verbatim from the template: each picture
+  labelled `<Picture N>` with its aspect ratio, the instruction as a JSON string, JSON reply whose
+  `expanded_caption` is sent; `parseH3EditCaption`). ~38 KB of instructions, so ~10k input tokens per
+  caption. A refusal or failure sends the instruction as typed, as for Klein.
+- **Why captions:** with one-line instructions H3 made characters generic: it dropped a cat-girl's cat ears
+  and the anime girl's ponytail and framing. With a hand-written caption in MiniMax's format, both came
+  back exactly. **The real vision model (Gemini 3.5 Flash) has not written one yet**: untested whether it
+  follows the 38 KB prompt, keeps to the JSON, or refuses NSFW pictures.
+- **Tested on the PC** through the real builder (harness sliced it out of `server.js`), same seeds and
+  pictures as Klein, one-line instructions:
+  - Night rain on a photo: **H3 better** (stronger likeness, detail). Coat from picture 2 onto picture 1:
+    both right, H3 copied the coat more exactly. Two women at a café: both right, H3 more natural.
+  - "Redraw picture 1 in picture 2's anime style": **both failed** (Klein returned picture 2; H3 drew the
+    anime girl in picture 1's jacket). Uncaptioned; untried with a caption.
+  - Text-to-image: an elf ranger with a lettered sign, very good at 1 and 2 MP.
+  - **Speed (16 GB, warm):** generate ~14 s at 1–2 MP; edits 19–25 s; 2-picture combines 24–56 s; first
+    run after a model swap ~80 s. Klein does the same edits in 3–6 s. The 21 GB DiT doesn't fit in VRAM.
+- **Not tested:** through the deployed proxy or the browser, the caption with the real vision model, NSFW,
+  Messenger photos (still on Qwen Lightning), Reimagine (goes the "reference" route, as an edit), 3–4
+  picture combines, edits above ~1 MP (the template uses 4 MP; MiniMax says it is best at 4–20 MP).
+- **To finish (Joe):** Settings → Image API → Fetch models, add `local/minimax-h3-image`, tick
+  "Natural-language prompts". ✨ Edit and 🔀 Combine come ticked from the proxy.
 
 ## 🔔 "It's done" notifications, Stage 3 (2026-11-10) — deployed 2026-11-10 (`94886f3`, frontend + storywriterbackend + proxy)
 
