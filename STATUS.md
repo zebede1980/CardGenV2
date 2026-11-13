@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Saved prompts keep their reference image (2026-11-13) — committed, not deployed
+## Saved prompts keep their reference image (2026-11-13) — deployed 2026-11-13 (`a3a4ad1`, frontend)
 
 Creating a character from a picture often warned "Omitted large reference-image snapshot": the saved
 prompt drops any embedded image over 400,000 characters (~290 KB). `savePromptToLibrary` now first
@@ -19,6 +19,14 @@ on 2026-11-13 that was 414 prompts, 213 with images, **41 MB per card generated*
 route (server-side fingerprint lookup) some time. Tested in WebKit (9 checks: a 2400×3000 PNG stored
 as a ≤400k-char JPEG with no warning, small image untouched, transparency → white, undecodable image
 still dropped with the old warning). Not tried on the iPhone.
+
+**Storage on OCI (2026-11-13):** ~1.3 GB in all: card images 969 MB (`proxy/data/users/<id>/card-images`:
+portraits `<id>.img`, every earlier version `<id>_h<n>.img`, gallery `<id>_gallery_<row>.img`), Playground
+images 129 MB, Postgres 72 MB (saved_prompts 43 MB). Every portrait, version and gallery file belongs to a
+live card. Orphans: 678 history-item files (`h_…`, 107 MB) whose items are gone from `history_items`, nearly
+all from May–June 2026 (the history.json → DB move, 13 June). Legacy `proxy/data/cards.json` (74 cards, never
+read) and `users/<id>/cards.json` (76 cards, read only by the manual `POST /api/storage/migrate-cards`), 52 MB.
+Nothing deleted yet.
 
 ## 🖼️ MiniMax H3-Image (`local/minimax-h3-image`) (2026-11-13) — deployed 2026-11-13 (`8103b4b`, proxy + frontend)
 
