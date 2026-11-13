@@ -44,6 +44,41 @@ function looksLikeRefusal(text) {
   return opening.test(t) || (t.split(/\s+/).length < 60 && policy.test(t));
 }
 
+// H3's expander answers {"expanded_caption": "...", "target_aspect_ratio": "W:H"},
+// possibly after some reasoning or inside a code fence. Returns the caption,
+// or "" when there's none.
+function parseH3EditCaption(raw) {
+  const text = String(raw || "");
+  const end = text.lastIndexOf("}");
+  for (let start = text.indexOf("{"); start !== -1 && start < end; start = text.indexOf("{", start + 1)) {
+    try {
+      const caption = JSON.parse(text.slice(start, end + 1))?.expanded_caption;
+      if (typeof caption === "string") return caption.trim();
+    } catch { /* try the next brace */ }
+  }
+  const loose = /"expanded_caption"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(text);
+  if (loose) {
+    try { return JSON.parse(`"${loose[1]}"`).trim(); } catch { /* fall through */ }
+  }
+  return "";
+}
+
+// A picture's shape as a reduced "W:H", or null if it won't load.
+function imageAspectRatio(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const [w, h] = [img.naturalWidth, img.naturalHeight];
+      if (!w || !h) return resolve(null);
+      const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+      const d = gcd(w, h);
+      resolve(`${w / d}:${h / d}`);
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
 function getRatioDims(model, ratio) {
   const map = /seedream/i.test(model || "") ? SEEDREAM_RATIO_MAP : DEFAULT_RATIO_MAP;
   return map[ratio];
@@ -478,7 +513,7 @@ Object.assign(APIHandler.prototype, {
 
     const editModel = model || this.config.get("api.image.editModel") || "flux-2-pro-image-to-image";
     if (!captioned && this.needsEditCaption(editModel)) {
-      trimmedInstruction = await this._editCaptionOrInstruction([imageBase64], trimmedInstruction);
+      trimmedInstruction = await this._editCaptionOrInstruction([imageBase64], trimmedInstruction, editModel);
     }
 
     const data = {
@@ -610,33 +645,39 @@ Describe only what can be seen. No character names, no headings, lists or quotat
     return prompt;
   },
 
-  // ── Edit captions (FLUX.3 Klein) ─────────────────────────────────────────
+  // ── Edit captions (FLUX.3 Klein, MiniMax H3-Image) ───────────────────────
   // Klein reads its prompt as a full caption: BFL's own card says a one-line
   // edit like "make it blue" reframes the whole shot. BFL ships a prompt
   // "upsampler" for this and says any LLM can stand in for it with its system
   // prompt, so the vision model looks at the picture(s) and expands the
   // instruction first, as the upsampler would. Streams and is resumable, like
   // writeReimaginePrompt.
+  // H3-Image is the same, with MiniMax's expander prompt: given a one-liner it
+  // redraws the character more generic (cat ears and a ponytail lost, tested
+  // 2026-11-13); given the expander's caption, which names what to keep, not.
   needsEditCaption(model) {
-    return /^local\/flux3-klein/.test(model || "");
+    return /^local\/(flux3-klein|minimax-h3-image)/.test(model || "");
   },
 
-  async writeEditCaption({ images, instruction, onStream = null }) {
+  async writeEditCaption({ images, instruction, model: imageModel = "", onStream = null }) {
     const model = this.config.get("api.text.visionModel") || this.config.get("api.text.model");
     if (!model) throw new Error("No vision model or text model configured to write the edit caption");
+    const h3 = /^local\/minimax-h3-image/.test(imageModel);
+    const messages = h3 ? await this._h3EditCaptionMessages(images, instruction) : [
+      { role: "system", content: KLEIN_EDIT_CAPTION_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: [
+          ...images.map((url) => ({ type: "image_url", image_url: { url } })),
+          { type: "text", text: `Reference images follow in order (the first image, the second image, ...).\nUser request: ${instruction}\nOutput the caption.` },
+        ],
+      },
+    ];
     const data = {
       model,
-      messages: [
-        { role: "system", content: KLEIN_EDIT_CAPTION_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            ...images.map((url) => ({ type: "image_url", image_url: { url } })),
-            { type: "text", text: `Reference images follow in order (the first image, the second image, ...).\nUser request: ${instruction}\nOutput the caption.` },
-          ],
-        },
-      ],
-      max_tokens: 4096,
+      messages,
+      // H3's expander may think out loud before its JSON.
+      max_tokens: h3 ? 8192 : 4096,
       temperature: 0.2,
       stream: true,
       resumable: true,
@@ -644,22 +685,38 @@ Describe only what can be seen. No character names, no headings, lists or quotat
     };
     const response = await this.makeRequest("/api/text/chat/completions", data, false, true);
     const raw = await this.handleStreamResponse(response, onStream || (() => {}));
-    const caption = this._cleanWrittenPrompt(raw);
+    const caption = h3 ? parseH3EditCaption(raw) : this._cleanWrittenPrompt(raw);
     if (!caption) throw new Error("The vision model returned an empty edit caption — try again");
     if (this.lastFinishReason === "length") throw new Error("The edit caption was cut off before the model finished — try again");
     console.log("Edit caption:", caption);
     return caption;
   },
 
+  // MiniMax's expander format: each picture preceded by its label and exact
+  // shape, then the instructions with the user's request as a JSON string.
+  async _h3EditCaptionMessages(images, instruction) {
+    const content = [];
+    for (const [i, url] of images.entries()) {
+      const ratio = await imageAspectRatio(url);
+      content.push({ type: "text", text: `Reference Media: <Picture ${i + 1}>, ${ratio ? `aspect_ratio ${ratio}` : "aspect_ratio unavailable"}` });
+      content.push({ type: "image_url", image_url: { url } });
+    }
+    content.push({
+      type: "text",
+      text: `${H3_EDIT_CAPTION_INSTRUCTIONS}\n\nUser Editing Instruction (JSON string): ${JSON.stringify(instruction)}\nUser Aspect Ratio Selection: adaptive`,
+    });
+    return [{ role: "system", content: H3_EDIT_CAPTION_SYSTEM_PROMPT }, { role: "user", content }];
+  },
+
   // The caption, or the user's own instruction when the vision model refuses
   // or fails: Klein still edits well from a one-liner (tested 2026-10-26), so
   // a cloud model's content policy shouldn't block a local edit. A ■ Stop
   // pressed meanwhile still stops it.
-  async _editCaptionOrInstruction(images, instruction) {
+  async _editCaptionOrInstruction(images, instruction, model) {
     const stopSerial = this.stopSerial;
     let caption = "";
     try {
-      caption = await this.writeEditCaption({ images, instruction });
+      caption = await this.writeEditCaption({ images, instruction, model });
     } catch (error) {
       if (this.stopSerial !== stopSerial) throw error;
       console.warn("Edit caption failed, sending the instruction as typed:", error.message);
@@ -1503,7 +1560,7 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
     const combineModel = model || this.config.get("api.image.combineModel") || "";
     if (!combineModel) throw new Error("Choose a model that supports combining multiple images first.");
     if (this.needsEditCaption(combineModel)) {
-      trimmedInstruction = await this._editCaptionOrInstruction(images, trimmedInstruction);
+      trimmedInstruction = await this._editCaptionOrInstruction(images, trimmedInstruction, combineModel);
     }
 
     const apiKey = this.config.get("api.image.apiKey");
