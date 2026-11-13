@@ -3041,6 +3041,15 @@ const LOCAL_COMFY_MODELS = {
     maxReferences: 4,
     buildGraph: buildFlux3KleinGraph,
   },
+  // MiniMax H3-Image: one 33B checkpoint, 6 steps, no CFG; generates and
+  // edits from up to 16 pictures (see buildMinimaxH3ImageGraph).
+  "local/minimax-h3-image": {
+    name: "MiniMax H3-Image",
+    capabilities: { generate: true, edit: true, combine: true },
+    steps: { default: 6, min: 4, max: 12 },
+    maxReferences: 4,
+    buildGraph: buildMinimaxH3ImageGraph,
+  },
   "local/illustrious-xl": {
     name: "Illustrious XL",
     capabilities: { generate: true, edit: false },
@@ -3442,12 +3451,15 @@ function addLocalComfyReferences(graph, sourceImages, megapixels = LOCAL_COMFY.e
   });
 }
 
-// "image 1" and "<image_1>" both name a reference; each model wants its own.
+// "image 1", "<image_1>" and "<Picture 1>" all name a reference; each model
+// wants its own.
 function nameReferencesAs(prompt, style) {
-  const pattern = /<image_([1-9])>|\b(?:image|picture)\s+([1-9])\b/gi;
-  return prompt.replace(pattern, (whole, tagged, plain) => {
-    const n = tagged || plain;
-    return style === "tag" ? `<image_${n}>` : `image ${n}`;
+  const pattern = /<image_([1-9])>|<picture\s+([1-9])>|\b(?:image|picture)\s+([1-9])\b/gi;
+  return prompt.replace(pattern, (whole, tagged, pictureTag, plain) => {
+    const n = tagged || pictureTag || plain;
+    if (style === "tag") return `<image_${n}>`;
+    if (style === "picture") return `<Picture ${n}>`;
+    return `image ${n}`;
   });
 }
 
@@ -3625,6 +3637,57 @@ function buildFlux3KleinGraph({ prompt, seed, steps, width, height, sourceImages
     graph[17].inputs[`images.image${i}`] = [String(100 + i * 10), 0];
   });
   Object.assign(graph[7].inputs, { positive: ["17", 0], negative: ["17", 1], latent_image: ["17", 2] });
+  return graph;
+}
+
+// MiniMax H3-Image, from Comfy's image_minimax_h3_image_t2i / _edit templates
+// minus their prompt-expander branch (a local Qwen3.5 9B that rewrites the
+// instruction; the app's vision model does that job, see writeEditCaption).
+// One 33B checkpoint, distilled to 6 steps without CFG, generates and edits
+// from 1-16 pictures. The conditioning node encodes the pictures twice, through
+// the Qwen3-VL text encoder and as VAE reference latents, and returns the
+// latent too: for an edit, at picture 1's size. The prompt names the pictures
+// <Picture 1>, <Picture 2>... The text encoder is the H3 video model's own
+// (nvfp4; the template's int8 is 27 GB).
+// Weights: MiniMax H3-Image Community License, which excludes the UK, EU, US
+// and Korea; Joe chose to run it anyway (2026-11-13).
+const H3_IMAGE = {
+  unet: "minimax_h3_image_pruned_int8_convrot.safetensors",
+  clip: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+  vae: "minimax_h3_image_vae_fp16.safetensors",
+  editMegapixels: 1.0,
+};
+
+function buildMinimaxH3ImageGraph({ prompt, seed, steps, width, height, sourceImages }) {
+  const editing = sourceImages?.length > 0;
+  const graph = {
+    1: { class_type: "UNETLoader", inputs: { unet_name: H3_IMAGE.unet, weight_dtype: "default" } },
+    2: { class_type: "CLIPLoader", inputs: { clip_name: H3_IMAGE.clip, type: "minimax", device: "default" } },
+    3: { class_type: "VAELoader", inputs: { vae_name: H3_IMAGE.vae } },
+    4: {
+      class_type: "MiniMaxH3ImageConditioning",
+      inputs: {
+        clip: ["2", 0], vae: ["3", 0],
+        prompt: editing ? nameReferencesAs(prompt, "picture") : prompt,
+        width: editing ? 0 : width, height: editing ? 0 : height,
+      },
+    },
+    5: { class_type: "ConditioningZeroOut", inputs: { conditioning: ["4", 0] } },
+    7: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["1", 0], positive: ["4", 0], negative: ["5", 0], latent_image: ["4", 1],
+        seed, steps, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    8: { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "cardgen/h3image" } },
+  };
+  if (editing) {
+    addLocalComfyReferences(graph, sourceImages, H3_IMAGE.editMegapixels).forEach((output, i) => {
+      graph[4].inputs[`images.image_${i + 1}`] = output;
+    });
+  }
   return graph;
 }
 
