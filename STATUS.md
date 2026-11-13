@@ -7,6 +7,20 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Adventure: beats pick up from the last line (2026-11-13) — committed, not deployed
+
+Joe saw a beat open "Megan didn't answer right away…" when Megan had just asked *Joe* a question
+("Rain-Slicked Compliance", beats 18–20: beat 18 had opened with the same words, and the [Variety] note
+listing it was ignored). `routers/adventure.py`: the plan's first step now covers how the last beat ended
+and what it left hanging; a rule says a question or words aimed at someone are answered, dodged or cut off
+first, never skipped; a rule bans stalling openings ("X didn't answer right away", "Silence stretched");
+choices must follow on from the final line; and a per-beat **[Pick up from]** note quotes the last beat's
+final paragraph (trimmed to ~400 chars at a sentence, `_last_moment`). 3 new tests, 102 backend tests pass.
+**Replayed on DeepSeek V4 Pro** (Joe's model; built from the real session up to the pick, nothing saved):
+2 runs with the new prompt, 1 with the old. All three opened with Megan stepping closer and Joe
+answering; none stalled. The old prompt didn't reproduce the fault either, so 3 runs can't prove it's
+fixed. In both new runs Megan's own "Why?" was folded into the new question rather than answered first.
+
 ## Saved prompts keep their reference image (2026-11-13) — deployed 2026-11-13 (`a3a4ad1`, frontend)
 
 Creating a character from a picture often warned "Omitted large reference-image snapshot": the saved

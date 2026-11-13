@@ -89,9 +89,12 @@ ADVENTURE_NUDGES = [
 ADVENTURE_NUDGE_BLANKS = 3
 ADVENTURE_RECENT_OPENINGS = 4
 ADVENTURE_OPENING_WORDS = 8
+ADVENTURE_LAST_MOMENT_CHARS = 400
 
 _PLAN_STEPS = (
-    "1) where the scene stands right now: place, time, who is present and what each of them knows; "
+    "1) where the scene stands right now: place, time, who is present and what each of them knows, and how "
+    "the last beat ended: its final line, who said or did it, and anything it left hanging (a question, an "
+    "offer, a threat); "
     "2) what the reader's choice changes, and what it costs; "
     "3) this beat's turn: the one thing that moves the story on, and the moment of tension it ends on; "
     "4) the four choices: four different kinds, specific to this moment, none repeating earlier ones."
@@ -124,6 +127,8 @@ def _options_rules(how: str) -> str:
         "- four different kinds: a bold move, a careful one, a twist from outside (an arrival, an accident, "
         "a discovery), and one driven by what a character wants;\n"
         "- specific to this exact moment, naming who or what is involved; never generic like 'Keep exploring';\n"
+        "- following on from the final line: if the beat ends on a question or words aimed at someone, the "
+        "choices are ways it gets answered, dodged or interrupted, not moves that skip past it;\n"
         f"- short: under 15 words each, written as {how};\n"
         "- new: never repeat or rephrase a choice offered before;\n"
         "- tagged [safe] or [risky]: a risky one could go badly. At least one is risky."
@@ -165,6 +170,20 @@ def adventure_config(session_data) -> dict:
 def _opening_words(text: str) -> str:
     words = strip_think(text or "").split()
     return " ".join(words[:ADVENTURE_OPENING_WORDS]) + ("…" if len(words) > ADVENTURE_OPENING_WORDS else "")
+
+
+def _last_moment(text: str) -> str:
+    """The end of a beat (its last paragraph, or the tail of it), quoted back to the
+    narrator so the next beat picks up from it rather than from the reader's choice alone."""
+    paragraphs = [p.strip() for p in strip_think(text or "").split("\n") if p.strip()]
+    if not paragraphs:
+        return ""
+    last = paragraphs[-1]
+    if len(last) <= ADVENTURE_LAST_MOMENT_CHARS:
+        return last
+    tail = last[-ADVENTURE_LAST_MOMENT_CHARS:]
+    cut = re.search(r"(?<=[.!?…][”\"’']) |(?<=[.!?…]) ", tail)
+    return "…" + (tail[cut.end():] if cut else tail)
 
 
 def _options_block(options: list) -> str:
@@ -271,8 +290,12 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
         f"- Length: {ADVENTURE_LENGTHS[cfg['length']][0]}.",
         "- Flowing prose with a blank line between paragraphs: no headings, lists, bold, or commentary about the "
         "story or the game.",
-        "- Start exactly where the last beat ended and make the reader's choice happen, with real consequences. "
-        "Every beat moves the story on: a change, a discovery, a cost or a decision.",
+        "- Start exactly where the last beat ended. If it ended on a question or words aimed at someone, deal "
+        "with that first: it gets answered, dodged or cut off, never skipped as if it wasn't said. Then make the "
+        "reader's choice happen, with real consequences. Every beat moves the story on: a change, a discovery, "
+        "a cost or a decision.",
+        "- Open on something happening, not on a stalling reaction such as 'X didn't answer right away', "
+        "'For a long moment, nobody spoke' or 'Silence stretched'.",
         "- End on a moment of tension or decision, not a neat resolution.",
     ]
     if len(cast) > 1:
@@ -334,6 +357,10 @@ def build_adventure_prompt(session_data: models.AdventureSession, db: Session, m
     arc_note = _arc_note(cfg["arc"], len(beats))
     if arc_note:
         post.append(arc_note)
+    if beats:
+        moment = _last_moment(beats[-1].content)
+        if moment:
+            post.append(f"[Pick up from]: The last beat ended: “{moment}” Continue from that exact moment.")
     post.append(ADVENTURE_LENGTHS[cfg["length"]][1])
     if cfg["style"]:
         post.append(WRITING_STYLE_PRESETS[cfg["style"]]["post_reminder"])

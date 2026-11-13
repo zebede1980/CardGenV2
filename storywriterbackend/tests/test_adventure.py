@@ -381,6 +381,35 @@ def test_variety_lists_recent_openings_and_can_be_turned_off(client, model):
     assert "[Variety]" not in _post(model) and "[This beat]" not in _post(model)
 
 
+def test_next_beat_is_told_how_the_last_one_ended(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    assert "[Pick up from]" not in _post(model)  # nothing to pick up from yet
+    _act(client, adv["id"], role="user", content="Tobias lies")
+    post = _post(model)
+    assert '[Pick up from]: The last beat ended: “"Eleven," she said. "There were twelve last night."”' in post
+    assert "The lanterns swung" not in post.split("[Pick up from]")[1].split("\n")[0]  # last paragraph only
+
+
+def test_a_question_left_hanging_must_be_dealt_with(client, model):
+    adv = _new(client)
+    _act(client, adv["id"])
+    system = _system(model)
+    assert "answered, dodged or cut off" in system and "didn't answer right away" in system
+    assert "the last beat ended: its final line" in system
+    assert "ways it gets answered, dodged or interrupted" in system
+
+
+def test_last_moment_trims_a_long_paragraph_at_a_sentence():
+    para = ("She walked on. " * 40) + "\"Most humans fill silences. You do not. Why?\""
+    moment = adventure._last_moment("<think>plan</think>First.\n\n" + para)
+    assert moment.startswith("…") and moment.endswith("Why?\"")
+    assert len(moment) <= adventure.ADVENTURE_LAST_MOMENT_CHARS + 1
+    assert moment[1:].startswith(("She walked on.", "\"Most"))
+    assert adventure._last_moment("Short end.") == "Short end."
+    assert adventure._last_moment("<think>only a plan</think>") == ""
+
+
 def test_presets_route_lists_styles_and_lengths(client, model):
     p = client.get("/api/adventures/presets", headers=HEADERS).json()
     assert {"key": "hardboiled_noir", "name": "Hardboiled Noir"} in p["styles"]
