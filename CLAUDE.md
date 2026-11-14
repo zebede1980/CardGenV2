@@ -60,7 +60,8 @@ the `api.js` path above, so check them on their own when changing shared behavio
 ## Deploying
 
 The dev clone is `/home/ubuntu/CardGenV2` (branch `ChatTest`). The running containers build from a
-second clone. Commit and push here, then run `cd ~/DockerSource/CardGenV2 && git pull && docker
-compose up -d --build`. Rebuilding the proxy restarts it, which drops in-flight jobs and wipes
-`docker logs`, so check nothing is generating first. Bump the `?v=` on a script's tag in
+second clone. Commit freely as work progresses, but **ask before pushing**. Once a push is agreed,
+push here, then run `cd ~/DockerSource/CardGenV2 && git pull && docker compose up -d --build`.
+Rebuilding the proxy restarts it, which drops in-flight jobs and wipes `docker logs`, so check
+nothing is generating first. Bump the `?v=` on a script's tag in
 `index.html` when changing that script.
