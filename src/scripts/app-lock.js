@@ -262,10 +262,12 @@
 
   // ── The lock screen ───────────────────────────────────────────────────────
   //  open     nothing shown
-  //  covered  the page went into the background: a blank cover, so the app
-  //           switcher's snapshot (best effort) and the first frame back show
-  //           nothing. Coming back in time removes it; too late asks for the PIN.
   //  locked   asking for the PIN
+  //
+  // Nothing is drawn when the page goes into the background unless the PIN is
+  // certain to be asked for on the way back ("every time"). iOS freezes the
+  // page on the frame it left with and takes a second or two to wake it, so a
+  // cover put up on the way out is what you look at on the way back in.
 
   const Lock = {
     state: "open",
@@ -305,8 +307,6 @@
         location.reload();
       });
 
-      // A cover that somehow outlived the page coming back: any tap settles it.
-      el.addEventListener("click", () => { if (this.state === "covered") this.resume(); });
       (document.body || document.documentElement).appendChild(el);
       this.el = el;
     },
@@ -317,9 +317,10 @@
       this.el.hidden = false;
     },
 
-    lock() {
+    lock({ check = true } = {}) {
       if (this.state === "locked") return;
       this.state = "locked";
+      this.hiddenAt = 0;
       this.show("pin");
       const out = this.el.querySelector("[data-signout]");
       out.dataset.sure = "";
@@ -329,7 +330,7 @@
       const active = document.activeElement;
       if (active && active !== document.body && !this.el.contains(active)) active.blur?.();
       try { this.el.focus({ preventScroll: true }); } catch (e) { /* not focusable yet */ }
-      this.refresh();
+      if (check) this.refresh();
     },
 
     // Brings the dot count and any wait in line with the server. The lock
@@ -368,24 +369,32 @@
       toast("The PIN was removed, so this device is no longer locked.", "info");
     },
 
-    cover() {
-      if (this.state !== "open" || !enabled()) return;
-      this.state = "covered";
-      this.hiddenAt = Date.now();
-      this.show("cover");
+    askAfterMs() {
+      return Number(Device.read()?.after ?? DEFAULT_AFTER) * 1000;
     },
 
-    resume() {
-      if (this.state !== "covered") return;
-      if (!enabled()) return this.open();
-      const after = Number(Device.read()?.after ?? DEFAULT_AFTER) * 1000;
-      const away = Date.now() - this.hiddenAt;
-      if (away < 0 || away >= after) this.lock();
-      else this.open();
+    // The page went into the background. Called for visibilitychange and for
+    // pagehide, so the first of the two sets the time.
+    leave() {
+      if (this.state !== "open" || !enabled()) return;
+      if (this.askAfterMs() <= 0) return this.lock({ check: false });
+      if (!this.hiddenAt) this.hiddenAt = Date.now();
+    },
+
+    // The page is back. Time away comes from the clock, not a timer: iOS
+    // freezes timers. A clock that went backwards locks.
+    back() {
+      if (this.state === "locked") return void this.refresh();
+      const left = this.hiddenAt;
+      this.hiddenAt = 0;
+      if (!left || !enabled()) return;
+      const away = Date.now() - left;
+      if (away < 0 || away >= this.askAfterMs()) this.lock();
     },
 
     open() {
       this.state = "open";
+      this.hiddenAt = 0;
       if (this.el) this.el.hidden = true;
       this.pad?.configure({ length: this.pad.length });
       this.waiters.splice(0).forEach((resolve) => resolve());
@@ -684,14 +693,14 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-      Lock.cover();
+      Lock.leave();
     } else {
-      Lock.resume();
+      Lock.back();
       pads.forEach((pad) => { if (pad.until) pad.tick(); });
     }
   });
-  window.addEventListener("pagehide", () => Lock.cover());
-  window.addEventListener("pageshow", () => { if (document.visibilityState === "visible") Lock.resume(); });
+  window.addEventListener("pagehide", () => Lock.leave());
+  window.addEventListener("pageshow", () => { if (document.visibilityState === "visible") Lock.back(); });
 
   // Keys go to whichever keypad is in front. While the lock screen is up
   // nothing reaches the app's own shortcuts underneath.
@@ -710,7 +719,7 @@
     e.preventDefault();
   }, true);
 
-  // Focus stays out of the app while it is covered or locked.
+  // Focus stays out of the app while it is locked.
   document.addEventListener("focusin", (e) => {
     if (Lock.state === "open" || !Lock.el || Lock.el.contains(e.target)) return;
     e.target.blur?.();

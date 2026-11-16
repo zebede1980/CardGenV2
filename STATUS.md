@@ -22,9 +22,13 @@ PIN, asked for per device. 🔒 in the header (next to 🔔) opens the sheet.
   (`cardgen.appLock.v1`: `on`, `user`, `after`, `len`), so the phone can lock while the PC doesn't.
   iPhone Safari and the Home Screen app have separate storage: turn it on in each.
 - **When it asks:** every cold start, and on coming back after longer than the device's "ask after" time
-  (every time / 1 / 5 (default) / 15 / 60 min). Measured from the clock at hide and show, no timers. The
-  page is covered the moment it is hidden (for the app switcher's snapshot, best effort) and uncovered if
-  you are back in time.
+  (every time / 1 / 5 (default) / 15 / 60 min). Measured from the clock at hide and show, no timers.
+- **Nothing is drawn on the way out** (changed 2026-11-16, committed, not deployed), except with "every
+  time", where the PIN screen goes up as the page is hidden. The first version put a blank cover up on
+  every hide. On Joe's iPad that gave a black screen on the first return and a lone padlock for a second
+  or two on the next: iOS freezes the page on the frame it left with and takes that long to wake it.
+  **Cost:** with a time limit, the app switcher's thumbnail shows the app, and coming back late shows the
+  last screen for that second or two before the PIN screen. "Every time" has neither gap.
 - **Keypad of buttons, no text field**, so iOS never offers to save or fill the PIN. Physical keys work too.
 - **Proxy routes** (`server.js`, after change-password): `GET /api/auth/pin`, `POST /api/auth/pin/verify`,
   `PUT /api/auth/pin`, `POST /api/auth/pin/remove`. Wrong guesses are counted per account (not per IP)
@@ -38,15 +42,15 @@ PIN, asked for per device. 🔒 in the header (next to 🔔) opens the sheet.
 - **Requests:** each PIN check is cut off after 12 s and a network failure is retried once, so a dead
   connection after a wake doesn't mean typing the PIN again.
 - **Tested:** 41 checks of the routes against a scratch copy of the real `server.js` (hashing, the wait
-  schedule, a restart keeping the count, 10 guesses at once → 5 looked at, never a 401). 303 WebKit checks
+  schedule, a restart keeping the count, 10 guesses at once → 5 looked at, never a 401). 323 WebKit checks
   at 390 light / 320 dark / 430 dark / 1280 desktop / 667×375 and 568×320 landscape, real page + real
   proxy routes + fake everything else: cold start locked before the session is confirmed, the app starting
-  underneath, a stream that keeps arriving and finishes behind the lock, hidden → covered → back in time,
-  back late, clock moved backwards, 5 wrong → countdown that is right after 20 s "asleep", dropped and
+  underneath, a stream that keeps arriving and finishes behind the lock, hidden and back in time with
+  the lock screen never drawn, "every time" locking as the page hides, back late, clock moved backwards, 5 wrong → countdown that is right after 20 s "asleep", dropped and
   silent connections, a second device with its own setting, PIN changed or removed on another device,
   session ending while locked, focus and keys kept out of the app, layout.
-  **Not tested:** a real iPhone (does the cover make it into the app switcher snapshot? does the photo
-  picker or share sheet count as "leaving" with "every time"?), the deployed proxy, a real generation
+  **Not tested:** the no-cover change on a real device (headless WebKit can't freeze a page as iOS does),
+  whether the photo picker or share sheet count as "leaving" with "every time", the deployed proxy, a real generation
   behind the lock (only a test stream).
 - **After deploying:** proxy and frontend rebuilt and healthy; `GET /api/auth/pin` with no token answered
   401 with `X-Session-Expired` from inside the proxy container. Nothing signed-in was tried on the live site.

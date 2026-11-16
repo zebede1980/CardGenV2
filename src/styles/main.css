@@ -5854,7 +5854,6 @@ html.pwa .gallery-toolbar { padding-top: calc(0.75rem + env(safe-area-inset-top,
 #app-lock .al-box { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; width: 100%; max-width: 20rem; margin: auto; text-align: center; }
 #app-lock .al-icon { font-size: 2rem; line-height: 1; }
 #app-lock .al-title { margin: 0; font-size: 1.15rem; font-weight: 600; }
-#app-lock[data-mode="cover"] .al-pin, #app-lock[data-mode="cover"] .al-title { display: none; }
 #app-lock .al-link { margin-top: 0.4rem; min-height: 2.75rem; padding: 0.4rem 0.9rem; border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.85rem; text-decoration: underline; cursor: pointer; }
 
 .al-padwrap { --al-key: clamp(2.75rem, min(19vw, 10.5vh), 4.5rem); display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%; }
