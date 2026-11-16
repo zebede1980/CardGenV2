@@ -5828,3 +5828,77 @@ html.pwa .gallery-toolbar { padding-top: calc(0.75rem + env(safe-area-inset-top,
 #notify-sheet .ns-opt span { min-width: 0; overflow-wrap: anywhere; }
 #notify-sheet .ns-opt small { display: block; margin-top: 0.15rem; font-size: 0.8rem; }
 #notify-sheet .ns-rm { order: 2; }
+
+/* ── 🔒 App lock (app-lock.js) ───────────────────────────────────────────────
+   The lock screen sits above everything, toasts and the update bar included.
+   Buttons are styled under an id: main.js's dark-theme button rule outranks
+   plain class selectors. */
+#app-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: calc(1rem + env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px)) calc(1rem + env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+    background: var(--bg-page);
+    color: var(--text-primary);
+    outline: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+#app-lock[hidden] { display: none; }
+#app-lock .al-box { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; width: 100%; max-width: 20rem; margin: auto; text-align: center; }
+#app-lock .al-icon { font-size: 2rem; line-height: 1; }
+#app-lock .al-title { margin: 0; font-size: 1.15rem; font-weight: 600; }
+#app-lock[data-mode="cover"] .al-pin, #app-lock[data-mode="cover"] .al-title { display: none; }
+#app-lock .al-link { margin-top: 0.4rem; min-height: 2.75rem; padding: 0.4rem 0.9rem; border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.85rem; text-decoration: underline; cursor: pointer; }
+
+.al-padwrap { --al-key: clamp(2.75rem, min(19vw, 10.5vh), 4.5rem); display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%; }
+@supports (height: 1dvh) { .al-padwrap { --al-key: clamp(2.75rem, min(19vw, 10.5dvh), 4.5rem); } }
+.al-dots { display: flex; justify-content: center; gap: 0.7rem; min-height: 0.9rem; }
+.al-dots span { width: 0.8rem; height: 0.8rem; border-radius: 50%; border: 1.5px solid var(--text-secondary); }
+.al-dots span.on { background: var(--text-primary); border-color: var(--text-primary); }
+.al-msg { min-height: 2.5em; margin: 0; font-size: 0.85rem; line-height: 1.25; color: var(--error); overflow-wrap: anywhere; }
+.al-pad { display: grid; grid-template-columns: repeat(3, var(--al-key)); gap: calc(var(--al-key) * 0.2) calc(var(--al-key) * 0.32); justify-content: center; }
+#app-lock .al-key, #lock-sheet .al-key { width: var(--al-key); height: var(--al-key); padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-strong); color: var(--text-primary); font: inherit; font-size: calc(var(--al-key) * 0.4); font-weight: 500; line-height: 1; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; transition: background 80ms ease; }
+#app-lock .al-key:active, #lock-sheet .al-key:active { background: var(--accent-soft); }
+#app-lock .al-key:focus-visible, #lock-sheet .al-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#app-lock .al-key:disabled, #lock-sheet .al-key:disabled { opacity: 0.45; cursor: default; }
+#app-lock .al-key.al-ok, #lock-sheet .al-key.al-ok { font-size: calc(var(--al-key) * 0.3); font-weight: 600; color: var(--accent); }
+#app-lock .al-key.al-del, #lock-sheet .al-key.al-del { border-color: transparent; background: transparent; }
+#app-lock .al-key.al-none, #lock-sheet .al-key.al-none { visibility: hidden; }
+.al-shake .al-dots { animation: al-shake 320ms ease; }
+@keyframes al-shake { 20% { transform: translateX(-9px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .al-shake .al-dots { animation: none; } }
+/* A phone on its side: title on the left, keypad on the right. */
+@media (orientation: landscape) and (max-height: 480px) {
+    #app-lock[data-mode="pin"] .al-box { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "icon pad" "title pad" "out pad"; align-items: center; justify-items: center; column-gap: 2rem; row-gap: 0.4rem; max-width: 34rem; }
+    #app-lock .al-icon { grid-area: icon; align-self: end; }
+    #app-lock .al-title { grid-area: title; }
+    #app-lock [data-pad] { grid-area: pad; }
+    #app-lock [data-signout] { grid-area: out; align-self: start; margin-top: 0; }
+    #app-lock .al-msg { min-height: 1.3em; max-width: 16rem; }
+    #app-lock .al-padwrap { gap: 0.35rem; }
+}
+
+/* 🔒 App lock sheet */
+#lock-sheet .pb-scroll, #lock-sheet .ls-main { display: flex; flex-direction: column; gap: 0.9rem; }
+#lock-sheet .ls-main[hidden], #lock-sheet .ls-ask[hidden] { display: none; }
+#lock-sheet .ls-busy { opacity: 0.6; pointer-events: none; }
+#lock-sheet h3 { margin: 0; font-size: 0.95rem; }
+#lock-sheet .ls-state { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary); }
+#lock-sheet .pb-row button { min-height: 2.75rem; }
+#lock-sheet .ls-x { flex: none; width: 2.25rem; height: 2.25rem; display: grid; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--surface-strong); color: var(--text-primary); font-size: 0.95rem; cursor: pointer; }
+#lock-sheet .ls-after { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; }
+#lock-sheet .ls-after[hidden] { display: none; }
+#lock-sheet .ls-after select { width: 100%; min-height: 2.75rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-muted); color: var(--text-primary); font: inherit; font-size: 16px; font-weight: 400; }
+#lock-sheet .ls-forgot summary { min-height: 2.25rem; display: flex; align-items: center; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; }
+#lock-sheet .ls-forgot .pb-row { margin-top: 0.5rem; }
+#lock-sheet .ls-forgot .pb-input { flex: 1 1 12rem; min-width: 0; min-height: 2.75rem; }
+#lock-sheet .ls-ask { align-items: center; text-align: center; }
+#lock-sheet .ls-ask .al-padwrap { --al-key: clamp(2.75rem, min(17vw, 9vh), 4rem); }
+#lock-sheet .ls-cancel { min-height: 2.75rem; min-width: 8rem; margin-top: 0.3rem; }

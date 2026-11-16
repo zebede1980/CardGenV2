@@ -99,6 +99,7 @@
     const kind = u.searchParams.get("open");
     const id = u.searchParams.get("id");
     if (!kind || !(await whenAppReady())) return;
+    await window.cardgenLock?.whenUnlocked?.(); // a locked app opens nothing until the PIN is in
     try {
       if (id && ITEM_KINDS.includes(kind)) {
         await window.homeHandler.openRecent({ kind, id });

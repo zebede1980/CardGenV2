@@ -385,6 +385,7 @@ async function initAuth() {
         setStoredUser({ username: result.username });
         updateUserBar(result.username);
         hideAuthOverlay();
+        window.cardgenLock?.signedIn(true); // the password counts as unlocking (app-lock.js)
         checkStoryApp();
         // Trigger app initialisation if it hasn't started yet
         if (typeof window.onAuthSuccess === "function") {
@@ -419,14 +420,16 @@ async function initAuth() {
     setStoredUser(user);
     updateUserBar(user.username);
     hideAuthOverlay();
+    window.cardgenLock?.signedIn(false);
     checkStoryApp();
     return true; // already authenticated
   } else {
     clearToken();
     showAuthOverlay();
+    window.cardgenLock?.signedOut();
     return false;
   }
 }
 
 // Expose for other modules
-window.cardgenAuth = { getToken, clearToken, initAuth, apiChangePassword };
+window.cardgenAuth = { getToken, getStoredUser, clearToken, initAuth, apiChangePassword };
