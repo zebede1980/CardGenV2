@@ -42,6 +42,9 @@ halfway through this?*
   generation where the browser allows it. It reduces locks; it doesn't replace the above.
 - Never pass a third-party 401 through to the browser: `authFetch` treats any 401 as the user's
   session expiring and logs them out.
+- **App lock** (`src/scripts/app-lock.js`, the 🔒 PIN screen) is an opaque layer over the app and
+  nothing else. Locking must never pause, abort or reload anything: the app boots and generations
+  carry on behind the PIN screen.
 
 Chat, Story Writer and Adventure stream from the Python backend (`/api/sw/*`) with their own
 readers in `chat-handler.js`, `storywriter.js` and `adventure-handler.js`. They are separate from

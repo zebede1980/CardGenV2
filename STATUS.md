@@ -1,11 +1,57 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-13 (🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-16 (🔒 App lock PIN committed, not deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## 🔒 App lock PIN (2026-11-16) — committed, not deployed
+
+Joe asked whether the Home Screen app could ask for Face ID on opening. It can (WebAuthn), but iOS always
+offers the phone passcode instead, so it keeps out nobody who knows that passcode. Built instead: a separate
+PIN, asked for per device. 🔒 in the header (next to 🔔) opens the sheet.
+
+- **A privacy screen, nothing more.** `src/scripts/app-lock.js` puts an opaque layer over the app; the
+  session token works without the PIN and no other route checks it. The app boots and keeps running
+  underneath, so streams, resume loops and job collection carry on behind it. Locking never pauses, aborts
+  or reloads anything.
+- **PIN per account, lock per device.** The PIN (4–8 digits) is a bcrypt hash in `users.json` (`pinHash`,
+  `pinLength`, `pinFails`, `pinLockedUntil`). Whether a device asks is in its localStorage
+  (`cardgen.appLock.v1`: `on`, `user`, `after`, `len`), so the phone can lock while the PC doesn't.
+  iPhone Safari and the Home Screen app have separate storage: turn it on in each.
+- **When it asks:** every cold start, and on coming back after longer than the device's "ask after" time
+  (every time / 1 / 5 (default) / 15 / 60 min). Measured from the clock at hide and show, no timers. The
+  page is covered the moment it is hidden (for the app switcher's snapshot, best effort) and uncovered if
+  you are back in time.
+- **Keypad of buttons, no text field**, so iOS never offers to save or fill the PIN. Physical keys work too.
+- **Proxy routes** (`server.js`, after change-password): `GET /api/auth/pin`, `POST /api/auth/pin/verify`,
+  `PUT /api/auth/pin`, `POST /api/auth/pin/remove`. Wrong guesses are counted per account (not per IP)
+  and kept in the file: 5 free, then 30 s doubling to an hour between tries. Changing or removing needs
+  the PIN or the account password. None of them answers 401 for a wrong PIN or password (`authFetch`
+  would sign the user out).
+- **Ways past it, by design:** "Forgot it? Sign out" on the lock screen, then signing in with the password,
+  counts as unlocking; the sheet's "Forgot the PIN?" removes it with the password. So if the account
+  password is saved in the phone's Passwords app, anyone with the phone passcode can still get in.
+- **Notification links** (`?open=`) wait for the PIN (`cardgenLock.whenUnlocked()` in `pwa.js`).
+- **Requests:** each PIN check is cut off after 12 s and a network failure is retried once, so a dead
+  connection after a wake doesn't mean typing the PIN again.
+- **Tested:** 41 checks of the routes against a scratch copy of the real `server.js` (hashing, the wait
+  schedule, a restart keeping the count, 10 guesses at once → 5 looked at, never a 401). 303 WebKit checks
+  at 390 light / 320 dark / 430 dark / 1280 desktop / 667×375 and 568×320 landscape, real page + real
+  proxy routes + fake everything else: cold start locked before the session is confirmed, the app starting
+  underneath, a stream that keeps arriving and finishes behind the lock, hidden → covered → back in time,
+  back late, clock moved backwards, 5 wrong → countdown that is right after 20 s "asleep", dropped and
+  silent connections, a second device with its own setting, PIN changed or removed on another device,
+  session ending while locked, focus and keys kept out of the app, layout.
+  **Not tested:** a real iPhone (does the cover make it into the app switcher snapshot? does the photo
+  picker or share sheet count as "leaving" with "every time"?), the deployed proxy, a real generation
+  behind the lock (only a test stream).
+- **Deploy needs** proxy + frontend rebuilds.
+- **To try on the iPhone:** 🔒 → Set a PIN; swipe to another app for a few seconds and back (no PIN);
+  "Lock now"; close the app and reopen; start a card, lock the phone past the limit, unlock and enter the
+  PIN: the card should be there. Then remove the account password from the Passwords app if it is saved.
 
 ## Adventure: beats pick up from the last line (2026-11-13) — committed, not deployed
 
