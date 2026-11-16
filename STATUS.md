@@ -23,7 +23,7 @@ PIN, asked for per device. 🔒 in the header (next to 🔔) opens the sheet.
   iPhone Safari and the Home Screen app have separate storage: turn it on in each.
 - **When it asks:** every cold start, and on coming back after longer than the device's "ask after" time
   (every time / 1 / 5 (default) / 15 / 60 min). Measured from the clock at hide and show, no timers.
-- **Nothing is drawn on the way out** (changed 2026-11-16, committed, not deployed), except with "every
+- **Nothing is drawn on the way out** (changed and deployed 2026-11-16, `edbce61`, frontend only), except with "every
   time", where the PIN screen goes up as the page is hidden. The first version put a blank cover up on
   every hide. On Joe's iPad that gave a black screen on the first return and a lone padlock for a second
   or two on the next: iOS freezes the page on the frame it left with and takes that long to wake it.
