@@ -1,13 +1,13 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-16 (🔒 App lock PIN committed, not deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-16 (🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## 🔒 App lock PIN (2026-11-16) — committed, not deployed
+## 🔒 App lock PIN (2026-11-16) — deployed 2026-11-16 (`f75c959`, proxy + frontend)
 
 Joe asked whether the Home Screen app could ask for Face ID on opening. It can (WebAuthn), but iOS always
 offers the phone passcode instead, so it keeps out nobody who knows that passcode. Built instead: a separate
@@ -48,7 +48,8 @@ PIN, asked for per device. 🔒 in the header (next to 🔔) opens the sheet.
   **Not tested:** a real iPhone (does the cover make it into the app switcher snapshot? does the photo
   picker or share sheet count as "leaving" with "every time"?), the deployed proxy, a real generation
   behind the lock (only a test stream).
-- **Deploy needs** proxy + frontend rebuilds.
+- **After deploying:** proxy and frontend rebuilt and healthy; `GET /api/auth/pin` with no token answered
+  401 with `X-Session-Expired` from inside the proxy container. Nothing signed-in was tried on the live site.
 - **To try on the iPhone:** 🔒 → Set a PIN; swipe to another app for a few seconds and back (no PIN);
   "Lock now"; close the app and reopen; start a card, lock the phone past the limit, unlock and enter the
   PIN: the card should be there. Then remove the account password from the Passwords app if it is saved.
