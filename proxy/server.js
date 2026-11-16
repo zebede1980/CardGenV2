@@ -509,6 +509,168 @@ app.post("/api/auth/change-password", authRateLimiter, requireAuth, async (req, 
   }
 });
 
+// ── App lock PIN ──────────────────────────────────────────────────────────────
+// A short PIN, separate from the password, that a device can ask for before it
+// shows the app (src/scripts/app-lock.js). It is a privacy screen: the session
+// token works without it, so no other route checks it. The PIN belongs to the
+// account; which devices ask for it is each device's own setting.
+//
+// Wrong guesses are counted per account, not per IP (behind the reverse proxy
+// every client shares one), and kept in users.json so a restart doesn't hand
+// out fresh tries.
+
+const PIN_RE = /^\d{4,8}$/;
+const PIN_FREE_TRIES = 5;
+const PIN_MAX_WAIT_MS = 60 * 60 * 1000;
+
+// 5 free tries, then 30 s, 1 min, 2 min … up to an hour between tries.
+function pinWaitMs(fails) {
+  if (fails < PIN_FREE_TRIES) return 0;
+  return Math.min(PIN_MAX_WAIT_MS, 30 * 1000 * 2 ** (fails - PIN_FREE_TRIES));
+}
+
+function pinRetryAfter(user) {
+  return Math.max(0, Math.ceil(((user.pinLockedUntil || 0) - Date.now()) / 1000));
+}
+
+function pinStatus(user) {
+  return { set: !!user.pinHash, length: user.pinHash ? user.pinLength || 0 : 0, retryAfter: pinRetryAfter(user) };
+}
+
+// Checks a PIN guess and keeps the count. Call inside the users.json lock;
+// `changed` tells the caller to write the file.
+async function checkPinGuess(user, pin) {
+  const retryAfter = pinRetryAfter(user);
+  if (retryAfter > 0) return { ok: false, locked: true, retryAfter, changed: false };
+  const ok = typeof pin === "string" && PIN_RE.test(pin) && (await bcrypt.compare(pin, user.pinHash));
+  if (ok) {
+    const changed = !!(user.pinFails || user.pinLockedUntil);
+    delete user.pinFails;
+    delete user.pinLockedUntil;
+    return { ok: true, changed };
+  }
+  user.pinFails = (user.pinFails || 0) + 1;
+  const wait = pinWaitMs(user.pinFails);
+  if (wait) user.pinLockedUntil = Date.now() + wait;
+  return {
+    ok: false,
+    changed: true,
+    retryAfter: Math.ceil(wait / 1000),
+    attemptsLeft: Math.max(0, PIN_FREE_TRIES - user.pinFails),
+  };
+}
+
+// Runs fn(user, users) under the users.json lock. fn returns
+// { status, body, save }; the file is written when save is set.
+function withPinUser(req, fn) {
+  return withFileLock("users.json", async () => {
+    const users = await readUsers();
+    const user = users.find((u) => u.id === req.user.userId);
+    if (!user) return { status: 404, body: { error: "User not found" } };
+    const result = await fn(user, users);
+    if (result.save) await writeUsers(users);
+    return result;
+  });
+}
+
+// Changing or removing a PIN needs the PIN itself or the account password.
+// Never answers 401: the browser reads that as the session ending.
+async function authorisePinChange(user, { currentPin, password }) {
+  if (!user.pinHash) return { ok: true };
+  if (typeof password === "string" && password) {
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    return valid ? { ok: true } : { ok: false, status: 403, body: { error: "Incorrect password" } };
+  }
+  const guess = await checkPinGuess(user, currentPin);
+  if (guess.ok) return { ok: true, save: guess.changed };
+  if (guess.locked) {
+    return { ok: false, status: 429, body: { error: "Too many wrong tries", retryAfter: guess.retryAfter } };
+  }
+  return {
+    ok: false,
+    save: true,
+    status: 403,
+    body: { error: "Wrong PIN", retryAfter: guess.retryAfter, attemptsLeft: guess.attemptsLeft },
+  };
+}
+
+app.get("/api/auth/pin", requireAuth, async (req, res) => {
+  const users = await readUsers();
+  const user = users.find((u) => u.id === req.user.userId);
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json(pinStatus(user));
+});
+
+app.post("/api/auth/pin/verify", requireAuth, async (req, res) => {
+  try {
+    const result = await withPinUser(req, async (user) => {
+      if (!user.pinHash) return { status: 200, body: { ok: false, set: false } };
+      const guess = await checkPinGuess(user, req.body?.pin);
+      if (guess.locked) {
+        return { status: 429, body: { error: "Too many wrong tries", retryAfter: guess.retryAfter } };
+      }
+      if (guess.ok) return { status: 200, body: { ok: true }, save: guess.changed };
+      return {
+        status: 200,
+        save: true,
+        body: {
+          ok: false,
+          set: true,
+          length: user.pinLength || 0,
+          retryAfter: guess.retryAfter,
+          attemptsLeft: guess.attemptsLeft,
+        },
+      };
+    });
+    res.status(result.status).json(result.body);
+  } catch (e) {
+    console.error("PIN verify error:", e);
+    res.status(500).json({ error: "Couldn't check the PIN" });
+  }
+});
+
+app.put("/api/auth/pin", authRateLimiter, requireAuth, async (req, res) => {
+  const { pin } = req.body || {};
+  if (typeof pin !== "string" || !PIN_RE.test(pin)) {
+    return res.status(400).json({ error: "A PIN is 4 to 8 digits" });
+  }
+  try {
+    const result = await withPinUser(req, async (user) => {
+      const allowed = await authorisePinChange(user, req.body || {});
+      if (!allowed.ok) return allowed;
+      user.pinHash = await bcrypt.hash(pin, BCRYPT_ROUNDS);
+      user.pinLength = pin.length;
+      delete user.pinFails;
+      delete user.pinLockedUntil;
+      return { status: 200, body: pinStatus(user), save: true };
+    });
+    res.status(result.status).json(result.body);
+  } catch (e) {
+    console.error("PIN set error:", e);
+    res.status(500).json({ error: "Couldn't save the PIN" });
+  }
+});
+
+// POST rather than DELETE: this carries a body (the PIN or password).
+app.post("/api/auth/pin/remove", authRateLimiter, requireAuth, async (req, res) => {
+  try {
+    const result = await withPinUser(req, async (user) => {
+      const allowed = await authorisePinChange(user, req.body || {});
+      if (!allowed.ok) return allowed;
+      const had = !!user.pinHash;
+      delete user.pinHash;
+      delete user.pinLength;
+      delete user.pinFails;
+      delete user.pinLockedUntil;
+      return { status: 200, body: pinStatus(user), save: had };
+    });
+    res.status(result.status).json(result.body);
+  } catch (e) {
+    console.error("PIN remove error:", e);
+    res.status(500).json({ error: "Couldn't remove the PIN" });
+  }
+});
+
 // ── Data Endpoints for Settings & Configurations ─────────────────────────────
 // ── Shared helper to proxy proxy-data requests to backend ────────────────────
 async function autoMigrateDataIfNeeded(userId, username) {
