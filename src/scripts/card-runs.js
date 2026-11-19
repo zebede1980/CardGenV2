@@ -25,14 +25,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
    * finishing fields. A card run on the proxy does it when the setting is on;
    * otherwise this page's own requests do. Sets this.currentCharacter.
    */
-  async writeNewCard({ mode = "classic", concept = "", brief = "", characterName = "", pov, cardType, searchQuery = "", searchScenario = "", resetStyle = true, stopMark }) {
+  async writeNewCard({ mode = "classic", concept = "", brief = "", characterName = "", pov, cardType, searchQuery = "", searchScenario = "", resetStyle = true, autoCast = false, stopMark }) {
     this._serverPortrait = null;
+    this._serverCastDone = false;
     if (this.serverRunsEnabled()) {
       // It carries on if this page is frozen or discarded, and the card is in
-      // History either way: text, finishing fields and portrait. This page
-      // shows the progress, then does the one step that still needs it (cast).
+      // History either way: text, finishing fields, supporting cast and
+      // portrait. This page only shows the progress.
       const canDraw = !!(this.config.get("api.image.baseUrl") && this.config.get("api.image.apiKey") && this.config.get("app.enableImageGeneration"));
       this.currentCharacter = await this.runNewCardOnServer({
+        cast: { want: !!autoCast },
         portrait: {
           want: canDraw && !this.referenceImageDataUrl,
           resetStyle,
@@ -52,6 +54,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
         exampleStyle: document.getElementById("example-messages-prompt")?.value?.trim() || "",
         referenceImage: this.referenceImageDataUrl || "",
       });
+      // The cast step's entries arrive in the card's character_book. They have
+      // to be in the Lorebook Manager's list, which every save rebuilds the book from.
+      this.lorebookEntries = this._lorebookEntriesFromBook(this.currentCharacter.character_book);
+      this.updateLorebookEntryCount();
       window.apiHandler.throwIfStopped(stopMark);
       return;
     }
@@ -208,6 +214,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
           NewCardMarker.update({ historyId: run.historyId });
           // generateNewCharacterImage shows the run's portrait instead of drawing one.
           this._serverPortrait = run.portrait ? { status: run.portrait, error: run.portraitError, historyId: run.historyId } : null;
+          // The run did (or tried) the cast step, so the page must not repeat it.
+          this._serverCastDone = run.cast !== null && run.cast !== undefined;
           return run.card;
         }
         if (run.status === "stopped") throw new Error(CARD_RUN_STOPPED);

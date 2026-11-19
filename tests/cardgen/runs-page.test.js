@@ -329,6 +329,37 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("failed server portrait: the card is shown and the failure is reported", (await nameOnScreen(page)) === "Mira Okafor" && /Image generation failed/.test(await streamText(page)) && /Image generation failed/.test(await page.evaluate(() => document.getElementById("image-content").textContent)));
   check("failed server portrait: the page did not draw one itself", !page.__requests.some((r) => r.startsWith("POST /api/image/")));
 
+  // R7d. Auto-cast is a step of the run: the page shows it and does not repeat it,
+  //      and the entries end up in the Lorebook Manager and in every later save.
+  await setConfig({ serverRuns: true });
+  await clearHistory();
+  await page.close();
+  page = await open(context);
+  let castLists = model.count("cast-list");
+  await page.evaluate(() => { document.getElementById("auto-generate-cast").checked = true; });
+  await generate(page);
+  await idle(page);
+  await page.evaluate(() => { document.getElementById("auto-generate-cast").checked = false; });
+  await until(() => history().length === 1 && !history()[0].data.draft, { what: "final save" });
+  check("server cast: done once, by the run", model.count("cast-list") === castLists + 1 && textCalls(page) === 0, `${model.count("cast-list") - castLists} lists, ${textCalls(page)} page text calls`);
+  check("server cast: the Lorebook Manager has both entries", await page.evaluate(() => window.app.lorebookEntries.length === 2 && window.app.lorebookEntries[0].keys[0] === "Tamsin Hale"));
+  check("server cast: the card on screen names them", /Tamsin Hale/.test(await fieldOnScreen(page, "character-scenario")));
+  check("server cast: the page's final save kept the lorebook", history()[0].data.character.character_book?.entries?.length === 2, JSON.stringify(history()[0].data.character.character_book)?.slice(0, 200));
+  check("server cast: its progress is shown once", ((await streamText(page)).match(/Auto-generating supporting cast/g) || []).length === 1);
+
+  // R7e. The same with the setting off: the page's own cast step, through the shared code.
+  await setConfig({ serverRuns: false });
+  await clearHistory();
+  await page.close();
+  page = await open(context);
+  castLists = model.count("cast-list");
+  await page.evaluate(() => { document.getElementById("auto-generate-cast").checked = true; });
+  await generate(page);
+  await idle(page);
+  await page.evaluate(() => { document.getElementById("auto-generate-cast").checked = false; });
+  await until(() => history().length === 1 && !history()[0].data.draft, { what: "final save" });
+  check("page cast (setting off): still works, through the shared code", model.count("cast-list") === castLists + 1 && history()[0].data.character.character_book?.entries?.length === 2 && /Tamsin Hale/.test(history()[0].data.character.scenario) && /Supporting cast generated and injected/.test(await streamText(page)), await streamText(page));
+
   // R7b. 4 ideas and Inspire Me hand the picked idea to a run as well.
   await setConfig({ serverRuns: true });
   await clearHistory();

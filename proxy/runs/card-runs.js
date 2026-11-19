@@ -30,8 +30,9 @@ const { randomUUID } = require("crypto");
 const { createPromptHost } = require("./prompt-host");
 
 const STOPPED = "Generation stopped by user";
-// "portrait" is only in a run's steps when the page asked for one.
-const STEPS = ["card", "finishing", "portrait"];
+// "cast" and "portrait" are only in a run's steps when the page asked for them.
+const STEPS = ["card", "finishing", "cast", "portrait"];
+const OPTIONAL_STEPS = { cast: (spec) => spec.cast.want, portrait: (spec) => spec.portrait.want };
 const LIMITS = {
   MAX_RUNNING_PER_USER: 2,
   KEEP_MS: 24 * 60 * 60 * 1000,
@@ -298,6 +299,40 @@ function register(app, deps) {
         });
       });
 
+      // Supporting cast: lorebook entries for the people around the character,
+      // and a card edit that names them. Like the page, a failure here is
+      // reported and the run carries on.
+      if (stepOf(run, "cast")) {
+        try {
+          await runStep(run, "cast", async () => {
+            say(run, "\n\n👥 Auto-generating supporting cast...\n");
+            const result = JSON.parse(JSON.stringify(await host.api.autoGenerateSupportingCast(run.card, {
+              pov: spec.pov,
+              existingEntries: [],
+              say: (text) => say(run, text),
+            })));
+            if (result.card) run.card = result.card;
+            run.cast = "done";
+            run.castCount = result.entries.length;
+            if (result.entries.length) {
+              say(run, "✅ Supporting cast generated and injected!\n");
+              await saveHistoryCard(userId, {
+                isPermanent: false,
+                draft: true,
+                replaceHistoryId: run.historyId,
+                characterName: run.card.name,
+                character: run.card,
+              });
+            }
+          });
+        } catch (error) {
+          if (error.message === STOPPED || run._live?.abort.signal.aborted) throw error;
+          run.cast = "failed";
+          say(run, `⚠️ Supporting cast generation failed: ${error.message}\n`);
+          await persist(run);
+        }
+      }
+
       // The portrait can fail without failing the run: the card is whole
       // without it, and the page says what went wrong.
       if (stepOf(run, "portrait")) {
@@ -380,6 +415,8 @@ function register(app, deps) {
       historyId: run.historyId || null,
       // null: no portrait step. "done" | "failed" once it has run.
       portrait: stepOf(run, "portrait") ? (run.portrait || "pending") : null,
+      // The same for the supporting-cast step.
+      cast: stepOf(run, "cast") ? (run.cast || "pending") : null,
       portraitError: run.portraitError || null,
       createdAt: run.createdAt,
       updatedAt: run.updatedAt,
@@ -421,6 +458,7 @@ function register(app, deps) {
       exampleStyle: cleanText(spec.exampleStyle, 4000),
       referenceImage,
       hasReferenceImage: !!referenceImage,
+      cast: { want: spec.cast?.want === true },
       // A reference image is the portrait already, so none is drawn then.
       portrait: {
         want: spec.portrait?.want === true && !referenceImage,
@@ -467,7 +505,7 @@ function register(app, deps) {
       kind: "new-card",
       status: "running",
       step: STEPS[0],
-      steps: STEPS.filter((name) => name !== "portrait" || spec.portrait.want).map((name) => ({ name, status: "pending", error: null })),
+      steps: STEPS.filter((name) => !OPTIONAL_STEPS[name] || OPTIONAL_STEPS[name](spec)).map((name) => ({ name, status: "pending", error: null })),
       spec,
       page: /^[A-Za-z0-9_-]{1,64}$/.test(page) ? page : "",
       text: "",
@@ -539,6 +577,7 @@ function register(app, deps) {
     for (const step of run.steps) if (step.status !== "done") step.status = "pending";
     run.portrait = run.portrait === "done" ? "done" : null;
     run.portraitError = null;
+    run.cast = run.cast === "done" ? "done" : null;
     say(run, "\n▶️ Carrying on from where it stopped...\n");
     start(run, settings);
     res.json(view(run));

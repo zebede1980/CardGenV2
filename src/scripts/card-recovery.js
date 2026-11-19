@@ -115,6 +115,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (flow !== undefined && flow !== this._newCardFlow) return false;
     this._draftHistorySave = null;
     this._serverPortrait = null;
+    this._serverCastDone = false;
     NewCardMarker.clear();
     return true;
   },

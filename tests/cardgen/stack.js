@@ -87,6 +87,9 @@ Keep replies short and wary.
 
 function replyKind(body) {
   const text = (body.messages || []).map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n");
+  if (/identify and list supporting cast members/.test(text)) return "cast-list";
+  if (/Generate the supporting cast member JSON now/.test(text)) return "cast-member";
+  if (/You make targeted edits to roleplay character cards/.test(text)) return "card-edit";
   if (/<example_messages>|three tagged sections/.test(text)) return "finishing";
   if (/# \[Scenario Title\]/.test(text)) return "card-scenario";
   if (/The Roleplay's Setup/.test(text) && /Profile/.test(text) && /template/i.test(text)) return "card";
@@ -97,7 +100,21 @@ function replyKind(body) {
   return "other";
 }
 
+// The cast replies name the same two people, so the card edit "covers" both entries.
+const CAST_MEMBERS = [
+  { name: "Tamsin Hale", role: "Harbour Master", content: "Tamsin Hale runs the harbour office.\n\nShe has known the keeper for thirty years." },
+  { name: "Jory Penrose", role: "Apprentice", content: "Jory Penrose is nineteen and learning the trade.\n\nHe talks too much." },
+];
+let castMemberTurn = 0;
+
 const REPLIES = {
+  "cast-list": JSON.stringify({ cast: [{ description: "The harbour master who checks on the light" }, { description: "A young apprentice from the village" }] }),
+  "cast-member": () => JSON.stringify(CAST_MEMBERS[castMemberTurn++ % CAST_MEMBERS.length]),
+  "card-edit": JSON.stringify({
+    description: "# Mira Okafor's Profile\n\nMira Okafor is a lighthouse keeper on a spit of rock off the Cornish coast.",
+    scenario: "# The Roleplay's Setup\n\nA storm has cut the causeway. Tamsin Hale has radioed twice, and Jory Penrose is late with the oil. {{user}} arrives at the door.",
+    firstMessage: "The door opens a hand's width. \"Road's gone,\" {{char}} says. \"You'd better come in.\"",
+  }),
   card: CARD_SINGLE,
   "card-scenario": CARD_SCENARIO,
   finishing: FINISHING,
@@ -158,7 +175,8 @@ function startModel() {
       res.writeHead(status, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: { message: `fake failure ${status}` } }));
     }
-    const text = control.replies[kind] ?? control.replies.other;
+    const reply = control.replies[kind] ?? control.replies.other;
+    const text = typeof reply === "function" ? reply(body) : reply;
     if (!body.stream) {
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }], usage: { total_tokens: 10 } }));

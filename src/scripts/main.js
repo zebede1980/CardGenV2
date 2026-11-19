@@ -1294,15 +1294,17 @@ class CharacterGeneratorApp {
       // requirements survive even if the card itself didn't capture them.
       const brief = generationMode === "search" ? searchScenario : concept;
 
+      const wantsCast = !!document.getElementById("auto-generate-cast")?.checked;
       await this.writeNewCard({
         mode: generationMode, concept: effectiveConcept, brief, characterName, pov, cardType,
-        searchQuery, searchScenario, stopMark,
+        searchQuery, searchScenario, autoCast: wantsCast, stopMark,
       });
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 
       // Auto-generate supporting cast if requested
-      const autoGenerateCast = document.getElementById("auto-generate-cast")?.checked;
+      // Not when a card run already did the cast step on the proxy.
+      const autoGenerateCast = wantsCast && !this._serverCastDone;
       if (autoGenerateCast) {
         this.showStreamMessage("\n\n👥 Auto-generating supporting cast...\n");
         try {

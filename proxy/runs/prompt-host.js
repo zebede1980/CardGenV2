@@ -33,6 +33,7 @@ const SHARED_SCRIPTS = [
   "name-bank-data.js",
   "name-bank.js",
   "api-character.js",
+  "api-lorebook.js",
   "character-search.js",
   "image-model-caps.js",
   "prompt-look.js",

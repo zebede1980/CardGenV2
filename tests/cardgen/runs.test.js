@@ -221,6 +221,29 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   done = await settled(r.json.id);
   check("a reference image is the portrait: none is drawn", done.steps.length === 2 && done.portrait === null && model.count("image") === imageCalls);
 
+  // 17. Supporting cast, as a step of the run.
+  await clearHistory();
+  let listCalls = model.count("cast-list"), memberCalls = model.count("cast-member"), editCalls = model.count("card-edit");
+  r = await begin({ key: "k17", spec: spec({ cast: { want: true } }) });
+  check("a run asked for a cast has the step, between finishing and portrait", r.json.steps.map((s) => s.name).join(",") === "card,finishing,cast" && r.json.cast === "pending", JSON.stringify(r.json.steps));
+  done = await settled(r.json.id);
+  check("cast: the run finishes with the step done", done.status === "done" && done.cast === "done" && done.steps.every((s) => s.status === "done"), `${done.status} ${done.cast} ${JSON.stringify(done.log)}`);
+  check("cast: one list call, one call per member, one card edit", model.count("cast-list") === listCalls + 1 && model.count("cast-member") === memberCalls + 2 && model.count("card-edit") === editCalls + 1, `${model.count("cast-list") - listCalls}/${model.count("cast-member") - memberCalls}/${model.count("card-edit") - editCalls}`);
+  const book = done.card.character_book;
+  check("cast: the card has a lorebook entry per member, keyed on name and role", book?.entries?.length === 2 && book.entries[0].keys.join("|") === "Tamsin Hale|Harbour Master" && book.entries[1].comment === "Jory Penrose (Apprentice)" && book.entries.every((e) => e.enabled === true), JSON.stringify(book)?.slice(0, 300));
+  check("cast: the card now names them", /Tamsin Hale/.test(done.card.scenario) && /Jory Penrose/.test(done.card.scenario));
+  check("cast: the finishing fields survive the card edit", !!done.card.mesExample && !!done.card.creatorNotes && done.card.cardType === "single");
+  check("cast: saved to History with the book", history().length === 1 && history()[0].data.character.character_book?.entries?.length === 2 && /Tamsin Hale/.test(history()[0].data.character.scenario));
+  check("cast: the progress lines are in the run's log", done.log.some((l) => l.includes("Auto-generating supporting cast")) && done.log.filter((l) => l.startsWith("Generating cast member:")).length === 2 && done.log.some((l) => l.includes("Supporting cast generated")));
+
+  // 18. The cast step fails outright: the run still finishes with the card.
+  await clearHistory();
+  model.failAll["cast-list"] = 500;
+  r = await begin({ key: "k18", spec: spec({ cast: { want: true } }) });
+  done = await settled(r.json.id);
+  delete model.failAll["cast-list"];
+  check("failed cast: the run is still done and says so", done.status === "done" && done.cast === "failed" && done.log.some((l) => l.includes("Supporting cast generation failed")) && !!done.card.creatorNotes, `${done.status} ${done.cast}`);
+
   // 12. The proxy image must copy every prompt file the host loads.
   const { SHARED_SCRIPTS } = require(path.join(repo, "proxy", "runs", "prompt-host.js"));
   const dockerfile = fs.readFileSync(path.join(repo, "Dockerfile.proxy"), "utf8");

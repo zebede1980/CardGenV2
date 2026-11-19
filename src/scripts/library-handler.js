@@ -651,6 +651,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  /** The Lorebook Manager's entries for a card's character_book. */
+  _lorebookEntriesFromBook(book) {
+    if (!book || !Array.isArray(book.entries)) return [];
+    return book.entries.map((e) => ({
+      id: e.id || Date.now().toString() + Math.random().toString().slice(2, 5),
+      keys: e.keys || [],
+      content: e.content || "",
+      topic: e.comment || "",
+      enabled: e.enabled !== false,
+    }));
+  },
+
   /**
    * Put a stored card (Library or History) on screen for editing. Returns
    * false if there is no such card.
@@ -670,24 +682,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     document.getElementById("image-controls").style.display = "block";
     document.getElementById("image-buttons-row").style.display = "";
 
-    if (
-      card.character.character_book &&
-      card.character.character_book.entries
-    ) {
-      this.lorebookEntries = card.character.character_book.entries.map(
-        (e) => ({
-          id:
-            e.id ||
-            Date.now().toString() + Math.random().toString().slice(2, 5),
-          keys: e.keys || [],
-          content: e.content || "",
-          topic: e.comment || "",
-          enabled: e.enabled !== false,
-        }),
-      );
-    } else {
-      this.lorebookEntries = [];
-    }
+    this.lorebookEntries = this._lorebookEntriesFromBook(card.character.character_book);
     this.updateLorebookEntryCount();
 
     if (card.character.alternateGreetings) {
