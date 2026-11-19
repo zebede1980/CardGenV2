@@ -263,6 +263,32 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("proxy restart: the card was not written again", model.count("card") === cardCalls + 1);
   check("proxy restart: the page said what happened", /The server restarted/.test(await streamText(page)), (await streamText(page)).slice(-500));
 
+  // R6b. Gateway errors while polling (nginx answering for a proxy that is
+  //      restarting) are waited out, not treated as the run failing. Its own
+  //      context with service workers blocked: Playwright cannot intercept a
+  //      WebKit page's requests once the app's service worker is registered.
+  await clearHistory();
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    await ctx.addInitScript((t) => { try { localStorage.setItem("cardgen_auth_token", t); } catch (_) {} }, token);
+    const pg = await open(ctx);
+    const held = model.hold("finishing", 1);
+    await generate(pg);
+    await until(() => held.reached, { what: "finishing step" });
+    let gateway = 0;
+    await pg.route(/\/api\/card-runs\/[a-f0-9-]{36}\?/, (route) => {
+      if (gateway++ < 3) return route.fulfill({ status: 502, contentType: "text/html", body: "<html>Bad Gateway</html>" });
+      return route.continue();
+    });
+    await until(() => gateway >= 2, { what: "gateway errors served" });
+    check("gateway errors: the page keeps waiting", await pg.evaluate(() => window.app.isGenerating === true), `gateway=${gateway}`);
+    held.release();
+    await idle(pg);
+    check("gateway errors: the card arrives once the server answers", (await nameOnScreen(pg)) === "Mira Okafor" && (await fieldOnScreen(pg, "creator-notes")).includes("slow-burn") && gateway >= 3, `gateway=${gateway} stream=${(await streamText(pg)).slice(-200)}`);
+    await until(() => history().length === 1 && !history()[0].data.draft, { what: "final save" });
+    await ctx.close();
+  }
+
   // R7. The portrait is drawn by the run, once. The page that started it shows
   //     it; a second device that attaches looks on. Neither page draws anything.
   await setConfig({ serverRuns: true, enableImageGeneration: true }, stack.imageSettings());

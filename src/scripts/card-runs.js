@@ -114,10 +114,33 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return data;
   },
 
+  // The server didn't answer, or only a gateway did (nginx while the proxy
+  // restarts): worth asking again. Anything else is an answer.
+  _cardRunUnreachable(error) {
+    return !error.status || [502, 503, 504].includes(error.status);
+  },
+
+  /**
+   * _cardRunRequest, asked up to `attempts` times while the server can't be
+   * reached. The connection often comes back a moment after the screen does.
+   */
+  async _cardRunRequestPatiently(method, path, body, attempts = 4) {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this._cardRunRequest(method, path, body);
+      } catch (error) {
+        if (!this._cardRunUnreachable(error) || attempt >= attempts) throw error;
+        await this._cardRunPause(800 * attempt);
+        await window.apiHandler._waitUntilVisible();
+      }
+    }
+  },
+
   /**
    * Have the proxy make a new character from `spec`, and follow it to the end.
-   * Resolves the finished card (text and finishing fields; no portrait).
-   * Throws "Generation stopped by user" on Stop, like the page's own pipeline.
+   * Resolves the finished card; its portrait, if the run drew one, is left for
+   * generateNewCharacterImage to show. Throws "Generation stopped by user" on
+   * Stop, like the page's own pipeline.
    */
   async runNewCardOnServer(spec) {
     // Made before the request and kept in the marker, so sending it twice (a
@@ -125,17 +148,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const key = window.crypto?.randomUUID ? window.crypto.randomUUID() : `k${Date.now()}${Math.random().toString(36).slice(2)}`;
     NewCardMarker.update({ runKey: key });
 
-    let run;
-    for (let attempt = 1; ; attempt++) {
-      try {
-        run = await this._cardRunRequest("POST", "/api/card-runs", { key, spec, settings: this.config.config });
-        break;
-      } catch (error) {
-        if (error.status || attempt >= 4) throw error;
-        await this._cardRunPause(800 * attempt);
-        await window.apiHandler._waitUntilVisible();
-      }
-    }
+    const run = await this._cardRunRequestPatiently("POST", "/api/card-runs", { key, spec, settings: this.config.config });
     NewCardMarker.update({ runId: run.id });
     return this._followCardRun(run.id);
   },
@@ -148,6 +161,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     let logSeen = 0;     // run messages already on screen
     let offline = 0;
     let resumed = false;
+    // The run doesn't need the screen on, but someone watching the card being
+    // written does: same as the page's own pipeline. Released when hidden.
+    window.wakeLockManager?.acquire();
     try {
       for (;;) {
         // Hidden means frozen or about to be: don't poll, there is nobody to show it to.
@@ -162,10 +178,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
           if (error.status === 404) {
             throw new Error("The server no longer has this generation. If the card was written, it is in History.");
           }
-          if (error.status) throw error;
+          if (!this._cardRunUnreachable(error)) throw error;
           // No connection (it often returns a moment after the screen does), or the
-          // proxy is restarting. The run doesn't need this page; keep asking.
+          // proxy is restarting. The run doesn't need this page; keep asking until
+          // it answers or Stop is pressed.
           offline++;
+          if (offline === 4) this.showStreamMessage("\n⏳ Waiting for the server...\n");
           await this._cardRunPause(Math.min(5000, 500 * offline));
           continue;
         }
@@ -196,7 +214,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (run.status === "interrupted" && !resumed) {
           resumed = true;
           this.showStreamMessage("\n⚠️ The server restarted. Carrying on...\n");
-          await this._cardRunRequest("POST", `/api/card-runs/${runId}/resume`, { settings: this.config.config });
+          await this._cardRunRequestPatiently("POST", `/api/card-runs/${runId}/resume`, { settings: this.config.config });
           continue;
         }
         if (run.status !== "running") throw new Error(run.error || "The generation failed on the server");
@@ -205,6 +223,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
     } finally {
       this._activeRunId = null;
+      window.wakeLockManager?.release();
     }
   },
 
@@ -240,7 +259,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
   async recoverCardRun(marker) {
     let run = null;
     if (marker?.runId) {
-      run = await this._cardRunRequest("GET", `/api/card-runs/${marker.runId}?card=1`).catch(() => null);
+      // Throws if the server can't be reached: the caller then keeps the marker,
+      // so the next load asks again. A 404 means the run is gone for good.
+      run = await this._cardRunRequestPatiently("GET", `/api/card-runs/${marker.runId}?card=1`).catch((error) => {
+        if (error.status === 404) return null;
+        throw error;
+      });
     } else if (this.serverRunsEnabled()) {
       const list = await this._cardRunRequest("GET", "/api/card-runs?active=1").catch(() => null);
       const active = list?.runs?.[0];

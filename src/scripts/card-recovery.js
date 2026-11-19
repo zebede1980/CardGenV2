@@ -140,7 +140,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
           return true;
         }
       } catch (error) {
+        // The server couldn't be asked. The run doesn't need this page, and
+        // the marker stays so the next load can pick it up.
         console.warn("[recovery] could not pick up the card run:", error);
+        return false;
       }
     }
     if (!marker) return false;
