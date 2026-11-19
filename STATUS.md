@@ -43,7 +43,8 @@ speaking the same `/v1/audio/speech` and `/v1/audio/voices` as kokoro-fastapi, w
 - **After deploying (`663f90e`):** through the live proxy (throwaway user): `bf_alice` answered by Faster
   Kokoro (76 chars, 4.8 s of audio in 0.72 s), `af_v0bella` fell back to stock (3.1 s), voice list still 67.
   Live compose backed up as `docker-compose.yml.bak-20261119-fasterkokoro`. **To try:** Story Mode on the iPhone.
-## Character Gen backend-driven (2026-11-19) — phases 0–3a, supporting cast and the Revise group **deployed 2026-11-19 (`62e1389`)**
+
+## Character Gen backend-driven (2026-11-19) — phases 0–3a, cast, the Revise group and picture landing **deployed 2026-11-19 (`223472e`)**
 
 Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the
 deviations). Built while Joe was in meetings, on his instruction to carry on through the phases.
@@ -158,7 +159,11 @@ History only (never over a Library card), and "keep what I typed, offer the AI's
 - Tests now 229: parser 19, engine 79, phase 0 page 50, runs page 81. Reduce tokens shares the path
   but its candidate dialog was not driven.
 
-**Portrait follow-ups: "landing" (2026-11-19) — committed, NOT deployed (proxy + frontend).**
+**Portrait follow-ups: "landing" (2026-11-19) — deployed 2026-11-19 (`223472e`, proxy + frontend).**
+After the rebuild: both healthy, the running proxy has the landing code, `/api/jobs/land` and
+`/api/jobs/collected` answer 401 with `X-Session-Expired` without a token (directly and through
+nginx), and the site serves the new script versions. No signed-in request was made, so **landing has
+not met a real image provider, the local GPU or a phone**.
 Joe chose "History copies": a picture drawn while the page is gone is saved as a History copy of the
 card with that picture as its portrait. Built without touching the image screens, and **for everyone,
 not behind the setting**, because the proxy already holds every image job:
