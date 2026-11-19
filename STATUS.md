@@ -241,7 +241,7 @@ PIN, asked for per device. 🔒 in the header (next to 🔔) opens the sheet.
   "Lock now"; close the app and reopen; start a card, lock the phone past the limit, unlock and enter the
   PIN: the card should be there. Then remove the account password from the Passwords app if it is saved.
 
-## Adventure: beats pick up from the last line (2026-11-13) — committed, not deployed
+## Adventure: beats pick up from the last line (2026-11-13) — deployed 2026-11-19 (backend rebuilt with the Character Gen work; `_last_moment` confirmed in the running container)
 
 Joe saw a beat open "Megan didn't answer right away…" when Megan had just asked *Joe* a question
 ("Rain-Slicked Compliance", beats 18–20: beat 18 had opened with the same words, and the [Variety] note
