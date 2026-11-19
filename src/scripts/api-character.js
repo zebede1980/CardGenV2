@@ -942,9 +942,7 @@ ${lorebookContent}`;
 
     try {
       console.log("Sending revision request with data size:", JSON.stringify(data).length);
-      const response = await this.makeRequest("/chat/completions", data, false, true);
-      console.log("Response received, processing stream...");
-      const output = await this.handleStreamResponse(response, () => {});
+      const output = await this.streamedText(data, "Card revision");
       console.log("Revision stream complete. Output length:", output?.length);
       const parsed = this.parseJsonFromModelOutput(output);
       console.log("Successfully parsed JSON output");
@@ -1169,13 +1167,11 @@ Generate exactly 10 names as a JSON array. Make each name as different from the 
       // thinking. The old 350 left an empty reply, which surfaced as
       // "Could not parse name list".
       max_tokens: 4096,
-      stream: false,
     };
 
     try {
       console.log("=== STARTING NAME OPTIONS GENERATION ===");
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      const output = this.processNormalResponse(response);
+      const output = await this.streamedText(data, "Name ideas");
 
       let parsed;
       try {
@@ -1281,8 +1277,7 @@ Output ONLY the new ${fieldName} content without surrounding explanation.`;
 
     try {
       console.log(`=== STARTING FIELD REGENERATION: ${field} ===`);
-      const response = await this.makeRequest("/chat/completions", data, false, true);
-      const output = await this.handleStreamResponse(response, () => {});
+      const output = await this.streamedText(data, "Field redo");
       console.log(`${field} regenerated successfully`);
       return output.trim().replace(/^```(?:markdown)?\n?/i, "").replace(/```$/i, "").trim();
     } catch (error) {
@@ -1352,8 +1347,7 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
 
     try {
       console.log("=== STARTING EXAMPLE MESSAGES GENERATION ===");
-      const response = await this.makeRequest("/chat/completions", data, false, true);
-      const output = await this.handleStreamResponse(response, () => {});
+      const output = await this.streamedText(data, "Example messages");
       console.log("Example messages generated successfully");
       return output.trim();
     } catch (error) {
@@ -1398,12 +1392,10 @@ Output a JSON array of tags only.`;
       // Classification against a closed vocabulary — creativity is corruption.
       temperature: 0.2,
       max_tokens: 150,
-      stream: false,
     };
 
     try {
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      const output = this.processNormalResponse(response);
+      const output = await this.streamedText(data, "Tags");
       let parsed;
       try {
         parsed = JSON.parse(output);
@@ -1465,12 +1457,10 @@ Write the Creator's Notes blurb now. Plain text only, no formatting.`;
       ],
       temperature: 0.85,
       max_tokens: 256,
-      stream: false,
     };
 
     try {
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      return this.processNormalResponse(response).trim();
+      return (await this.streamedText(data, "Creator's notes")).trim();
     } catch (error) {
       console.error("=== CREATOR NOTES GENERATION FAILED ===", error);
       throw error;
@@ -1513,12 +1503,10 @@ Write the instructions now. Plain text only, no formatting.`;
       ],
       temperature: 0.7,
       max_tokens: 150,
-      stream: false,
     };
 
     try {
-      const response = await this.makeRequest("/chat/completions", data, false, false);
-      return this.processNormalResponse(response).trim();
+      return (await this.streamedText(data, "Post-history instructions")).trim();
     } catch (error) {
       console.error("=== POST-HISTORY GENERATION FAILED ===", error);
       throw error;
@@ -1680,11 +1668,9 @@ Write the three tagged sections now.`;
       ],
       temperature: 0.9,
       max_tokens: 2048,
-      stream: false,
     };
 
-    const response = await this.makeRequest("/chat/completions", data, false, false);
-    return this.processNormalResponse(response);
+    return this.streamedText(data, "Character ideas");
   },
 
   /**
@@ -1755,11 +1741,9 @@ Write the three tagged sections now.`;
       ],
       temperature: 0.9,
       max_tokens: 2048,
-      stream: false,
     };
 
-    const response = await this.makeRequest("/chat/completions", data, false, false);
-    return this.processNormalResponse(response);
+    return this.streamedText(data, "Character ideas");
   },
 
   /**

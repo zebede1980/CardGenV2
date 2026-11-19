@@ -45,8 +45,7 @@ Output ONLY the message content.`;
 
     try {
       console.log(`=== STARTING ALT GREETING GENERATION (${type}) ===`);
-      const response = await this.makeRequest("/chat/completions", data, false, true);
-      const output = await this.handleStreamResponse(response, () => {});
+      const output = await this.streamedText(data, "Alternate greeting");
       console.log("Alternate greeting generated successfully.");
       return output.trim();
     } catch (error) {
@@ -525,10 +524,7 @@ Please analyze this character and lorebook for consistency.`;
 
     try {
       console.log("=== STARTING CONSISTENCY CHECK ===");
-      const response = await this.makeRequest("/chat/completions", data, false, true);
-      const output = await this.handleStreamResponse(response, (chunk, full) => {
-        if (onStream) onStream(chunk, full);
-      });
+      const output = await this.streamedText(data, "Consistency check", { onStream });
       return output.trim();
     } catch (error) {
       console.error("=== CONSISTENCY CHECK FAILED ===", error);

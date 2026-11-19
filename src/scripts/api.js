@@ -801,6 +801,19 @@ class APIHandler {
     }
   }
 
+  /**
+   * One text call as a resumable stream, returning the reply text. For every
+   * call whose result is a single field or list (Redo, tags, notes, ideas…):
+   * streamed, so iOS can't drop a silent request at 60 s and re-send it as a
+   * second paid call, and buffered by the proxy, so a phone that locks mid-call
+   * collects the reply when it wakes. `label` names the job in a "done" push.
+   */
+  async streamedText(data, label, { onStream = null, endpoint = "/chat/completions", warnOnTruncation = true } = {}) {
+    const request = { ...data, stream: true, resumable: true, __jobLabel: label };
+    const response = await this.makeRequest(endpoint, request, false, true);
+    return this.handleStreamResponse(response, onStream || (() => {}), { warnOnTruncation });
+  }
+
   async fetchModels(type = 'image') {
     const baseUrl = this.config.get(`api.${type}.baseUrl`);
     const apiKey = this.config.get(`api.${type}.apiKey`);

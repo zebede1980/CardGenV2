@@ -1155,12 +1155,11 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
       // Give enough tokens so the AI can gracefully finish the sentence without a hard cutoff
       max_tokens: 500,
       temperature: 0.2,
-      stream: false,
     });
 
     const tryShorten = async (target, text) => {
-      const result = await this.makeRequest("/api/text/chat/completions", buildShortenRequest(target, text), false, false);
-      return this.processNormalResponse(result).trim();
+      const output = await this.streamedText(buildShortenRequest(target, text), "Image prompt", { warnOnTruncation: false });
+      return output.trim();
     };
 
     try {
@@ -1399,18 +1398,16 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
       // on reasoning before writing anything; at 500 a longer think used it all
       // up, so roughly one analysis in three came back cut off or empty.
       max_tokens: 2048,
-      stream: false,
     };
 
-    const response = await this.makeRequest("/chat/completions", data, false, false);
-    return this._visionTextOrThrow(response, "Image analysis");
+    return this._visionTextOrThrow(await this.streamedText(data, "Image analysis", { warnOnTruncation: false }), "Image analysis");
   },
 
   // A cut-off vision reply is either empty or half a sentence (or, via the
   // reasoning_content fallback, the model's thinking) — none of which should
   // land in a description field as if it were a result.
-  _visionTextOrThrow(response, label) {
-    const text = (this.processNormalResponse(response) || "").trim();
+  _visionTextOrThrow(output, label) {
+    const text = String(output || "").trim();
     if (this.lastFinishReason === "length" || !text) {
       throw new Error(`${label} was cut off before the model finished — please try again.`);
     }
@@ -1440,11 +1437,9 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
       ],
       temperature: 0.3,
       max_tokens: 2048,
-      stream: false,
     };
 
-    const response = await this.makeRequest("/api/text/chat/completions", data, false, false);
-    return this._visionTextOrThrow(response, "Style extraction");
+    return this._visionTextOrThrow(await this.streamedText(data, "Style extraction", { warnOnTruncation: false }), "Style extraction");
   },
 
   // Local image generation via WebUI Forge — called directly from the browser,
