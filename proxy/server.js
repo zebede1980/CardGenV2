@@ -4208,7 +4208,7 @@ app.get("/api/image/local-models", requireAuth, (req, res) => {
 // applyImageRatio in api-image.js. Cached, since the list is ~1MB and rarely
 // changes; a failed fetch serves the last good copy, or an empty map (the
 // client then falls back to plain pixel sizes).
-const IMAGE_CATALOG_URL = "https://nano-gpt.com/api/models";
+const IMAGE_CATALOG_URL = process.env.IMAGE_CATALOG_URL || "https://nano-gpt.com/api/models";
 const IMAGE_CATALOG_TTL_MS = 6 * 60 * 60 * 1000;
 let imageCatalogCache = { at: 0, models: null };
 
@@ -4230,7 +4230,8 @@ function summariseImageModel(m) {
   };
 }
 
-app.get("/api/image/catalog", requireAuth, async (req, res) => {
+/** The size catalogue, refreshed when stale. An empty map if it has never loaded. */
+async function getImageCatalog() {
   const fresh = imageCatalogCache.models && Date.now() - imageCatalogCache.at < IMAGE_CATALOG_TTL_MS;
   if (!fresh) {
     try {
@@ -4246,8 +4247,60 @@ app.get("/api/image/catalog", requireAuth, async (req, res) => {
       console.warn("Image catalog fetch failed:", err.message);
     }
   }
-  res.json({ models: imageCatalogCache.models || {} });
+  return imageCatalogCache.models || {};
+}
+
+app.get("/api/image/catalog", requireAuth, async (req, res) => {
+  res.json({ models: await getImageCatalog() });
 });
+
+/**
+ * Draw one image with nobody on the other end of a socket: for generations the
+ * proxy runs itself (proxy/runs/card-runs.js). Local ComfyUI models and hosted
+ * ones, as /api/image/generations does it. Resolves the provider's JSON
+ * ({ data: [{ url | b64_json }] }); rejects with the message the page would show.
+ */
+async function generateImageUpstream({ apiUrl, apiKey, body }) {
+  if (isLocalComfyModel(body.model)) return runLocalComfyImage(body);
+  if (!apiKey) throw new Error("Image API key required");
+  if (!apiUrl) throw new Error("Image API URL required");
+  const url = apiUrl.endsWith("/images/generations") ? apiUrl : `${apiUrl}/images/generations`;
+  const additionalHeaders = apiUrl.includes("openrouter.ai")
+    ? { "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427", "X-Title": "SillyTavern Character Generator" }
+    : {};
+  const send = (authHeaders) => fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders, ...additionalHeaders },
+    body: JSON.stringify(body),
+  });
+  let response = await send({ Authorization: `Bearer ${apiKey}` });
+  if (response.status === 401) response = await send({ "X-API-Key": apiKey });
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    console.error("Image API error (server run):", response.status, details.slice(0, 300));
+    let message = response.statusText;
+    try {
+      const parsed = JSON.parse(details);
+      message = parsed.error?.message || parsed.message || message;
+    } catch (_) { /* not JSON */ }
+    throw new Error(`Image API Error (${response.status}): ${message}`);
+  }
+  return response.json();
+}
+
+/** A result image (remote URL, data: URL or bare base64) as a storable data: URL. */
+async function imageResultToDataUrl(result) {
+  const first = result?.data?.[0] || {};
+  const value = first.url || result?.image || result?.url || "";
+  if (value.startsWith("data:")) return value;
+  if (first.b64_json) return `data:image/png;base64,${first.b64_json}`;
+  if (!value) throw new Error("The image API returned no image");
+  assertSafeFetchUrl(value);
+  const response = await fetch(value, { timeout: 30000, size: MAX_PROXIED_IMAGE_BYTES });
+  if (!response.ok) throw new Error(`Failed to fetch the result image: ${response.status}`);
+  const mime = (response.headers.get("content-type") || "image/png").split(";")[0].trim();
+  return `data:${mime};base64,${(await response.buffer()).toString("base64")}`;
+}
 
 // Proxy endpoint for image API
 app.post("/api/image/generations", requireAuth, async (req, res) => {
@@ -4302,7 +4355,7 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     // This supports APIs like NanoGPT that need n, response_format, etc. —
     // minus resumable/clientRef, which are our own bookkeeping and not
     // something the upstream image API should ever see.
-    const { resumable: _resumable, clientRef: _clientRef, ...forwardedBody } = req.body;
+    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, ...forwardedBody } = req.body;
     const requestBody = {
       ...forwardedBody,
     };
@@ -4466,7 +4519,7 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
     // the other way round, `n: 1` and friends were dead code — whatever the
     // client sent overrode them. `resumable`/`clientRef` are our own
     // bookkeeping and are stripped, exactly as /api/image/generations does.
-    const { resumable: _resumable, clientRef: _clientRef, ...forwardedBody } = req.body;
+    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, ...forwardedBody } = req.body;
     const requestBody = { ...forwardedBody, model, prompt, input_references, n: forwardedBody.n || 1 };
 
     if (resumable) {
@@ -5511,6 +5564,9 @@ require("./runs/card-runs").register(app, {
   dataDir: DATA_DIR,
   getUserDataDir,
   callTextUpstream,
+  generateImageUpstream,
+  imageResultToDataUrl,
+  getImageCatalog,
   saveHistoryCard,
   searchCharacter: (name, isFictional) => (BRAVE_SEARCH_ENABLED ? searchCharacterDetails(String(name || "").trim(), !!isFictional) : null),
   reportDone: reportRunDone,

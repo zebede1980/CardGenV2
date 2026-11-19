@@ -1,7 +1,8 @@
 "use strict";
 
 /**
- * Card runs: a new character made start to finish by the proxy.
+ * Card runs: a new character made start to finish by the proxy: the card,
+ * its finishing fields and, when asked for, its portrait.
  *
  * The page used to conduct this itself, one request per step, so the chain
  * stopped when the phone locked and was lost when Safari discarded the tab
@@ -29,7 +30,8 @@ const { randomUUID } = require("crypto");
 const { createPromptHost } = require("./prompt-host");
 
 const STOPPED = "Generation stopped by user";
-const STEPS = ["card", "finishing"];
+// "portrait" is only in a run's steps when the page asked for one.
+const STEPS = ["card", "finishing", "portrait"];
 const LIMITS = {
   MAX_RUNNING_PER_USER: 2,
   KEEP_MS: 24 * 60 * 60 * 1000,
@@ -43,7 +45,10 @@ const DEVICE_STATE_KEYS = /^cardgenv2_recent_/;
 const RUN_ID_RE = /^[a-f0-9-]{36}$/;
 
 function register(app, deps) {
-  const { requireAuth, dataDir, getUserDataDir, callTextUpstream, saveHistoryCard, searchCharacter, reportDone, loadUserConfig } = deps;
+  const {
+    requireAuth, dataDir, getUserDataDir, callTextUpstream, generateImageUpstream, imageResultToDataUrl,
+    getImageCatalog, saveHistoryCard, searchCharacter, reportDone, loadUserConfig,
+  } = deps;
 
   /** id -> run. Fields starting "_" are live handles and are never written to disk. */
   const runs = new Map();
@@ -157,6 +162,58 @@ function register(app, deps) {
     throw lastError;
   }
 
+  /** One image call for a run. The result always carries a url the shared code can read. */
+  async function callImage(run, body) {
+    const image = run._live.settings?.api?.image || {};
+    const result = await generateImageUpstream({ apiUrl: image.baseUrl, apiKey: image.apiKey, body });
+    const first = result?.data?.[0];
+    if (first && !first.url && first.b64_json) first.url = `data:image/png;base64,${first.b64_json}`;
+    return result;
+  }
+
+  /**
+   * The new character's portrait, as the page's generateNewCharacterImage does
+   * it: the first model marked Generate, the style reset unless asked not to,
+   * and one retry on the hosted fallback when a local model fails (the PC is
+   * usually just off), reusing the prompt already written. Returns a data: URL.
+   */
+  async function drawPortrait(run, host) {
+    const { spec, card } = run;
+    const config = host.global.config;
+    const isLocal = host.global.isLocalImageModel;
+    const preferred = host.global.firstImageModelWithCapability("generate", config);
+    if (!preferred) throw new Error("No image model is set up for generating");
+    config.set("api.image.model", preferred);
+    if (spec.portrait.resetStyle) {
+      config.set("api.image.style", "realistic");
+      config.set("api.image.mood", "");
+    }
+    const look = host.api.getActiveLook ? host.api.getActiveLook() : null;
+    if (look) say(run, `🎨 Using Look: ${look.name || "Custom look"}\n`);
+
+    const description = spec.portrait.referenceDescription
+      ? `${card.description}\n\nReference image details:\n${spec.portrait.referenceDescription}`
+      : card.description;
+    const draw = (customPrompt) => host.api.generateImage(
+      description, card.name, customPrompt, null, card.cardType || spec.cardType, undefined, spec.portrait.guidance,
+    );
+
+    host.api.lastGeneratedImagePrompt = null;
+    let url;
+    try {
+      url = await draw(null);
+    } catch (error) {
+      const fallback = config.get("api.image.localFallbackModel");
+      if (run._live.abort.signal.aborted || !isLocal(preferred) || !fallback || isLocal(fallback)) throw error;
+      console.warn(`[runs] ${preferred} failed, falling back to ${fallback}:`, error.message);
+      say(run, `🖥️ Local GPU unavailable — using ${fallback} instead...\n`);
+      config.set("api.image.model", fallback);
+      url = await draw(host.api.lastGeneratedImagePrompt || null);
+    }
+    if (run._live.abort.signal.aborted) throw new Error(STOPPED);
+    return imageResultToDataUrl({ data: [{ url }] });
+  }
+
   async function runStep(run, name, work) {
     const step = stepOf(run, name);
     if (step.status === "done") return;
@@ -185,6 +242,8 @@ function register(app, deps) {
         settings: run._live.settings,
         deviceState: await readDeviceState(userId),
         callText: (body, options) => callText(run, body, options),
+        callImage: (body) => callImage(run, body),
+        imageCatalog: getImageCatalog,
         search: searchCharacter,
         warn: (message) => say(run, `⚠️ ${message}\n`),
       });
@@ -229,7 +288,7 @@ function register(app, deps) {
           exampleStyle: spec.exampleStyle,
           lorebookEntries: [],
         });
-        // Still a draft: the portrait is the page's step for now.
+        // Still a draft: the page's last save (after cast and so on) clears that.
         await saveHistoryCard(userId, {
           isPermanent: false,
           draft: true,
@@ -238,6 +297,34 @@ function register(app, deps) {
           character: run.card,
         });
       });
+
+      // The portrait can fail without failing the run: the card is whole
+      // without it, and the page says what went wrong.
+      if (stepOf(run, "portrait")) {
+        try {
+          await runStep(run, "portrait", async () => {
+            say(run, "\n🎨 Generating character image...\n");
+            const imageBase64 = await drawPortrait(run, host);
+            run.card.imagePrompt = host.api.lastGeneratedImagePrompt || run.card.imagePrompt || "";
+            await saveHistoryCard(userId, {
+              isPermanent: false,
+              draft: true,
+              replaceHistoryId: run.historyId,
+              characterName: run.card.name,
+              character: run.card,
+              imageBase64,
+            });
+            run.portrait = "done";
+            say(run, "✅ Image generation complete!\n");
+          });
+        } catch (error) {
+          if (error.message === STOPPED || run._live?.abort.signal.aborted) throw error;
+          run.portrait = "failed";
+          run.portraitError = error.message;
+          say(run, `⚠️ Image generation failed: ${error.message}\n`);
+          await persist(run);
+        }
+      }
 
       await finish(run, "done");
     } catch (error) {
@@ -250,7 +337,7 @@ function register(app, deps) {
     run.status = status;
     run.error = error;
     run.finishedAt = Date.now();
-    for (const step of run.steps) if (step.status === "running") step.status = status === "done" ? "done" : "pending";
+    for (const step of run.steps) if (step.status === "running") step.status = "pending";
     const live = run._live;
     run._live = null;
     await persist(run);
@@ -289,6 +376,9 @@ function register(app, deps) {
       cardType: run.spec.cardType,
       pov: run.spec.pov,
       historyId: run.historyId || null,
+      // null: no portrait step. "done" | "failed" once it has run.
+      portrait: stepOf(run, "portrait") ? (run.portrait || "pending") : null,
+      portraitError: run.portraitError || null,
       createdAt: run.createdAt,
       updatedAt: run.updatedAt,
       textLength: run.text.length,
@@ -329,6 +419,13 @@ function register(app, deps) {
       exampleStyle: cleanText(spec.exampleStyle, 4000),
       referenceImage,
       hasReferenceImage: !!referenceImage,
+      // A reference image is the portrait already, so none is drawn then.
+      portrait: {
+        want: spec.portrait?.want === true && !referenceImage,
+        resetStyle: spec.portrait?.resetStyle !== false,
+        referenceDescription: cleanText(spec.portrait?.referenceDescription, 20000),
+        guidance: cleanText(spec.portrait?.guidance, 4000),
+      },
     };
   }
 
@@ -368,7 +465,7 @@ function register(app, deps) {
       kind: "new-card",
       status: "running",
       step: STEPS[0],
-      steps: STEPS.map((name) => ({ name, status: "pending", error: null })),
+      steps: STEPS.filter((name) => name !== "portrait" || spec.portrait.want).map((name) => ({ name, status: "pending", error: null })),
       spec,
       page: /^[A-Za-z0-9_-]{1,64}$/.test(page) ? page : "",
       text: "",
@@ -438,6 +535,8 @@ function register(app, deps) {
     const page = String(req.headers["x-page-id"] || "");
     if (/^[A-Za-z0-9_-]{1,64}$/.test(page)) run.page = page;
     for (const step of run.steps) if (step.status !== "done") step.status = "pending";
+    run.portrait = run.portrait === "done" ? "done" : null;
+    run.portraitError = null;
     say(run, "\n▶️ Carrying on from where it stopped...\n");
     start(run, settings);
     res.json(view(run));

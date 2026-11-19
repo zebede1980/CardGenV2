@@ -34,6 +34,10 @@ const SHARED_SCRIPTS = [
   "name-bank.js",
   "api-character.js",
   "character-search.js",
+  "image-model-caps.js",
+  "prompt-look.js",
+  "h3-edit-caption-prompt.js",
+  "api-image.js",
   "character-generator.js",
 ];
 
@@ -68,11 +72,13 @@ function readPath(object, dotted) {
  * @param {object}   options.deviceState  { key: string } the localStorage the prompt code sees
  * @param {function} options.callText     (body, { onContent, label }) -> { content, finishReason, reasoningChars, usage }
  * @param {function} [options.search]     (name, isFictional) -> results | null
+ * @param {function} [options.callImage]  (body) -> the image API's JSON
+ * @param {function} [options.imageCatalog] () -> the size catalogue map
  * @param {function} [options.warn]       (message) for things the page would show as a toast
  * @param {function} [options.random]     replaces Math.random (tests)
  * @param {boolean}  [options.strict]     throw on any page access instead of returning nothing (tests)
  */
-function createPromptHost({ settings = {}, deviceState = {}, callText, search = null, warn = () => {}, random = null, strict = false } = {}) {
+function createPromptHost({ settings = {}, deviceState = {}, callText, search = null, callImage = null, imageCatalog = null, warn = () => {}, random = null, strict = false } = {}) {
   if (typeof callText !== "function") throw new Error("createPromptHost needs callText");
   const storage = { ...deviceState };
   const pageAccess = [];
@@ -105,8 +111,13 @@ function createPromptHost({ settings = {}, deviceState = {}, callText, search = 
       querySelector: (selector) => noPage(`document.querySelector("${selector}")`),
       querySelectorAll: (selector) => { noPage(`document.querySelectorAll("${selector}")`); return []; },
     },
-    // character-search.js calls the proxy's own search route with fetch().
+    // The shared code calls two of the proxy's own routes with fetch():
+    // character-search.js the web search, api-image.js the size catalogue.
     fetch: async (url, init = {}) => {
+      if (String(url).endsWith("/api/image/catalog") && imageCatalog) {
+        const models = await imageCatalog();
+        return { ok: true, status: 200, json: async () => ({ models }) };
+      }
       if (String(url).endsWith("/api/search/character") && search) {
         const { name, isFictional } = JSON.parse(init.body || "{}");
         const results = await search(name, !!isFictional);
@@ -117,6 +128,10 @@ function createPromptHost({ settings = {}, deviceState = {}, callText, search = 
     __host: {
       warn,
       callText: (body, options) => callText(body, options || {}),
+      callImage: (body) => {
+        if (!callImage) throw new Error("Image calls are not available here");
+        return callImage(body);
+      },
     },
   };
   sandbox.window = sandbox;
@@ -125,7 +140,13 @@ function createPromptHost({ settings = {}, deviceState = {}, callText, search = 
   sandbox.config = {
     config: settings,
     get: (dotted) => readPath(settings, dotted),
-    set() {},
+    // Changes the run's own copy only; nothing is saved for the user.
+    set: (dotted, value) => {
+      const keys = String(dotted).split(".");
+      const last = keys.pop();
+      const target = keys.reduce((object, key) => (object[key] && typeof object[key] === "object" ? object[key] : (object[key] = {})), settings);
+      target[last] = value;
+    },
     log() {},
     getDebugMode: () => false,
   };
@@ -143,6 +164,8 @@ function createPromptHost({ settings = {}, deviceState = {}, callText, search = 
 
   return {
     api: sandbox.apiHandler,
+    // The sandbox's globals: config, and the shared files' top-level functions.
+    global: sandbox,
     characterGenerator: sandbox.characterGenerator,
     characterSearch: sandbox.characterSearch,
     /** The localStorage contents now, to be kept for the user's next run. */

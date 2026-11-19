@@ -1,7 +1,7 @@
 // Card runs, the page's half — extends CharacterGeneratorApp prototype
 //
 // With "Make new characters on the server" on (Settings → app.serverRuns), the
-// card and its finishing fields are written by a run on the proxy
+// card, its finishing fields and its portrait are made by a run on the proxy
 // (proxy/runs/card-runs.js) instead of by requests this page conducts. The page
 // posts what was asked for and then only watches: it polls for progress while
 // it is visible and does nothing at all while it is hidden. Nothing here can
@@ -25,12 +25,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
    * finishing fields. A card run on the proxy does it when the setting is on;
    * otherwise this page's own requests do. Sets this.currentCharacter.
    */
-  async writeNewCard({ mode = "classic", concept = "", brief = "", characterName = "", pov, cardType, searchQuery = "", searchScenario = "", stopMark }) {
+  async writeNewCard({ mode = "classic", concept = "", brief = "", characterName = "", pov, cardType, searchQuery = "", searchScenario = "", resetStyle = true, stopMark }) {
+    this._serverPortrait = null;
     if (this.serverRunsEnabled()) {
       // It carries on if this page is frozen or discarded, and the card is in
-      // History either way. This page shows the progress, then does the steps
-      // that still need it (cast, portrait).
+      // History either way: text, finishing fields and portrait. This page
+      // shows the progress, then does the one step that still needs it (cast).
+      const canDraw = !!(this.config.get("api.image.baseUrl") && this.config.get("api.image.apiKey") && this.config.get("app.enableImageGeneration"));
       this.currentCharacter = await this.runNewCardOnServer({
+        portrait: {
+          want: canDraw && !this.referenceImageDataUrl,
+          resetStyle,
+          referenceDescription: document.getElementById("reference-image-description")?.value?.trim() || "",
+          guidance: document.getElementById("prompt-guidance")?.value?.trim() || "",
+        },
         mode: mode === "search" ? "search" : "classic",
         concept,
         brief,
@@ -180,6 +188,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
           // The save at the end of the page's steps replaces the run's History item.
           this._draftHistorySave = Promise.resolve(run.historyId);
           NewCardMarker.update({ historyId: run.historyId });
+          // generateNewCharacterImage shows the run's portrait instead of drawing one.
+          this._serverPortrait = run.portrait ? { status: run.portrait, error: run.portraitError, historyId: run.historyId } : null;
           return run.card;
         }
         if (run.status === "stopped") throw new Error(CARD_RUN_STOPPED);
@@ -196,6 +206,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } finally {
       this._activeRunId = null;
     }
+  },
+
+  /** Put the portrait a run stored with the card on screen as this card's image. */
+  async _adoptServerPortrait(historyId) {
+    const stored = await this.storage.getCard(historyId);
+    if (!(stored?.imageBlob instanceof Blob)) throw new Error("The portrait the server drew could not be loaded");
+    this.currentImageUrl = URL.createObjectURL(stored.imageBlob);
+    const container = document.getElementById("image-content");
+    if (container) {
+      container.innerHTML = '<div class="image-container"><img alt="Character portrait" class="generated-image"></div>';
+      container.querySelector("img").src = this.currentImageUrl;
+    }
+    // Lets the prompt editor show what was sent, as after a page-drawn portrait.
+    if (window.apiHandler) window.apiHandler.lastGeneratedImagePrompt = this.currentCharacter?.imagePrompt || null;
   },
 
   /** Stop pressed: end the run on the server too (closing this page would not). */
@@ -274,7 +298,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       // The portrait is this page's step. A reference image was stored as the
       // portrait by the run, so there is one already in that case.
       const canDraw = this.config.get("api.image.baseUrl") && this.config.get("api.image.apiKey") && this.config.get("app.enableImageGeneration");
-      if (own && !this.currentImageUrl && canDraw) {
+      // Only when the run had no portrait step of its own; if it tried and
+      // failed, its message is already in the output above.
+      this._serverPortrait = null;
+      if (own && !this.currentImageUrl && canDraw && finished.portrait === null) {
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
           await this.generateNewCharacterImage();

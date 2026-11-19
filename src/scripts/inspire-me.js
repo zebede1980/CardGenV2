@@ -205,6 +205,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       NewCardMarker.begin({ cardType, pov, mode: "inspire" });
       await this.writeNewCard({
         concept: effectiveConcept, brief: memo, characterName, pov, cardType, stopMark,
+        resetStyle: false, // Inspire Me keeps the style and mood that are set
       });
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));

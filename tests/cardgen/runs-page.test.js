@@ -263,38 +263,45 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("proxy restart: the card was not written again", model.count("card") === cardCalls + 1);
   check("proxy restart: the page said what happened", /The server restarted/.test(await streamText(page)), (await streamText(page)).slice(-500));
 
-  // R7. The portrait is drawn once, by the page that started the run; a second
-  //     device that attaches only looks on.
-  await setConfig({ serverRuns: true, enableImageGeneration: true }, { baseUrl: "http://127.0.0.1:1/v1", apiKey: "fake-image-key", model: "fake-image" });
+  // R7. The portrait is drawn by the run, once. The page that started it shows
+  //     it; a second device that attaches looks on. Neither page draws anything.
+  await setConfig({ serverRuns: true, enableImageGeneration: true }, stack.imageSettings());
   await clearHistory();
   await page.close();
   page = await open(context);
-  const STUB_DRAW = (png) => {
-    window.__draws = 0;
-    window.app.generateNewCharacterImage = async function () {
-      window.__draws++;
-      this.currentImageUrl = png;
-      document.getElementById("image-content").innerHTML = `<div class="image-container"><img src="${png}" class="generated-image"></div>`;
-    };
-    window.apiHandler.generateImagePrompt = async () => "a portrait prompt";
-  };
-  await page.evaluate(STUB_DRAW, PNG);
+  let imageCalls = model.count("image");
   hold = model.hold("finishing", 1);
   await generate(page);
   await until(() => hold.reached, { what: "finishing step" });
   const context2 = await newContext();           // another device: its own storage, same account
   const page2 = await open(context2);
-  await page2.evaluate(STUB_DRAW, PNG);
   await until(async () => page2.evaluate(() => window.app.isGenerating === true), { what: "second device attached" });
   hold.release();
   await idle(page);
   await idle(page2);
-  check("two devices: both show the card", (await nameOnScreen(page)) === "Mira Okafor" && (await nameOnScreen(page2)) === "Mira Okafor");
-  check("two devices: the portrait was drawn once, by the page that started it", (await page.evaluate(() => window.__draws)) === 1 && (await page2.evaluate(() => window.__draws)) === 0, `${await page.evaluate(() => window.__draws)}/${await page2.evaluate(() => window.__draws)}`);
-  await until(() => history().length === 1 && !history()[0].data.draft, { what: "final save with portrait" });
+  const portraitShown = (p) => p.evaluate(() => { const img = document.querySelector("#image-content img.generated-image"); return !!img && img.naturalWidth > 0; });
+  await until(async () => portraitShown(page), { what: "portrait on the first page" });
+  check("server portrait: both devices show the card", (await nameOnScreen(page)) === "Mira Okafor" && (await nameOnScreen(page2)) === "Mira Okafor");
+  check("server portrait: the image API was called once, by the run", model.count("image") === imageCalls + 1, model.count("image") - imageCalls);
+  check("server portrait: neither page made an image or text request", [page, page2].every((p) => !p.__requests.some((r) => r.startsWith("POST /api/image/") || r.startsWith("POST /api/text/"))), page.__requests.concat(page2.__requests).filter((r) => r.includes("/api/image/g") || r.includes("/api/text")).join(", "));
+  check("server portrait: the page that started it shows the portrait", await portraitShown(page));
+  check("server portrait: the onlooker shows it too, loaded from History", await until(async () => portraitShown(page2), { what: "portrait on the second page" }));
+  check("server portrait: the prompt that was used is in the prompt box", /lighthouse keeper/.test(await fieldOnScreen(page, "custom-image-prompt")), await fieldOnScreen(page, "custom-image-prompt"));
+  await until(() => history().length === 1 && !history()[0].data.draft, { what: "final save" });
   const stored = await api("GET", `/api/storage/cards/${history()[0].id}`, undefined, token);
-  check("two devices: one History item, with the portrait", history().length === 1 && String(stored.json?.imageBase64 || "").startsWith("data:image/png"));
+  check("server portrait: one History item, with the portrait, after the page's final save", history().length === 1 && String(stored.json?.imageBase64 || "").startsWith("data:image/"));
   await context2.close();
+
+  // R7a. The run could not draw it: the page says so and does not try again itself.
+  await clearHistory();
+  model.failAll.image = 500;
+  imageCalls = model.count("image");
+  await page.evaluate(() => window.app.handleClearNew());
+  await generate(page);
+  await idle(page);
+  delete model.failAll.image;
+  check("failed server portrait: the card is shown and the failure is reported", (await nameOnScreen(page)) === "Mira Okafor" && /Image generation failed/.test(await streamText(page)) && /Image generation failed/.test(await page.evaluate(() => document.getElementById("image-content").textContent)));
+  check("failed server portrait: the page did not draw one itself", !page.__requests.some((r) => r.startsWith("POST /api/image/")));
 
   // R7b. 4 ideas and Inspire Me hand the picked idea to a run as well.
   await setConfig({ serverRuns: true });
@@ -313,6 +320,34 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   const ideasCall = model.calls.filter((c) => c.kind === "card").pop();
   check("4 ideas: the picked idea is written by a run", page.__requests.some((r) => r.startsWith("POST /api/card-runs")) && textCalls(page) === 0 && model.count("card") === cardCalls + 1 && (await nameOnScreen(page)) === "Mira Okafor");
   check("4 ideas: the brief and the chosen direction both reach the model", /PLAYER'S BRIEF[\s\S]*a lighthouse keeper[\s\S]*CHOSEN DIRECTION[\s\S]*The Keeper/.test(JSON.stringify(ideasCall.body.messages)));
+
+  // R7c. The portrait request is the same whichever side makes it: the page
+  //      (setting off) and the run (setting on) must write the same prompt
+  //      request and send the same image request, bar the random seed.
+  const portraitCalls = async (serverRuns) => {
+    await setConfig({ serverRuns, enableImageGeneration: true }, stack.imageSettings());
+    await clearHistory();
+    const ctx = await newContext();
+    const pg = await open(ctx);
+    const from = model.calls.length;
+    await generate(pg, { concept: "a lighthouse keeper on the Cornish coast" });
+    await idle(pg);
+    await until(() => model.calls.slice(from).some((c) => c.kind === "image"), { what: "image call" });
+    await until(() => history().length === 1 && !history()[0].data.draft, { what: "final save" });
+    await ctx.close();
+    const calls = model.calls.slice(from);
+    const strip = ({ seed, ...rest }) => rest;
+    return {
+      prompt: JSON.stringify(calls.find((c) => c.kind === "image-prompt")?.body.messages),
+      image: JSON.stringify(strip(calls.find((c) => c.kind === "image").body)),
+      temperature: calls.find((c) => c.kind === "image-prompt")?.body.temperature,
+    };
+  };
+  const byPage = await portraitCalls(false);
+  const byRun = await portraitCalls(true);
+  const firstDiff = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return `at ${i}: page …${a.slice(Math.max(0, i - 80), i + 120)}…  run …${b.slice(Math.max(0, i - 80), i + 120)}…`; };
+  check("portrait: the run writes the same prompt request as the page", !!byPage.prompt && byPage.prompt === byRun.prompt && byPage.temperature === byRun.temperature, firstDiff(byPage.prompt || "", byRun.prompt || ""));
+  check("portrait: the run sends the same image request as the page", byPage.image === byRun.image, firstDiff(byPage.image, byRun.image));
 
   // R8. With the setting off, nothing goes near the run routes.
   await setConfig({ serverRuns: false });

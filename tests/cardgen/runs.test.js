@@ -174,6 +174,53 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   r = await api("GET", "/api/card-runs/not-a-run", undefined, token);
   check("an unknown run id is a 404", r.status === 404);
 
+  // 13. The portrait, drawn by the run.
+  await clearHistory();
+  const withImages = (image = {}, app = {}) => ({ ...config, api: { ...config.api, image: stack.imageSettings(image) }, app: { ...config.app, enableImageGeneration: true, ...app } });
+  const wantPortrait = { want: true, resetStyle: true, referenceDescription: "", guidance: "" };
+  let imageCalls = model.count("image"), promptCalls = model.count("image-prompt");
+  r = await begin({ key: "k13a", spec: spec({ portrait: wantPortrait }), settings: withImages() });
+  check("a run asked for a portrait has three steps", r.json.steps.map((s) => s.name).join(",") === "card,finishing,portrait" && r.json.portrait === "pending", JSON.stringify(r.json.steps));
+  done = await settled(r.json.id);
+  check("portrait: the run draws it and finishes", done.status === "done" && done.portrait === "done" && done.steps.every((s) => s.status === "done"), `${done.status} ${done.portrait} ${done.portraitError} ${JSON.stringify(done.log)}`);
+  check("portrait: one prompt-writing call and one image call", model.count("image") === imageCalls + 1 && model.count("image-prompt") === promptCalls + 1, `${model.count("image") - imageCalls}/${model.count("image-prompt") - promptCalls}`);
+  const imageCall = model.calls.filter((c) => c.kind === "image").pop();
+  check("portrait: the image request names the model and carries the written prompt", imageCall.body.model === "fake-image" && /lighthouse keeper/.test(imageCall.body.prompt) && !("resumable" in imageCall.body) && !("__jobLabel" in imageCall.body), JSON.stringify(imageCall.body).slice(0, 300));
+  r = await api("GET", `/api/storage/cards/${done.historyId}`, undefined, token);
+  check("portrait: stored with the card in History, with the prompt used", String(r.json?.imageBase64 || "").startsWith("data:image/png") && /lighthouse keeper/.test(r.json.character.imagePrompt || ""), r.json?.character?.imagePrompt);
+  check("portrait: the progress messages say so", done.log.some((l) => l.includes("Generating character image")) && done.log.some((l) => l.includes("Image generation complete")));
+
+  // 14. The image API fails: the card is still whole and the run still ends well.
+  await clearHistory();
+  model.failAll.image = 500;
+  r = await begin({ key: "k14", spec: spec({ portrait: wantPortrait }), settings: withImages() });
+  done = await settled(r.json.id);
+  delete model.failAll.image;
+  check("failed portrait: the run is still done, and says what went wrong", done.status === "done" && done.portrait === "failed" && /Image API Error \(500\)/.test(done.portraitError) && done.log.some((l) => l.includes("Image generation failed")), `${done.status} ${done.portrait} ${done.portraitError}`);
+  check("failed portrait: the card and its fields are in History", history().length === 1 && !!history()[0].data.character.creatorNotes);
+
+  // 15. A local model first in the list, the PC off: the hosted fallback draws it, with the same prompt.
+  await clearHistory();
+  imageCalls = model.count("image"); promptCalls = model.count("image-prompt");
+  r = await begin({ key: "k15", spec: spec({ portrait: wantPortrait }), settings: withImages({ models: ["local/z-image-turbo", "fake-image"], model: "local/z-image-turbo", localFallbackModel: "fake-image" }) });
+  done = await settled(r.json.id);
+  check("local GPU off: the hosted fallback draws the portrait", done.status === "done" && done.portrait === "done" && done.log.some((l) => l.includes("Local GPU unavailable")), `${done.portrait} ${done.portraitError} ${JSON.stringify(done.log)}`);
+  check("local GPU off: the prompt is written once and reused", model.count("image") === imageCalls + 1 && model.count("image-prompt") === promptCalls + 1, `${model.count("image") - imageCalls}/${model.count("image-prompt") - promptCalls}`);
+  check("local GPU off: the fallback request is for the fallback model", model.calls.filter((c) => c.kind === "image").pop().body.model === "fake-image");
+  await clearHistory();
+  r = await begin({ key: "k15b", spec: spec({ portrait: wantPortrait }), settings: withImages({ models: ["local/z-image-turbo", "fake-image"], model: "local/z-image-turbo", localFallbackModel: "" }) });
+  done = await settled(r.json.id);
+  check("local GPU off and no fallback set: the portrait fails with the GPU message", done.status === "done" && done.portrait === "failed" && /local GPU/i.test(done.portraitError), done.portraitError);
+
+  // 16. No portrait when none was asked for, or when a reference image is the portrait.
+  r = await begin({ key: "k16a", spec: spec(), settings: withImages() });
+  check("no portrait step unless asked for", r.json.steps.length === 2 && r.json.portrait === null);
+  await settled(r.json.id);
+  imageCalls = model.count("image");
+  r = await begin({ key: "k16b", spec: spec({ portrait: wantPortrait, referenceImage: PNG }), settings: withImages() });
+  done = await settled(r.json.id);
+  check("a reference image is the portrait: none is drawn", done.steps.length === 2 && done.portrait === null && model.count("image") === imageCalls);
+
   // 12. The proxy image must copy every prompt file the host loads.
   const { SHARED_SCRIPTS } = require(path.join(repo, "proxy", "runs", "prompt-host.js"));
   const dockerfile = fs.readFileSync(path.join(repo, "Dockerfile.proxy"), "utf8");

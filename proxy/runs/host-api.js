@@ -21,8 +21,12 @@ class APIHandler {
    * dropped: nothing here needs a job buffer, the run itself is the buffer.
    */
   async makeRequest(endpoint, data, isImageRequest = false, stream = false) {
-    if (isImageRequest) throw new Error("Image calls are not part of a server run yet");
     const { resumable, clientRef, __jobLabel, ...body } = data;
+    if (isImageRequest) {
+      // The page gets a fetch Response here and calls .ok / .json() on it.
+      const result = await __host.callImage(body);
+      return { ok: true, status: 200, json: async () => result, text: async () => JSON.stringify(result) };
+    }
     if (Array.isArray(body.messages)) body.messages = withContentContext(body.messages);
     if (stream) return { __serverCall: { body: { ...body, stream: true }, label: __jobLabel || "" } };
 
@@ -75,6 +79,10 @@ class APIHandler {
   // The page retries a 401 with other auth headers; the proxy has already done that.
   async tryAlternativeAuth() {
     throw new Error("Authorization Error: the text API rejected the key");
+  }
+
+  _authHeaders() {
+    return {};
   }
 
   stopMark() {

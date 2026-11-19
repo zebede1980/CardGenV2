@@ -22,6 +22,8 @@ COPY proxy/runs/ ./runs/
 # proxy with its in-flight jobs, alone. Keep in step with SHARED_SCRIPTS.
 COPY src/scripts/content-context.js src/scripts/name-bank-data.js src/scripts/name-bank.js \
      src/scripts/api-character.js src/scripts/character-search.js src/scripts/character-generator.js \
+     src/scripts/image-model-caps.js src/scripts/prompt-look.js src/scripts/h3-edit-caption-prompt.js \
+     src/scripts/api-image.js \
      ./src/scripts/
 
 # Create non-root user

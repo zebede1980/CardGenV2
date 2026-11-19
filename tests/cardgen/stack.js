@@ -118,6 +118,7 @@ function startModel() {
     holds: {},
     failNext: {},         // kind -> status code to fail the next call with
     failAll: {},          // kind -> status code to fail every call with, until removed
+    imageDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
   };
   control.hold = (kind, afterChunks = 2) => {
     let release;
@@ -132,6 +133,18 @@ function startModel() {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "*");
     if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+    if (req.method === "POST" && /images\/generations$/.test(req.url)) {
+      const body = JSON.parse((await readBody(req)).toString() || "{}");
+      control.calls.push({ kind: "image", stream: false, body, at: Date.now() });
+      const status = control.failNext.image || control.failAll.image;
+      delete control.failNext.image;
+      res.writeHead(status || 200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify(status ? { error: { message: `fake image failure ${status}` } } : { data: [{ url: control.imageDataUrl }] }));
+    }
+    if (req.method === "GET" && /\/api\/models$/.test(req.url)) {   // the size catalogue
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ models: { image: {} } }));
+    }
     if (req.method !== "POST" || !/chat\/completions$/.test(req.url)) {
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ data: [{ id: "fake-model" }] }));
@@ -289,7 +302,9 @@ async function start({ repo, stageDir, quiet = true }) {
         JWT_SECRET: "test-secret",
         INTERNAL_API_SECRET: "test-internal",
         FRONTEND_URL: url,
+        IMAGE_CATALOG_URL: `http://127.0.0.1:${model.port}/api/models`,
         COMFYUI_URL: "",
+        COMFYUI_API_KEY: "",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -348,7 +363,11 @@ async function start({ repo, stageDir, quiet = true }) {
     return { token: r.json.token, userId: who.json.userId };
   };
 
+  // Settings for a user who has a hosted image model set up.
+  const imageSettings = (extra = {}) => ({ baseUrl: `http://127.0.0.1:${model.port}/v1`, apiKey: "fake-image-key", model: "fake-image", models: ["fake-image"], ...extra });
+
   return {
+    imageSettings,
     url, token, userId, username, config, api, register, stageDir, dataDir: path.join(proxyDir, "data"),
     model: model.control,
     backend: backend.state,

@@ -245,6 +245,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
    * reuses the prompt already written, so the text model isn't asked twice.
    */
   async generateNewCharacterImage({ resetStyle = true } = {}) {
+    // A card run on the proxy drew (or tried to draw) the portrait already:
+    // show its result rather than paying for a second one (card-runs.js).
+    const served = this._serverPortrait;
+    if (served) {
+      this._serverPortrait = null;
+      if (served.status !== "done") throw new Error(served.error || "The server could not draw the portrait");
+      await this._adoptServerPortrait(served.historyId);
+      return;
+    }
+
     // A text-to-image job, so the first 🪄 model rather than the first model
     // in the list, which could be image-to-image and have no source to work from.
     const preferred = firstImageModelWithCapability("generate", this.config);
