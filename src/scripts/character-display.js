@@ -1313,11 +1313,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const revisionInstruction =
         "This character card may be poorly formatted, inconsistent, or lack proper structure. Remaster it completely to meet the required format, BUT YOU MUST PRESERVE ALL FACTUAL DETAILS AND LORE. Do NOT remove any backstory elements, world-building, relationships, character traits, items, or physical descriptions. Reformat and clarify the writing into the correct sections, but do not delete the underlying concepts or details. Rewrite every section to be logically consistent and behaviourally precise. Use direct bullet points for personality traits and behaviours; use short factual prose for backstory and scenario. Fix grammar and remove flowery prose, but ensure every single piece of factual information from the original card is retained in the new format.";
 
-      const revised = await this.apiHandler.reviseCharacter(
-        this.currentCharacter,
-        revisionInstruction,
-        pov,
-      );
+      const revised = await this.reviseCard(revisionInstruction, pov);
       this.currentCharacter = revised;
       this.originalCharacter = JSON.parse(JSON.stringify(revised));
       this.displayCharacter();

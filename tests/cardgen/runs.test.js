@@ -244,6 +244,32 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   delete model.failAll["cast-list"];
   check("failed cast: the run is still done and says so", done.status === "done" && done.cast === "failed" && done.log.some((l) => l.includes("Supporting cast generation failed")) && !!done.card.creatorNotes, `${done.status} ${done.cast}`);
 
+  // 19. A revision of an existing card.
+  await clearHistory();
+  r = await begin({ key: "k19-card", spec: spec() });
+  const original = await settled(r.json.id);
+  const pushesBeforeRevise = backend.pushes.length;
+  let reviseCalls = model.count("revise"); finCalls = model.count("finishing");
+  r = await api("POST", "/api/card-runs", { key: "k19", kind: "revise", settings: config, spec: { card: original.card, instruction: "Make her warmer.", pov: "third", withFinishing: true, exampleCount: 3, portraitImage: PNG } }, token, PAGE);
+  check("a revise run has its own steps", r.status === 200 && r.json.kind === "revise" && r.json.steps.map((s) => s.name).join(",") === "revise,finishing", r.text);
+  done = await settled(r.json.id);
+  check("revise: the run finishes with the rewritten card", done.status === "done" && /REVISED to be warmer/.test(done.card.description) && /REVISED/.test(done.card.firstMessage) && done.card.cardType === "single", `${done.status} ${done.error} ${JSON.stringify(done.card)?.slice(0, 200)}`);
+  check("revise: one rewrite call and one finishing call", model.count("revise") === reviseCalls + 1 && model.count("finishing") === finCalls + 1);
+  const reviseCall = model.calls.filter((c) => c.kind === "revise").pop();
+  check("revise: the request carries the instruction and the card", /Make her warmer\./.test(JSON.stringify(reviseCall.body.messages)) && /lighthouse keeper/.test(JSON.stringify(reviseCall.body.messages)));
+  const finishingCall = model.calls.filter((c) => c.kind === "finishing").pop();
+  check("revise: the finishing fields are rewritten for the revised card, told what changed", /REVISED to be warmer/.test(JSON.stringify(finishingCall.body.messages)) && /Make her warmer\./.test(JSON.stringify(finishingCall.body.messages)));
+  check("revise: saved to History as a new item, the original untouched", history().length === 2 && history().some((h) => h.id === original.historyId && !/REVISED/.test(h.data.character.description)) && history().some((h) => h.id === done.historyId && /REVISED/.test(h.data.character.description)), history().map((h) => h.id).join(","));
+  r = await api("GET", `/api/storage/cards/${done.historyId}`, undefined, token);
+  check("revise: the revised copy keeps the portrait it was sent", String(r.json?.imageBase64 || "").startsWith("data:image/png"));
+  await until(() => backend.pushes.length === pushesBeforeRevise + 1, { what: "revise report" });
+  check("revise: reported with its own fixed label", backend.pushes[backend.pushes.length - 1].items[0].label === "Card revision");
+  r = await api("POST", "/api/card-runs", { key: "k19b", kind: "revise", settings: config, spec: { card: original.card, instruction: "Tidy it.", pov: "third" } }, token, PAGE);
+  check("revise without finishing fields has one step", r.json.steps.map((s) => s.name).join(",") === "revise");
+  await settled(r.json.id);
+  r = await api("POST", "/api/card-runs", { key: "k19c", kind: "revise", settings: config, spec: { instruction: "No card." } }, token, PAGE);
+  check("a revise run with no card is refused", r.status === 400);
+
   // 12. The proxy image must copy every prompt file the host loads.
   const { SHARED_SCRIPTS } = require(path.join(repo, "proxy", "runs", "prompt-host.js"));
   const dockerfile = fs.readFileSync(path.join(repo, "Dockerfile.proxy"), "utf8");

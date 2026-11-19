@@ -23,16 +23,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.currentCharacter.character_book = this.buildCharacterBook();
       this.syncAltGreetingsToCharacter();
       this.showNotification("Applying AI revision...", "info");
-      const revised = await this.apiHandler.reviseCharacter(
-        this.currentCharacter,
-        revisionInstruction,
-        pov,
-      );
-
-      // Rewrite the derived fields to match the revised card, so the edit is
-      // reviewed and accepted as a whole in the diff below.
-      this.showNotification("Updating example messages, creator's notes and post-history...", "info");
-      await this.fillFinishingFields(revised, { revisionNote: revisionInstruction });
+      // The rewrite, and the derived fields rewritten to match it, so the edit
+      // is reviewed and accepted as a whole in the diff below.
+      const revised = await this.reviseCard(revisionInstruction, pov, { withFinishing: true });
 
       const approved = await this.promptCardDiffApproval(before, revised);
 
@@ -44,6 +37,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         await this.refreshLibraryViews();
         this.showNotification("Character revised successfully", "success");
       } else {
+        await this._dropRevisionDraft();
         this.showNotification("Revision discarded", "info");
       }
     } catch (error) {
@@ -194,11 +188,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       const revisionInstruction = `Please review the following consistency report and fix the identified issues in the character card.\n\nConsistency Report:\n${this.lastConsistencyReport}\n\nApply the suggested fixes to resolve any logical contradictions, tonal inconsistencies, or continuity errors while keeping the core identity intact.`;
 
-      const revised = await this.apiHandler.reviseCharacter(
-        this.currentCharacter,
-        revisionInstruction,
-        pov,
-      );
+      const revised = await this.reviseCard(revisionInstruction, pov);
 
       const approved = await this.promptCardDiffApproval(before, revised);
 
@@ -213,6 +203,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           "success",
         );
       } else {
+        await this._dropRevisionDraft();
         this.showNotification("Auto-fix discarded", "info");
       }
     } catch (error) {

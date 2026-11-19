@@ -87,6 +87,7 @@ Keep replies short and wary.
 
 function replyKind(body) {
   const text = (body.messages || []).map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n");
+  if (/Revise the following character according to this request/.test(text)) return "revise";
   if (/identify and list supporting cast members/.test(text)) return "cast-list";
   if (/Generate the supporting cast member JSON now/.test(text)) return "cast-member";
   if (/You make targeted edits to roleplay character cards/.test(text)) return "card-edit";
@@ -108,6 +109,13 @@ const CAST_MEMBERS = [
 let castMemberTurn = 0;
 
 const REPLIES = {
+  revise: JSON.stringify({
+    name: "Mira Okafor",
+    description: "# Mira Okafor's Profile\n\nMira Okafor is a lighthouse keeper, REVISED to be warmer.",
+    personality: "## Personality & Drives\n\n{{char}} is patient and, REVISED, quick to laugh.",
+    scenario: "# The Roleplay's Setup\n\nREVISED: the storm has passed. {{user}} arrives at the door.",
+    firstMessage: "REVISED: The door opens wide. \"Come in, come in,\" {{char}} says.",
+  }),
   "cast-list": JSON.stringify({ cast: [{ description: "The harbour master who checks on the light" }, { description: "A young apprentice from the village" }] }),
   "cast-member": () => JSON.stringify(CAST_MEMBERS[castMemberTurn++ % CAST_MEMBERS.length]),
   "card-edit": JSON.stringify({

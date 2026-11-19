@@ -72,7 +72,7 @@ const NewCardMarker = {
     this._channel.onmessage = (event) => {
       const marker = this.read();
       if (event.data?.type !== "anyone" || !marker) return;
-      if (marker.page === (window.cardgenPage?.id || "") && window.app?.isGenerating) {
+      if (marker.page === (window.cardgenPage?.id || "") && (window.app?.isGenerating || window.app?.isRevising)) {
         this._channel.postMessage({ type: "alive", startedAt: marker.startedAt });
       }
     };

@@ -1,8 +1,10 @@
 "use strict";
 
 /**
- * Card runs: a new character made start to finish by the proxy: the card,
- * its finishing fields and, when asked for, its portrait.
+ * Card runs: work on a character that the proxy carries out start to finish.
+ * Two kinds: "new-card" (the card, its finishing fields and, when asked for,
+ * its supporting cast and portrait) and "revise" (an AI rewrite of an existing
+ * card, with its finishing fields rewritten to match when asked for).
  *
  * The page used to conduct this itself, one request per step, so the chain
  * stopped when the phone locked and was lost when Safari discarded the tab
@@ -33,6 +35,8 @@ const STOPPED = "Generation stopped by user";
 // "cast" and "portrait" are only in a run's steps when the page asked for them.
 const STEPS = ["card", "finishing", "cast", "portrait"];
 const OPTIONAL_STEPS = { cast: (spec) => spec.cast.want, portrait: (spec) => spec.portrait.want };
+const REVISE_STEPS = ["revise", "finishing"];
+const PUSH_LABELS = { "new-card": "New character", revise: "Card revision" };
 const LIMITS = {
   MAX_RUNNING_PER_USER: 2,
   KEEP_MS: 24 * 60 * 60 * 1000,
@@ -249,6 +253,12 @@ function register(app, deps) {
         warn: (message) => say(run, `⚠️ ${message}\n`),
       });
 
+      if (run.kind === "revise") {
+        await executeRevise(run, host);
+        await finish(run, "done");
+        return;
+      }
+
       await runStep(run, "card", async () => {
         run.text = "";
         const onStream = (delta, full) => {
@@ -368,6 +378,52 @@ function register(app, deps) {
     }
   }
 
+  /**
+   * A revision of an existing card: rewrite it to the instruction, then (for
+   * Revise) rewrite the finishing fields to match. The result is saved to
+   * History as a new item, never over the card it came from: the page offers
+   * it as a diff when it is there, and it is waiting in History when it isn't.
+   */
+  async function executeRevise(run, host) {
+    const { spec, userId } = run;
+    await runStep(run, "revise", async () => {
+      say(run, "✏️ Applying the revision...\n");
+      run.card = JSON.parse(JSON.stringify(await host.api.reviseCharacter(spec.card, spec.instruction, spec.pov)));
+      run.historyId = await saveHistoryCard(userId, {
+        isPermanent: false,
+        draft: true,
+        replaceHistoryId: run.historyId || undefined,
+        characterName: run.card.name,
+        character: run.card,
+        // The card's portrait as the page holds it, so the revised copy in
+        // History is whole even if the page never comes back for it.
+        imageBase64: spec.portraitImage || "",
+      });
+      delete spec.card; // the revised card is the one that matters from here on
+      delete spec.portraitImage;
+    });
+
+    if (stepOf(run, "finishing")) {
+      await runStep(run, "finishing", async () => {
+        say(run, "💬 Updating example messages, creator's notes and post-history...\n");
+        await host.api.fillFinishingFields(run.card, {
+          count: spec.exampleCount,
+          pov: spec.pov,
+          revisionNote: spec.instruction,
+          exampleStyle: spec.exampleStyle,
+          lorebookEntries: spec.lorebookEntries,
+        });
+        await saveHistoryCard(userId, {
+          isPermanent: false,
+          draft: true,
+          replaceHistoryId: run.historyId,
+          characterName: run.card.name,
+          character: run.card,
+        });
+      });
+    }
+  }
+
   async function finish(run, status, error = null) {
     run.status = status;
     run.error = error;
@@ -387,7 +443,7 @@ function register(app, deps) {
       attached,
       // A fixed label, never the character's name: this text is what the lock
       // screen shows under the "name only" notification setting.
-      items: [{ label: "New character", ok: status === "done", error: String(error || "").slice(0, 300) }],
+      items: [{ label: PUSH_LABELS[run.kind] || "Generation", ok: status === "done", error: String(error || "").slice(0, 300) }],
     }).catch((err) => console.warn("[runs] done report failed:", err.message));
   }
 
@@ -469,6 +525,22 @@ function register(app, deps) {
     };
   }
 
+  function cleanReviseSpec(raw) {
+    const spec = raw && typeof raw === "object" ? raw : {};
+    const card = spec.card && typeof spec.card === "object" && !Array.isArray(spec.card) ? spec.card : null;
+    return {
+      card,
+      instruction: cleanText(spec.instruction, 60000),
+      pov: spec.pov === "first" ? "first" : "third",
+      cardType: ["group", "scenario"].includes(card?.cardType) ? card.cardType : "single",
+      withFinishing: spec.withFinishing === true,
+      exampleCount: Math.min(10, Math.max(1, parseInt(spec.exampleCount, 10) || 3)),
+      exampleStyle: cleanText(spec.exampleStyle, 4000),
+      lorebookEntries: Array.isArray(spec.lorebookEntries) ? spec.lorebookEntries.slice(0, 300) : [],
+      portraitImage: typeof spec.portraitImage === "string" && spec.portraitImage.startsWith("data:image/") ? spec.portraitImage : "",
+    };
+  }
+
   const usableSettings = (settings) => !!(settings?.api?.text?.apiKey && settings.api.text.baseUrl && settings.api.text.model);
 
   // ── Routes ─────────────────────────────────────────────────────────────────
@@ -481,11 +553,15 @@ function register(app, deps) {
       if (existing) return res.json(view(existing, { withCard: true }));
     }
 
-    const spec = cleanSpec(req.body?.spec);
-    if (spec.mode === "classic" && !spec.concept) {
+    const kind = req.body?.kind === "revise" ? "revise" : "new-card";
+    const spec = kind === "revise" ? cleanReviseSpec(req.body?.spec) : cleanSpec(req.body?.spec);
+    if (kind === "revise" && (!spec.card || !spec.instruction)) {
+      return res.status(400).json({ error: { code: "400", message: "A card and a revision request are required" } });
+    }
+    if (kind === "new-card" && spec.mode === "classic" && !spec.concept) {
       return res.status(400).json({ error: { code: "400", message: "A concept is required" } });
     }
-    if (spec.mode === "search" && !spec.searchQuery) {
+    if (kind === "new-card" && spec.mode === "search" && !spec.searchQuery) {
       return res.status(400).json({ error: { code: "400", message: "A character to search for is required" } });
     }
     const settings = req.body?.settings;
@@ -502,10 +578,13 @@ function register(app, deps) {
       id: randomUUID(),
       key,
       userId,
-      kind: "new-card",
+      kind,
       status: "running",
-      step: STEPS[0],
-      steps: STEPS.filter((name) => !OPTIONAL_STEPS[name] || OPTIONAL_STEPS[name](spec)).map((name) => ({ name, status: "pending", error: null })),
+      step: kind === "revise" ? REVISE_STEPS[0] : STEPS[0],
+      steps: (kind === "revise"
+        ? REVISE_STEPS.filter((name) => name !== "finishing" || spec.withFinishing)
+        : STEPS.filter((name) => !OPTIONAL_STEPS[name] || OPTIONAL_STEPS[name](spec))
+      ).map((name) => ({ name, status: "pending", error: null })),
       spec,
       page: /^[A-Za-z0-9_-]{1,64}$/.test(page) ? page : "",
       text: "",
@@ -522,7 +601,7 @@ function register(app, deps) {
     };
     runs.set(run.id, run);
     start(run, settings);
-    console.log(`[runs] run ${run.id} started for user ${userId} (${spec.mode}, ${spec.cardType})`);
+    console.log(`[runs] ${kind} run ${run.id} started for user ${userId}`);
     res.json(view(run));
   });
 

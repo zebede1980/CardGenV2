@@ -406,6 +406,108 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("portrait: the run writes the same prompt request as the page", !!byPage.prompt && byPage.prompt === byRun.prompt && byPage.temperature === byRun.temperature, firstDiff(byPage.prompt || "", byRun.prompt || ""));
   check("portrait: the run sends the same image request as the page", byPage.image === byRun.image, firstDiff(byPage.image, byRun.image));
 
+  // ── V. Revise, Remaster and friends ────────────────────────────────────────
+  const setField = (pg, id, value) => pg.evaluate(([i, v]) => { const el = document.getElementById(i); el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); }, [id, value]);
+  const startRevise = (pg, instruction = "Make her warmer.") => pg.evaluate((text) => { document.getElementById("revision-instruction").value = text; window.app.handleReviseCharacter(); }, instruction);
+  const diffOpen = (pg) => pg.evaluate(() => { const m = document.getElementById("card-diff-modal"); return !!m && (m.classList.contains("show") || getComputedStyle(m).display !== "none") && !!document.getElementById("card-diff-accept-btn"); });
+  const answerDiff = (pg, accept) => pg.evaluate((yes) => document.getElementById(yes ? "card-diff-accept-btn" : "card-diff-reject-btn").click(), accept);
+  const revising = (pg) => pg.evaluate(() => window.app.isRevising === true);
+  const notRevising = (pg) => pg.waitForFunction(() => window.app.isRevising === false, null, { timeout: 30000 });
+  const freshCard = async (serverRuns) => {
+    await setConfig({ serverRuns });
+    await clearHistory();
+    await page.close();
+    page = await open(context);
+    await generate(page);
+    await idle(page);
+    await until(() => history().length === 1 && !history()[0].data.draft, { what: "card saved" });
+    return history()[0].id;
+  };
+
+  // V1. Setting on, accepted.
+  let originalId = await freshCard(true);
+  let reviseCalls = model.count("revise");
+  await startRevise(page);
+  await until(() => diffOpen(page), { what: "diff dialog" });
+  check("server revise: the proxy wrote it, not the page", model.count("revise") === reviseCalls + 1 && !page.__requests.some((r) => r.startsWith("POST /api/text/")));
+  check("server revise: the revised copy is already in History, the original untouched", history().length === 2 && history().some((h) => h.id === originalId && !/REVISED/.test(h.data.character.description)));
+  check("server revise: nothing on screen changes before the diff is accepted", !/REVISED/.test(await fieldOnScreen(page, "character-description")));
+  await answerDiff(page, true);
+  await notRevising(page);
+  await until(() => history().length === 2 && history().every((h) => !h.data.draft), { what: "accepted save" });
+  check("server revise accepted: the card on screen is the revised one, with its finishing fields", /REVISED to be warmer/.test(await fieldOnScreen(page, "character-description")) && (await fieldOnScreen(page, "creator-notes")).includes("slow-burn"));
+  check("server revise accepted: the save replaced the run's copy rather than adding a third", history().length === 2);
+
+  // V2. Setting on, discarded: the run's copy goes.
+  await startRevise(page, "Now make her colder.");
+  await until(() => diffOpen(page), { what: "diff dialog" });
+  await until(() => history().length === 3, { what: "proposal in history" });
+  await answerDiff(page, false);
+  await notRevising(page);
+  await until(() => history().length === 2, { what: "proposal removed" });
+  check("server revise discarded: its History copy is removed", history().length === 2);
+
+  // V3. Typing while it runs: what was typed wins, the AI's version stays in History.
+  originalId = await freshCard(true);
+  hold = model.hold("revise", 0);
+  await startRevise(page);
+  await until(() => hold.reached, { what: "rewrite held" });
+  await setField(page, "character-scenario", "MY OWN SCENARIO, typed while the rewrite was running.");
+  hold.release();
+  await until(() => diffOpen(page), { what: "diff dialog" });
+  await answerDiff(page, true);
+  await notRevising(page);
+  await until(() => history().length === 3, { what: "accepted save as its own item" });
+  check("typed meanwhile: my text is what ends up on the card", (await fieldOnScreen(page, "character-scenario")).startsWith("MY OWN SCENARIO") && /REVISED to be warmer/.test(await fieldOnScreen(page, "character-description")));
+  check("typed meanwhile: the AI's whole version is still in History", history().some((h) => /REVISED: the storm has passed/.test(h.data.character.scenario)) && history().some((h) => /MY OWN SCENARIO/.test(h.data.character.scenario)), history().map((h) => h.data.character.scenario.slice(0, 40)).join(" | "));
+  check("typed meanwhile: the page says what it kept", await page.evaluate(() => [...document.querySelectorAll(".notification")].some((n) => /Kept what you typed in Scenario/.test(n.textContent))));
+
+  // V4. Tab discarded mid-revision: the run finishes, and the reload shows the revised card.
+  originalId = await freshCard(true);
+  reviseCalls = model.count("revise");
+  hold = model.hold("revise", 0);
+  await startRevise(page);
+  await until(() => hold.reached, { what: "rewrite held" });
+  const reviseRunId = await until(async () => (await marker(page))?.runId, { what: "revise run id" });
+  await page.close({ runBeforeUnload: false });
+  hold.release();
+  await until(async () => (await runStatus(reviseRunId)).status === "done", { what: "revision finished with no page" });
+  check("discarded tab mid-revision: the proxy finished it and saved it", history().length === 2 && history().some((h) => /REVISED/.test(h.data.character.description)));
+  page = await open(context);
+  await until(async () => /REVISED to be warmer/.test(await fieldOnScreen(page, "character-description")), { what: "revised card on reload" });
+  check("discarded tab mid-revision: the revised card is on screen after reopening", (await nameOnScreen(page)) === "Mira Okafor" && model.count("revise") === reviseCalls + 1);
+  check("discarded tab mid-revision: the card before it is still there", history().some((h) => h.id === originalId && !/REVISED/.test(h.data.character.description)));
+  check("discarded tab mid-revision: marker cleared", (await marker(page)) === null);
+
+  // V5. Remaster applies without a diff; Stop reaches the server.
+  originalId = await freshCard(true);
+  await page.evaluate(() => { window.app.handleRemasterCurrentCard(); });
+  await until(async () => /REVISED to be warmer/.test(await fieldOnScreen(page, "character-description")), { what: "remaster applied" });
+  await notRevising(page);
+  check("server remaster: applied straight to the card", /REVISED to be warmer/.test(await fieldOnScreen(page, "character-description")));
+  hold = model.hold("revise", 0);
+  await startRevise(page);
+  await until(() => hold.reached, { what: "rewrite held" });
+  const stopRunId = await until(async () => (await marker(page))?.runId, { what: "revise run id" });
+  await page.evaluate(() => window.app.handleStopRevision());
+  await until(async () => (await runStatus(stopRunId)).status === "stopped", { what: "revision stopped on the server" });
+  hold.release();
+  check("server revise: Stop reaches the server", (await runStatus(stopRunId)).status === "stopped" && !(await diffOpen(page)));
+
+  // V6. Setting off: the page's own rewrite, same handlers, same keep-my-edits rule.
+  originalId = await freshCard(false);
+  reviseCalls = model.count("revise");
+  hold = model.hold("revise", 0);
+  await startRevise(page);
+  await until(() => hold.reached, { what: "rewrite held" });
+  await setField(page, "character-first-message", "MY OWN OPENING LINE.");
+  hold.release();
+  await until(() => diffOpen(page), { what: "diff dialog" });
+  await answerDiff(page, true);
+  await notRevising(page);
+  check("page revise (setting off): works through the same handler", model.count("revise") === reviseCalls + 1 && page.__requests.some((r) => r.startsWith("POST /api/text/")) && !page.__requests.some((r) => r.startsWith("POST /api/card-runs")) && /REVISED to be warmer/.test(await fieldOnScreen(page, "character-description")));
+  check("page revise (setting off): typed text wins and the AI's version goes to History", (await fieldOnScreen(page, "character-first-message")) === "MY OWN OPENING LINE." && history().some((h) => /REVISED: The door opens wide/.test(h.data.character.firstMessage)));
+
   // R8. With the setting off, nothing goes near the run routes.
   await setConfig({ serverRuns: false });
   await clearHistory();

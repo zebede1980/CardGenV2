@@ -1499,6 +1499,7 @@ class CharacterGeneratorApp {
 
   handleStopRevision() {
     if (this.isRevising) {
+      this.stopCardRun?.(); // a revision on the proxy has to be told too
       window.apiHandler.stopGeneration();
       this.isRevising = false;
       this.setRevisionState(false);

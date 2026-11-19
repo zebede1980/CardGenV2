@@ -827,7 +827,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
           instruction += `The card currently mentions these lorebook keywords — keep at least one mention of each, exactly as written: ${keepKeys.join(", ")}.\n\n`;
         }
         instruction += "Additionally, rewrite the entire card to be extremely concise and token-efficient. Remove all flowery prose, purple language, and repetition. Every sentence must serve a direct behavioural or descriptive purpose. Bullet points for traits and behaviours; short factual prose only for backstory and scenario. Keep only the absolute core facts that an AI needs to portray this character — make every word count.";
-        revised = await this.apiHandler.reviseCharacter(this.currentCharacter, instruction, pov);
+        revised = await this.reviseCard(instruction, pov);
       } else {
         const instruction =
           `These topics have just been moved out of the card into lorebook entries:\n\n${topicsText}\n\n` +
@@ -856,11 +856,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this._warnUncoveredEntries(coverage.missing);
         return true;
       }
+      await this._dropRevisionDraft();
       restoreLorebook();
       return false;
     } catch (error) {
       // Without this the new entries stayed while the card still held the
       // same lore, duplicating it.
+      await this._dropRevisionDraft();
       restoreLorebook();
       throw error;
     }

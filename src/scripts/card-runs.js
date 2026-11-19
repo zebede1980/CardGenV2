@@ -149,14 +149,121 @@ Object.assign(CharacterGeneratorApp.prototype, {
    * Stop, like the page's own pipeline.
    */
   async runNewCardOnServer(spec) {
+    return this._startAndFollowCardRun("new-card", spec);
+  },
+
+  async _startAndFollowCardRun(kind, spec) {
     // Made before the request and kept in the marker, so sending it twice (a
     // retry here, or iOS re-sending the POST) is one run, not two paid ones.
     const key = window.crypto?.randomUUID ? window.crypto.randomUUID() : `k${Date.now()}${Math.random().toString(36).slice(2)}`;
     NewCardMarker.update({ runKey: key });
 
-    const run = await this._cardRunRequestPatiently("POST", "/api/card-runs", { key, spec, settings: this.config.config });
+    const run = await this._cardRunRequestPatiently("POST", "/api/card-runs", { key, kind, spec, settings: this.config.config });
     NewCardMarker.update({ runId: run.id });
     return this._followCardRun(run.id);
+  },
+
+  /**
+   * An AI rewrite of the card on screen: Revise, Remaster, Reduce tokens and
+   * Consistency auto-fix all come through here. Resolves the revised card;
+   * applying it is the caller's job, usually after the diff dialog.
+   *
+   * With server runs on, the proxy does the rewrite (and, for Revise, the
+   * finishing fields), and saves the result to History as a new item whether
+   * or not this page is still here: never over the Library card. The caller's
+   * save replaces that item when the change is accepted; _dropRevisionDraft
+   * removes it when the change is discarded.
+   *
+   * Either way, anything typed into the card while it was running is kept.
+   */
+  async reviseCard(instruction, pov, { withFinishing = false } = {}) {
+    const asked = this._captureCardSnapshot();
+    this._revisionHistoryId = null;
+    let revised;
+
+    if (this.serverRunsEnabled()) {
+      let portraitImage = "";
+      if (this.currentImageUrl && typeof this._urlToDataUrl === "function") {
+        portraitImage = await this._urlToDataUrl(this.currentImageUrl).catch(() => "");
+      }
+      NewCardMarker.begin({ mode: "revise", pov, cardType: this.currentCharacter.cardType || "single" });
+      try {
+        revised = await this._startAndFollowCardRun("revise", {
+          card: this.currentCharacter,
+          instruction,
+          pov,
+          withFinishing,
+          exampleCount: parseInt(document.getElementById("example-messages-count")?.value || "3", 10),
+          exampleStyle: document.getElementById("example-messages-prompt")?.value?.trim() || "",
+          lorebookEntries: this.lorebookEntries || [],
+          portraitImage,
+        });
+        this._revisionHistoryId = this._lastRunHistoryId || null;
+      } finally {
+        NewCardMarker.clear();
+      }
+    } else {
+      revised = await this.apiHandler.reviseCharacter(this.currentCharacter, instruction, pov);
+      if (withFinishing) {
+        // Rewrite the derived fields to match the revised card, so the edit is
+        // reviewed and accepted as a whole.
+        this.showNotification("Updating example messages, creator's notes and post-history...", "info");
+        await this.fillFinishingFields(revised, { revisionNote: instruction });
+      }
+    }
+    return this._keepEditsMadeMeanwhile(asked, revised);
+  },
+
+  /**
+   * A rewrite takes a minute or two and the fields stay editable. Whatever was
+   * typed in a field since the rewrite was asked for wins over the AI's text
+   * for that field; the AI's whole version is kept in History so it can still
+   * be had.
+   */
+  async _keepEditsMadeMeanwhile(asked, revised) {
+    const now = this._captureCardSnapshot();
+    if (!asked || !now) return revised;
+    const labels = {
+      name: "Name", description: "Description", personality: "Personality", scenario: "Scenario",
+      firstMessage: "First Message", mesExample: "Example Messages", creatorNotes: "Creator's Notes",
+      postHistoryInstructions: "Post-History Instructions",
+    };
+    const edited = Object.keys(labels).filter((field) => now[field] !== asked[field]);
+    if (edited.length === 0) return revised;
+
+    const aiVersion = JSON.parse(JSON.stringify(revised));
+    for (const field of edited) revised[field] = now[field];
+
+    if (this._revisionHistoryId) {
+      // The run's History item is the AI's whole version. Leave it there: the
+      // save after an accept makes its own item instead of replacing it.
+      this._draftHistorySave = null;
+      this._revisionHistoryId = null;
+    } else if (this.storage && this.storageReady) {
+      await this.storage.saveCard({
+        characterName: aiVersion.name || "Unnamed Character",
+        character: aiVersion,
+        isPermanent: false,
+        draft: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).catch((error) => console.warn("Could not keep the AI's version in History:", error));
+    }
+    this.showNotification(
+      `Kept what you typed in ${edited.map((f) => labels[f]).join(", ")} while that was running. The AI's version is in History.`,
+      "info",
+    );
+    return revised;
+  },
+
+  /** The revision was discarded: its History item, if a run made one, goes too. */
+  async _dropRevisionDraft() {
+    const id = this._revisionHistoryId;
+    this._revisionHistoryId = null;
+    if (!id) return;
+    this._draftHistorySave = null;
+    await this.storage.deleteCard(id).catch((error) => console.warn("Could not remove the discarded revision from History:", error));
+    this.refreshLibraryViews?.();
   },
 
   /** Poll a run until it ends, showing its text and messages as they arrive. */
@@ -211,6 +318,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (run.status === "done") {
           // The save at the end of the page's steps replaces the run's History item.
           this._draftHistorySave = Promise.resolve(run.historyId);
+          this._lastRunHistoryId = run.historyId;
           NewCardMarker.update({ historyId: run.historyId });
           // generateNewCharacterImage shows the run's portrait instead of drawing one.
           this._serverPortrait = run.portrait ? { status: run.portrait, error: run.portraitError, historyId: run.historyId } : null;
@@ -280,6 +388,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     if (!run) return false;
 
+    if (run.kind === "revise") {
+      // Only the browser that asked for it picks a revision back up.
+      return marker?.runId ? this._recoverRevision(run) : false;
+    }
     if (run.status === "running" || run.status === "interrupted") return this._attachToCardRun(run, { own: !!marker?.runId });
     if (!run.historyId) return false;
 
@@ -297,6 +409,34 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.showStreamMessage(`♻️ ${name} ${how}.${rest}\n`);
     this.showNotification(`${name} ${how}.${rest}`, run.status === "done" ? "success" : "warning");
     return true;
+  },
+
+  /**
+   * A revision whose page went away. Nothing was on screen to protect when
+   * this page loaded, so the revised card itself is loaded from History, once
+   * the run has finished. The card it was made from is untouched.
+   */
+  async _recoverRevision(run) {
+    try {
+      if (run.status === "running" || run.status === "interrupted") {
+        this.setRevisionState(true, "revise-character-btn");
+        this.showNotification("A revision is still being written on the server. Picking it up...", "info");
+        await this._followCardRun(run.id);
+      }
+      const finished = await this._cardRunRequest("GET", `/api/card-runs/${run.id}`);
+      this._draftHistorySave = null;
+      if (finished.status !== "done" || !finished.historyId) return false;
+      if (!(await this.loadCardIntoEditor(finished.historyId, { quiet: true }))) return false;
+      this._restoreCardSelects({ pov: finished.pov, cardType: finished.cardType });
+      const name = this.currentCharacter?.name || "The card";
+      this.showNotification(`${name}: the revision you asked for was finished by the server. This is the revised card; the one before it is still in your Library or History.`, "success");
+      return true;
+    } catch (error) {
+      console.warn("[recovery] could not pick up the revision:", error);
+      return false;
+    } finally {
+      this.setRevisionState(false);
+    }
   },
 
   /**
