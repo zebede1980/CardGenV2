@@ -122,13 +122,32 @@ History only (never over a Library card), and "keep what I typed, offer the AI's
 - Tests now 229: parser 19, engine 79, phase 0 page 50, runs page 81. Reduce tokens shares the path
   but its candidate dialog was not driven.
 
-**Next: portrait follow-ups** (Regenerate, Gen 4, Compare, takes, Edit portrait, gallery), chosen by
-Joe but not started. They are a different shape from the rest: nine call sites inside long UI flows,
-`editImage` does page-only work (a canvas check for a blanked result), and "where do the pictures
-land if the page is gone" needs deciding. Proposed: each draw (write prompt + draw, or caption + edit)
-becomes one server unit behind the existing `apiHandler.generateImage` / `editImage` calls for
-Character Gen, and a draw whose page has gone saves a History copy of the card with that picture as
-its portrait. Single-field Redo was not chosen and is unchanged (resumable, lost on a closed app).
+**Portrait follow-ups: "landing" (2026-11-19) — committed, NOT deployed (proxy + frontend).**
+Joe chose "History copies": a picture drawn while the page is gone is saved as a History copy of the
+card with that picture as its portrait. Built without touching the image screens, and **for everyone,
+not behind the setting**, because the proxy already holds every image job:
+- Character Gen's image requests carry the card they are for (`__landing: { card, replaceHistoryId? }`,
+  added in `api.js` `makeRequest` from `app._imageLanding()`, Character Gen view only; never for an
+  edit of the reference image). The proxy strips it before the provider sees it.
+- A finished image job that has a card and has not been **collected** 10 minutes after it was drawn
+  (`JOB_LAND_AFTER_MS`) is saved to History (`landImageJob` in `server.js`). Covers Regenerate, Gen 4,
+  Compare, takes, Edit portrait, the gallery generator and a page-drawn new-card portrait (which names
+  its draft, so the draft is completed rather than duplicated).
+- **Collected is something the page says**: `POST /api/jobs/collected` when the picture arrives, or
+  the existing `/api/jobs/:id/result`. The proxy never assumes it from having written a response, since
+  a locked phone's dead connection can look open. A lost confirmation means the picture is saved as
+  well as shown.
+- **On load**, image jobs this browser left uncollected more than 2 minutes ago are landed at once
+  (`POST /api/jobs/land`) and the page says "N pictures drawn while the app was closed are in
+  History", unless another tab of the browser is open (`CardgenPages`, a BroadcastChannel roll-call).
+- **Limits:** jobs live in the proxy's memory, so a proxy restart loses pictures that had not landed
+  yet. Gen 4 with the app closed leaves four History items. A landed edit is not checked for the
+  "blank image" safety result (that check needs a canvas). The chain "write prompt, then draw" inside
+  Gen 4 and Compare still needs the page between the two; only the drawn picture is protected.
+- Tests: `landing.test.js`, 32 checks (261 in all). The local ComfyUI handler has the same hook but
+  only the hosted route was exercised.
+
+Single-field Redo was not chosen and is unchanged (resumable, lost on a closed app).
 
 ## 🔒 App lock PIN (2026-11-16) — deployed 2026-11-16 (`f75c959`, proxy + frontend)
 

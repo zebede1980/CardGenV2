@@ -11,7 +11,7 @@ this plan. The rest of the document is the plan as written.
 | 0 | Done. On for everyone |
 | 1 | Done, and much smaller than planned (below) |
 | 2 | Done, behind Settings → "Make new characters on the server (beta)", off by default |
-| 3 | First slice done: the new card's portrait is drawn by the run. Regenerate, Gen 4, Compare, takes, Edit and the gallery are chosen but not started |
+| 3 | Done differently: the new card's portrait is drawn by the run; for Regenerate, Gen 4, Compare, takes, Edit and the gallery, a picture nobody collects is saved to History with its card ("landing"), using the image jobs the proxy already holds instead of new run kinds |
 | 4 | Done: 4 ideas and Inspire Me use a run; supporting cast is a run step; Revise, Remaster, Reduce tokens and auto-fix are a `revise` run. Not chosen, so not done: single-field Redo, the import queue, lorebook scan |
 | 5 | Not started |
 
