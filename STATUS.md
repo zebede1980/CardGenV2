@@ -40,6 +40,9 @@ speaking the same `/v1/audio/speech` and `/v1/audio/voices` as kokoro-fastapi, w
 - **Deploy:** the live `docker-compose.yml` is untracked; add the `faster-kokoro` service block from
   `docker-compose.example.yml` (no host port) and `FASTER_KOKORO_URL` on the proxy, then build
   `faster-kokoro` and rebuild the proxy. `kokoro-tts` stays: HandyTime and offbook use it too.
+- **After deploying (`663f90e`):** through the live proxy (throwaway user): `bf_alice` answered by Faster
+  Kokoro (76 chars, 4.8 s of audio in 0.72 s), `af_v0bella` fell back to stock (3.1 s), voice list still 67.
+  Live compose backed up as `docker-compose.yml.bak-20261119-fasterkokoro`. **To try:** Story Mode on the iPhone.
 ## Character Gen backend-driven (2026-11-19) — phases 0–3a, supporting cast and the Revise group **deployed 2026-11-19 (`62e1389`)**
 
 Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the
