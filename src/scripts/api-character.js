@@ -1516,6 +1516,50 @@ Write the instructions now. Plain text only, no formatting.`;
   /* ── Finishing fields — one call after the card is written ─────────────── */
 
   /**
+   * Fill example messages, Creator's Notes and Post-History Instructions on
+   * `target` with one finishing call (see generateFinishingFields). Any section
+   * the reply leaves out falls back to its single-field generator, so one weak
+   * reply never leaves a field blank. Failures are non-fatal: the card keeps
+   * whatever it had. A user Stop is rethrown, so the caller stops too rather
+   * than carrying on to display and save a card the user abandoned.
+   *
+   * No page access in here: the proxy runs this as well as the browser.
+   */
+  async fillFinishingFields(target, { count = 3, pov = "third", brief = "", revisionNote = "", exampleStyle = "", lorebookEntries = [] } = {}) {
+    if (!target) return;
+
+    let fields = {};
+    try {
+      fields = await this.generateFinishingFields(target, {
+        count, pov, brief, revisionNote, exampleStyle, lorebookEntries,
+      });
+    } catch (error) {
+      if (error.message?.includes("Generation stopped by user")) throw error;
+      console.warn("Finishing-fields call failed; falling back to single-field calls:", error);
+    }
+
+    const fallbacks = {
+      mesExample: () => this.generateExampleMessages(target, count, pov, exampleStyle, lorebookEntries, brief),
+      creatorNotes: () => this.generateCreatorNotes(target, "", brief),
+      postHistoryInstructions: () => this.generatePostHistoryInstructions(target, "", brief),
+    };
+    for (const [key, fallback] of Object.entries(fallbacks)) {
+      let value = fields[key];
+      if (!value) {
+        console.warn(`Finishing call returned no ${key}; generating it on its own`);
+        try {
+          value = ((await fallback()) || "").trim();
+        } catch (error) {
+          if (error.message?.includes("Generation stopped by user")) throw error;
+          console.warn(`${key} generation failed (non-fatal):`, error);
+        }
+      }
+      if (value) target[key] = value;
+    }
+  },
+
+
+  /**
    * Write example messages, Creator's Notes and Post-History Instructions in a
    * single call, once the main card fields exist. Used after creation and after
    * an AI edit, so the derived fields always match the card.

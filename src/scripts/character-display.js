@@ -532,47 +532,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   /**
    * Fill example messages, Creator's Notes and Post-History Instructions on
-   * `target` with one finishing call (see generateFinishingFields). Any section
-   * the reply leaves out falls back to its single-field generator, so one weak
-   * reply never leaves a field blank. Failures are non-fatal: the card keeps
-   * whatever it had. A user Stop is rethrown, so the caller stops too rather
-   * than carrying on to display and save a card the user abandoned.
+   * `target`, with the options currently set on the page. The work is
+   * APIHandler.fillFinishingFields (api-character.js), which the proxy runs
+   * too for server-run generations.
    */
   async fillFinishingFields(target = this.currentCharacter, { brief = "", revisionNote = "" } = {}) {
     if (!target) return;
-    const count = parseInt(document.getElementById("example-messages-count")?.value || "3", 10);
-    const pov = document.getElementById("pov-select")?.value || "third";
-    const exampleStyle = document.getElementById("example-messages-prompt")?.value?.trim() || "";
-    const lorebookEntries = this.lorebookEntries || [];
-
-    let fields = {};
-    try {
-      fields = await this.apiHandler.generateFinishingFields(target, {
-        count, pov, brief, revisionNote, exampleStyle, lorebookEntries,
-      });
-    } catch (error) {
-      if (error.message?.includes("Generation stopped by user")) throw error;
-      console.warn("Finishing-fields call failed; falling back to single-field calls:", error);
-    }
-
-    const fallbacks = {
-      mesExample: () => this.apiHandler.generateExampleMessages(target, count, pov, exampleStyle, lorebookEntries, brief),
-      creatorNotes: () => this.apiHandler.generateCreatorNotes(target, "", brief),
-      postHistoryInstructions: () => this.apiHandler.generatePostHistoryInstructions(target, "", brief),
-    };
-    for (const [key, fallback] of Object.entries(fallbacks)) {
-      let value = fields[key];
-      if (!value) {
-        console.warn(`Finishing call returned no ${key}; generating it on its own`);
-        try {
-          value = ((await fallback()) || "").trim();
-        } catch (error) {
-          if (error.message?.includes("Generation stopped by user")) throw error;
-          console.warn(`${key} generation failed (non-fatal):`, error);
-        }
-      }
-      if (value) target[key] = value;
-    }
+    return this.apiHandler.fillFinishingFields(target, {
+      count: parseInt(document.getElementById("example-messages-count")?.value || "3", 10),
+      pov: document.getElementById("pov-select")?.value || "third",
+      exampleStyle: document.getElementById("example-messages-prompt")?.value?.trim() || "",
+      lorebookEntries: this.lorebookEntries || [],
+      brief,
+      revisionNote,
+    });
   },
 
   async handleRegenerateCreatorNotes() {
