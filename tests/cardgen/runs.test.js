@@ -56,7 +56,7 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   const runFile = path.join(stack.dataDir, "users", String(userId), "runs", `${id1}.json`);
   check("the run file holds no API key", fs.existsSync(runFile) && !fs.readFileSync(runFile, "utf8").includes("fake-key"));
   await until(() => backend.pushes.length === 1, { what: "done report" });
-  check("one done report for the whole run, naming the character", backend.pushes[0].page === "testpage1" && backend.pushes[0].view === "cardgen" && backend.pushes[0].items.length === 1 && backend.pushes[0].items[0].ok === true && /Mira Okafor/.test(backend.pushes[0].items[0].label), JSON.stringify(backend.pushes));
+  check("one done report for the whole run, with a label that gives nothing away", backend.pushes[0].page === "testpage1" && backend.pushes[0].view === "cardgen" && backend.pushes[0].items.length === 1 && backend.pushes[0].items[0].ok === true && backend.pushes[0].items[0].label === "New character", JSON.stringify(backend.pushes));
   check("a run that was being polled is reported as attached", backend.pushes[0].attached === true);
 
   // 2. The same key is the same run.

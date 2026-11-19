@@ -193,7 +193,7 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("discarded tab: says the server finished it", /was finished by the server while the app was closed/.test(await streamText(page)));
   check("discarded tab: nothing was generated twice", model.count("card") === cardCalls + 1 && model.count("finishing") === finCalls + 1 && textCalls(page) === 0);
   check("discarded tab: marker cleared", (await marker(page)) === null);
-  check("discarded tab: one done report was sent for the run", backend.pushes.some((p) => p.items[0].ok && /Mira Okafor/.test(p.items[0].label)));
+  check("discarded tab: one done report was sent for the run", backend.pushes.some((p) => p.items[0].ok && p.items[0].label === "New character"));
 
   // R4. Tab discarded mid-run; reopened while it is STILL running: attach and finish.
   await clearHistory();

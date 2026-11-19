@@ -350,7 +350,9 @@ function register(app, deps) {
       page: run.page,
       view: "cardgen",
       attached,
-      items: [{ label: run.card?.name ? `${run.card.name} (character)` : "Character", ok: status === "done", error: String(error || "").slice(0, 300) }],
+      // A fixed label, never the character's name: this text is what the lock
+      // screen shows under the "name only" notification setting.
+      items: [{ label: "New character", ok: status === "done", error: String(error || "").slice(0, 300) }],
     }).catch((err) => console.warn("[runs] done report failed:", err.message));
   }
 
