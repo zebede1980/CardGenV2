@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Character Gen backend-driven (2026-11-19) — phases 0–3a **deployed 2026-11-19 (`8b8fd74`)**; cast + Revise group committed, not deployed
+## Character Gen backend-driven (2026-11-19) — phases 0–3a, supporting cast and the Revise group **deployed 2026-11-19 (`62e1389`)**
 
 Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the
 deviations). Built while Joe was in meetings, on his instruction to carry on through the phases.
@@ -101,7 +101,12 @@ as designed, with the active Look applied. Every field filled, `{{char}}` used, 
 file has none. Joe then turned the setting on and made a character from the app: "seemed fine".
 **Still untried:** a lock or a closed app mid-run on the phone, a portrait from the local GPU in a run.
 
-**Added 2026-11-19, committed, NOT deployed (proxy + frontend):** Joe chose these with: results to
+**Added and deployed 2026-11-19 (`62e1389`, proxy + frontend; the backend was left running):** after
+the rebuild the proxy came up healthy with "2 recent run(s) loaded" (the earlier runs survived the
+restart from their files), the image has all 11 shared scripts, and the prompt host inside the
+container has the cast and revise code with no page access. Nothing signed-in was tried on the live
+site after this second deploy: **cast and the Revise group have not met a real model**.
+Joe chose these with: results to
 History only (never over a Library card), and "keep what I typed, offer the AI's version".
 - **Supporting cast is a step of the new-card run** (between finishing and portrait) when auto-cast is
   ticked. The cast orchestration and its helpers moved from `lorebook-handler.js` to `APIHandler` in
