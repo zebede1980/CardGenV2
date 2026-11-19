@@ -168,12 +168,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   // Resolves true once the card is stored, false if it couldn't be (errors are logged, not thrown,
   // so the automatic saves after generation never interrupt anything).
-  async saveCardToLibrary(isPermanent = false, specificId = null) {
-    if (!this.storageReady || !this.storage || !this.currentCharacter) return false;
+  //
+  // `draft` marks a History save made part-way through creating a character
+  // (see saveDraftToHistory). The next History save replaces that item rather
+  // than adding a second one.
+  async saveCardToLibrary(isPermanent = false, specificId = null, options = {}) {
+    return !!(await this._storeCard(isPermanent, specificId, options));
+  },
+
+  // The stored record (with its id), or null if the save failed.
+  async _storeCard(isPermanent = false, specificId = null, { draft = false } = {}) {
+    if (!this.storageReady || !this.storage || !this.currentCharacter) return null;
 
     try {
       this.currentCharacter.character_book = this.buildCharacterBook();
       this.syncAltGreetingsToCharacter();
+      // Taken before anything is awaited, so a save started mid-pipeline
+      // stores the card as it was when the save was asked for.
+      const characterSnapshot = JSON.parse(JSON.stringify(this.currentCharacter));
+
+      let replaceHistoryId = null;
+      if (!isPermanent && !draft && this._draftHistorySave) {
+        const pending = this._draftHistorySave;
+        this._draftHistorySave = null;
+        replaceHistoryId = await pending;
+      }
 
       let imageBlob = null;
       if (this.currentImageUrl) {
@@ -219,14 +238,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       const cardData = {
-        characterName: this.currentCharacter.name || "Unnamed Character",
-        character: JSON.parse(JSON.stringify(this.currentCharacter)),
+        characterName: characterSnapshot.name || "Unnamed Character",
+        character: characterSnapshot,
         imageBlob,
         imageHistory: imageHistoryData,
         isPermanent,
         stSourceAvatar: this.stSourceAvatar || null,
         updatedAt: new Date().toISOString(),
       };
+      if (draft) cardData.draft = true;
+      if (replaceHistoryId) cardData.replaceHistoryId = replaceHistoryId;
 
       if (specificId) {
         cardData.id = specificId;
@@ -247,24 +268,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (typeof this._renderCharacterGalleryPanel === "function") this._renderCharacterGalleryPanel();
       }
 
-      if (!isPermanent) {
-        const allCards = await this.storage.listCards();
-        const tempCards = allCards.filter((c) => !c.isPermanent);
-        if (tempCards.length > 30) {
-          tempCards.sort(
-            (a, b) => new Date(a.updatedAt || a.createdAt || 0).getTime() - new Date(b.updatedAt || b.createdAt || 0).getTime(),
-          );
-          const toDelete = tempCards.slice(0, tempCards.length - 30);
-          for (const card of toDelete) {
-            await this.storage.deleteCard(card.id);
-          }
-        }
-      }
-      return true;
+      // History is capped at 30 by the proxy, which evicts the oldest as it saves.
+      return savedCard || {};
     } catch (error) {
       console.error("Failed to save card:", error);
-      return false;
+      return null;
     }
+  },
+
+  /**
+   * Save a character to History the moment its text exists, without waiting:
+   * the rest of the pipeline (finishing fields, cast, portrait) carries on. A
+   * tab that Safari discards during those steps used to take the paid-for card
+   * with it, because the only save was at the very end. The save at the end
+   * replaces this one (see saveCardToLibrary).
+   */
+  saveDraftToHistory() {
+    this._draftHistorySave = this._storeCard(false, null, { draft: true })
+      .then((saved) => {
+        const id = saved?.id || null;
+        if (id) NewCardMarker.update({ historyId: id });
+        return id;
+      })
+      .catch(() => null);
+    return this._draftHistorySave;
   },
 
   async handleSnapshotToHistory() {
@@ -624,6 +651,116 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
   },
 
+  /**
+   * Put a stored card (Library or History) on screen for editing. Returns
+   * false if there is no such card.
+   */
+  async loadCardIntoEditor(id, { quiet = false } = {}) {
+    const card = await this.storage.getCard(id);
+    if (!card?.character) return false;
+    // Restore the ST slot link if it was saved, otherwise clear it
+    this.stSourceAvatar = card.stSourceAvatar || null;
+    this._updatePushButton();
+    this.currentCharacter = card.character;
+    this.originalCharacter = JSON.parse(JSON.stringify(card.character));
+    this.displayCharacter();
+    this.showResultSection();
+    const inputSectionDetails = document.getElementById("input-section-details");
+    if (inputSectionDetails) inputSectionDetails.open = false;
+    document.getElementById("image-controls").style.display = "block";
+    document.getElementById("image-buttons-row").style.display = "";
+
+    if (
+      card.character.character_book &&
+      card.character.character_book.entries
+    ) {
+      this.lorebookEntries = card.character.character_book.entries.map(
+        (e) => ({
+          id:
+            e.id ||
+            Date.now().toString() + Math.random().toString().slice(2, 5),
+          keys: e.keys || [],
+          content: e.content || "",
+          topic: e.comment || "",
+          enabled: e.enabled !== false,
+        }),
+      );
+    } else {
+      this.lorebookEntries = [];
+    }
+    this.updateLorebookEntryCount();
+
+    if (card.character.alternateGreetings) {
+      this.altGreetings = card.character.alternateGreetings.map(
+        (content, i) => ({
+          id: Date.now().toString() + i,
+          content,
+        }),
+      );
+    } else {
+      this.altGreetings = [];
+    }
+    this.updateAltGreetingsCount();
+
+    // Reset media state before loading card image/history to prevent cross-card leakage
+    if (typeof this._resetCharacterMediaState === "function") {
+      this._resetCharacterMediaState();
+    } else {
+      if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:")) {
+        try { URL.revokeObjectURL(this.currentImageUrl); } catch (_) {}
+      }
+      this.currentImageUrl = null;
+      if (this.imageHistoryUrls) {
+        this.imageHistoryUrls.forEach(url => {
+          if (url && typeof url === "string" && url.startsWith("blob:")) {
+            try { URL.revokeObjectURL(url); } catch (_) {}
+          }
+        });
+      }
+      this.imageHistoryUrls = [];
+    }
+    this.currentCardId = id;
+
+    if (card.imageBlob instanceof Blob) {
+      this.currentImageUrl = URL.createObjectURL(card.imageBlob);
+      const imageContainer = document.getElementById("image-content");
+      if (imageContainer) {
+        imageContainer.innerHTML = `
+          <div class="image-container">
+            <img src="${this.currentImageUrl}" alt="${card.character.name || "Character"}" class="generated-image">
+          </div>
+        `;
+      }
+    } else {
+      const imageContainer = document.getElementById("image-content");
+      if (imageContainer) {
+        imageContainer.innerHTML = `<div class="image-placeholder"><div class="loading-spinner" style="display:none;"></div><p style="color:var(--text-secondary);font-size:0.875rem;">No image</p></div>`;
+      }
+    }
+
+    if (card.imageHistory && Array.isArray(card.imageHistory)) {
+      for (const item of card.imageHistory) {
+        if (item) {
+          try {
+            if (typeof item === 'string' && item.startsWith('data:')) {
+              this.imageHistoryUrls.push(item);
+            } else {
+              const blob = item instanceof Blob ? item : new Blob([item]);
+              this.imageHistoryUrls.push(URL.createObjectURL(blob));
+            }
+          } catch (e) {
+            console.warn("Failed to restore history blob:", e);
+          }
+        }
+      }
+    }
+    if (typeof this.updateImageHistoryButton === "function") this.updateImageHistoryButton();
+    if (typeof this._renderCharacterGalleryPanel === "function") this._renderCharacterGalleryPanel();
+
+    if (!quiet) this.showNotification("Card loaded", "success");
+    return true;
+  },
+
   async handleLibraryCardClick(event) {
     const actionElement = event.target.closest("[data-action]");
     if (!actionElement) return;
@@ -633,108 +770,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     try {
       if (action === "load-card") {
-        const card = await this.storage.getCard(id);
-        if (!card?.character) return;
-        // Restore the ST slot link if it was saved, otherwise clear it
-        this.stSourceAvatar = card.stSourceAvatar || null;
-        this._updatePushButton();
-        this.currentCharacter = card.character;
-        this.originalCharacter = JSON.parse(JSON.stringify(card.character));
-        this.displayCharacter();
-        this.showResultSection();
-        const inputSectionDetails = document.getElementById("input-section-details");
-        if (inputSectionDetails) inputSectionDetails.open = false;
-        document.getElementById("image-controls").style.display = "block";
-        document.getElementById("image-buttons-row").style.display = "";
-
-        if (
-          card.character.character_book &&
-          card.character.character_book.entries
-        ) {
-          this.lorebookEntries = card.character.character_book.entries.map(
-            (e) => ({
-              id:
-                e.id ||
-                Date.now().toString() + Math.random().toString().slice(2, 5),
-              keys: e.keys || [],
-              content: e.content || "",
-              topic: e.comment || "",
-              enabled: e.enabled !== false,
-            }),
-          );
-        } else {
-          this.lorebookEntries = [];
-        }
-        this.updateLorebookEntryCount();
-
-        if (card.character.alternateGreetings) {
-          this.altGreetings = card.character.alternateGreetings.map(
-            (content, i) => ({
-              id: Date.now().toString() + i,
-              content,
-            }),
-          );
-        } else {
-          this.altGreetings = [];
-        }
-        this.updateAltGreetingsCount();
-
-        // Reset media state before loading card image/history to prevent cross-card leakage
-        if (typeof this._resetCharacterMediaState === "function") {
-          this._resetCharacterMediaState();
-        } else {
-          if (this.currentImageUrl && this.currentImageUrl.startsWith("blob:")) {
-            try { URL.revokeObjectURL(this.currentImageUrl); } catch (_) {}
-          }
-          this.currentImageUrl = null;
-          if (this.imageHistoryUrls) {
-            this.imageHistoryUrls.forEach(url => {
-              if (url && typeof url === "string" && url.startsWith("blob:")) {
-                try { URL.revokeObjectURL(url); } catch (_) {}
-              }
-            });
-          }
-          this.imageHistoryUrls = [];
-        }
-        this.currentCardId = id;
-
-        if (card.imageBlob instanceof Blob) {
-          this.currentImageUrl = URL.createObjectURL(card.imageBlob);
-          const imageContainer = document.getElementById("image-content");
-          if (imageContainer) {
-            imageContainer.innerHTML = `
-              <div class="image-container">
-                <img src="${this.currentImageUrl}" alt="${card.character.name || "Character"}" class="generated-image">
-              </div>
-            `;
-          }
-        } else {
-          const imageContainer = document.getElementById("image-content");
-          if (imageContainer) {
-            imageContainer.innerHTML = `<div class="image-placeholder"><div class="loading-spinner" style="display:none;"></div><p style="color:var(--text-secondary);font-size:0.875rem;">No image</p></div>`;
-          }
-        }
-
-        if (card.imageHistory && Array.isArray(card.imageHistory)) {
-          for (const item of card.imageHistory) {
-            if (item) {
-              try {
-                if (typeof item === 'string' && item.startsWith('data:')) {
-                  this.imageHistoryUrls.push(item);
-                } else {
-                  const blob = item instanceof Blob ? item : new Blob([item]);
-                  this.imageHistoryUrls.push(URL.createObjectURL(blob));
-                }
-              } catch (e) {
-                console.warn("Failed to restore history blob:", e);
-              }
-            }
-          }
-        }
-        if (typeof this.updateImageHistoryButton === "function") this.updateImageHistoryButton();
-        if (typeof this._renderCharacterGalleryPanel === "function") this._renderCharacterGalleryPanel();
-
-        this.showNotification("Card loaded", "success");
+        await this.loadCardIntoEditor(id);
       } else if (action === "delete-card") {
         await this.storage.deleteCard(id);
         await this.refreshLibraryViews();

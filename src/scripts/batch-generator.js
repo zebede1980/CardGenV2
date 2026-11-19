@@ -258,6 +258,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (!promptSaved) this.showStreamMessage("⚠️ Prompt could not be saved to local library.\n");
 
       this.showStreamMessage(`🚀 Generating full character from "${idea.name}"...\n\n`);
+      NewCardMarker.begin({ cardType, pov, mode: "ideas" });
       this.currentCharacter = await this.characterGenerator.generateCharacter(
         effectiveConcept, characterName,
         (token, fullContent) => this.handleCharacterStream(token, fullContent),
@@ -271,6 +272,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
         if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
         if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
       }
+      // Into History now, so a tab closed during the later steps doesn't take
+      // the card with it. The save at the end replaces this one.
+      this.saveDraftToHistory();
 
       this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
       await this.fillFinishingFields(this.currentCharacter, { brief: concept });
@@ -378,6 +382,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
       this.hideResultSection();
     } finally {
+      this._endNewCard();
       this.isGenerating = false;
       this.setGeneratingState(false);
       const inputSectionDetails = document.getElementById("input-section-details");

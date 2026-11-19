@@ -72,6 +72,8 @@ class CharacterGeneratorApp {
     this.bindEvents();
     this.checkAPIStatus();
     this.refreshLibraryViews();
+    // A character whose creation was cut short by this page going away.
+    this.recoverNewCard?.();
   }
 
   async ensureStorageReady() {
@@ -1278,6 +1280,7 @@ class CharacterGeneratorApp {
       if (!promptSaved) this.showStreamMessage("⚠️ Prompt could not be saved to local library.\n");
 
       this.showStreamMessage("🚀 Starting character generation...\n\n");
+      NewCardMarker.begin({ cardType, pov, mode: generationMode });
       if (generationMode === "search") {
         this.currentCharacter = await window.characterSearch.generateCharacter(
           searchQuery, searchScenario, characterName,
@@ -1299,6 +1302,9 @@ class CharacterGeneratorApp {
         if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
         if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
       }
+      // Into History now, so a tab closed during the later steps doesn't take
+      // the card with it. The save at the end replaces this one.
+      this.saveDraftToHistory();
 
       this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
       // The player's own words, carried into the follow-up steps so play-style
@@ -1421,6 +1427,7 @@ class CharacterGeneratorApp {
       }
       this.hideResultSection();
     } finally {
+      this._endNewCard();
       this.isGenerating = false;
       this.setGeneratingState(false);
       const inputSectionDetails = document.getElementById("input-section-details");

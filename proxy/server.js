@@ -192,6 +192,110 @@ function parseStorableImageDataUrl(dataUrl) {
 // ── Per-user history (non-permanent auto-saves) stored as a local flat file ──
 const HISTORY_MAX = 30;
 
+function historyRequest(userId, method, suffix = "", body) {
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  return fetch(`${internalUrl}/api/proxy-data/history${suffix}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Id": String(userId),
+      "X-User-Name": "system",
+      "X-Internal-Secret": INTERNAL_API_SECRET,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+function removeHistoryCardFiles(imgDir, histId) {
+  for (const ext of [".img", ".mime"]) {
+    const f = path.join(imgDir, `${histId}${ext}`);
+    if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
+  }
+  deleteCardHistoryImages(imgDir, histId);
+}
+
+/**
+ * Save a card to History (the "Last 30" auto-saves) and return the item's id.
+ *
+ * `record.replaceHistoryId` naming an item that still exists updates that item
+ * in place. A new character is saved as soon as its text is parsed, so a tab
+ * that dies during the later steps doesn't take a paid card with it; the save
+ * at the end of the pipeline then replaces that draft instead of adding a
+ * second copy. An update with no portrait keeps the one already stored.
+ *
+ * Writes the one item and deletes only the items it evicts. (It used to rewrite
+ * the whole list from a read that returned [] on any error, so a failed read
+ * followed by a working write would have deleted every other item.) A failed
+ * write throws, so the caller reports the save as failed.
+ */
+async function saveHistoryCard(userId, record) {
+  await autoMigrateDataIfNeeded(userId, "system");
+  const char = record.character || record;
+  const now = new Date().toISOString();
+
+  let existingItems = null; // null = couldn't be read; then nothing is evicted
+  try {
+    const listRes = await historyRequest(userId, "GET");
+    if (listRes.ok) {
+      existingItems = (await listRes.json()).map((item) => ({
+        id: String(item.id),
+        createdAt: item.data?.createdAt || null,
+        updatedAt: item.data?.updatedAt || item.updated_at || null,
+      }));
+    }
+  } catch (_) { /* backend unreachable: the write below reports it */ }
+
+  const replaceId = typeof record.replaceHistoryId === "string" && /^h_[A-Za-z0-9_]{1,60}$/.test(record.replaceHistoryId)
+    ? record.replaceHistoryId
+    : null;
+  const existing = replaceId && existingItems ? existingItems.find((i) => i.id === replaceId) : null;
+  const histId = existing ? existing.id : `h_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const histCard = {
+    id: histId,
+    characterName: record.characterName || char.name || "Unnamed",
+    isPermanent: false,
+    createdAt: existing?.createdAt || record.createdAt || now,
+    updatedAt: now,
+    // Store the full character object so it can be loaded later
+    character: typeof record.character === "object" && record.character ? record.character : char,
+  };
+  if (record.draft) histCard.draft = true; // text only so far; the pipeline was still running
+
+  // Save portrait image locally (same mechanism as DB cards)
+  const imageBase64 = record.imageBase64 || "";
+  const imgDir = path.join(getUserDataDir(userId), "card-images");
+  if (imageBase64.startsWith("data:")) {
+    const parsed = parseStorableImageDataUrl(imageBase64);
+    if (parsed.ok) {
+      if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+      await Promise.all([
+        fsPromises.writeFile(path.join(imgDir, `${histId}.img`), Buffer.from(parsed.base64, "base64")),
+        fsPromises.writeFile(path.join(imgDir, `${histId}.mime`), parsed.mime),
+      ]);
+    }
+  }
+  // Save archived image history alongside the portrait
+  await saveCardHistoryImages(imgDir, histId, record.imageHistory);
+
+  const writeRes = await historyRequest(userId, "POST", "", { id: histId, data: histCard });
+  if (!writeRes.ok) throw new Error(`History save failed (${writeRes.status})`);
+
+  // Evict the oldest items over the cap, with their images.
+  if (existingItems && !existing) {
+    const overflow = existingItems.length + 1 - HISTORY_MAX;
+    if (overflow > 0) {
+      const age = (i) => Date.parse(i.updatedAt || i.createdAt || 0) || 0;
+      const evicted = [...existingItems].sort((a, b) => age(a) - age(b)).slice(0, overflow);
+      for (const old of evicted) {
+        await historyRequest(userId, "DELETE", `/${encodeURIComponent(old.id)}`).catch(() => { });
+        if (/^h_[A-Za-z0-9_]+$/.test(old.id)) removeHistoryCardFiles(imgDir, old.id);
+      }
+    }
+  }
+  return histId;
+}
+
 async function readHistory(userId) {
   await autoMigrateDataIfNeeded(userId, "system");
   const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
@@ -1023,49 +1127,9 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
     const char = record.character || record;
     const name = record.characterName || char.name || "Unnamed";
 
-    // ── Non-permanent (history/auto-save) → flat file, skip DB ───────────────
+    // ── Non-permanent (history/auto-save) → History, not the cards table ─────
     if (record.isPermanent === false) {
-      const histId = `h_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const now = new Date().toISOString();
-      const histCard = {
-        id: histId,
-        characterName: name,
-        isPermanent: false,
-        createdAt: record.createdAt || now,
-        updatedAt: now,
-        // Store the full character object so it can be loaded later
-        character: typeof record.character === "object" && record.character ? record.character : char,
-      };
-      // Save portrait image locally (same mechanism as DB cards)
-      const imageBase64 = record.imageBase64 || "";
-      const imgDir = path.join(getUserDataDir(req.user.userId), "card-images");
-      if (imageBase64.startsWith("data:")) {
-        const parsed = parseStorableImageDataUrl(imageBase64);
-        if (parsed.ok) {
-          if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
-          await Promise.all([
-            fsPromises.writeFile(path.join(imgDir, `${histId}.img`), Buffer.from(parsed.base64, "base64")),
-            fsPromises.writeFile(path.join(imgDir, `${histId}.mime`), parsed.mime),
-          ]);
-        }
-      }
-      // Save archived image history alongside the portrait
-      await saveCardHistoryImages(imgDir, histId, record.imageHistory);
-      // Persist and trim oldest items if over the cap
-      const histItems = await readHistory(req.user.userId);
-      histItems.push(histCard);
-      if (histItems.length > HISTORY_MAX) {
-        const removed = histItems.splice(0, histItems.length - HISTORY_MAX);
-        // Clean up portrait and history images for evicted entries
-        for (const old of removed) {
-          for (const ext of [".img", ".mime"]) {
-            const f = path.join(imgDir, `${old.id}${ext}`);
-            if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
-          }
-          deleteCardHistoryImages(imgDir, old.id);
-        }
-      }
-      await writeHistory(req.user.userId, histItems);
+      const histId = await saveHistoryCard(req.user.userId, record);
       return res.json({ ...record, id: histId });
     }
 
