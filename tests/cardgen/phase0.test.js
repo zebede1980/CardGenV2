@@ -69,6 +69,15 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   const names = history().map((h) => h.data.character.name);
   check("history is capped at 30", history().length === 30, history().length);
   check("the oldest were evicted, the newest kept", !names.includes("A") && !names.includes("B") && names.includes("N29") && names.includes("N0"), names.join(","));
+  // Deleting one History card touches that card only, even when the list can't be read.
+  const beforeDelete = history().length;
+  backend.failHistoryReads = true;
+  r = await api("DELETE", `/api/storage/cards/${history()[0].id}`, undefined, token);
+  backend.failHistoryReads = false;
+  check("deleting one History card removes exactly one, even if the list can't be read", r.status === 200 && history().length === beforeDelete - 1, `${r.status} ${history().length}/${beforeDelete}`);
+  r = await api("DELETE", "/api/storage/cards/h_..%2F..%2Fescape", undefined, token);
+  check("a path-like History id is refused", r.status === 400 && history().length === beforeDelete - 1, r.status);
+
   // start the browser part from a clean History
   for (const h of history()) await api("DELETE", `/api/storage/cards/${h.id}`, undefined, token);
   await until(() => history().length === 0, { what: "history cleared" });

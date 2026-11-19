@@ -318,60 +318,6 @@ async function readHistory(userId) {
   }
 }
 
-async function writeHistory(userId, items) {
-  await autoMigrateDataIfNeeded(userId, "system");
-  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
-
-  try {
-    // 1. Fetch current history from DB
-    const currentRes = await fetch(`${internalUrl}/api/proxy-data/history`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "X-User-Id": String(userId),
-        "X-User-Name": "system",
-        "X-Internal-Secret": INTERNAL_API_SECRET
-      }
-    });
-
-    if (currentRes.ok) {
-      const currentItems = await currentRes.json();
-      const newIds = new Set(items.map(i => String(i.id)));
-
-      // 2. Delete any items currently in DB that are NOT in the new list
-      for (const curr of currentItems) {
-        if (!newIds.has(String(curr.id))) {
-          await fetch(`${internalUrl}/api/proxy-data/history/${curr.id}`, {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-              "X-User-Id": String(userId),
-              "X-User-Name": "system",
-              "X-Internal-Secret": INTERNAL_API_SECRET
-            }
-          });
-        }
-      }
-    }
-
-    // 3. Upsert the items that are in the new list
-    for (const item of items) {
-      await fetch(`${internalUrl}/api/proxy-data/history`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Id": String(userId),
-          "X-User-Name": "system",
-          "X-Internal-Secret": INTERNAL_API_SECRET
-        },
-        body: JSON.stringify({ id: String(item.id || Date.now()), data: item })
-      });
-    }
-  } catch (e) {
-    console.error("Failed to write history:", e);
-  }
-}
-
 // Delete all archived history-image files for a card (e.g. ${cardId}_h0.img)
 async function deleteCardHistoryImages(imgDir, cardId) {
   let i = 0;
@@ -1223,14 +1169,17 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
 
   // ── History card (stored locally) ─────────────────────────────────────────
   if (String(cardId).startsWith("h_")) {
+    // The id becomes part of a file path below, so it has to look like one of ours.
+    if (!/^h_[A-Za-z0-9_]{1,60}$/.test(cardId)) return res.status(400).json({ error: "Invalid history id" });
     try {
-      const histItems = await readHistory(req.user.userId);
-      await writeHistory(req.user.userId, histItems.filter(c => String(c.id) !== String(cardId)));
-      for (const ext of [".img", ".mime"]) {
-        const f = path.join(imgDir, `${cardId}${ext}`);
-        if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
+      await autoMigrateDataIfNeeded(req.user.userId, req.user.username);
+      // This one item only. It used to re-save every other item from a read
+      // that returned [] on any error, which could delete all of History.
+      const removed = await historyRequest(req.user.userId, "DELETE", `/${encodeURIComponent(cardId)}`);
+      if (!removed.ok && removed.status !== 404) {
+        return res.status(502).json({ error: `History delete failed (${removed.status})` });
       }
-      deleteCardHistoryImages(imgDir, cardId);
+      removeHistoryCardFiles(imgDir, cardId);
       return res.json({ success: true });
     } catch (e) {
       return res.status(500).json({ error: e.message });
