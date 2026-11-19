@@ -14,6 +14,15 @@ RUN npm install --only=production
 
 # Copy proxy source
 COPY proxy/server.js ./
+COPY proxy/runs/ ./runs/
+
+# The browser's prompt code, which the proxy runs too for server-run
+# generations (proxy/runs/prompt-host.js). Listed one by one on purpose: a
+# change to any other front-end file then leaves this image, and the running
+# proxy with its in-flight jobs, alone. Keep in step with SHARED_SCRIPTS.
+COPY src/scripts/content-context.js src/scripts/name-bank-data.js src/scripts/name-bank.js \
+     src/scripts/api-character.js src/scripts/character-search.js src/scripts/character-generator.js \
+     ./src/scripts/
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \

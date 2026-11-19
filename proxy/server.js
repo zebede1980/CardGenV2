@@ -2756,6 +2756,102 @@ app.get("/api/jobs", requireAuth, (req, res) => {
   res.json({ jobs: list });
 });
 
+/**
+ * The upstream request for a text call: where it goes and what is sent. One
+ * place, used by the browser-facing route below and by server-run generations
+ * (callTextUpstream), so the two can't send differently shaped requests.
+ */
+function buildTextUpstreamRequest(apiUrl, body) {
+  // Append the endpoint path if not already present
+  const url = apiUrl.endsWith("/chat/completions") ? apiUrl : `${apiUrl}/chat/completions`;
+
+  // Add OpenRouter-specific headers if using OpenRouter
+  const additionalHeaders = apiUrl.includes("openrouter.ai")
+    ? {
+      "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
+      "X-Title": "SillyTavern Character Generator",
+    }
+    : {};
+
+  // Note: `??` not `||` — a caller asking for temperature: 0 (deterministic
+  // decoding) must not be silently coerced to 0.7 because 0 is falsy.
+  const requestBody = {
+    model: body.model,
+    messages: body.messages,
+    max_tokens: Math.max(body.max_tokens ?? 1000, MIN_TEXT_MAX_TOKENS),
+    temperature: body.temperature ?? 0.7,
+    stream: body.stream ?? false,
+  };
+  for (const key of TEXT_PASSTHROUGH_PARAMS) {
+    if (body[key] !== undefined) requestBody[key] = body[key];
+  }
+  if (requestBody.top_p === undefined) requestBody.top_p = DEFAULT_TEXT_TOP_P;
+
+  return { url, additionalHeaders, requestBody };
+}
+
+/**
+ * Call the text model with nobody on the other end of a socket: for
+ * generations the proxy runs itself (proxy/runs/card-runs.js). Resolves
+ * { content, finishReason, reasoningChars, usage } once the reply is complete;
+ * `onContent(text)` is called as it streams. Aborting `signal` rejects with an
+ * AbortError. A failed call rejects with "API Error: <status>" and never
+ * surfaces as an HTTP 401 to anyone.
+ */
+async function callTextUpstream({ apiUrl, apiKey, body, signal, onContent, onReasoning }) {
+  if (!apiKey) throw new Error("API key is required. Please configure your API settings.");
+  if (!apiUrl) throw new Error("API URL is required. Please configure your API Base URL in settings.");
+  const { url, additionalHeaders, requestBody } = buildTextUpstreamRequest(apiUrl, body);
+  const fetchOpts = {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...additionalHeaders },
+    body: JSON.stringify(requestBody),
+    signal,
+    timeout: TEXT_UPSTREAM_TIMEOUT_MS,
+  };
+  let response = await fetch(url, fetchOpts);
+  if (response.status === 401) {
+    response = await fetch(url, {
+      ...fetchOpts,
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey, ...additionalHeaders },
+    });
+  }
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    console.error("Text API error (server run):", response.status, details.slice(0, 300));
+    const error = new Error(`API Error: ${response.status} ${response.statusText || ""}`.trim());
+    error.status = response.status;
+    throw error;
+  }
+
+  if (!requestBody.stream) {
+    const data = await response.json();
+    const message = data.choices?.[0]?.message || {};
+    return {
+      content: message.content || "",
+      finishReason: data.choices?.[0]?.finish_reason || null,
+      reasoningChars: (message.reasoning || message.reasoning_content || "").length,
+      usage: data.usage || null,
+    };
+  }
+
+  return new Promise((resolve, reject) => {
+    let content = "";
+    let finishReason = null;
+    let reasoningChars = 0;
+    let usage = null;
+    const feed = makeSseContentExtractor({
+      onContent: (text) => { content += text; if (onContent) onContent(text); },
+      onFinishReason: (reason) => { finishReason = reason; },
+      onReasoning: (text) => { reasoningChars += text.length; if (onReasoning) onReasoning(text); },
+      onUsage: (u) => { usage = u; },
+    });
+    response.body.on("data", feed);
+    response.body.on("error", reject);
+    response.body.on("end", () => resolve({ content, finishReason: finishReason || "stop", reasoningChars, usage }));
+  });
+}
+
 // Proxy endpoint for text API
 app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
   // Declared outside the try so the catch below can distinguish a deliberate
@@ -2792,38 +2888,11 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
       });
     }
 
-    // Append the endpoint path if not already present
-    const fullTextUrl = apiUrl.endsWith("/chat/completions")
-      ? apiUrl
-      : `${apiUrl}/chat/completions`;
+    const { url: fullTextUrl, additionalHeaders, requestBody } = buildTextUpstreamRequest(apiUrl, req.body);
 
     console.log("Proxying text request to:", fullTextUrl);
     console.log("Model:", model);
     console.log("Messages count:", messages?.length || 0);
-
-    // Add OpenRouter-specific headers if using OpenRouter
-    const isOpenRouter = apiUrl.includes("openrouter.ai");
-    const additionalHeaders = isOpenRouter
-      ? {
-        "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
-        "X-Title": "SillyTavern Character Generator",
-      }
-      : {};
-
-    // Note: `??` not `||` — a caller asking for temperature: 0 (deterministic
-    // decoding) must not be silently coerced to 0.7 because 0 is falsy.
-    const requestBody = {
-      model,
-      messages,
-      max_tokens: Math.max(max_tokens ?? 1000, MIN_TEXT_MAX_TOKENS),
-      temperature: temperature ?? 0.7,
-      stream: stream ?? false,
-    };
-
-    for (const key of TEXT_PASSTHROUGH_PARAMS) {
-      if (req.body[key] !== undefined) requestBody[key] = req.body[key];
-    }
-    if (requestBody.top_p === undefined) requestBody.top_p = DEFAULT_TEXT_TOP_P;
 
     const upstreamAbort = new AbortController();
 
@@ -5403,6 +5472,50 @@ function extractNameFromUrl(url) {
     return "Imported Character";
   }
 }
+
+// ── Card runs: a new character made start to finish by the proxy ────────────
+// (proxy/runs/card-runs.js; plans/character-gen-backend-driven.md)
+
+function internalBackendHeaders(userId, extra = {}) {
+  return {
+    "Content-Type": "application/json",
+    "X-User-Id": String(userId),
+    "X-User-Name": "system",
+    "X-Internal-Secret": INTERNAL_API_SECRET,
+    ...extra,
+  };
+}
+
+/** The user's saved settings, for resuming a run when no page sent them. */
+async function loadUserConfig(userId) {
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const r = await fetch(`${internalUrl}/api/proxy-data/config`, { headers: internalBackendHeaders(userId) });
+  if (!r.ok) return null;
+  return (await r.json()).config_data || null;
+}
+
+/** Tell the backend a run has ended; it pushes if the page that started it is away. */
+async function reportRunDone(userId, payload) {
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  const r = await fetch(`${internalUrl}/api/push/internal/jobs-done`, {
+    method: "POST",
+    headers: internalBackendHeaders(userId, { "X-Proxy-Job": "1" }),
+    body: JSON.stringify(payload),
+    timeout: 20000,
+  });
+  if (!r.ok) console.warn(`[push] run-done report refused: ${r.status}`);
+}
+
+require("./runs/card-runs").register(app, {
+  requireAuth,
+  dataDir: DATA_DIR,
+  getUserDataDir,
+  callTextUpstream,
+  saveHistoryCard,
+  searchCharacter: (name, isFictional) => (BRAVE_SEARCH_ENABLED ? searchCharacterDetails(String(name || "").trim(), !!isFictional) : null),
+  reportDone: reportRunDone,
+  loadUserConfig,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 

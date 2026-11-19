@@ -117,6 +117,7 @@ function startModel() {
     // kind -> { afterChunks, release() } : the stream pauses there until released
     holds: {},
     failNext: {},         // kind -> status code to fail the next call with
+    failAll: {},          // kind -> status code to fail every call with, until removed
   };
   control.hold = (kind, afterChunks = 2) => {
     let release;
@@ -138,8 +139,8 @@ function startModel() {
     const body = JSON.parse((await readBody(req)).toString() || "{}");
     const kind = replyKind(body);
     control.calls.push({ kind, stream: !!body.stream, body, at: Date.now() });
-    if (control.failNext[kind]) {
-      const status = control.failNext[kind];
+    if (control.failNext[kind] || control.failAll[kind]) {
+      const status = control.failNext[kind] || control.failAll[kind];
       delete control.failNext[kind];
       res.writeHead(status, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: { message: `fake failure ${status}` } }));
@@ -256,7 +257,12 @@ async function start({ repo, stageDir, quiet = true }) {
   // Stage the proxy exactly as its Dockerfile lays it out, plus shared code.
   fs.rmSync(stageDir, { recursive: true, force: true });
   copyDir(path.join(repo, "proxy"), path.join(stageDir, "proxy"));
-  copyDir(path.join(repo, "src", "shared"), path.join(stageDir, "src", "shared"));
+  // The prompt files the proxy shares with the page: only the ones its image copies.
+  const { SHARED_SCRIPTS } = require(path.join(repo, "proxy", "runs", "prompt-host.js"));
+  fs.mkdirSync(path.join(stageDir, "src", "scripts"), { recursive: true });
+  for (const name of SHARED_SCRIPTS) {
+    fs.copyFileSync(path.join(repo, "src", "scripts", name), path.join(stageDir, "src", "scripts", name));
+  }
 
   const proxyPort = await new Promise((resolve) => {
     const s = http.createServer();
@@ -301,10 +307,10 @@ async function start({ repo, stageDir, quiet = true }) {
   let proxy = spawnProxy();
   await waitHealthy();
 
-  const api = async (method, p, body, token) => {
+  const api = async (method, p, body, token, headers = {}) => {
     const res = await fetch(url + p, {
       method,
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await res.text();
@@ -329,8 +335,15 @@ async function start({ repo, stageDir, quiet = true }) {
   };
   await api("POST", "/api/config", config, token);
 
+  const register = async () => {
+    const name = `tester${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const r = await api("POST", "/api/auth/register", { username: name, password: "password123" });
+    const who = await api("GET", "/api/auth/me", undefined, r.json.token);
+    return { token: r.json.token, userId: who.json.userId };
+  };
+
   return {
-    url, token, userId, username, config, api,
+    url, token, userId, username, config, api, register, stageDir,
     model: model.control,
     backend: backend.state,
     proxyLogs: logs,
