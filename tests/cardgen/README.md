@@ -22,6 +22,15 @@ PROXY_NODE_MODULES=~/cardgen-test-deps/proxydeps/node_modules \
 node tests/cardgen/phase0.test.js
 ```
 
+The same two variables run the rest:
+
+| File | Browser? | What it covers |
+|---|---|---|
+| `parser.test.js` | no | the card parser |
+| `runs.test.js` | no | the run engine through the real proxy: a whole card with nobody watching, stop, resume, a proxy restart mid-run, errors, limits |
+| `phase0.test.js` | WebKit | History drafts, recovery after a discarded tab, streamed single calls (setting off) |
+| `runs-page.test.js` | WebKit | card runs from the page: hidden page, discarded tab, attach on reload, Stop, restart, two devices; and that the proxy's prompt host builds the same requests as the page |
+
 `stack.js` is the shared stack: `model.hold(kind)` pauses a model reply mid-stream so a test can
 close the page at that point (a discarded tab), then `release()` lets the proxy finish on its own.
 What these cannot show is real iOS behaviour: a frozen page, a real lock, Safari's own discard.

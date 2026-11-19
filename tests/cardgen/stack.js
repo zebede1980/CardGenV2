@@ -160,7 +160,7 @@ function startModel() {
       if (hold && i === hold.afterChunks) {
         hold.reached = true;
         await hold.gate;
-        delete control.holds[kind];
+        if (control.holds[kind] === hold) delete control.holds[kind];
       }
       if (aborted) return;
       res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: chunks[i] } }] })}\n\n`);
@@ -360,4 +360,4 @@ async function start({ repo, stageDir, quiet = true }) {
   };
 }
 
-module.exports = { start, sleep };
+module.exports = { start, sleep, replyKind, REPLIES };

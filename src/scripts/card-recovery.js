@@ -101,10 +101,21 @@ window.NewCardMarker = NewCardMarker;
 
 Object.assign(CharacterGeneratorApp.prototype, {
 
-  /** A new-card pipeline on this page has ended, whichever way. */
-  _endNewCard() {
+  /** A new-card pipeline is starting on this page. Returns its token for _endNewCard. */
+  _beginNewCard() {
+    this._newCardFlow = (this._newCardFlow || 0) + 1;
+    return this._newCardFlow;
+  },
+
+  /**
+   * A new-card pipeline on this page has ended, whichever way. Returns false,
+   * and touches nothing, if a newer pipeline has started since `flow` did.
+   */
+  _endNewCard(flow) {
+    if (flow !== undefined && flow !== this._newCardFlow) return false;
     this._draftHistorySave = null;
     NewCardMarker.clear();
+    return true;
   },
 
   /**
@@ -113,10 +124,26 @@ Object.assign(CharacterGeneratorApp.prototype, {
    */
   async recoverNewCard() {
     const marker = NewCardMarker.read();
+    if (marker) {
+      // Another tab is still making it: the marker is that tab's, so leave it be.
+      if (await NewCardMarker.ownerIsAlive(marker)) return false;
+      if (this.isGenerating || this.currentCharacter) return false; // something newer is already on screen
+    }
+
+    // A card run on the proxy (card-runs.js): this page's own, named in the
+    // marker, or one in progress for this user that another device started.
+    if (marker?.runId || (!marker && this.serverRunsEnabled?.())) {
+      try {
+        if (await this.recoverCardRun(marker)) {
+          NewCardMarker.clear();
+          return true;
+        }
+      } catch (error) {
+        console.warn("[recovery] could not pick up the card run:", error);
+      }
+    }
     if (!marker) return false;
-    // Another tab is still making it: the marker is that tab's, so leave it be.
-    if (await NewCardMarker.ownerIsAlive(marker)) return false;
-    if (this.isGenerating || this.currentCharacter) return false; // something newer is already on screen
+
     try {
       let missing;
       if (marker.historyId) {

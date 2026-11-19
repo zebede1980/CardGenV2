@@ -347,6 +347,9 @@ class Config {
         retryDelay: 1000,
         debugMode: false,
         enableImageGeneration: true,
+        // New characters are made by a card run on the proxy instead of by
+        // this page (proxy/runs/card-runs.js). Off until proven on the phone.
+        serverRuns: false,
         creator: "",
         // Cultural default for generated characters — names, nationality and
         // setting. "western" (the default) is Anglo-led with continental
@@ -528,6 +531,9 @@ class Config {
     )?.checked;
     if (enableImageGeneration !== undefined)
       this.config.app.enableImageGeneration = enableImageGeneration;
+
+    const serverRuns = document.getElementById("server-runs")?.checked;
+    if (serverRuns !== undefined) this.config.app.serverRuns = serverRuns;
 
     const characterCulture = document.getElementById("character-culture")?.value;
     if (characterCulture) this.config.app.characterCulture = characterCulture;
@@ -718,6 +724,9 @@ class Config {
     if (enableImageGeneration)
       enableImageGeneration.checked =
         this.config.app.enableImageGeneration !== false;
+
+    const serverRunsEl = document.getElementById("server-runs");
+    if (serverRunsEl) serverRunsEl.checked = this.config.app.serverRuns === true;
 
     const characterCultureEl = document.getElementById("character-culture");
     if (characterCultureEl)

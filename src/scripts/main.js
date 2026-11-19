@@ -649,6 +649,14 @@ class CharacterGeneratorApp {
       if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); this.handleGenerate(); }
     });
 
+    const serverRunsToggle = document.getElementById("server-runs");
+    if (serverRunsToggle) {
+      serverRunsToggle.addEventListener("change", () => {
+        this.config.loadFromForm();
+        this.config.saveConfig();
+      });
+    }
+
     // Image generation toggle
     const enableImageGenerationToggle = document.getElementById("enable-image-generation");
     if (enableImageGenerationToggle) {
@@ -1214,6 +1222,7 @@ class CharacterGeneratorApp {
     }
 
     this.isGenerating = true;
+    const flow = this._beginNewCard();
     this.setGeneratingState(true);
     // A Stop between two requests has nothing in flight to abort, so each step
     // below checks this mark before carrying on.
@@ -1281,37 +1290,60 @@ class CharacterGeneratorApp {
 
       this.showStreamMessage("🚀 Starting character generation...\n\n");
       NewCardMarker.begin({ cardType, pov, mode: generationMode });
-      if (generationMode === "search") {
-        this.currentCharacter = await window.characterSearch.generateCharacter(
-          searchQuery, searchScenario, characterName,
-          (token, fullContent) => this.handleCharacterStream(token, fullContent),
-          pov, this.lorebookData, cardType,
-        );
-      } else {
-        this.currentCharacter = await this.characterGenerator.generateCharacter(
-          effectiveConcept, characterName,
-          (token, fullContent) => this.handleCharacterStream(token, fullContent),
-          pov, this.lorebookData, cardType,
-        );
-      }
-      window.apiHandler.throwIfStopped(stopMark);
-
-      // Stamp cardType on the character and auto-tag non-single types
-      this.currentCharacter.cardType = cardType;
-      if (cardType === "group" || cardType === "scenario") {
-        if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
-        if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
-      }
-      // Into History now, so a tab closed during the later steps doesn't take
-      // the card with it. The save at the end replaces this one.
-      this.saveDraftToHistory();
-
-      this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
       // The player's own words, carried into the follow-up steps so play-style
       // requirements survive even if the card itself didn't capture them.
       const brief = generationMode === "search" ? searchScenario : concept;
-      await this.fillFinishingFields(this.currentCharacter, { brief });
-      window.apiHandler.throwIfStopped(stopMark);
+
+      if (this.serverRunsEnabled()) {
+        // The proxy writes the card and its finishing fields (a card run), so
+        // they carry on if this page is frozen or discarded, and the card is
+        // in History either way. This page shows the progress, then does the
+        // steps that still need it (cast, portrait).
+        this.currentCharacter = await this.runNewCardOnServer({
+          mode: generationMode,
+          concept: effectiveConcept,
+          brief,
+          searchQuery,
+          searchScenario,
+          characterName,
+          pov,
+          cardType,
+          lorebook: this.lorebookData,
+          exampleCount: parseInt(document.getElementById("example-messages-count")?.value || "3", 10),
+          exampleStyle: document.getElementById("example-messages-prompt")?.value?.trim() || "",
+          referenceImage: this.referenceImageDataUrl || "",
+        });
+        window.apiHandler.throwIfStopped(stopMark);
+      } else {
+        if (generationMode === "search") {
+          this.currentCharacter = await window.characterSearch.generateCharacter(
+            searchQuery, searchScenario, characterName,
+            (token, fullContent) => this.handleCharacterStream(token, fullContent),
+            pov, this.lorebookData, cardType,
+          );
+        } else {
+          this.currentCharacter = await this.characterGenerator.generateCharacter(
+            effectiveConcept, characterName,
+            (token, fullContent) => this.handleCharacterStream(token, fullContent),
+            pov, this.lorebookData, cardType,
+          );
+        }
+        window.apiHandler.throwIfStopped(stopMark);
+
+        // Stamp cardType on the character and auto-tag non-single types
+        this.currentCharacter.cardType = cardType;
+        if (cardType === "group" || cardType === "scenario") {
+          if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
+          if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
+        }
+        // Into History now, so a tab closed during the later steps doesn't take
+        // the card with it. The save at the end replaces this one.
+        this.saveDraftToHistory();
+
+        this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
+        await this.fillFinishingFields(this.currentCharacter, { brief });
+        window.apiHandler.throwIfStopped(stopMark);
+      }
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 
@@ -1427,11 +1459,14 @@ class CharacterGeneratorApp {
       }
       this.hideResultSection();
     } finally {
-      this._endNewCard();
-      this.isGenerating = false;
-      this.setGeneratingState(false);
-      const inputSectionDetails = document.getElementById("input-section-details");
-      if (inputSectionDetails) inputSectionDetails.open = false;
+      // Stop frees the form at once, so a new generation can begin before this
+      // one has finished unwinding. Only the newest one may reset the form.
+      if (this._endNewCard(flow)) {
+        this.isGenerating = false;
+        this.setGeneratingState(false);
+        const inputSectionDetails = document.getElementById("input-section-details");
+        if (inputSectionDetails) inputSectionDetails.open = false;
+      }
     }
   }
 
@@ -1496,6 +1531,9 @@ class CharacterGeneratorApp {
     }
     if (this.isGenerating) {
       this.showStreamMessage("\n\n🛑 Stopping generation...\n");
+      // A card run lives on the proxy: it has to be told, or it would finish
+      // (and bill) with nobody watching.
+      this.stopCardRun?.();
       window.apiHandler.stopGeneration();
       this.isGenerating = false;
       this.setGeneratingState(false);

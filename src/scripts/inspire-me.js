@@ -154,6 +154,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Follow the same pattern as handleGenerate()
     this.isGenerating = true;
+    const flow = this._beginNewCard();
     const stopMark = window.apiHandler.stopMark();
     this.setGeneratingState(true);
 
@@ -321,11 +322,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
       this.hideResultSection();
     } finally {
-      this._endNewCard();
-      this.isGenerating = false;
-      this.setGeneratingState(false);
-      const inputSectionDetails = document.getElementById("input-section-details");
-      if (inputSectionDetails) inputSectionDetails.open = false;
+      // Stop frees the form at once, so a new generation can begin before this
+      // one has finished unwinding. Only the newest one may reset the form.
+      if (this._endNewCard(flow)) {
+        this.isGenerating = false;
+        this.setGeneratingState(false);
+        const inputSectionDetails = document.getElementById("input-section-details");
+        if (inputSectionDetails) inputSectionDetails.open = false;
+      }
     }
   },
 
