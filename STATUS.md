@@ -1,24 +1,77 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-16 (🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-19 (Character Gen backend-driven phases 0–2 committed, not deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Character Gen backend-driven: plan only (2026-11-19) — `plans/character-gen-backend-driven.md`
+## Character Gen backend-driven (2026-11-19) — phases 0–2 committed, **not pushed, not deployed**
 
-Nothing built. Finding: Generate is a chain of 5–12 requests conducted by page JavaScript. Each
-request is resumable, the chain isn't: a locked phone stops after the step in flight, and a
-discarded tab loses a paid card (saved only at the last step; nothing collects pending jobs on
-load). Plan: a "card run" executed by the **proxy** (prompt code and image pipeline are already JS),
-state in a file per run, card saved to History as soon as the text parses, one push at the end,
-page polls like auto-written stories. The big cost is phase 1: moving the prompt builders, parser,
-Looks and name bank into `src/shared/` modules that Node can load, guarded by golden tests.
-Phase 0 (small, independent): save the card after the text step, make the remaining single calls
-streamed + resumable, collect pending jobs on load, fix the two parser bugs. Five decisions wait
-on Joe at the end of the plan.
+Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the
+deviations). Built while Joe was in meetings, on his instruction to carry on through the phases.
+Deploy needs **proxy + frontend** (the proxy image changed: check its build output, since the new
+`COPY` lines were only checked by a folder-layout test, Docker Desktop being off on the PC).
+
+**Phase 0, on for everyone (no setting):**
+- **Every single-field call is a resumable stream** (`APIHandler.streamedText`, `api.js`): Redo,
+  example messages, notes, post-history, tags, name ideas, alt greeting, consistency check, Revise,
+  the Inspire and 4-ideas brainstorms, image analysis, style extraction, prompt shortening. Nine were
+  non-streamed (iOS 60 s cut and re-send). An empty reply no longer falls back to the model's reasoning.
+- **A new card is saved to History as soon as its text is parsed** (a draft; `saveDraftToHistory`),
+  and the save at the end replaces that item (`replaceHistoryId`). Stop after the text step now
+  leaves the card in History.
+- **Recovery after a discarded tab** (`card-recovery.js`): a marker in localStorage
+  (`cardgen.newCard.v1`); a page that loads and finds one nobody finished puts the card back, from
+  History (applying a finishing-fields reply the proxy still holds) or from the held card job. No paid
+  calls; it says what is still missing. A second tab asks the first over a BroadcastChannel first.
+- **Parser** (`character-generator.js`): scenario titles read from the plain `# Title` header; "The
+  Red Cobras" no longer turns every "The" into `{{char}}` (`ORDINARY_WORDS`); "The name's X" only
+  looked for in the description.
+- **Proxy History saves** (`saveHistoryCard`) write one item and evict the oldest by date. Before,
+  every save rewrote the whole list from a read that returned `[]` on any error, so a failed read
+  followed by a working write would have deleted all of History. A failed write is now reported.
+  The client-side trim (it downloaded every card on each save) is gone.
+- **Fix:** a pipeline still unwinding after Stop no longer resets the form of a generation started
+  straight after it (`_beginNewCard` / `_endNewCard(flow)`; classic, 4 ideas, Inspire Me).
+
+**Phases 1–2, behind Settings → "Make new characters on the server (beta)" (`app.serverRuns`, off):**
+- **Card runs** (`proxy/runs/card-runs.js`): `POST /api/card-runs` and the proxy writes the card,
+  parses it, saves it to History, writes the finishing fields, saves again and reports once. Routes:
+  `GET /api/card-runs[/:id]`, `/:id/stop`, `/:id/resume`, `/active-count` (how many are running:
+  a replacement for reading `docker logs` before a rebuild). State is one JSON file per run in
+  `proxy/data/users/<id>/runs/`, written after every step, kept 24 h; API keys stay in memory. A
+  proxy restart leaves a run "interrupted" and Resume carries on from the first unfinished step.
+- **The proxy runs the browser's own prompt files** (`proxy/runs/prompt-host.js`): `api-character.js`,
+  the name bank, the parser and `character-search.js` are loaded into a Node `vm` sandbox with a
+  server-side `APIHandler` (`host-api.js`). No second copy of any prompt. **Those six files now run
+  in two places**: a change in them that reaches for `document` breaks server runs, and the tests say so.
+  `Dockerfile.proxy` copies them one by one (`SHARED_SCRIPTS`), so other front-end changes still
+  leave the proxy container alone.
+- **The page** (`card-runs.js`) polls every 1.5 s while visible and not at all while hidden; no
+  watchdog, no resume loop. Stop reaches the server. On load it attaches to a run in progress (its
+  own, or one another device started: an onlooker never draws a portrait) or shows one that finished
+  while it was away. Supporting cast and the **portrait are still the page's steps**: a card whose
+  page went away is in History complete but with no portrait (phase 3).
+- Name history for server runs is per user in `users/<id>/cardgen-state.json`, separate from each
+  device's own list.
+- 4 ideas and Inspire Me still use the page pipeline (phase 4).
+
+**Tests** (`tests/cardgen/`, README there; needs playwright-core and the proxy's packages outside the
+repo): the **real** `proxy/server.js` against a fake backend and a fake streaming model, and the real
+page in headless WebKit at 390 px. 185 checks: parser 19, run engine 46 (also in the image's folder
+layout), phase 0 page 48, runs from the page 46 (hidden page, discarded tab, attach on reload, Stop,
+proxy restart, two devices) including that the prompt host sends **the same requests as the page**
+for single (third and first person), group and scenario cards.
+**Not tested:** a real model, a real iPhone (a frozen page, a real lock, Safari's own discard), a real
+`docker build` of the proxy image, a real push, web search with a Brave key, the PIN lock over a run.
+
+**To try on the iPhone after deploying:** with the setting **off**: start a card, close the app from
+the switcher during "example messages", reopen: the card should come back. With it **on**: start a
+card and lock the phone straight away for two minutes; unlock: the card and its fields should be
+there at once, then the portrait is drawn. Then start one and close the app: a push should arrive,
+and the card is in History.
 
 ## 🔒 App lock PIN (2026-11-16) — deployed 2026-11-16 (`f75c959`, proxy + frontend)
 
@@ -1023,13 +1076,7 @@ stored in history, the output-token cap.)
   scan reads `<think>` text; speaker routing matches "Ann" inside "Annabel".
 
 Character Gen (`character-generator.js`, `api-character.js`, `main.js`):
-- **"The …" names break macro enforcement:** the first-word regex turns every "The" in a group or
-  scenario card into `{{char}}`.
-- **`ec485d2` regressed scenario titles starting "The …":** scenario headers have no "'s Profile",
-  the old "X is…" scan accepted "The Haunted Lighthouse is…", the new one rejects "The" and then
-  the unanchored first-person regex scans the whole card and can pick a name out of dialogue.
-- Revise, Remaster, field Redo, example messages and alt greetings stream without `resumable`;
-  Inspire Me and batch ideas are non-streamed (iOS 60 s cut, double charge).
+- (Fixed 2026-11-19: "The …" names, scenario titles, and the non-resumable / non-streamed calls.)
 - Example Messages textarea has no input listener, so edits are lost on Save.
 - A failed generation collapses the inputs panel (blank phone screen); Stop between the prompt
   save and the card call still pays for a card; the name shortlist contradicts a typed name; Redo

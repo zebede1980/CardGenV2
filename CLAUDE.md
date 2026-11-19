@@ -45,6 +45,18 @@ halfway through this?*
 - **App lock** (`src/scripts/app-lock.js`, the 🔒 PIN screen) is an opaque layer over the app and
   nothing else. Locking must never pause, abort or reload anything: the app boots and generations
   carry on behind the PIN screen.
+- **A new card is in History as soon as its text is parsed** (a draft that the final save replaces),
+  and a marker in `localStorage` lets the next page load put it back if the tab was discarded
+  part-way (`src/scripts/card-recovery.js`). Recovery never makes a paid call.
+- **Card runs** (Settings → "Make new characters on the server", `app.serverRuns`): the proxy
+  conducts the card and its finishing fields itself (`proxy/runs/card-runs.js`) and the page only
+  polls while visible (`src/scripts/card-runs.js`). Nothing in that path may depend on the page
+  being alive. Plan and state: `plans/character-gen-backend-driven.md`.
+- **Six front-end files also run inside the proxy** (`SHARED_SCRIPTS` in `proxy/runs/prompt-host.js`:
+  `content-context.js`, the name bank, `api-character.js`, `character-search.js`,
+  `character-generator.js`). Keep them free of `document`, DOM elements and page-only globals, and
+  when adding one to the list add it to `Dockerfile.proxy` too. Changing any of them rebuilds the
+  proxy image.
 
 Chat, Story Writer and Adventure stream from the Python backend (`/api/sw/*`) with their own
 readers in `chat-handler.js`, `storywriter.js` and `adventure-handler.js`. They are separate from
@@ -59,6 +71,9 @@ the `api.js` path above, so check them on their own when changing shared behavio
   (`visibilityState`), timers firing late after sleep, and the socket dropping while hidden then
   recovering on unlock. Not just the happy path.
 - Say plainly what was tested headlessly versus on a real iPhone.
+- `tests/cardgen/` runs the real proxy against a fake backend and model, and the real page in
+  headless WebKit (README there). Run it after touching Character Gen's requests, History saves,
+  the shared prompt files or `proxy/runs/`.
 
 ## Deploying
 

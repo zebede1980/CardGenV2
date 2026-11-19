@@ -1,6 +1,45 @@
 # Character Gen: making it backend-driven
 
-Written 2026-11-19 from a read of the code at `4e98809`. Nothing here is built.
+Written 2026-11-19 from a read of the code at `4e98809`. **Phases 0 to 2 are built** (same day,
+not deployed): see "What was built" straight below, which also says where the build departed from
+this plan. The rest of the document is the plan as written.
+
+## What was built (2026-11-19), and where it departs from the plan
+
+| Phase | State |
+|---|---|
+| 0 | Done. On for everyone |
+| 1 | Done, and much smaller than planned (below) |
+| 2 | Done, behind Settings → "Make new characters on the server (beta)", off by default |
+| 3 to 5 | Not started |
+
+**Phase 1 was not a rewrite.** The plan expected to move every prompt builder into `src/shared/`
+modules that take a settings object, with golden tests guarding thousands of moved lines. A probe
+showed the browser's prompt files already load and run in a bare Node sandbox without touching the
+page. So the proxy loads those same files (`proxy/runs/prompt-host.js`) and supplies a server-side
+`APIHandler` for them to extend. Nothing was moved and there is still one copy of every prompt. The
+"golden test" became a direct comparison: the same inputs through the real page and through the
+proxy's host must produce the same requests, and do, for all four card kinds. The price is that
+six front-end files (`SHARED_SCRIPTS`) now also run on the server and must stay free of page access.
+
+**Decisions taken as recommended:** the proxy conducts (1); run state is a file per run on the
+proxy's disk (5); progress is polled every 1.5 s (4); Stop keeps the card in History as a draft (3).
+Decision 2, how far to go, is still open.
+
+**The working-card id is simply the History item.** Phase 2 did not need a new kind of record:
+`replaceHistoryId` lets a save update a History item in place, and that id is what a run, the
+page's last save and the recovery code all refer to.
+
+**Settings travel with the request.** The page sends its settings object when it starts a run, so
+the run uses exactly what the page would have, including a change made a second earlier. Only a
+Resume with no page settings falls back to the saved copy.
+
+**Still the page's job after phase 2:** saving the prompt to the library (the 41 MB download is
+untouched), supporting cast, the portrait, and everything on 4 ideas and Inspire Me.
+
+**Things found on the way and fixed:** History saves could wipe the whole list after one failed read;
+a second tab cleared the first tab's recovery marker; a stopped pipeline's cleanup reset the form of
+the next generation.
 
 ## The short version
 
