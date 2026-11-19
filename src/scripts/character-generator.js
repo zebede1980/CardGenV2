@@ -46,20 +46,29 @@ class CharacterGenerator {
     const isPlaceholder = (name) => !name || /\{\{|\}\}|\[|\]|^char$|character name/i.test(name);
     const clean = (name) => name.replace(/^[*_"“”\s]+|[*_"“”\s]+$/g, "").trim();
 
-    const header = text.match(/^#\s*(.+?)(?:['’]s|['’])\s+Profile\s*$/im);
+    const header = text.match(CharacterGenerator.PROFILE_HEADER_RE);
     if (header && !isPlaceholder(clean(header[1]))) return clean(header[1]);
+
+    // Scenario cards are headed "# The Haunted Lighthouse", with no
+    // "'s Profile". Take the card's opening heading as the title. Without
+    // this, any title starting "The" fell through to the sentence scans below,
+    // which reject "The…" and then took a name out of the dialogue.
+    const title = this._plainTitle(text);
+    if (title && !isPlaceholder(clean(title))) return clean(title);
 
     const word = "\\p{Lu}[\\p{L}\\p{M}'’-]*";
     const particle = "(?:van|von|de|del|della|der|den|di|da|du|la|le|bin|ibn|al|el|of)";
     const name = `${word}(?:\\s+(?:${particle}\\s+)*${word}){0,4}`;
 
+    // Both sentence scans read the description only (before ## Personality),
+    // so a later "She is…" or a line of dialogue can't be taken for a name.
+    const description = text.split(/^##\s*(?:My\s+)?Personality/im)[0];
+
     // First person: "The name's Name"
-    const firstPerson = text.match(new RegExp(`The name['’]s\\s+(${name})`, "u"));
+    const firstPerson = description.match(new RegExp(`The name['’]s\\s+(${name})`, "u"));
     if (firstPerson) return firstPerson[1].trim();
 
-    // Third person: "Name is…" opening a line of the description (before
-    // ## Personality), so a later "She is…" can't be taken for a name.
-    const description = text.split(/^##\s*(?:My\s+)?Personality/im)[0];
+    // Third person: "Name is…" opening a line.
     const notName = "(?:He|She|They|It|This|That|The|There|Her|His|Their|A|An|What|Who)\\b";
     const thirdPerson = description.match(
       new RegExp(`^[*_\\s]*(?!${notName})(${name})[*_]*\\s+(?:is|was)\\b`, "mu"),
@@ -67,6 +76,20 @@ class CharacterGenerator {
     if (thirdPerson) return thirdPerson[1].trim();
 
     return "";
+  }
+
+  // The card's opening "# Heading" when it is a bare title rather than
+  // "# Name's Profile" or one of the template's own sections. "" otherwise.
+  _plainTitle(rawData) {
+    const first = (rawData || "").match(/^#(?!#)\s*(.+?)\s*$/m);
+    if (!first) return "";
+    const heading = first[1].replace(/^[*_\s]+|[*_\s]+$/g, "");
+    if (CharacterGenerator.PROFILE_HEADER_RE.test(`# ${heading}`)) return "";
+    if (/^(?:The Roleplay|First Message|(?:My\s+)?Personality)/i.test(heading)) return "";
+    // It has to open the card: a "##" section before it means it isn't the title.
+    const firstSection = rawData.search(/^##/m);
+    if (firstSection !== -1 && firstSection < first.index) return "";
+    return heading;
   }
 
   // Parse character data using simple string splitting based on template
@@ -107,7 +130,9 @@ class CharacterGenerator {
       descContent = descContent.replace(/^#\s*[^#\n]+\n+/, "").trim();
 
       if (character.name && character.name !== "Unknown Character") {
-        character.description = `# ${character.name}'s Profile\n\n${descContent}`;
+        // A scenario card keeps its bare "# Title" header.
+        const heading = this._plainTitle(rawData) ? character.name : `${character.name}'s Profile`;
+        character.description = `# ${heading}\n\n${descContent}`;
       } else {
         character.description = descContent;
       }
@@ -155,9 +180,16 @@ class CharacterGenerator {
         const escapedFullName = character.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const fullRegex = new RegExp(`\\b${escapedFullName}\\b`, 'g');
         
+        // The first name on its own is replaced too ("Mira" for "Mira Okafor"),
+        // unless it is also an ordinary word. "The Red Cobras" used to turn
+        // every "The" in the card into {{char}}, and "Will Turner" every
+        // sentence that began "Will…".
         let firstRegex = null;
         const nameParts = character.name.split(" ");
-        if (nameParts.length > 1 && nameParts[0].length > 2) {
+        if (
+          nameParts.length > 1 && nameParts[0].length > 2 &&
+          !CharacterGenerator.ORDINARY_WORDS.has(nameParts[0].toLowerCase().replace(/[^a-z]/g, ""))
+        ) {
           const escapedFirstName = nameParts[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           firstRegex = new RegExp(`\\b${escapedFirstName}\\b`, 'g');
         }
@@ -171,20 +203,16 @@ class CharacterGenerator {
 
         if (character.description) {
           const lines = character.description.split('\n');
-          let safeStartIndex = 0;
-          let foundIntro = false;
-          
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim() !== '' && !lines[i].startsWith('#') && !lines[i].startsWith('**') && !foundIntro) {
-              foundIntro = true;
-              continue; // Skip the intro paragraph where name is allowed
-            }
-            if (foundIntro) {
-              safeStartIndex = i;
-              break;
-            }
-          }
-          
+          // The name is allowed in the header and the intro paragraph, so
+          // enforcement starts on the line after the intro. With no intro it
+          // starts after the header (it used to start at line 0 and rewrite
+          // the header itself).
+          const introIndex = lines.findIndex(
+            (line) => line.trim() !== '' && !line.startsWith('#') && !line.startsWith('**'),
+          );
+          const headerIndex = lines.findIndex((line) => line.startsWith('#'));
+          const safeStartIndex = (introIndex !== -1 ? introIndex : headerIndex) + 1;
+
           for (let i = safeStartIndex; i < lines.length; i++) {
             lines[i] = enforceMacro(lines[i]);
           }
@@ -262,6 +290,28 @@ class CharacterGenerator {
     return spec;
   }
 }
+
+// "# Name's Profile", with a straight or curly apostrophe ("# Silas' Profile" too).
+CharacterGenerator.PROFILE_HEADER_RE = /^#\s*(.+?)(?:['’]s|['’])\s+Profile\s*$/im;
+
+// First words of a name that are also ordinary words, so can't be swapped for
+// {{char}} wherever they appear: articles and titles (group and scenario
+// names), and given names that double as common words.
+CharacterGenerator.ORDINARY_WORDS = new Set(
+  (
+    "the a an old new big little great grand saint mister miss mrs lady lord sir dame doctor captain " +
+    "father mother sister brother uncle aunt king queen prince princess duke house club team order " +
+    "project operation black white red blue green gold silver iron dark last first lost " +
+    "will may grace rose hope mark faith joy bill art rob sue pat don frank jack lance chase hunter " +
+    "summer autumn winter april june august dawn ivy violet amber crystal ruby pearl jade sky rain " +
+    "storm wolf fox raven angel destiny chance miles guy rich bob dot gene ray rod victor earl major " +
+    "dean reed heath cliff glen dale brook river forest sage basil olive holly daisy lily iris poppy " +
+    "penny sandy misty star sunny love honor justice gray grey brown christian norman carol bell " +
+    "belle page mason carter cooper parker tanner archer fisher baker sterling drew wade pierce chip " +
+    "buck bud rusty sonny junior patience prudence charity trinity serenity harmony melody candy " +
+    "ginger pepper sunshine bear colt ash cash ace blaze flint stone rocky cole"
+  ).split(" "),
+);
 
 // Export singleton instance
 window.characterGenerator = new CharacterGenerator();
