@@ -7,6 +7,19 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Character Gen backend-driven: plan only (2026-11-19) — `plans/character-gen-backend-driven.md`
+
+Nothing built. Finding: Generate is a chain of 5–12 requests conducted by page JavaScript. Each
+request is resumable, the chain isn't: a locked phone stops after the step in flight, and a
+discarded tab loses a paid card (saved only at the last step; nothing collects pending jobs on
+load). Plan: a "card run" executed by the **proxy** (prompt code and image pipeline are already JS),
+state in a file per run, card saved to History as soon as the text parses, one push at the end,
+page polls like auto-written stories. The big cost is phase 1: moving the prompt builders, parser,
+Looks and name bank into `src/shared/` modules that Node can load, guarded by golden tests.
+Phase 0 (small, independent): save the card after the text step, make the remaining single calls
+streamed + resumable, collect pending jobs on load, fix the two parser bugs. Five decisions wait
+on Joe at the end of the plan.
+
 ## 🔒 App lock PIN (2026-11-16) — deployed 2026-11-16 (`f75c959`, proxy + frontend)
 
 Joe asked whether the Home Screen app could ask for Face ID on opening. It can (WebAuthn), but iOS always
