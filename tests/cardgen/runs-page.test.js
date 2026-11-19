@@ -296,6 +296,24 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("two devices: one History item, with the portrait", history().length === 1 && String(stored.json?.imageBase64 || "").startsWith("data:image/png"));
   await context2.close();
 
+  // R7b. 4 ideas and Inspire Me hand the picked idea to a run as well.
+  await setConfig({ serverRuns: true });
+  await clearHistory();
+  await page.close();
+  page = await open(context);
+  cardCalls = model.count("card");
+  await page.evaluate(() => {
+    document.getElementById("character-concept").value = "a lighthouse keeper";
+    window.app._batchIdeas = [{ name: "The Keeper", description: "A keeper who never sleeps." }];
+    window.app.handleBatchPick(0);
+  });
+  await until(async () => page.evaluate(() => window.app.isGenerating === true), { what: "ideas pick started" });
+  await idle(page);
+  await until(() => history().length === 1 && !history()[0].data.draft, { what: "final save" });
+  const ideasCall = model.calls.filter((c) => c.kind === "card").pop();
+  check("4 ideas: the picked idea is written by a run", page.__requests.some((r) => r.startsWith("POST /api/card-runs")) && textCalls(page) === 0 && model.count("card") === cardCalls + 1 && (await nameOnScreen(page)) === "Mira Okafor");
+  check("4 ideas: the brief and the chosen direction both reach the model", /PLAYER'S BRIEF[\s\S]*a lighthouse keeper[\s\S]*CHOSEN DIRECTION[\s\S]*The Keeper/.test(JSON.stringify(ideasCall.body.messages)));
+
   // R8. With the setting off, nothing goes near the run routes.
   await setConfig({ serverRuns: false });
   await clearHistory();

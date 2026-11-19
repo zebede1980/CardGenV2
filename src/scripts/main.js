@@ -1294,56 +1294,10 @@ class CharacterGeneratorApp {
       // requirements survive even if the card itself didn't capture them.
       const brief = generationMode === "search" ? searchScenario : concept;
 
-      if (this.serverRunsEnabled()) {
-        // The proxy writes the card and its finishing fields (a card run), so
-        // they carry on if this page is frozen or discarded, and the card is
-        // in History either way. This page shows the progress, then does the
-        // steps that still need it (cast, portrait).
-        this.currentCharacter = await this.runNewCardOnServer({
-          mode: generationMode,
-          concept: effectiveConcept,
-          brief,
-          searchQuery,
-          searchScenario,
-          characterName,
-          pov,
-          cardType,
-          lorebook: this.lorebookData,
-          exampleCount: parseInt(document.getElementById("example-messages-count")?.value || "3", 10),
-          exampleStyle: document.getElementById("example-messages-prompt")?.value?.trim() || "",
-          referenceImage: this.referenceImageDataUrl || "",
-        });
-        window.apiHandler.throwIfStopped(stopMark);
-      } else {
-        if (generationMode === "search") {
-          this.currentCharacter = await window.characterSearch.generateCharacter(
-            searchQuery, searchScenario, characterName,
-            (token, fullContent) => this.handleCharacterStream(token, fullContent),
-            pov, this.lorebookData, cardType,
-          );
-        } else {
-          this.currentCharacter = await this.characterGenerator.generateCharacter(
-            effectiveConcept, characterName,
-            (token, fullContent) => this.handleCharacterStream(token, fullContent),
-            pov, this.lorebookData, cardType,
-          );
-        }
-        window.apiHandler.throwIfStopped(stopMark);
-
-        // Stamp cardType on the character and auto-tag non-single types
-        this.currentCharacter.cardType = cardType;
-        if (cardType === "group" || cardType === "scenario") {
-          if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
-          if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
-        }
-        // Into History now, so a tab closed during the later steps doesn't take
-        // the card with it. The save at the end replaces this one.
-        this.saveDraftToHistory();
-
-        this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
-        await this.fillFinishingFields(this.currentCharacter, { brief });
-        window.apiHandler.throwIfStopped(stopMark);
-      }
+      await this.writeNewCard({
+        mode: generationMode, concept: effectiveConcept, brief, characterName, pov, cardType,
+        searchQuery, searchScenario, stopMark,
+      });
 
       this.originalCharacter = JSON.parse(JSON.stringify(this.currentCharacter));
 

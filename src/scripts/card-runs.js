@@ -19,6 +19,56 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return this.config.get("app.serverRuns") === true;
   },
 
+  /**
+   * The middle of making a new character, shared by Generate, 4 ideas and
+   * Inspire Me: write the card, stamp its type, get it into History, fill the
+   * finishing fields. A card run on the proxy does it when the setting is on;
+   * otherwise this page's own requests do. Sets this.currentCharacter.
+   */
+  async writeNewCard({ mode = "classic", concept = "", brief = "", characterName = "", pov, cardType, searchQuery = "", searchScenario = "", stopMark }) {
+    if (this.serverRunsEnabled()) {
+      // It carries on if this page is frozen or discarded, and the card is in
+      // History either way. This page shows the progress, then does the steps
+      // that still need it (cast, portrait).
+      this.currentCharacter = await this.runNewCardOnServer({
+        mode: mode === "search" ? "search" : "classic",
+        concept,
+        brief,
+        searchQuery,
+        searchScenario,
+        characterName,
+        pov,
+        cardType,
+        lorebook: this.lorebookData,
+        exampleCount: parseInt(document.getElementById("example-messages-count")?.value || "3", 10),
+        exampleStyle: document.getElementById("example-messages-prompt")?.value?.trim() || "",
+        referenceImage: this.referenceImageDataUrl || "",
+      });
+      window.apiHandler.throwIfStopped(stopMark);
+      return;
+    }
+
+    const onStream = (token, fullContent) => this.handleCharacterStream(token, fullContent);
+    this.currentCharacter = mode === "search"
+      ? await window.characterSearch.generateCharacter(searchQuery, searchScenario, characterName, onStream, pov, this.lorebookData, cardType)
+      : await this.characterGenerator.generateCharacter(concept, characterName, onStream, pov, this.lorebookData, cardType);
+    window.apiHandler.throwIfStopped(stopMark);
+
+    // Stamp cardType on the character and auto-tag non-single types
+    this.currentCharacter.cardType = cardType;
+    if (cardType === "group" || cardType === "scenario") {
+      if (!Array.isArray(this.currentCharacter.tags)) this.currentCharacter.tags = [];
+      if (!this.currentCharacter.tags.includes(cardType)) this.currentCharacter.tags.push(cardType);
+    }
+    // Into History now, so a tab closed during the later steps doesn't take
+    // the card with it. The save at the end replaces this one.
+    this.saveDraftToHistory();
+
+    this.showStreamMessage("\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
+    await this.fillFinishingFields(this.currentCharacter, { brief });
+    window.apiHandler.throwIfStopped(stopMark);
+  },
+
   // A pause between polls that Stop can cut short, so the page reacts at once.
   _cardRunPause(ms) {
     return new Promise((resolve) => {
