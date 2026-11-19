@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Character Gen backend-driven (2026-11-19) — phases 0–2 and the new-card portrait **deployed 2026-11-19 (`8b8fd74`)**
+## Character Gen backend-driven (2026-11-19) — phases 0–3a **deployed 2026-11-19 (`8b8fd74`)**; cast + Revise group committed, not deployed
 
 Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the
 deviations). Built while Joe was in meetings, on his instruction to carry on through the phases.
@@ -93,10 +93,37 @@ card and lock the phone straight away for two minutes; unlock: the card and its 
 there at once, then the portrait is drawn. Then start one and close the app: a push should arrive,
 and the card is in History with its portrait.
 
-**Next, and why it stopped here:** every remaining item acts on a card you already have (Redo,
-Revise / Remaster, Regenerate, Gen 4, Edit, gallery, cast). Those need two things from Joe first:
-a trial of the above on the phone, and a say on how results should land when the page has unsaved
-edits (the plan's "Follow-up actions" section and Decision 2).
+**First real runs (2026-11-19, after deploying):** one run through the deployed proxy as Joe, from
+inside the container: DeepSeek V4 Pro on nano-gpt, 66 s in all (card 28 s, finishing 8 s, portrait
+28 s). The PC was off, so the portrait step fell back from `local/qwen-image-2.1` to `z-image-turbo`
+as designed, with the active Look applied. Every field filled, `{{char}}` used, the portrait stored
+(303 KB JPEG). It is "Malcolm Dickinson" in History. Streamed calls report no token usage, so the run
+file has none. Joe then turned the setting on and made a character from the app: "seemed fine".
+**Still untried:** a lock or a closed app mid-run on the phone, a portrait from the local GPU in a run.
+
+**Added 2026-11-19, committed, NOT deployed (proxy + frontend):** Joe chose these with: results to
+History only (never over a Library card), and "keep what I typed, offer the AI's version".
+- **Supporting cast is a step of the new-card run** (between finishing and portrait) when auto-cast is
+  ticked. The cast orchestration and its helpers moved from `lorebook-handler.js` to `APIHandler` in
+  `api-lorebook.js` (now a shared script, 11 in all); the page delegates. The page adopts the entries
+  from the card's `character_book` so later saves keep them.
+- **Revise, Remaster, Reduce tokens and Consistency auto-fix** go through one page method,
+  `reviseCard()` (`card-runs.js`). With the setting on it is a `kind: "revise"` run: rewrite, then
+  for Revise the finishing fields, saved to History as a **new** item with the card's portrait
+  (sent with the request). The diff dialog is unchanged: accept saves over the run's copy, discard
+  deletes it. A tab closed mid-revision reloads onto the revised card. Stop revision reaches the server.
+- **Keep-my-edits, in both modes:** a field typed in while a rewrite runs keeps what was typed; the
+  AI's whole version stays in History (`_keepEditsMadeMeanwhile`). Before, accepting overwrote it.
+- Tests now 229: parser 19, engine 79, phase 0 page 50, runs page 81. Reduce tokens shares the path
+  but its candidate dialog was not driven.
+
+**Next: portrait follow-ups** (Regenerate, Gen 4, Compare, takes, Edit portrait, gallery), chosen by
+Joe but not started. They are a different shape from the rest: nine call sites inside long UI flows,
+`editImage` does page-only work (a canvas check for a blanked result), and "where do the pictures
+land if the page is gone" needs deciding. Proposed: each draw (write prompt + draw, or caption + edit)
+becomes one server unit behind the existing `apiHandler.generateImage` / `editImage` calls for
+Character Gen, and a draw whose page has gone saves a History copy of the card with that picture as
+its portrait. Single-field Redo was not chosen and is unchanged (resumable, lost on a closed app).
 
 ## 🔒 App lock PIN (2026-11-16) — deployed 2026-11-16 (`f75c959`, proxy + frontend)
 

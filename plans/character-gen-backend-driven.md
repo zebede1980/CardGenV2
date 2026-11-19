@@ -11,8 +11,8 @@ this plan. The rest of the document is the plan as written.
 | 0 | Done. On for everyone |
 | 1 | Done, and much smaller than planned (below) |
 | 2 | Done, behind Settings → "Make new characters on the server (beta)", off by default |
-| 3 | First slice done: the new card's portrait is drawn by the run. Regenerate, Gen 4, Compare, takes, Edit and the gallery are not started |
-| 4 | One piece done: 4 ideas and Inspire Me use a run once an idea is picked. The rest is not started |
+| 3 | First slice done: the new card's portrait is drawn by the run. Regenerate, Gen 4, Compare, takes, Edit and the gallery are chosen but not started |
+| 4 | Done: 4 ideas and Inspire Me use a run; supporting cast is a run step; Revise, Remaster, Reduce tokens and auto-fix are a `revise` run. Not chosen, so not done: single-field Redo, the import queue, lorebook scan |
 | 5 | Not started |
 
 **Phase 1 was not a rewrite.** The plan expected to move every prompt builder into `src/shared/`
@@ -41,11 +41,11 @@ Resume with no page settings falls back to the saved copy.
 supporting cast, the brainstorm call of 4 ideas and Inspire Me, and every action on a card that
 already exists.
 
-**Why it stopped where it did.** What is left all acts on an existing card. The engine can run those
-steps today; what is undecided is the page side: where a Redo's result goes if you have typed in
-other fields since, how Gen 4's candidates are shown when they were drawn while you were away, and
-whether Reset keeps working. Those are choices for Joe, best made after using phases 0 to 3 on the
-phone.
+**Joe's answers (2026-11-19):** build the Revise group, the portrait follow-ups and supporting
+cast, not single-field Redo; a run never writes over a Library card, its result goes to History;
+and what you typed while something ran is kept, with the AI's version on offer. The first and third
+are built. The portrait follow-ups are next and want one more decision: where the pictures land
+when the page has gone (STATUS has the proposal).
 
 **Things found on the way and fixed:** History saves and deletes could wipe the whole list after
 one failed read; a second tab cleared the first tab's recovery marker; a stopped pipeline's cleanup

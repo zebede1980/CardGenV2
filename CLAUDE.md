@@ -49,11 +49,12 @@ halfway through this?*
   and a marker in `localStorage` lets the next page load put it back if the tab was discarded
   part-way (`src/scripts/card-recovery.js`). Recovery never makes a paid call.
 - **Card runs** (Settings → "Make new characters on the server", `app.serverRuns`): the proxy
-  makes the card, its finishing fields and its portrait itself (`proxy/runs/card-runs.js`) and the
+  makes the card, its finishing fields, cast and portrait itself, and rewrites for Revise and
+  Remaster (`proxy/runs/card-runs.js`), and the
   page only polls while visible (`src/scripts/card-runs.js`). Nothing in that path may depend on
   the page being alive. Plan and state: `plans/character-gen-backend-driven.md`.
-- **Ten front-end files also run inside the proxy** (`SHARED_SCRIPTS` in `proxy/runs/prompt-host.js`:
-  `content-context.js`, the name bank, `api-character.js`, `character-search.js`,
+- **Eleven front-end files also run inside the proxy** (`SHARED_SCRIPTS` in `proxy/runs/prompt-host.js`:
+  `content-context.js`, the name bank, `api-character.js`, `api-lorebook.js`, `character-search.js`,
   `image-model-caps.js`, `prompt-look.js`, `h3-edit-caption-prompt.js`, `api-image.js`,
   `character-generator.js`). On any path a run uses, keep them free of `document`, DOM elements
   and page-only globals, and when adding one to the list add it to `Dockerfile.proxy` too.
