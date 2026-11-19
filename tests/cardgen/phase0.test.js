@@ -158,7 +158,7 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("discard during finishing: History has one complete item", history().length === 1);
   check("discard during finishing: nothing was generated twice", model.count("card") === cardCalls + 1 && model.count("finishing") === finCalls + 1, `${model.count("card") - cardCalls}/${model.count("finishing") - finCalls}`);
   check("marker cleared after recovery", (await marker(page)) === null);
-  check("recovery says so", await page.evaluate(() => [...document.querySelectorAll(".notification")].some((n) => /Recovered Mira Okafor/.test(n.textContent))));
+  check("recovery says so", await page.evaluate(() => /Recovered Mira Okafor/.test(document.getElementById("stream-content").textContent)));
 
   // B4. Tab discarded while the card itself is being written; reopened after it finished.
   for (const h of history()) await api("DELETE", `/api/storage/cards/${h.id}`, undefined, token);
