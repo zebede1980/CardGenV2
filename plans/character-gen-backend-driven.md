@@ -11,7 +11,9 @@ this plan. The rest of the document is the plan as written.
 | 0 | Done. On for everyone |
 | 1 | Done, and much smaller than planned (below) |
 | 2 | Done, behind Settings → "Make new characters on the server (beta)", off by default |
-| 3 to 5 | Not started |
+| 3 | First slice done: the new card's portrait is drawn by the run. Regenerate, Gen 4, Compare, takes, Edit and the gallery are not started |
+| 4 | One piece done: 4 ideas and Inspire Me use a run once an idea is picked. The rest is not started |
+| 5 | Not started |
 
 **Phase 1 was not a rewrite.** The plan expected to move every prompt builder into `src/shared/`
 modules that take a settings object, with golden tests guarding thousands of moved lines. A probe
@@ -19,8 +21,9 @@ showed the browser's prompt files already load and run in a bare Node sandbox wi
 page. So the proxy loads those same files (`proxy/runs/prompt-host.js`) and supplies a server-side
 `APIHandler` for them to extend. Nothing was moved and there is still one copy of every prompt. The
 "golden test" became a direct comparison: the same inputs through the real page and through the
-proxy's host must produce the same requests, and do, for all four card kinds. The price is that
-six front-end files (`SHARED_SCRIPTS`) now also run on the server and must stay free of page access.
+proxy's host must produce the same requests, and do, for all four card kinds and for the portrait.
+The price is that ten front-end files (`SHARED_SCRIPTS`) now also run on the server and must stay
+free of page access on the paths a run uses.
 
 **Decisions taken as recommended:** the proxy conducts (1); run state is a file per run on the
 proxy's disk (5); progress is polled every 1.5 s (4); Stop keeps the card in History as a draft (3).
@@ -34,12 +37,19 @@ page's last save and the recovery code all refer to.
 the run uses exactly what the page would have, including a change made a second earlier. Only a
 Resume with no page settings falls back to the saved copy.
 
-**Still the page's job after phase 2:** saving the prompt to the library (the 41 MB download is
-untouched), supporting cast, the portrait, and everything on 4 ideas and Inspire Me.
+**Still the page's job:** saving the prompt to the library (the 41 MB download is untouched),
+supporting cast, the brainstorm call of 4 ideas and Inspire Me, and every action on a card that
+already exists.
 
-**Things found on the way and fixed:** History saves could wipe the whole list after one failed read;
-a second tab cleared the first tab's recovery marker; a stopped pipeline's cleanup reset the form of
-the next generation.
+**Why it stopped where it did.** What is left all acts on an existing card. The engine can run those
+steps today; what is undecided is the page side: where a Redo's result goes if you have typed in
+other fields since, how Gen 4's candidates are shown when they were drawn while you were away, and
+whether Reset keeps working. Those are choices for Joe, best made after using phases 0 to 3 on the
+phone.
+
+**Things found on the way and fixed:** History saves and deletes could wipe the whole list after
+one failed read; a second tab cleared the first tab's recovery marker; a stopped pipeline's cleanup
+reset the form of the next generation; the image routes sent an internal field to the provider.
 
 ## The short version
 

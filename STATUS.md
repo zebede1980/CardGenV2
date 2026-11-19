@@ -1,13 +1,13 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-19 (Character Gen backend-driven phases 0–2 committed, not deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-19 (Character Gen backend-driven phases 0–2 + server portrait committed, not deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Character Gen backend-driven (2026-11-19) — phases 0–2 committed, **not pushed, not deployed**
+## Character Gen backend-driven (2026-11-19) — phases 0–2 and the new-card portrait committed, **not pushed, not deployed**
 
 Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the
 deviations). Built while Joe was in meetings, on his instruction to carry on through the phases.
@@ -29,49 +29,69 @@ Deploy needs **proxy + frontend** (the proxy image changed: check its build outp
 - **Parser** (`character-generator.js`): scenario titles read from the plain `# Title` header; "The
   Red Cobras" no longer turns every "The" into `{{char}}` (`ORDINARY_WORDS`); "The name's X" only
   looked for in the description.
-- **Proxy History saves** (`saveHistoryCard`) write one item and evict the oldest by date. Before,
-  every save rewrote the whole list from a read that returned `[]` on any error, so a failed read
-  followed by a working write would have deleted all of History. A failed write is now reported.
-  The client-side trim (it downloaded every card on each save) is gone.
+- **Proxy History saves and deletes** touch one item (`saveHistoryCard`, and the History branch of
+  `DELETE /api/storage/cards/:id`); saves evict the oldest by date. Before, both rewrote the whole
+  list from a read that returned `[]` on any error, so a failed read followed by a working write
+  would have deleted all of History. A failed write is now reported. The client-side trim (it
+  downloaded every card on each save) is gone, and so is `writeHistory()`.
+- The image routes no longer forward the page's internal `__jobLabel` field to the image provider.
 - **Fix:** a pipeline still unwinding after Stop no longer resets the form of a generation started
   straight after it (`_beginNewCard` / `_endNewCard(flow)`; classic, 4 ideas, Inspire Me).
 
-**Phases 1–2, behind Settings → "Make new characters on the server (beta)" (`app.serverRuns`, off):**
+**Phases 1–3a, behind Settings → "Make new characters on the server (beta)" (`app.serverRuns`, off):**
 - **Card runs** (`proxy/runs/card-runs.js`): `POST /api/card-runs` and the proxy writes the card,
-  parses it, saves it to History, writes the finishing fields, saves again and reports once. Routes:
+  parses it, saves it to History, writes the finishing fields, **draws the portrait**, saves again and
+  reports once (push label "New character", never the name). Routes:
   `GET /api/card-runs[/:id]`, `/:id/stop`, `/:id/resume`, `/active-count` (how many are running:
   a replacement for reading `docker logs` before a rebuild). State is one JSON file per run in
   `proxy/data/users/<id>/runs/`, written after every step, kept 24 h; API keys stay in memory. A
   proxy restart leaves a run "interrupted" and Resume carries on from the first unfinished step.
 - **The proxy runs the browser's own prompt files** (`proxy/runs/prompt-host.js`): `api-character.js`,
-  the name bank, the parser and `character-search.js` are loaded into a Node `vm` sandbox with a
-  server-side `APIHandler` (`host-api.js`). No second copy of any prompt. **Those six files now run
-  in two places**: a change in them that reaches for `document` breaks server runs, and the tests say so.
+  `api-image.js`, `prompt-look.js`, the name bank, the parser, `character-search.js` and four small
+  ones are loaded into a Node `vm` sandbox with a server-side `APIHandler` (`host-api.js`). No second
+  copy of any prompt. **Those ten files (`SHARED_SCRIPTS`) now run in two places**: a change in them
+  that reaches for `document` on a path a run uses breaks server runs, and the tests say so.
+  `content-context.js` and `image-model-caps.js` are new files split out of `api.js` and `config.js`.
   `Dockerfile.proxy` copies them one by one (`SHARED_SCRIPTS`), so other front-end changes still
   leave the proxy container alone.
 - **The page** (`card-runs.js`) polls every 1.5 s while visible and not at all while hidden; no
-  watchdog, no resume loop. Stop reaches the server. On load it attaches to a run in progress (its
-  own, or one another device started: an onlooker never draws a portrait) or shows one that finished
-  while it was away. Supporting cast and the **portrait are still the page's steps**: a card whose
-  page went away is in History complete but with no portrait (phase 3).
+  watchdog, no resume loop. Gateway errors and no connection are waited out. Stop reaches the server.
+  On load it attaches to a run in progress (its own, or one another device started) or shows one
+  that finished while it was away. `writeNewCard()` is the shared middle of Generate, 4 ideas and
+  Inspire Me, so all three use a run.
+- **The portrait** is the run's third step when images are on and there is no reference image: the
+  first model marked Generate, the style reset as the page does it, one retry on the hosted fallback
+  if a local model fails (prompt reused), result stored with the card. A failed portrait does not
+  fail the run; the page reports it and does not draw one itself. `generateNewCharacterImage` shows
+  the run's portrait instead of drawing. **Only supporting cast is still the page's step**: a card
+  whose page went away is complete in History, portrait included, but has no auto-cast.
 - Name history for server runs is per user in `users/<id>/cardgen-state.json`, separate from each
   device's own list.
-- 4 ideas and Inspire Me still use the page pipeline (phase 4).
+- The brainstorm call of 4 ideas and Inspire Me (before you pick) is still a page request, as are
+  saving the prompt to the library and every action on an existing card.
 
 **Tests** (`tests/cardgen/`, README there; needs playwright-core and the proxy's packages outside the
 repo): the **real** `proxy/server.js` against a fake backend and a fake streaming model, and the real
-page in headless WebKit at 390 px. 185 checks: parser 19, run engine 46 (also in the image's folder
-layout), phase 0 page 48, runs from the page 46 (hidden page, discarded tab, attach on reload, Stop,
-proxy restart, two devices) including that the prompt host sends **the same requests as the page**
-for single (third and first person), group and scenario cards.
+page in headless WebKit at 390 px. 187 checks: parser 19, run engine 60 (also in the image's folder
+layout), phase 0 page 50, runs from the page 58 (hidden page, discarded tab, attach on reload, Stop,
+proxy restart, gateway errors, two devices, the portrait) including that the run sends **the same
+requests as the page**: the card and finishing calls for single (third and first person), group and
+scenario cards, and the portrait's prompt-writing call and image request.
 **Not tested:** a real model, a real iPhone (a frozen page, a real lock, Safari's own discard), a real
-`docker build` of the proxy image, a real push, web search with a Brave key, the PIN lock over a run.
+`docker build` of the proxy image, a real push, web search with a Brave key, the PIN lock over a run,
+and **a portrait drawn on the local GPU from a run** (only "PC off → hosted fallback" ran; the local
+path is the existing `runLocalComfyImage`).
 
 **To try on the iPhone after deploying:** with the setting **off**: start a card, close the app from
 the switcher during "example messages", reopen: the card should come back. With it **on**: start a
 card and lock the phone straight away for two minutes; unlock: the card and its fields should be
 there at once, then the portrait is drawn. Then start one and close the app: a push should arrive,
-and the card is in History.
+and the card is in History with its portrait.
+
+**Next, and why it stopped here:** every remaining item acts on a card you already have (Redo,
+Revise / Remaster, Regenerate, Gen 4, Edit, gallery, cast). Those need two things from Joe first:
+a trial of the above on the phone, and a say on how results should land when the page has unsaved
+edits (the plan's "Follow-up actions" section and Decision 2).
 
 ## 🔒 App lock PIN (2026-11-16) — deployed 2026-11-16 (`f75c959`, proxy + frontend)
 

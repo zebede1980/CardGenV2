@@ -49,14 +49,15 @@ halfway through this?*
   and a marker in `localStorage` lets the next page load put it back if the tab was discarded
   part-way (`src/scripts/card-recovery.js`). Recovery never makes a paid call.
 - **Card runs** (Settings → "Make new characters on the server", `app.serverRuns`): the proxy
-  conducts the card and its finishing fields itself (`proxy/runs/card-runs.js`) and the page only
-  polls while visible (`src/scripts/card-runs.js`). Nothing in that path may depend on the page
-  being alive. Plan and state: `plans/character-gen-backend-driven.md`.
-- **Six front-end files also run inside the proxy** (`SHARED_SCRIPTS` in `proxy/runs/prompt-host.js`:
+  makes the card, its finishing fields and its portrait itself (`proxy/runs/card-runs.js`) and the
+  page only polls while visible (`src/scripts/card-runs.js`). Nothing in that path may depend on
+  the page being alive. Plan and state: `plans/character-gen-backend-driven.md`.
+- **Ten front-end files also run inside the proxy** (`SHARED_SCRIPTS` in `proxy/runs/prompt-host.js`:
   `content-context.js`, the name bank, `api-character.js`, `character-search.js`,
-  `character-generator.js`). Keep them free of `document`, DOM elements and page-only globals, and
-  when adding one to the list add it to `Dockerfile.proxy` too. Changing any of them rebuilds the
-  proxy image.
+  `image-model-caps.js`, `prompt-look.js`, `h3-edit-caption-prompt.js`, `api-image.js`,
+  `character-generator.js`). On any path a run uses, keep them free of `document`, DOM elements
+  and page-only globals, and when adding one to the list add it to `Dockerfile.proxy` too.
+  Changing any of them rebuilds the proxy image, which restarts the proxy.
 
 Chat, Story Writer and Adventure stream from the Python backend (`/api/sw/*`) with their own
 readers in `chat-handler.js`, `storywriter.js` and `adventure-handler.js`. They are separate from
