@@ -1221,7 +1221,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const imageBase64 = this.referenceImageDataUrl;
       const originalUrl = this.referenceImageDataUrl;
 
-      const resultUrl = await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
+      // An edit of the reference image is not a portrait of the card on
+      // screen, so it must not be saved as one if this page goes away.
+      this._noImageLanding = true;
+      let resultUrl;
+      try {
+        resultUrl = await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
+      } finally {
+        this._noImageLanding = false;
+      }
 
       let blobUrl = resultUrl;
       if (!resultUrl.startsWith("blob:") && !resultUrl.startsWith("data:")) {

@@ -288,6 +288,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       .then((saved) => {
         const id = saved?.id || null;
         if (id) NewCardMarker.update({ historyId: id });
+        // The portrait request that follows names this item, so a picture that
+        // lands without the page completes the draft instead of adding a card.
+        this._draftHistoryId = id;
         return id;
       })
       .catch(() => null);

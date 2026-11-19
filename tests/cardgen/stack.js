@@ -161,6 +161,12 @@ function startModel() {
     if (req.method === "POST" && /images\/generations$/.test(req.url)) {
       const body = JSON.parse((await readBody(req)).toString() || "{}");
       control.calls.push({ kind: "image", stream: false, body, at: Date.now() });
+      const held = control.holds.image;
+      if (held) {
+        held.reached = true;
+        await held.gate;
+        if (control.holds.image === held) delete control.holds.image;
+      }
       const status = control.failNext.image || control.failAll.image;
       delete control.failNext.image;
       res.writeHead(status || 200, { "Content-Type": "application/json" });
@@ -289,7 +295,7 @@ function startFront(repo, proxyPort) {
   return listen(server).then((port) => ({ server, port }));
 }
 
-async function start({ repo, stageDir, quiet = true }) {
+async function start({ repo, stageDir, quiet = true, env = {} }) {
   const model = await startModel();
   const backend = await startBackend();
 
@@ -331,6 +337,7 @@ async function start({ repo, stageDir, quiet = true }) {
         IMAGE_CATALOG_URL: `http://127.0.0.1:${model.port}/api/models`,
         COMFYUI_URL: "",
         COMFYUI_API_KEY: "",
+        ...env,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -393,6 +400,7 @@ async function start({ repo, stageDir, quiet = true }) {
   const imageSettings = (extra = {}) => ({ baseUrl: `http://127.0.0.1:${model.port}/v1`, apiKey: "fake-image-key", model: "fake-image", models: ["fake-image"], ...extra });
 
   return {
+    modelUrl: `http://127.0.0.1:${model.port}/v1`,
     imageSettings,
     url, token, userId, username, config, api, register, stageDir, dataDir: path.join(proxyDir, "data"),
     model: model.control,

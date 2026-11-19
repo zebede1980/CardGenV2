@@ -2190,6 +2190,9 @@ const JOB_LIMITS = {
   KEPT_MAX_BYTES: envInt("JOB_KEPT_MAX_BYTES", 128 * 1024 * 1024),
   // Slack over the 10-minute upstream timeout.
   MAX_RUN_MS: envInt("JOB_MAX_RUN_MS", 20 * 60 * 1000),
+  // A finished picture that came with a card and that nobody has collected
+  // this long after it was drawn is saved to History (see landImageJob).
+  LAND_AFTER_MS: envInt("JOB_LAND_AFTER_MS", 10 * 60 * 1000),
   SWEEP_INTERVAL_MS: envInt("JOB_SWEEP_INTERVAL_MS", 60 * 1000),
 };
 
@@ -2477,6 +2480,74 @@ function makeSseContentExtractor({ onContent, onFinishReason, onReasoning, onUsa
   };
 }
 
+// ── Landing: a picture nobody came back for ────────────────────────────────
+//
+// Character Gen's image requests (Regenerate, Gen 4, Compare, takes, Edit, the
+// gallery generator, a new card's portrait) carry the card they are for, as
+// `__landing: { card, replaceHistoryId? }`. If the page that asked is gone when
+// the picture is ready (Safari discarded the tab) the result used to sit in
+// the job buffer until it expired, paid for and never seen. Now a picture that
+// has not been collected LAND_AFTER_MS after it was drawn is saved as a History
+// copy of that card with the picture as its portrait. A page that does come
+// back in time collects it as before and nothing is saved.
+//
+// "Collected" is something the page says, never something assumed here. A
+// response written to a socket proves nothing: a locked phone's connection can
+// look open long after it is dead. The page confirms with POST
+// /api/jobs/collected once it has the picture, or collects it later through
+// /api/jobs/:id/result. If a confirmation is lost the picture is saved as well
+// as shown, which is the harmless way to be wrong.
+
+function imageLandingFrom(body) {
+  const landing = body && body.__landing;
+  const card = landing && landing.card && typeof landing.card === "object" && !Array.isArray(landing.card) ? landing.card : null;
+  if (!card) return null;
+  try {
+    if (JSON.stringify(card).length > 2 * 1024 * 1024) return null;
+  } catch (_) {
+    return null;
+  }
+  const replaceHistoryId = typeof landing.replaceHistoryId === "string" && /^h_[A-Za-z0-9_]{1,60}$/.test(landing.replaceHistoryId)
+    ? landing.replaceHistoryId
+    : null;
+  return { card, replaceHistoryId };
+}
+
+/** Save an uncollected picture with its card. Resolves { historyId, name }, or null if there was nothing to do. */
+async function landImageJob(job) {
+  if (!job || !job.landing || job.landed || job.collected || job.status !== "done" || !job.result) return null;
+  job.landed = true; // claimed first, so a timer and a request can't both save it
+  const { card, replaceHistoryId } = job.landing;
+  try {
+    const imageBase64 = await imageResultToDataUrl(job.result);
+    const historyId = await saveHistoryCard(job.userId, {
+      isPermanent: false,
+      characterName: card.name,
+      character: card,
+      imageBase64,
+      replaceHistoryId: replaceHistoryId || undefined,
+    });
+    job.landing = null;
+    job.landedAs = { historyId, name: card.name || "" };
+    console.log(`[jobs] image job ${job.id} was never collected; saved to History as ${historyId}`);
+    return job.landedAs;
+  } catch (error) {
+    job.landed = false;
+    console.warn(`[jobs] could not save uncollected image job ${job.id} to History:`, error.message);
+    return null;
+  }
+}
+
+/** Call when an image job with a card finishes: lands it now if asked to, else after the grace period. */
+function scheduleImageLanding(job) {
+  if (!job || !job.landing || job.status !== "done") return;
+  if (job.landNow) {
+    landImageJob(job);
+    return;
+  }
+  setTimeout(() => landImageJob(job), JOB_LIMITS.LAND_AFTER_MS).unref();
+}
+
 /** SSE frames shaped like the provider's, so the client parser needs no changes. */
 function sseDeltaFrame(text) {
   return `data: ${JSON.stringify({
@@ -2635,6 +2706,7 @@ app.get("/api/jobs/:jobId/result", requireAuth, (req, res) => {
     return res.status(200).json({ status: "error", error: job.error });
   }
 
+  job.collected = true; // someone came back for it: nothing to land
   return res.json({
     status: "done",
     finishReason: job.finishReason,
@@ -2674,6 +2746,52 @@ app.post("/api/jobs/cancel", requireAuth, (req, res) => {
     if (!found) cancelledClientRefs.set(`${userId}:${ref.slice(0, 100)}`, Date.now());
   }
   res.json({ cancelled });
+});
+
+/**
+ * The page has the picture(s): nothing to land. Body: { clientRefs: string[] }.
+ */
+app.post("/api/jobs/collected", requireAuth, (req, res) => {
+  const refs = new Set(
+    (Array.isArray(req.body?.clientRefs) ? req.body.clientRefs : [])
+      .filter((r) => typeof r === "string")
+      .slice(0, 20)
+      .map((r) => r.slice(0, 100)),
+  );
+  let collected = 0;
+  for (const job of generationJobs.values()) {
+    if (job.userId !== req.user.userId || !job.clientRef || !refs.has(job.clientRef)) continue;
+    job.collected = true;
+    collected++;
+  }
+  res.json({ collected });
+});
+
+/**
+ * A page that loaded and found image jobs its predecessor never collected: save
+ * them to History now instead of after the grace period. Body:
+ * { clientRefs: string[] }. A job that is still drawing lands when it finishes.
+ */
+app.post("/api/jobs/land", requireAuth, async (req, res) => {
+  const refs = new Set(
+    (Array.isArray(req.body?.clientRefs) ? req.body.clientRefs : [])
+      .filter((r) => typeof r === "string")
+      .slice(0, 20)
+      .map((r) => r.slice(0, 100)),
+  );
+  const landed = [];
+  let pending = 0;
+  for (const job of generationJobs.values()) {
+    if (job.userId !== req.user.userId || !job.clientRef || !refs.has(job.clientRef) || !job.landing) continue;
+    if (job.status === "running") {
+      job.landNow = true;
+      pending++;
+    } else {
+      const result = await landImageJob(job);
+      if (result) landed.push(result);
+    }
+  }
+  res.json({ landed, pending });
 });
 
 /**
@@ -4119,12 +4237,14 @@ async function handleLocalComfyImage(req, res) {
         });
       }
       job = createGenerationJob(req.user.userId, new AbortController(), clientRef, req);
+      job.landing = imageLandingFrom(req.body);
     }
 
     const data = await runLocalComfyImage(req.body);
     if (job) {
       job.result = data;
       finishGenerationJob(job, "done", { finishReason: "stop" });
+      scheduleImageLanding(job);
     }
     if (!res.writableEnded && !clientGone) res.json(data);
   } catch (error) {
@@ -4304,7 +4424,7 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     // This supports APIs like NanoGPT that need n, response_format, etc. —
     // minus resumable/clientRef, which are our own bookkeeping and not
     // something the upstream image API should ever see.
-    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, ...forwardedBody } = req.body;
+    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, __landing: _landing, ...forwardedBody } = req.body;
     const requestBody = {
       ...forwardedBody,
     };
@@ -4341,6 +4461,7 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
       // the point is the opposite: let the image finish generating into the
       // job regardless of what the client's connection does.
       job = createGenerationJob(req.user.userId, new AbortController(), clientRef, req);
+      job.landing = imageLandingFrom(req.body);
     }
     res.on("close", () => {
       clientGone = true;
@@ -4395,6 +4516,7 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     if (job) {
       job.result = data;
       finishGenerationJob(job, "done", { finishReason: "stop" });
+      scheduleImageLanding(job);
       if (clientGone) {
         console.log(`[jobs] image job ${job.id} finished after the client had detached (held for collection)`);
       }
@@ -4468,7 +4590,7 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
     // the other way round, `n: 1` and friends were dead code — whatever the
     // client sent overrode them. `resumable`/`clientRef` are our own
     // bookkeeping and are stripped, exactly as /api/image/generations does.
-    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, ...forwardedBody } = req.body;
+    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, __landing: _landing, ...forwardedBody } = req.body;
     const requestBody = { ...forwardedBody, model, prompt, input_references, n: forwardedBody.n || 1 };
 
     if (resumable) {

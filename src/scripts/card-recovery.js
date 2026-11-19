@@ -99,7 +99,91 @@ const NewCardMarker = {
 
 window.NewCardMarker = NewCardMarker;
 
+// Every page of this app answers "here" on this channel, so a page that has
+// just loaded can tell whether another tab of this browser is open. It must
+// not tidy up work that a tab which is still open is waiting for.
+const CardgenPages = {
+  CHANNEL: "cardgen.pages",
+  // A page hears every other channel object of the same name, its own probe
+  // included, so each message says which page it is from.
+  me: () => window.cardgenPage?.id || "",
+  start() {
+    if (this._channel || typeof BroadcastChannel === "undefined") return;
+    this._channel = new BroadcastChannel(this.CHANNEL);
+    this._channel.onmessage = (event) => {
+      if (event.data?.type === "who" && event.data.from !== this.me()) this._channel.postMessage({ type: "here", from: this.me() });
+    };
+  },
+  /** True if another tab of this browser answers within `waitMs`. */
+  anotherIsOpen(waitMs = 400) {
+    if (typeof BroadcastChannel === "undefined") return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const channel = new BroadcastChannel(this.CHANNEL);
+      const finish = (open) => { clearTimeout(timer); channel.close(); resolve(open); };
+      const timer = setTimeout(() => finish(false), waitMs);
+      channel.onmessage = (event) => { if (event.data?.type === "here" && event.data.from !== this.me()) finish(true); };
+      channel.postMessage({ type: "who", from: this.me() });
+    });
+  },
+};
+CardgenPages.start();
+
+// Labels of the image jobs Character Gen starts (api-image.js).
+const CARD_IMAGE_JOB_LABELS = new Set(["Character image", "Image edit"]);
+// A job newer than this may belong to a page that is merely slow to wake.
+const ORPHANED_IMAGE_AFTER_MS = 2 * 60 * 1000;
+
+// Image requests made from Character Gen carry the card they are for, so the
+// proxy can save a picture nobody collected as a History copy of that card.
+if (window.apiHandler) {
+  window.apiHandler.imageLanding = () => window.app?._imageLanding?.() || null;
+}
+
 Object.assign(CharacterGeneratorApp.prototype, {
+
+  /**
+   * The card an image request from this page is for, or null: only on the
+   * Character Gen view, with a card on screen. While a new card is being made
+   * the picture replaces its draft in History rather than adding a second item.
+   */
+  _imageLanding() {
+    if (this._noImageLanding || !this.currentCharacter) return null;
+    if (window.cardgenPage?.view() !== "cardgen") return null;
+    return { card: this.currentCharacter, replaceHistoryId: this._draftHistoryId || undefined };
+  },
+
+  /**
+   * On load: pictures a previous page of this browser asked for and never
+   * collected. Nothing here can show them the way their screen would have, so
+   * the proxy is asked to save each with its card in History now, rather than
+   * when its grace period runs out.
+   */
+  async landOrphanedImages() {
+    try {
+      const now = Date.now();
+      const orphans = (window.ResumableJobs?.list() || [])
+        .filter((job) => CARD_IMAGE_JOB_LABELS.has(job.label) && now - (job.startedAt || 0) > ORPHANED_IMAGE_AFTER_MS);
+      if (orphans.length === 0) return;
+      if (await CardgenPages.anotherIsOpen()) return; // that tab may still be waiting for them
+
+      const res = await window.authFetch("/api/jobs/land", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientRefs: orphans.map((job) => job.clientRef) }),
+      });
+      if (!res.ok) return;
+      const { landed = [] } = await res.json();
+      for (const job of orphans) window.ResumableJobs.remove(job.clientRef);
+      if (landed.length === 0) return;
+
+      const names = [...new Set(landed.map((item) => item.name).filter(Boolean))].join(", ");
+      const what = landed.length === 1 ? "A picture" : `${landed.length} pictures`;
+      this.showNotification(`${what} drawn while the app was closed ${landed.length === 1 ? "is" : "are"} in History${names ? ` with ${names}` : ""}.`, "info");
+      this.refreshLibraryViews?.();
+    } catch (error) {
+      console.warn("[recovery] could not land uncollected pictures:", error);
+    }
+  },
 
   /** A new-card pipeline is starting on this page. Returns its token for _endNewCard. */
   _beginNewCard() {
@@ -114,6 +198,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   _endNewCard(flow) {
     if (flow !== undefined && flow !== this._newCardFlow) return false;
     this._draftHistorySave = null;
+    this._draftHistoryId = null;
     this._serverPortrait = null;
     this._serverCastDone = false;
     NewCardMarker.clear();
@@ -125,6 +210,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
    * going away. Never throws; a failure just leaves the form empty as before.
    */
   async recoverNewCard() {
+    this.landOrphanedImages();
     const marker = NewCardMarker.read();
     if (marker) {
       // Another tab is still making it: the marker is that tab's, so leave it be.

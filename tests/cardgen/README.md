@@ -29,6 +29,7 @@ The same two variables run the rest:
 | `parser.test.js` | no | the card parser |
 | `runs.test.js` | no | the run engine through the real proxy: a whole card with nobody watching, stop, resume, a proxy restart mid-run, errors, limits |
 | `phase0.test.js` | WebKit | History drafts, recovery after a discarded tab, streamed single calls (setting off) |
+| `landing.test.js` | WebKit | a picture nobody collected is saved to History with its card: page gone, collected in time, confirmed, landed on request, Regenerate with the tab closed, two tabs |
 | `runs-page.test.js` | WebKit | card runs from the page: hidden page, discarded tab, attach on reload, Stop, restart, two devices; and that the proxy's prompt host builds the same requests as the page |
 
 `stack.js` is the shared stack: `model.hold(kind)` pauses a model reply mid-stream so a test can

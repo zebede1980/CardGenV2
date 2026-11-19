@@ -81,6 +81,13 @@ class APIHandler {
       data = { ...data, messages: withContentContext(data.messages) };
     }
 
+    // A held picture can be saved with the card it is for if nobody comes back
+    // for it (proxy: landImageJob). The app says which card, if any.
+    if (isImageRequest && data.resumable && !data.__landing && typeof this.imageLanding === "function") {
+      const landing = this.imageLanding();
+      if (landing) data = { ...data, __landing: landing };
+    }
+
     const resumable = !!data.resumable && !!window.ResumableJobs;
     let clientRef = null;
     if (resumable) {
@@ -114,6 +121,8 @@ class APIHandler {
             onHandOff();
           } else {
             window.ResumableJobs.remove(clientRef);
+            // The picture is here, so the proxy need not save it with its card.
+            if (isImageRequest && data.__landing) this._confirmCollected(clientRef);
           }
         }
         return response;
@@ -167,6 +176,16 @@ class APIHandler {
     }
     if (resumable) window.ResumableJobs.remove(clientRef);
     throw lastError;
+  }
+
+  /** Tell the proxy a held picture reached this page (see landImageJob in proxy/server.js). */
+  _confirmCollected(clientRef) {
+    (window.authFetch || fetch)("/api/jobs/collected", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this._authHeaders() },
+      body: JSON.stringify({ clientRefs: [clientRef] }),
+      keepalive: true,
+    }).catch(() => { /* the picture is then saved as well as shown: harmless */ });
   }
 
   /**
