@@ -1876,6 +1876,34 @@ app.get("/api/tts/voices", async (req, res) => {
   }
 });
 
+// AkinVox Faster Kokoro (the faster-kokoro service): Kokoro-82M with a faster
+// decoder, the same request shape as kokoro-fastapi. Returns its response when
+// it produced audio, or null so the caller falls back to stock Kokoro.
+// FASTER_KOKORO_URL="" turns it off.
+// After a network failure it is skipped for a minute, so a stopped container
+// costs one DNS/connect timeout rather than one per sentence of narration.
+let fasterKokoroDownUntil = 0;
+async function fetchFasterKokoro(speechBody, signal) {
+  const raw = process.env.FASTER_KOKORO_URL ?? "http://faster-kokoro:8880";
+  if (!raw.trim() || Date.now() < fasterKokoroDownUntil) return null;
+  try {
+    const response = await fetch(`${raw.replace(/\/$/, "")}/v1/audio/speech`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: speechBody,
+      signal
+    });
+    if (response.ok) return response;
+    const detail = (await response.text().catch(() => "")).slice(0, 200);
+    console.warn(`[TTS] Faster Kokoro ${response.status}, using stock Kokoro: ${detail}`);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    fasterKokoroDownUntil = Date.now() + 60 * 1000;
+    console.warn("[TTS] Faster Kokoro unreachable, using stock Kokoro for 60 s:", error.message);
+  }
+  return null;
+}
+
 app.post("/api/tts/synthesize", async (req, res) => {
   try {
     const { text, voice, speed, provider, googleApiKey, nanogptKey, nanogptModel, nanogptVoice } = req.body;
@@ -1884,19 +1912,30 @@ app.post("/api/tts/synthesize", async (req, res) => {
     // Branch: Kokoro TTS
     if (provider === "kokoro") {
       const kokoroUrl = (process.env.KOKORO_TTS_URL || "http://kokoro-tts:8880").replace(/\/$/, "");
-      const requestUrl = `${kokoroUrl}/v1/audio/speech`;
-      
-      const response = await fetch(requestUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "kokoro",
-          input: text,
-          voice: voice || "af_heart",
-          response_format: "wav",
-          speed: speed || 1.0
-        })
+      const speechBody = JSON.stringify({
+        model: "kokoro",
+        input: text,
+        voice: voice || "af_heart",
+        response_format: "wav",
+        speed: speed || 1.0
       });
+      // Stop synthesising if the browser hangs up (Faster Kokoro drops the
+      // rest of the text when its caller leaves; stock Kokoro carries on).
+      const upstreamAbort = new AbortController();
+      res.on("close", () => { if (!res.writableEnded) upstreamAbort.abort(); });
+
+      // Faster Kokoro first (same voices, ~3x faster on CPU). Anything it
+      // can't do (legacy v0, Japanese and Mandarin voices) or any failure
+      // goes to the stock Kokoro server instead.
+      let response = await fetchFasterKokoro(speechBody, upstreamAbort.signal);
+      if (!response) {
+        response = await fetch(`${kokoroUrl}/v1/audio/speech`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: speechBody,
+          signal: upstreamAbort.signal
+        });
+      }
 
       if (!response.ok) {
         const errData = await response.text();

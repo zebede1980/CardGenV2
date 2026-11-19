@@ -1,12 +1,45 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-19 (Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-19 (🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## 🔊 Faster Kokoro for narration (2026-11-19) — deployed 2026-11-19
+
+AkinVox **Faster Kokoro** (`AKinvox/faster-kokoro-v1`, released 2026-11-19, Apache-2.0): Kokoro-82M's
+own text front-end, voices and prosody, with the waveform decoder swapped for a 31M mel head + the
+public Vocos vocoder. New service `faster-kokoro/` (Dockerfile + `server.py`, a small FastAPI server
+speaking the same `/v1/audio/speech` and `/v1/audio/voices` as kokoro-fastapi, wav/pcm only).
+
+- **Proxy** (`fetchFasterKokoro` in `server.js`): Kokoro speech goes to `FASTER_KOKORO_URL`
+  (default `http://faster-kokoro:8880`, empty turns it off) first. Any non-200 (legacy `v0` voices,
+  Japanese/Mandarin, mp3) or network error falls back to stock `kokoro-tts`; after a network error
+  it is skipped for 60 s, so a stopped container costs one ~5 s DNS timeout, not one per sentence.
+  The proxy now also aborts the upstream request when the browser hangs up. The voice list still
+  comes from stock Kokoro (67), since every voice keeps working through the fallback.
+- **Server:** 41 voices (the 54 minus `j*`/`z*`, whose misaki extras aren't installed); blends
+  `a+b` and `a(2)+b(1)` mixed by weight; one request at a time (asyncio lock); between pieces
+  (KPipeline's ≤510-phoneme chunks) it checks whether the caller left and stops. All weights and
+  voices are baked at build (pinned Kokoro revision; `HF_HUB_OFFLINE=1` at run). **Torch must stay
+  CPU-only:** vocos → torchaudio pulls a CUDA torch (+6 GB, a 12 GB image); the Dockerfile installs
+  torch + torchaudio from the CPU index and holds them with a constraints file (image 3.5 GB).
+- **Measured on OCI (4 cores, one request at a time, median of 3, bf_alice and am_eric):** 54 chars
+  2.4–2.6 s → 0.6 s; 278 chars 11–12 s → 2.1–2.3 s; 877 chars 33–36 s → 5.9–6.3 s. **3.9–5.8× faster**;
+  stock was barely faster than real time on long text, Faster is ~7× real time. Memory ~1.3 GB, as stock.
+  Whisper base.en transcripts of both engines match word for word (only the usual Whisper slips in both);
+  long clips are ~10% shorter because the pauses between sentences are shorter.
+  After a hang-up mid-request the next short request waited 2.8 s (stock: ~15 s).
+- **Tested:** the server directly (blends give distinct audio, speed, French, 400s with the voice list,
+  hang-up), and the dev `server.js` in a throwaway proxy container on the app network (fast path, blend,
+  `af_v0bella` → stock, bogus voice → stock's 400 passed through, fast server gone → stock, the 60 s skip,
+  a browser hang-up reaching Faster Kokoro). **Not tested:** listening by ear (the voices are 0.90–0.99
+  similar to stock per the model card; Hindi lowest), the deployed stack, Story Mode on the iPhone.
+- **Deploy:** the live `docker-compose.yml` is untracked; add the `faster-kokoro` service block from
+  `docker-compose.example.yml` (no host port) and `FASTER_KOKORO_URL` on the proxy, then build
+  `faster-kokoro` and rebuild the proxy. `kokoro-tts` stays: HandyTime and offbook use it too.
 ## Character Gen backend-driven (2026-11-19) — phases 0–3a, supporting cast and the Revise group **deployed 2026-11-19 (`62e1389`)**
 
 Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the

@@ -47,6 +47,8 @@ services:
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       # Internal URL for the local Kokoro-82M TTS service (Story Writer narration)
       - KOKORO_TTS_URL=${KOKORO_TTS_URL:-http://kokoro-tts:8880}
+      # Faster Kokoro, tried before KOKORO_TTS_URL; set it empty to turn it off
+      - FASTER_KOKORO_URL=${FASTER_KOKORO_URL-http://faster-kokoro:8880}
       # Optional: local ComfyUI image models on your own GPU, reached via an
       # authenticating nginx on that machine. Leave empty to disable.
       - COMFYUI_URL=${COMFYUI_URL:-}
@@ -103,6 +105,16 @@ services:
     restart: unless-stopped
     ports:
       - "8880:8880"
+    networks:
+      - app-network
+
+  # AkinVox Faster Kokoro: Kokoro-82M's voices with a faster decoder (~3x on
+  # CPU). The proxy tries it first for Kokoro speech and falls back to
+  # kokoro-tts for anything it can't do. Internal only, no host port.
+  faster-kokoro:
+    build: ./faster-kokoro
+    container_name: faster-kokoro
+    restart: unless-stopped
     networks:
       - app-network
 
