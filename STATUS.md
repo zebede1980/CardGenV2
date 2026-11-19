@@ -1,18 +1,23 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-19 (Character Gen backend-driven phases 0–2 + server portrait committed, not deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-19 (Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Character Gen backend-driven (2026-11-19) — phases 0–2 and the new-card portrait committed, **not pushed, not deployed**
+## Character Gen backend-driven (2026-11-19) — phases 0–2 and the new-card portrait **deployed 2026-11-19 (`8b8fd74`)**
 
 Plan and reasoning: `plans/character-gen-backend-driven.md` (its "What was built" section lists the
 deviations). Built while Joe was in meetings, on his instruction to carry on through the phases.
-Deploy needs **proxy + frontend** (the proxy image changed: check its build output, since the new
-`COPY` lines were only checked by a folder-layout test, Docker Desktop being off on the PC).
+**After deploying** (proxy + frontend rebuilt; compose recreated storywriterbackend as well): all
+healthy. The proxy image has `/app/runs` and the ten shared scripts in `/app/src/scripts`; inside the
+container the prompt host loaded them, built a card prompt (8,932 chars) with no page access, and the
+data folder is writable for run files. `GET /api/card-runs/active-count` with no token answers 401 with
+`X-Session-Expired`, directly and through nginx. The site serves the new script versions and the
+Settings switch. **No signed-in request and no real generation was made on the live site**; the
+"server runs" setting is off until Joe turns it on.
 
 **Phase 0, on for everyone (no setting):**
 - **Every single-field call is a resumable stream** (`APIHandler.streamedText`, `api.js`): Redo,
