@@ -256,12 +256,18 @@ async function start({ repo, stageDir, quiet = true }) {
 
   // Stage the proxy exactly as its Dockerfile lays it out, plus shared code.
   fs.rmSync(stageDir, { recursive: true, force: true });
-  copyDir(path.join(repo, "proxy"), path.join(stageDir, "proxy"));
+  // CARDGEN_TEST_LAYOUT=docker lays the files out as Dockerfile.proxy does
+  // (server.js and src/scripts side by side under one folder), to catch a path
+  // that only works in the repository's layout.
+  const dockerLayout = process.env.CARDGEN_TEST_LAYOUT === "docker";
+  const proxyDir = dockerLayout ? path.join(stageDir, "app") : path.join(stageDir, "proxy");
+  const scriptsDir = dockerLayout ? path.join(stageDir, "app", "src", "scripts") : path.join(stageDir, "src", "scripts");
+  copyDir(path.join(repo, "proxy"), proxyDir);
   // The prompt files the proxy shares with the page: only the ones its image copies.
   const { SHARED_SCRIPTS } = require(path.join(repo, "proxy", "runs", "prompt-host.js"));
-  fs.mkdirSync(path.join(stageDir, "src", "scripts"), { recursive: true });
+  fs.mkdirSync(scriptsDir, { recursive: true });
   for (const name of SHARED_SCRIPTS) {
-    fs.copyFileSync(path.join(repo, "src", "scripts", name), path.join(stageDir, "src", "scripts", name));
+    fs.copyFileSync(path.join(repo, "src", "scripts", name), path.join(scriptsDir, name));
   }
 
   const proxyPort = await new Promise((resolve) => {
@@ -273,7 +279,7 @@ async function start({ repo, stageDir, quiet = true }) {
   const url = `http://127.0.0.1:${front.port}`;
   const logs = [];
   const spawnProxy = () => {
-    const child = spawn(process.execPath, [path.join(stageDir, "proxy", "server.js")], {
+    const child = spawn(process.execPath, [path.join(proxyDir, "server.js")], {
       env: {
         ...process.env,
         PORT: String(proxyPort),
@@ -343,7 +349,7 @@ async function start({ repo, stageDir, quiet = true }) {
   };
 
   return {
-    url, token, userId, username, config, api, register, stageDir,
+    url, token, userId, username, config, api, register, stageDir, dataDir: path.join(proxyDir, "data"),
     model: model.control,
     backend: backend.state,
     proxyLogs: logs,

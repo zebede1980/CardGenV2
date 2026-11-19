@@ -51,9 +51,9 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("the content context leads the system prompt", cardCall.body.messages[0].role === "system" && cardCall.body.messages[0].content.startsWith("**CONTENT CONTEXT:**"));
   check("page-only fields are not sent upstream", !("resumable" in cardCall.body) && !("clientRef" in cardCall.body) && !("__jobLabel" in cardCall.body), Object.keys(cardCall.body).join(","));
   check("the token floor and top_p apply as on the browser route", cardCall.body.max_tokens >= 4096 && cardCall.body.top_p === 0.95, `${cardCall.body.max_tokens}/${cardCall.body.top_p}`);
-  const stateFile = path.join(stack.stageDir, "proxy", "data", "users", String(userId), "cardgen-state.json");
+  const stateFile = path.join(stack.dataDir, "users", String(userId), "cardgen-state.json");
   check("the name history is kept for the user", fs.existsSync(stateFile) && /Mira Okafor/.test(fs.readFileSync(stateFile, "utf8")));
-  const runFile = path.join(stack.stageDir, "proxy", "data", "users", String(userId), "runs", `${id1}.json`);
+  const runFile = path.join(stack.dataDir, "users", String(userId), "runs", `${id1}.json`);
   check("the run file holds no API key", fs.existsSync(runFile) && !fs.readFileSync(runFile, "utf8").includes("fake-key"));
   await until(() => backend.pushes.length === 1, { what: "done report" });
   check("one done report for the whole run, naming the character", backend.pushes[0].page === "testpage1" && backend.pushes[0].view === "cardgen" && backend.pushes[0].items.length === 1 && backend.pushes[0].items[0].ok === true && /Mira Okafor/.test(backend.pushes[0].items[0].label), JSON.stringify(backend.pushes));
@@ -149,7 +149,7 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("a scenario card keeps its title and gets its tag", done.status === "done" && done.card.name === "The Haunted Lighthouse" && done.card.tags.includes("scenario") && done.card.description.startsWith("# The Haunted Lighthouse\n"), JSON.stringify(done.card).slice(0, 200));
   r = await api("GET", `/api/storage/cards/${done.historyId}`, undefined, token);
   check("the reference image is stored as the portrait", String(r.json?.imageBase64 || "").startsWith("data:image/png"));
-  const file9 = path.join(stack.stageDir, "proxy", "data", "users", String(userId), "runs", `${done.id}.json`);
+  const file9 = path.join(stack.dataDir, "users", String(userId), "runs", `${done.id}.json`);
   check("the reference image is not kept in the run file", !fs.readFileSync(file9, "utf8").includes("iVBORw0KGgo"));
 
   // 10. Search mode with no search key configured falls back to a normal card.
@@ -173,6 +173,12 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   await settled(b.json.id);
   r = await api("GET", "/api/card-runs/not-a-run", undefined, token);
   check("an unknown run id is a 404", r.status === 404);
+
+  // 12. The proxy image must copy every prompt file the host loads.
+  const { SHARED_SCRIPTS } = require(path.join(repo, "proxy", "runs", "prompt-host.js"));
+  const dockerfile = fs.readFileSync(path.join(repo, "Dockerfile.proxy"), "utf8");
+  const missing = SHARED_SCRIPTS.filter((name) => !dockerfile.includes(`src/scripts/${name}`));
+  check("Dockerfile.proxy copies every shared prompt file", missing.length === 0 && dockerfile.includes("COPY proxy/runs/"), missing.join(", "));
 
   await stack.stop();
   console.log(`\n${passed} passed, ${failed} failed`);
