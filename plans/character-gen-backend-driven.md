@@ -146,16 +146,57 @@ load: it touches no page, takes its settings as an argument, and returns text. T
 code produces for a dozen fixed inputs; afterwards the shared modules must produce the same bytes
 from Node. That turns a risky refactor into a mechanical one.
 
+## Follow-up actions on a card you already have (added 2026-11-19, second pass over the tab)
+
+Joe asked whether later images, AI revisions and single-field Redo are covered. The first draft
+covered them unevenly: revisions had a phase, later images were listed but had no phase, and Redo
+was only made resumable. The reason they are harder than Generate is the same for all three:
+
+**The server has nowhere to put the result.** A new card can simply be saved to History. A Redo or
+a second portrait has to land on *the card you are working on*, and that card has no identity on the
+server: it is `currentCharacter` in page memory, and every History save writes a new snapshot
+(`h_<time>`), not an update. So a result that arrives after the page has gone has no address.
+
+**The fix is a working-card id, and it belongs in phase 2, not phase 5.** The first run creates a
+working card with a stable id; every later run names that id and a target ("field: scenario",
+"portrait", "gallery"), and the server writes the result there. Phase 5 shrinks to the part that
+is really optional: saving what you *type* as you type it.
+
+| Action | Today | After phase 0 | Fully server-run in |
+|---|---|---|---|
+| Redo a field, example messages, notes, post-history, tags, alt greeting, name | one call into page memory; most not resumable | survives a lock; still lost if the tab is discarded | 4 (one-step run → card X, field Y) |
+| Revise, Reduce tokens, Consistency auto-fix, Remaster | rewrite + finishing fields, conducted by the page; rewrite not resumable | rewrite survives a lock; the chain still stalls | 4 |
+| Import & Remaster, review queue | queue of imported cards kept in `localStorage` with their images; each remastered by the page | no change | 4 (queue on the server) |
+| Regenerate portrait, Draft prompt + Generate | prompt write + image job; both resumable; result into page memory | no change needed for locks | 3 |
+| Gen 4, Compare Models, Generate all 3 takes | up to 4 jobs, then a pick-one dialog that only exists in the page | no change | 3 (results kept on the card as candidates; you pick when you're back) |
+| ✨ Edit portrait | caption call (Klein, H3) → edit job; resumable; result into page memory | no change | 3 |
+| Gallery: generate N pictures | N edit jobs at once, then accept / discard in the page | no change | 3 (same candidates store) |
+| Scan card for lorebook | two 16k calls, both resumable, conducted by the page | no change | 4 |
+
+Things the second pass found that the first draft missed: ✨ Edit portrait, the gallery generator,
+Import & Remaster with its review queue, and Scan for lorebook. Things that can't or needn't move:
+the **Local Forge** button (the browser calls Forge on your own network directly, so the server
+can't reach it), web image search and URL import (already one proxy call each), Test chat, and
+everything in group C.
+
+Two details that follow from server-side follow-ups:
+
+- **Reset** (the ↩ beside each Redo) restores the value from before the Redo. That "before" is in
+  page memory today; the working card has to keep one previous value per field.
+- **Candidates need a home.** Gen 4, takes and gallery pictures arrive as several results of which
+  you keep some. The working card gets a "candidates" list (the History image-version files already
+  work this way), cleared when you pick or discard.
+
 ## Phases
 
 | Phase | What | Size | Ships alone? |
 |---|---|---|---|
 | 0 | Quick wins in the current design (below) | small | yes |
 | 1 | Shared prompt modules + golden tests. No behaviour change | **large** | yes |
-| 2 | Run engine; Generate (classic + search) text steps on the server; History save; one push; polling page; stop, resume, attach on load | medium–large | yes, behind a setting |
-| 3 | Portrait on the server: prompt, draw, hosted fallback, image written straight to storage | medium | yes |
-| 4 | Inspire Me, 4 ideas, Revise / Remaster / Reduce / auto-fix, supporting cast as runs | medium | yes |
-| 5 | Server-side working draft (optional, see Decisions) | large | yes |
+| 2 | Run engine and the **working-card id**; Generate (classic + search) text steps on the server; History save; one push; polling page; stop, resume, attach on load | medium–large | yes, behind a setting |
+| 3 | Every image action on the server: new-card portrait, hosted fallback, Regenerate, Gen 4, Compare, takes, Edit, gallery; results written straight to the card or its candidates | medium–large | yes |
+| 4 | Every other text action as a run: Inspire Me, 4 ideas, Revise / Remaster / Reduce / auto-fix, import queue, supporting cast, lorebook scan, and single-field Redo | medium–large | yes |
+| 5 | Optional: hand-typed edits saved to the working card as you type (see Decisions) | medium | yes |
 
 **Phase 0, worth doing whatever is decided about the rest:**
 
@@ -211,11 +252,11 @@ page. A card whose page went away is saved without a portrait until you come bac
 ## Decisions for Joe
 
 1. **Proxy or Python backend?** Recommended: proxy.
-2. **How far to go?** Phases 0 to 4 make every multi-step action survive a lock, a discard and a
-   device change. Phase 5 goes further: the card you are editing lives on the server (an id from the
-   first keystroke, each field edit saved as you type, every Redo aimed at "card X, field Y"). That is
-   what "truly backend driven" means in full, and it is the only way unsaved edits survive a discarded
-   tab. It is also a rewrite of how the whole result screen holds its data. I'd decide after phase 4.
+2. **How far to go?** Phases 0 to 4 make every AI action on the tab (new cards, later images,
+   revisions, Redo) survive a lock, a discard and a device change, because each one is a run aimed at
+   a working card on the server. What they don't cover is text you typed by hand and haven't saved:
+   that still lives in the page until the next save. Phase 5 closes that by saving edits as you type.
+   I'd decide on phase 5 after phase 4.
 3. **Stop:** keep what finished (recommended: the card stays in History, marked incomplete) or delete
    it, as now?
 4. **Live text:** 2-second polling (recommended first), or token-by-token from the start?
