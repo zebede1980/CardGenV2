@@ -1868,6 +1868,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
     this.currentImageUrl = null;
     this.currentCardId = null;
+    this._lastStoredId = null;
     this._clearImageHistory();
   },
 

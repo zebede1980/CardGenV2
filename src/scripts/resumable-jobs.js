@@ -58,9 +58,10 @@ const ResumableJobs = {
     return this._read().find((e) => e.clientRef === clientRef) || null;
   },
 
-  add({ clientRef, label = "Generation" }) {
+  /** `extra` is kept with the entry for whoever finds it after a reload (e.g. the card a picture is for). */
+  add({ clientRef, label = "Generation", ...extra }) {
     const entries = this.prune().filter((e) => e.clientRef !== clientRef);
-    entries.push({ clientRef, jobId: null, offset: 0, label, startedAt: Date.now() });
+    entries.push({ ...extra, clientRef, jobId: null, offset: 0, label, startedAt: Date.now() });
     this._write(entries);
   },
 

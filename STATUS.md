@@ -1,11 +1,52 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-19 (🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-20 (notification tap no longer replaces the open app, committed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## A notification tap no longer replaces the open app (2026-11-20) — committed, not deployed
+
+Joe started ⚔️ Compare Models on the iPhone (Home Screen app), locked it, tapped the "done" push, entered
+the PIN and got an **empty Character Gen**. From the logs: the four pictures finished at 17:35:26; at
+17:35:35 the *old page* sent its pagehide presence beacon and a fresh page booted. The app was alive; the
+tap replaced it. Cause: pushes are Apple's declarative format, and a tap on a declarative notification
+makes Safari load its `navigate` URL with no JavaScript involved ("navigated to by the browser upon
+activation", WebKit's Declarative Web Push post), so `sw.js`'s "is the app already open?" check never ran.
+The pictures weren't lost: the proxy saved them as History copies ~10 min later, and the new page hadn't
+landed them sooner because they were under 2 minutes old.
+
+- **Pushes are `mutable`** (`services/push.py`, top level and inside `notification`; WebKit bug 297389
+  says it moved). Safari then hands them to `sw.js`, which shows its own notification without
+  `navigate`; a tap goes to `notificationclick`, which messages the open page. The declarative one is
+  only Safari's fallback if `sw.js` fails. `sw.js` also listens for `pushnotification` (WebKit's
+  name in bug 261956), always tags notifications so a double delivery replaces itself, and looks for the
+  open window 4 times over ~750 ms before `openWindow`, in case a frozen page isn't listed at once.
+- **A replaced or discarded page puts the card back** (`card-recovery.js`): on every hide the page writes
+  `cardgen.openCard.v1` (the card's text as on screen, its id, the newest stored copy `_lastStoredId`,
+  POV/type). The next page loads the stored copy (portrait, picture history) and lays the on-screen
+  text over it, so unsaved edits survive. A new card cut short still wins (`NewCardMarker`). Skipped if
+  another tab answers (a second tab starts empty, as before). Kept 24 h. **Every cold start now opens
+  Character Gen on the last card**, not an empty form.
+- **Its pictures are offered again**: image jobs now record the card (`cardKey`), model and prompt in
+  `cardgen.pendingJobs`. For the card put back, the next page shows the pick-one screen ("Drawn while the
+  app was away: pick one", Keep current first), waiting for any still being drawn; it opens when
+  Character Gen is shown. Closing it before a picture is collected leaves that picture to the proxy, which
+  saves it to History. Other cards' pictures land in History as before (2-minute rule kept for those).
+  A picture the proxy already saved can also be offered (then it is in History twice).
+- **Tested:** landing 46 (14 new: card back with portrait, picture offered and picked, still drawing,
+  Keep current, closed early → History, another card → History, unsaved text, Compare Models with two
+  models, nothing open → empty), phase 0 50, runs-page 81, runs 79, parser; backend push 22; `sw.js` in
+  Node (7: mutable push shown without navigate, `pushnotification` with only a proposed notification,
+  click with the page found at once / on the third look / not at all, foreign link).
+  **Not tested:** whether iOS really runs `sw.js` for a mutable push and calls `notificationclick` (only
+  a real iPhone can say), or whether `clients.matchAll` lists a locked app's page.
+- **To try on the iPhone after deploying** (frontend + storywriterbackend; no proxy rebuild): start
+  Compare Models, lock, tap the push, enter the PIN: the same page should be there with the pictures.
+  The logs tell the two cases apart: a `POST /api/push/presence` then a burst of boot requests
+  (`/api/proxy-data/config`, Story Writer connection check) means the page was still replaced.
 
 ## 🔊 Faster Kokoro for narration (2026-11-19) — deployed 2026-11-19
 

@@ -82,10 +82,18 @@ class APIHandler {
     }
 
     // A held picture can be saved with the card it is for if nobody comes back
-    // for it (proxy: landImageJob). The app says which card, if any.
+    // for it (proxy: landImageJob). The app says which card, if any. The job
+    // entry also remembers the card, model and prompt, so a page loaded after
+    // this one went away can offer the picture on that card again
+    // (collectPicturesLeftBehind in card-recovery.js).
+    let pictureFor = null;
     if (isImageRequest && data.resumable && !data.__landing && typeof this.imageLanding === "function") {
       const landing = this.imageLanding();
-      if (landing) data = { ...data, __landing: landing };
+      if (landing) {
+        const { cardKey, ...sent } = landing;
+        data = { ...data, __landing: sent };
+        if (cardKey) pictureFor = { cardKey, model: data.model || "", prompt: String(data.prompt || "").slice(0, 8000) };
+      }
     }
 
     const resumable = !!data.resumable && !!window.ResumableJobs;
@@ -94,7 +102,7 @@ class APIHandler {
       // A caller may pick the ref up front, to find the job again after a reload.
       clientRef = data.clientRef || window.ResumableJobs.newRef();
       data = { ...data, clientRef };
-      window.ResumableJobs.add({ clientRef, label: data.__jobLabel || "Generation" });
+      window.ResumableJobs.add({ clientRef, label: data.__jobLabel || "Generation", ...(pictureFor || {}) });
       if (!isImageRequest) this.activeClientRefs.add(clientRef);
     }
     // Streams hand the ref to handleStreamResponse, which releases it there.

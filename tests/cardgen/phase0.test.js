@@ -243,7 +243,9 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   await page.close();
   page = await open();
   await sleep(800);
-  check("clean reload recovers nothing", (await nameOnScreen(page)) === "" && (await marker(page)) === null);
+  // The card that was open comes back (OpenCardMarker), but nothing is "recovered" as a new card.
+  check("clean reload: the open card is back, nothing recovered", (await nameOnScreen(page)) === "Someone Else" && (await marker(page)) === null &&
+    !(await page.evaluate(() => [...document.querySelectorAll(".notification")].some((el) => /Recovered/.test(el.textContent)))), await nameOnScreen(page));
 
   // B9. Layout: no sideways scroll at 390 and 320.
   for (const width of [390, 320]) {

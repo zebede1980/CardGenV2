@@ -263,6 +263,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
 
       const savedCard = await this.storage.saveCard(cardData);
+      // The newest stored copy of the card on screen: where a page loaded after
+      // this one finds its portrait and pictures (restoreOpenCard).
+      if (savedCard?.id && this.currentCharacter?.name === characterSnapshot.name) this._lastStoredId = savedCard.id;
       if (isPermanent && savedCard && savedCard.id) {
         this.currentCardId = savedCard.id;
         if (typeof this._renderCharacterGalleryPanel === "function") this._renderCharacterGalleryPanel();
@@ -718,6 +721,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.imageHistoryUrls = [];
     }
     this.currentCardId = id;
+    this._lastStoredId = id;
 
     if (card.imageBlob instanceof Blob) {
       this.currentImageUrl = URL.createObjectURL(card.imageBlob);

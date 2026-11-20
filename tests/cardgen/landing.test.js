@@ -208,14 +208,123 @@ const CARD = { name: "Mira Okafor", description: "# Mira Okafor's Profile\n\nA l
   await sleep(600);
   check("page gone mid-draw: nothing saved yet (the grace period is long)", history().length === 1);
 
-  // P2. The app is reopened: the picture is saved to History at once, and it says so.
+  // P2. The app is reopened (a notification tap that loads a URL replaces the
+  //     page the same way): the card is back on screen and the picture is
+  //     offered on it, as its own screen would have; nothing goes to History.
+  const pendingJobs = (p) => p.evaluate(() => JSON.parse(localStorage.getItem("cardgen.pendingJobs") || "[]"));
+  const pickScreen = (p) => p.evaluate(() => {
+    const modal = document.getElementById("image-options-modal");
+    return {
+      open: !!modal?.classList.contains("show"),
+      title: document.querySelector("#image-options-modal .modal-title")?.textContent || "",
+      tiles: [...document.querySelectorAll("#image-options-grid .left-behind-tile")].map((t) => ({ img: !!t.querySelector("img"), label: t.querySelector(".compare-label")?.textContent || "", text: t.querySelector(".compare-body")?.textContent || "" })),
+      keep: !!document.querySelector("#image-options-grid")?.textContent.includes("Keep This"),
+    };
+  });
+  const historyBefore = history().length;
   page = await open();
-  await until(() => history().length === 2, { what: "orphaned picture landed on reload" });
-  const landedItem = history().find((h) => h.id !== cardId);
-  r = await api("GET", `/api/storage/cards/${landedItem.id}`, undefined, token);
-  check("reopened: the picture is in History with its card", landedItem.data.character.name === "Mira Okafor" && String(r.json?.imageBase64 || "").startsWith("data:image/"));
-  check("reopened: the page says so", await until(async () => page.evaluate(() => [...document.querySelectorAll(".notification")].some((el) => /A picture drawn while the app was closed is in History with Mira Okafor/.test(el.textContent))), { what: "notification", timeout: 4000 }).catch(() => false));
-  check("reopened: the pending job entry is cleared", await page.evaluate(() => JSON.parse(localStorage.getItem("cardgen.pendingJobs") || "[]").length === 0));
+  check("reopened: the card that was open is back on screen", await until(() => page.evaluate(() => window.app.currentCharacter?.name === "Mira Okafor" && !!window.app.currentImageUrl), { what: "card restored" }).catch(() => false));
+  let pick = await until(async () => { const s = await pickScreen(page); return s.tiles[0]?.img ? s : null; }, { what: "picture offered" }).catch(() => null);
+  check("reopened: the picture is offered to pick, with Keep current", !!pick && pick.open && /Drawn while the app was away/.test(pick.title) && pick.tiles.length === 1 && pick.tiles[0].label === "fake-image" && pick.keep, JSON.stringify(pick));
+  await sleep(500);
+  check("reopened: nothing was saved to History behind its back", history().length === historyBefore, history().length);
+  check("reopened: the pending job entry is cleared", (await pendingJobs(page)).length === 0);
+  const portraitBefore = await page.evaluate(() => window.app.currentImageUrl);
+  await page.evaluate(() => document.querySelector("#image-options-grid .left-behind-tile").click());
+  check("reopened: picking it makes it the portrait", await until(() => page.evaluate((before) => !document.getElementById("image-options-modal").classList.contains("show") && window.app.currentImageUrl !== before, portraitBefore), { what: "picked" }).catch(() => false));
+  await until(() => page.evaluate(() => !window.app.isSaving), { what: "settled" }).catch(() => null);
+  await sleep(800);
+
+  // P2b. Still being drawn when the app comes back: the tile waits for it.
+  hold = model.hold("image");
+  await page.evaluate(() => { document.getElementById("custom-image-prompt").value = "on the cliff path"; window.app.handleRegenerateImage(); });
+  await until(() => hold.reached, { what: "image held" });
+  await page.close({ runBeforeUnload: false });
+  page = await open();
+  pick = await until(async () => { const s = await pickScreen(page); return s.tiles.length ? s : null; }, { what: "pick screen" }).catch(() => null);
+  check("still drawing: the pick screen says it is collecting", !!pick && /Collecting/.test(pick.tiles[0].text), JSON.stringify(pick));
+  hold.release();
+  pick = await until(async () => { const s = await pickScreen(page); return s.tiles[0]?.img ? s : null; }, { what: "picture arrives" }).catch(() => null);
+  check("still drawing: the picture appears when it is done", !!pick);
+  await page.evaluate(() => document.getElementById("image-options-grid").firstElementChild.click()); // Keep current comes first
+  check("still drawing: Keep current closes it and keeps the old portrait", await until(() => page.evaluate(() => !document.getElementById("image-options-modal").classList.contains("show")), { what: "kept" }).catch(() => false));
+  await sleep(800);
+
+  // P2c. The pick screen is closed before the picture is finished: the proxy saves it to History.
+  hold = model.hold("image");
+  await page.evaluate(() => { document.getElementById("custom-image-prompt").value = "at the lamp"; window.app.handleRegenerateImage(); });
+  await until(() => hold.reached, { what: "image held" });
+  await page.close({ runBeforeUnload: false });
+  page = await open();
+  await until(async () => (await pickScreen(page)).tiles.length > 0, { what: "pick screen" });
+  let count = history().length;
+  await page.evaluate(() => window.app.closeImageOptionsModal());
+  await sleep(2500); // the tile's next look at the job notices the screen has gone
+  hold.release();
+  await until(() => history().length === count + 1, { what: "abandoned picture landed" }).catch(() => null);
+  const abandoned = history()[0];
+  r = abandoned ? await api("GET", `/api/storage/cards/${abandoned.id}`, undefined, token) : null;
+  check("closed early: the picture is saved to History with its card instead", history().length === count + 1 && abandoned.data.character.name === "Mira Okafor" && String(r?.json?.imageBase64 || "").startsWith("data:image/"), history().length - count);
+  check("closed early: no pending entry is left", (await pendingJobs(page)).length === 0);
+
+  // P2d. A picture for a different card than the one put back is saved to History as before.
+  hold = model.hold("image");
+  await page.evaluate(() => { document.getElementById("custom-image-prompt").value = "storm at night"; window.app.handleRegenerateImage(); });
+  await until(() => hold.reached, { what: "image held" });
+  await page.evaluate(() => {
+    const jobs = JSON.parse(localStorage.getItem("cardgen.pendingJobs") || "[]");
+    for (const job of jobs) { job.cardKey = "some-other-card"; job.startedAt -= 5 * 60 * 1000; }
+    localStorage.setItem("cardgen.pendingJobs", JSON.stringify(jobs));
+  });
+  await page.close({ runBeforeUnload: false });
+  hold.release();
+  await sleep(600);
+  count = history().length;
+  page = await open();
+  await until(() => history().length === count + 1, { what: "other card's picture landed" }).catch(() => null);
+  check("another card's picture: saved to History, not offered", history().length === count + 1 && !(await pickScreen(page)).open);
+  check("another card's picture: the page says so", await until(async () => page.evaluate(() => [...document.querySelectorAll(".notification")].some((el) => /A picture drawn while the app was away is in History with Mira Okafor/.test(el.textContent))), { what: "notification", timeout: 4000 }).catch(() => false));
+
+  // P2e. Text edited but never saved survives a replaced page.
+  await page.evaluate(() => { window.app.currentCharacter.scenario = "Edited on screen, never saved."; });
+  await page.close({ runBeforeUnload: false });
+  page = await open();
+  check("unsaved edit: the text comes back as it was on screen", await until(() => page.evaluate(() => window.app.currentCharacter?.scenario === "Edited on screen, never saved."), { what: "edit restored" }).catch(() => false));
+  check("unsaved edit: the portrait comes back with it", await page.evaluate(() => !!window.app.currentImageUrl));
+
+  // P2f. Compare Models with two models, the page replaced mid-draw: both offered, named by model.
+  hold = model.hold("image");
+  const callsBefore = model.calls.filter((c) => c.kind === "image").length;
+  await page.evaluate(() => {
+    document.getElementById("custom-image-prompt").value = "a lighthouse portrait";
+    window.app.openImageOptionsModal();
+    window.app._runModelComparison(["fake-image", "fake-image-two"]);
+  });
+  await until(() => model.calls.filter((c) => c.kind === "image").length >= callsBefore + 2, { what: "both compare draws held" });
+  await page.close({ runBeforeUnload: false });
+  page = await open();
+  await until(async () => (await pickScreen(page)).tiles.length === 2, { what: "two tiles" });
+  hold.release();
+  pick = await until(async () => { const s = await pickScreen(page); return s.tiles.every((t) => t.img) ? s : null; }, { what: "both pictures" }).catch(() => null);
+  check("compare: both models' pictures are offered, each named", !!pick && pick.tiles.map((t) => t.label).sort().join() === "fake-image,fake-image-two", JSON.stringify(pick?.tiles));
+  // (The fake model returns the same picture every time, so the history itself would dedupe them.)
+  const archived = await page.evaluate(() => {
+    const pending = (window.app._pendingCandidateUrls || []).length;
+    window.app.closeImageOptionsModal();
+    return { pending, after: window.app._pendingCandidateUrls };
+  });
+  check("compare: closing hands both to the card's picture history", archived.pending === 2 && archived.after === null, JSON.stringify(archived));
+  await sleep(800);
+
+  // P2g. Nothing on screen when the page went: the next one starts empty.
+  await page.evaluate(() => { window.app.currentCharacter = null; });
+  await page.close({ runBeforeUnload: false });
+  page = await open();
+  await sleep(1500);
+  check("nothing open: the next page starts with an empty form", await page.evaluate(() => !window.app.currentCharacter));
+  await page.evaluate(async () => {
+    await window.app.loadCardIntoEditor((await window.app.storage.listCards())[0].id, { quiet: true });
+  });
 
   // P3. With a second tab open, a reload leaves that tab's pending picture alone.
   hold = model.hold("image");
@@ -230,9 +339,10 @@ const CARD = { name: "Mira Okafor", description: "# Mira Okafor's Profile\n\nA l
     for (const job of jobs) job.startedAt -= 5 * 60 * 1000;
     localStorage.setItem("cardgen.pendingJobs", JSON.stringify(jobs));
   });
+  const historyTwoTabs = history().length;
   const second = await open();
   await sleep(1500);
-  check("two tabs: the new tab does not land a picture the first is waiting for", history().length === 2 && await second.evaluate(() => JSON.parse(localStorage.getItem("cardgen.pendingJobs") || "[]").length === 1));
+  check("two tabs: the new tab does not land a picture the first is waiting for", history().length === historyTwoTabs && await second.evaluate(() => JSON.parse(localStorage.getItem("cardgen.pendingJobs") || "[]").length === 1));
   await second.close();
   hold.release();
   await until(async () => page.evaluate(() => !!document.querySelector("#image-options-grid img")), { what: "first tab got its picture" });

@@ -128,6 +128,67 @@ const CardgenPages = {
 };
 CardgenPages.start();
 
+// The card on Character Gen's screen, written each time the page is hidden.
+// A page can be replaced while the app is in the background (a tap on a
+// notification that loads a URL, iOS discarding it), and the next one used to
+// start with an empty form. It puts this card back instead: the last stored
+// copy for the portrait and pictures, then the text as it was on screen, so
+// edits that were never saved survive too.
+const OpenCardMarker = {
+  KEY: "cardgen.openCard.v1",
+  MAX_AGE_MS: 24 * 60 * 60 * 1000,
+  // A card's text is tens of KB; this only stops a freak one filling localStorage.
+  MAX_TEXT_CHARS: 1.5 * 1024 * 1024,
+
+  read() {
+    try {
+      const marker = JSON.parse(localStorage.getItem(this.KEY) || "null");
+      if (!marker || typeof marker !== "object" || Date.now() - (marker.at || 0) > this.MAX_AGE_MS) return null;
+      return marker;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  remember(app) {
+    try {
+      if (!app?.storageReady) return; // still booting: what is stored is still right
+      if (!app.currentCharacter) {
+        localStorage.removeItem(this.KEY);
+        return;
+      }
+      let character = JSON.stringify({
+        ...app.currentCharacter,
+        character_book: app.buildCharacterBook?.() ?? app.currentCharacter.character_book,
+        alternateGreetings: (app.altGreetings || []).map((g) => g.content),
+      });
+      if (character.length > this.MAX_TEXT_CHARS) character = null;
+      localStorage.setItem(this.KEY, JSON.stringify({
+        at: Date.now(),
+        cardKey: app._editorCardKey(),
+        currentCardId: app.currentCardId || null,
+        storedId: app._lastStoredId || null,
+        stSourceAvatar: app.stSourceAvatar || null,
+        pov: document.getElementById("pov-select")?.value || "",
+        cardType: document.getElementById("card-type-select")?.value || "",
+        character,
+      }));
+    } catch (_) {
+      // Storage full or unavailable: the next page just starts empty, as before.
+    }
+  },
+
+  start() {
+    // "hidden" is the last moment a page is sure to run: iOS may freeze or
+    // drop it after that without another event.
+    const save = () => this.remember(window.app);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") save(); });
+    window.addEventListener("pagehide", save);
+  },
+};
+OpenCardMarker.start();
+window.OpenCardMarker = OpenCardMarker;
+
 // Labels of the image jobs Character Gen starts (api-image.js).
 const CARD_IMAGE_JOB_LABELS = new Set(["Character image", "Image edit"]);
 // A job newer than this may belong to a page that is merely slow to wake.
@@ -149,22 +210,227 @@ Object.assign(CharacterGeneratorApp.prototype, {
   _imageLanding() {
     if (this._noImageLanding || !this.currentCharacter) return null;
     if (window.cardgenPage?.view() !== "cardgen") return null;
-    return { card: this.currentCharacter, replaceHistoryId: this._draftHistoryId || undefined };
+    // cardKey stays in the browser (api.js takes it off): it ties the job to
+    // the card on screen for collectPicturesLeftBehind.
+    return { card: this.currentCharacter, replaceHistoryId: this._draftHistoryId || undefined, cardKey: this._editorCardKey() };
+  },
+
+  /** Names the card on screen, the same way in this page and the next one. */
+  _editorCardKey() {
+    if (!this.currentCharacter) return null;
+    return this.currentCardId || this._draftHistoryId || `name:${this.currentCharacter.name || ""}`;
   },
 
   /**
-   * On load: pictures a previous page of this browser asked for and never
-   * collected. Nothing here can show them the way their screen would have, so
-   * the proxy is asked to save each with its card in History now, rather than
-   * when its grace period runs out.
+   * On load, with nothing else on screen: put back the card that was there
+   * when the last page was hidden (OpenCardMarker). Returns true if it did.
    */
-  async landOrphanedImages() {
+  async restoreOpenCard() {
+    const marker = OpenCardMarker.read();
+    if (!marker || this.currentCharacter || this.isGenerating) return false;
+    let snapshot = null;
+    try { snapshot = marker.character ? JSON.parse(marker.character) : null; } catch (_) { snapshot = null; }
+    try {
+      const loaded = marker.storedId ? await this.loadCardIntoEditor(marker.storedId, { quiet: true }) : false;
+      if (!loaded && !snapshot) return false;
+      if (this.isGenerating) return false; // the user started something while it loaded
+      if (snapshot) {
+        // The text as it was on screen, which may be newer than the stored copy.
+        if (!loaded) {
+          this._resetCharacterMediaState?.();
+          this.originalCharacter = JSON.parse(JSON.stringify(snapshot));
+        }
+        this.currentCharacter = snapshot;
+        this.lorebookEntries = this._lorebookEntriesFromBook(snapshot.character_book);
+        this.updateLorebookEntryCount?.();
+        this.altGreetings = (snapshot.alternateGreetings || []).map((content, i) => ({ id: `${Date.now()}${i}`, content }));
+        this.updateAltGreetingsCount?.();
+        this.displayCharacter();
+        if (!loaded) this._showRecoveredCard();
+      }
+      this._restoreCardSelects({ pov: marker.pov, cardType: marker.cardType });
+      // The card it was, not the History copy its pictures were read from.
+      this.currentCardId = marker.currentCardId || null;
+      this._lastStoredId = marker.storedId || null;
+      this.stSourceAvatar = marker.stSourceAvatar || null;
+      this._updatePushButton?.();
+      this._renderCharacterGalleryPanel?.();
+      this._restoredCardKey = marker.cardKey || null;
+      return true;
+    } catch (error) {
+      console.warn("[recovery] could not put back the card that was open:", error);
+      return false;
+    }
+  },
+
+  /**
+   * On load, with no other tab open: Character Gen pictures a previous page
+   * of this browser asked for and never collected. Those for the card just
+   * put back on screen are offered to pick from, as their own screen would
+   * have; the rest are saved to History with their cards.
+   */
+  async handlePicturesLeftBehind() {
+    try {
+      const jobs = (window.ResumableJobs?.list() || []).filter((job) => CARD_IMAGE_JOB_LABELS.has(job.label));
+      if (jobs.length === 0) return;
+      const key = this._restoredCardKey;
+      const mine = key && this.currentCharacter ? jobs.filter((job) => job.cardKey === key) : [];
+      await this.landOrphanedImages(jobs.filter((job) => !mine.includes(job)));
+      if (mine.length) this._whenCardGenShown(() => this.offerPicturesLeftBehind(mine));
+    } catch (error) {
+      console.warn("[recovery] could not deal with pictures left behind:", error);
+    }
+  },
+
+  /** Run `fn` now if Character Gen is on screen, else the next time it is. */
+  _whenCardGenShown(fn) {
+    if (window.cardgenPage?.view() === "cardgen") return fn();
+    const tab = document.getElementById("tab-cardgen");
+    if (!tab) return fn();
+    tab.addEventListener("click", () => setTimeout(fn, 0), { once: true });
+  },
+
+  /**
+   * The pick-one screen again, for pictures whose page went away: Keep
+   * current first, then each picture as it is collected. Nothing is collected
+   * once the screen is gone (picked, kept, closed): those are left to the
+   * proxy, which saves them to History, so none is lost.
+   */
+  async offerPicturesLeftBehind(jobs) {
+    const character = this.currentCharacter;
+    if (!character || this._pendingCandidateUrls) return;
+    const modal = document.getElementById("image-options-modal");
+    const modalTitle = document.querySelector("#image-options-modal .modal-title");
+    const grid = document.getElementById("image-options-grid");
+    const loading = document.getElementById("image-options-loading");
+    if (!modal || !grid) return;
+
+    this.openImageOptionsModal();
+    if (modalTitle) modalTitle.textContent = "🖼️ Drawn while the app was away: pick one";
+    if (loading) loading.style.display = "none";
+    grid.innerHTML = "";
+    if (!grid.dataset.defaultColumns) grid.dataset.defaultColumns = grid.style.gridTemplateColumns;
+    grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(min(120px, 100%), 1fr))";
+
+    const landedUrls = [];
+    const landed = [];
+    this._pendingCandidateUrls = landedUrls;
+    const live = () => this._pendingCandidateUrls === landedUrls && modal.classList.contains("show");
+
+    const tiles = jobs.map((job) => {
+      const tile = document.createElement("div");
+      tile.className = "left-behind-tile";
+      tile.style.cssText = "border:2px solid transparent;border-radius:0.5rem;overflow:hidden;background:var(--surface-color);position:relative;display:flex;flex-direction:column;";
+      tile.innerHTML = `
+        <div class="compare-body" style="min-height:12rem;display:flex;align-items:center;justify-content:center;padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">⏳ Collecting…</div>
+        <div class="compare-label" style="padding:0.5rem;text-align:center;font-size:0.8rem;color:var(--text-secondary);background:rgba(0,0,0,0.1);border-top:1px solid var(--border);font-family:monospace;overflow-wrap:anywhere;"></div>`;
+      tile.querySelector(".compare-label").textContent = job.model || "picture";
+      grid.appendChild(tile);
+      return tile;
+    });
+    this._insertCurrentImageCard(grid, landedUrls);
+
+    const results = await Promise.all(jobs.map((job, i) => this._collectPictureLeftBehind(job, tiles[i], { live, character, landed, landedUrls })));
+    if (!live()) return;
+    const got = results.filter(Boolean).length;
+    if (got === 0) {
+      this._pendingCandidateUrls = null;
+      this.closeImageOptionsModal();
+      this.showNotification("The pictures drawn while the app was away could not be collected. Any that were finished are in History.", "warning", 6000);
+    } else {
+      this.showNotification(`${got === 1 ? "A picture" : `${got} pictures`} drawn while the app was away: tap the one you want.`, "info");
+    }
+  },
+
+  /** One picture into its tile. Returns true if it was shown. */
+  async _collectPictureLeftBehind(job, tile, { live, character, landed, landedUrls }) {
+    const body = tile.querySelector(".compare-body");
+    const say = (text) => { if (body && live()) body.textContent = text; };
+    try {
+      // Wait without collecting, so a picture whose screen has gone is still
+      // the proxy's to save.
+      const state = await this._waitForImageJob(job.clientRef, live);
+      if (state === "abandoned") {
+        await this.landOrphanedImages([job], { now: true });
+        return false;
+      }
+      if (!state) {
+        window.ResumableJobs.remove(job.clientRef);
+        say("Not held any more. If it was finished, it is in History.");
+        return false;
+      }
+      const response = await this.apiHandler._tryCollectResult(job.clientRef, true, { maxWaitMs: 60 * 1000 });
+      window.ResumableJobs.remove(job.clientRef);
+      if (!response) {
+        say("Not held any more. If it was finished, it is in History.");
+        return false;
+      }
+      const result = await response.json();
+      const remote = result?.data?.[0]?.url || result?.image || result?.url;
+      if (!remote) throw new Error("No picture in the reply");
+      const url = await this._fetchAsDisplayUrl(remote);
+      if (!live()) {
+        // Collected just as the screen went: keep it with the card, as Compare does.
+        if (this.currentCharacter === character) {
+          this._addToHistory(url);
+          this.saveCardToLibrary().then(() => this.refreshLibraryViews()).catch((e) => console.warn("Saving a late picture failed:", e));
+        }
+        return false;
+      }
+      const entry = { url, prompt: job.prompt || "", model: job.model || "", label: job.model || "picture" };
+      landed.push(entry);
+      landedUrls.push(url);
+      tile.style.cursor = "pointer";
+      tile.onclick = () => this.selectImageOption(url, entry.prompt, entry.model, landed);
+      body.style.cssText = "";
+      body.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = entry.label;
+      img.style.cssText = "width:100%;height:auto;display:block;";
+      body.appendChild(img);
+      return true;
+    } catch (error) {
+      window.ResumableJobs.remove(job.clientRef);
+      say(`❌ ${error.message}`);
+      return false;
+    }
+  },
+
+  /**
+   * Polls a job's state without collecting it. Resolves the job when it has
+   * finished (or failed), null if the proxy no longer has it, or "abandoned"
+   * if the screen waiting for it went away first.
+   */
+  async _waitForImageJob(clientRef, live) {
+    for (;;) {
+      if (!live()) return "abandoned";
+      await this.apiHandler._waitUntilVisible?.();
+      try {
+        const res = await window.authFetch(`/api/jobs?clientRef=${encodeURIComponent(clientRef)}`);
+        if (res.ok) {
+          const job = (await res.json()).jobs?.[0];
+          if (!job) return null;
+          window.ResumableJobs.update(clientRef, { jobId: job.id });
+          if (job.status !== "running") return job;
+        }
+      } catch (_) {
+        // No connection yet (just woken): keep waiting.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  },
+
+  /**
+   * Asks the proxy to save these pictures with their cards in History now,
+   * rather than when its grace period runs out. Without `now`, only those old
+   * enough that the page that asked for them can't just be slow to wake.
+   */
+  async landOrphanedImages(jobs, { now: landNow = false } = {}) {
     try {
       const now = Date.now();
-      const orphans = (window.ResumableJobs?.list() || [])
-        .filter((job) => CARD_IMAGE_JOB_LABELS.has(job.label) && now - (job.startedAt || 0) > ORPHANED_IMAGE_AFTER_MS);
+      const orphans = (jobs || []).filter((job) => landNow || now - (job.startedAt || 0) > ORPHANED_IMAGE_AFTER_MS);
       if (orphans.length === 0) return;
-      if (await CardgenPages.anotherIsOpen()) return; // that tab may still be waiting for them
 
       const res = await window.authFetch("/api/jobs/land", {
         method: "POST",
@@ -178,7 +444,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       const names = [...new Set(landed.map((item) => item.name).filter(Boolean))].join(", ");
       const what = landed.length === 1 ? "A picture" : `${landed.length} pictures`;
-      this.showNotification(`${what} drawn while the app was closed ${landed.length === 1 ? "is" : "are"} in History${names ? ` with ${names}` : ""}.`, "info");
+      this.showNotification(`${what} drawn while the app was away ${landed.length === 1 ? "is" : "are"} in History${names ? ` with ${names}` : ""}.`, "info");
       this.refreshLibraryViews?.();
     } catch (error) {
       console.warn("[recovery] could not land uncollected pictures:", error);
@@ -206,11 +472,28 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   /**
-   * On load: put back a character whose pipeline was cut short by the page
-   * going away. Never throws; a failure just leaves the form empty as before.
+   * On load: put back what the last page had on Character Gen. A character
+   * whose making was cut short comes first; failing that, the card that was
+   * open; then any pictures that were being drawn for it. Never throws.
    */
   async recoverNewCard() {
-    this.landOrphanedImages();
+    let recovered = false;
+    try {
+      recovered = await this._recoverInterruptedNewCard();
+    } finally {
+      // With another tab open this is a second tab, not a replacement for a
+      // page that went away: what that tab has on screen and is waiting for
+      // stays its own.
+      if (!(await CardgenPages.anotherIsOpen())) {
+        if (!recovered && !this.currentCharacter && !this.isGenerating) await this.restoreOpenCard();
+        await this.handlePicturesLeftBehind();
+      }
+    }
+    return recovered;
+  },
+
+  /** A character whose pipeline was cut short by the page going away. */
+  async _recoverInterruptedNewCard() {
     const marker = NewCardMarker.read();
     if (marker) {
       // Another tab is still making it: the marker is that tab's, so leave it be.
