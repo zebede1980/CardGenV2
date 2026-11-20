@@ -84,12 +84,20 @@ def public_key(db) -> str:
 
 
 def payload(title: str, body: str, url: str, tag: str = "") -> str:
-    """Apple's declarative push format (Safari 18.4+ can show it without running
-    the service worker); sw.js reads the same fields on every other browser."""
-    note = {"title": title, "body": body, "navigate": url, "lang": "en-GB"}
+    """Apple's declarative push format; sw.js reads the same fields on every other browser.
+
+    "mutable" makes Safari hand the message to sw.js, which shows the notification
+    itself. A tap on a declarative notification makes Safari load `navigate` with
+    no JavaScript involved, replacing the page that is open (and whatever it was
+    in the middle of); a tap on sw.js's own goes to its notificationclick, which
+    asks the open page to switch view instead. The declarative notification is
+    only the fallback if sw.js fails. WebKit first read "mutable" inside
+    "notification" and now reads it beside it (WebKit bug 297389), so it is in both.
+    """
+    note = {"title": title, "body": body, "navigate": url, "lang": "en-GB", "mutable": True}
     if tag:
         note["tag"] = tag
-    return json.dumps({"web_push": 8030, "notification": note})
+    return json.dumps({"web_push": 8030, "mutable": True, "notification": note})
 
 
 def send(db, sub: models.PushSubscription, title: str, body: str, path: str = "/", tag: str = "") -> str:

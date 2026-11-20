@@ -115,6 +115,8 @@ def test_a_test_push_is_encrypted_for_the_device_and_signed(client, service):
     assert sent["headers"]["Authorization"].startswith("vapid t=")
     msg = d.read(sent["data"])
     assert msg["web_push"] == 8030
+    # Mutable, so Safari lets sw.js show it and a tap doesn't reload the open page.
+    assert msg["mutable"] is True and msg["notification"]["mutable"] is True
     assert msg["notification"]["navigate"] == "https://cards.example.org/?open=home"
     assert "iPhone" in msg["notification"]["body"]
 
