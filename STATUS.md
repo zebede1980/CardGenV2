@@ -1,13 +1,16 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-20 (notification tap no longer replaces the open app, committed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-20 (notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## A notification tap no longer replaces the open app (2026-11-20) — committed, not deployed
+## A notification tap no longer replaces the open app (2026-11-20) — deployed 2026-11-20 (`9177cb2`, frontend + storywriterbackend)
+
+After deploying: the site serves the new `card-recovery.js` version and `sw.js`, and the backend builds
+`mutable` payloads (checked inside the container). No push has been sent or tapped since.
 
 Joe started ⚔️ Compare Models on the iPhone (Home Screen app), locked it, tapped the "done" push, entered
 the PIN and got an **empty Character Gen**. From the logs: the four pictures finished at 17:35:26; at
