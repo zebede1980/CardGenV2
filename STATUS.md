@@ -16,7 +16,7 @@ draws twice, grouped in the grid (up to 4 models, so up to 8 images). `_playgrou
 image model): tab order, panels switch, no sideways scroll, 2 per model sends 2 requests per ticked model,
 remembered on reload, 1 per model and plain counts unchanged. Not tried on the iPhone.
 
-## Playground: Recent pictures + prompt history (2026-11-22) — committed, not deployed
+## Playground: Recent pictures + prompt history (2026-11-22) — deployed 2026-11-22 (`6b85489`, proxy + frontend)
 
 - **Every Playground picture is kept for 3 days** (Generate, Edit, Reimagine, Enhance, Combine; not Crop,
   not Character Gen or Messenger). The page tags the request `__keep: { tool, prompt }` (a `keep` option on
