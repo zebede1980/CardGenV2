@@ -18,7 +18,9 @@ remembered on reload, 1 per model and plain counts unchanged. Not tried on the i
 
 ## Local model survey (2026-11-22): Ideogram 4 parked
 
-Joe dropped `local/flux3-klein` from his model list (results consistently a bit off). A survey of ComfyUI's
+Joe dropped `local/flux3-klein` from his model list (results consistently a bit off). Its DiT file and the
+unused NoobAI-XL checkpoint were then deleted from the PC, so `local/flux3-klein` (still in
+`LOCAL_COMFY_MODELS`) now fails in ComfyUI if picked; its text encoder and VAE stay (FIBO 2.0 uses them). A survey of ComfyUI's
 local image templates found nothing clearly better than what's installed. **Ideogram 4.0** (Comfy-Org/Ideogram-4,
 int8, Ideogram non-commercial licence) was started and **parked before testing**: it runs two 9.6 GB DiTs per
 step (conditional + unconditional guider, won't both fit in 16 GB), has a built-in NSFW safety filter,
