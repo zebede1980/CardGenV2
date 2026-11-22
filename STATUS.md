@@ -7,6 +7,15 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Playground: tool tabs on top, "2 per model" (2026-11-22) — committed, not deployed
+
+The Generate / Crop / Edit / Reimagine / … tabs (`#playground-tool-tabs`) moved above the drop zone and
+picture; their panels stay below the picture. How many → **2 per model** (`models2`): each ticked model
+draws twice, grouped in the grid (up to 4 models, so up to 8 images). `_playgroundPerModelCount()` in
+`image-playground.js`. Tested in headless WebKit (390 light / 320 dark / 1280; real page + proxy, fake
+image model): tab order, panels switch, no sideways scroll, 2 per model sends 2 requests per ticked model,
+remembered on reload, 1 per model and plain counts unchanged. Not tried on the iPhone.
+
 ## A notification tap no longer replaces the open app (2026-11-20) — deployed 2026-11-20 (`9177cb2`, frontend + storywriterbackend)
 
 After deploying: the site serves the new `card-recovery.js` version and `sw.js`, and the backend builds

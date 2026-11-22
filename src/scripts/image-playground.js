@@ -172,7 +172,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (generateCountSelect) {
       this._restorePlaygroundGenerateCount();
       generateCountSelect.addEventListener("change", (e) => {
-        const value = e.target.value === "models" ? "models" : parseInt(e.target.value, 10) || 1;
+        const value = this._playgroundPerModelCount() ? e.target.value : parseInt(e.target.value, 10) || 1;
         this.config.set("api.image.generateCount", value);
         this._syncPlaygroundGenerateMode();
       });
@@ -368,15 +368,24 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this._syncPlaygroundGenerateMode();
   },
 
-  // "1 per model" swaps the model dropdown for a checklist: the same prompt
-  // drawn once by each ticked model, to see which suits it.
+  // How many images each ticked model draws: 1 for "1 per model", 2 for
+  // "2 per model", 0 when How many is a plain count for the dropdown's model.
+  _playgroundPerModelCount() {
+    const value = document.getElementById("playground-generate-count")?.value;
+    return value === "models" ? 1 : value === "models2" ? 2 : 0;
+  },
+
+  // "1/2 per model" swaps the model dropdown for a checklist: the same prompt
+  // drawn by each ticked model, to see which suits it.
   _syncPlaygroundGenerateMode() {
-    const perModel = document.getElementById("playground-generate-count")?.value === "models";
+    const perModelCount = this._playgroundPerModelCount();
     const single = document.getElementById("playground-generate-single-model");
     const compare = document.getElementById("playground-generate-compare");
-    if (single) single.style.display = perModel ? "none" : "";
-    if (compare) compare.style.display = perModel ? "" : "none";
-    if (perModel) this._renderPlaygroundCompareList();
+    const label = document.getElementById("playground-generate-compare-label");
+    if (single) single.style.display = perModelCount ? "none" : "";
+    if (compare) compare.style.display = perModelCount ? "" : "none";
+    if (label) label.textContent = `Models (${perModelCount === 2 ? "two images" : "one image"} each, up to 4):`;
+    if (perModelCount) this._renderPlaygroundCompareList();
   },
 
   // Shares its picks with Character Gen's ⚔️ Compare Models, so there is one
@@ -438,7 +447,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   openPlaygroundPromptBuilder() {
     if (!window.promptBuilder) return;
     const promptEl = document.getElementById("playground-generate-prompt");
-    const perModel = document.getElementById("playground-generate-count")?.value === "models";
+    const perModel = !!this._playgroundPerModelCount();
     const model = (perModel && document.querySelector("#playground-generate-compare-list input:checked")?.value)
       || document.getElementById("playground-generate-model")?.value
       || this.config.get("api.image.generateModel") || "";
@@ -501,8 +510,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const promptAt = (index) => (takes ? takes[index].prompt : prompt);
     this._pgGenerateLabels = takes ? takes.map(t => t.label) : null;
 
-    // One model per slot: the dropdown's model N times, or each ticked model once.
-    const perModel = !takes && document.getElementById("playground-generate-count")?.value === "models";
+    // One model per slot: the dropdown's model N times, or each ticked model
+    // once or twice (side by side in the grid).
+    const perModelCount = takes ? 0 : this._playgroundPerModelCount();
+    const perModel = !!perModelCount;
     let models;
     if (takes) {
       const model = takesModel || document.getElementById("playground-generate-model")?.value || this.config.get("api.image.generateModel");
@@ -512,7 +523,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       }
       models = takes.map(() => model);
     } else if (perModel) {
-      models = [...document.querySelectorAll("#playground-generate-compare-list input:checked")].map(cb => cb.value);
+      models = [...document.querySelectorAll("#playground-generate-compare-list input:checked")]
+        .flatMap(cb => Array(perModelCount).fill(cb.value));
       if (!models.length) {
         this.showNotification("Tick at least one model to generate with", "warning");
         return;
@@ -544,7 +556,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       statusEl.textContent = takes
         ? `🖼️ Drawing ${count} takes with ${models[0]}… ${done}/${count} done, this may take a minute.`
         : perModel
-        ? `🪄 Generating with ${count} model${count > 1 ? "s" : ""}… ${done}/${count} done, this may take a minute.`
+        ? `🪄 Generating ${perModelCount === 2 ? "2 each " : ""}with ${count / perModelCount} model${count > perModelCount ? "s" : ""}… ${done}/${count} done, this may take a minute.`
         : count > 1
           ? `🪄 Generating ${count} with ${models[0]}… ${done}/${count} done, this may take a minute.`
           : `🪄 Generating with ${models[0]}… this may take a minute.`;

@@ -2395,6 +2395,19 @@
                             Generate an image from a prompt, or upload/paste one, then crop or prompt-edit it — no character card needed.
                         </p>
 
+                        <!-- Tool tabs, above the drop zone and picture so they read as
+                             "what do you want to do", not as controls for the picture. Their
+                             panels stay in #playground-tools-section below the picture. -->
+                        <div id="playground-tool-tabs" style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+                            <button type="button" id="pg-tab-generate" class="btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🪄 Generate</button>
+                            <button type="button" id="pg-tab-crop" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✂️ Crop</button>
+                            <button type="button" id="pg-tab-edit" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
+                            <button type="button" id="pg-tab-reimagine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="A new picture of the same character, scene and style — a new angle, pose or moment">🔄 Reimagine</button>
+                            <button type="button" id="pg-tab-enhance" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">⬆️ Enhance</button>
+                            <button type="button" id="pg-tab-combine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🔀 Combine</button>
+                            <button type="button" id="pg-tab-library" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="Images you have saved, on the server and available from any device">📚 Library</button>
+                        </div>
+
                         <input type="file" id="playground-image-file" accept="image/*" style="display: none;" />
 
                         <!-- Drop zone — click to upload, or paste directly. A real text
@@ -2475,16 +2488,6 @@
                              identity-anchored regeneration, and canvas extension via prompt
                              alone — no need for three separate mask/frame-based tools. -->
                         <div id="playground-tools-section" style="margin-top: 1rem;">
-                            <div id="playground-tool-tabs" style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
-                                <button type="button" id="pg-tab-generate" class="btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🪄 Generate</button>
-                                <button type="button" id="pg-tab-crop" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✂️ Crop</button>
-                                <button type="button" id="pg-tab-edit" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">✨ Edit</button>
-                                <button type="button" id="pg-tab-reimagine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="A new picture of the same character, scene and style — a new angle, pose or moment">🔄 Reimagine</button>
-                                <button type="button" id="pg-tab-enhance" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">⬆️ Enhance</button>
-                                <button type="button" id="pg-tab-combine" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;">🔀 Combine</button>
-                                <button type="button" id="pg-tab-library" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="Images you have saved, on the server and available from any device">📚 Library</button>
-                            </div>
-
                             <!-- Create-from-nothing: the only tab that doesn't need an image
                                  loaded first. A successful generation becomes the working image
                                  (same as an upload/paste) and hands off to the Edit tab, same as
@@ -2500,11 +2503,11 @@
                                          listed instead of an empty dropdown. -->
                                     <p id="playground-generate-model-hint" style="display: none; font-size: 0.7rem; color: var(--warning); margin: 0 0 0.75rem;"></p>
                                 </div>
-                                <!-- Shown instead of the dropdown when How many is "1 per model".
+                                <!-- Shown instead of the dropdown when How many is "1/2 per model".
                                      Filled by _renderPlaygroundCompareList; the picks are shared
                                      with Character Gen's ⚔️ Compare Models (api.image.compareModels). -->
                                 <div id="playground-generate-compare" style="display: none; margin-bottom: 0.75rem;">
-                                    <span class="label" style="display:block; margin-bottom:0.35rem;">Models (one image each, up to 4):</span>
+                                    <span id="playground-generate-compare-label" class="label" style="display:block; margin-bottom:0.35rem;">Models (one image each, up to 4):</span>
                                     <div id="playground-generate-compare-list" style="display: flex; flex-direction: column; gap: 0.35rem;"></div>
                                 </div>
 
@@ -2554,6 +2557,7 @@
                                         <option value="2">2</option>
                                         <option value="4">4</option>
                                         <option value="models">1 per model</option>
+                                        <option value="models2">2 per model</option>
                                     </select>
                                     <!-- Own setting, not Character Gen's Aspect Ratio: before this
                                          existed, Playground quietly used whatever that was set to. -->
@@ -2956,7 +2960,7 @@
         <script src="src/scripts/character-display.js?v=20261119-revise"></script>
         <script src="src/scripts/image-handler.js?v=20261120-reopen"></script>
         <script src="src/scripts/image-cropper.js?v=20260922-imagefixes"></script>
-        <script src="src/scripts/image-playground.js?v=20261106-angles"></script>
+        <script src="src/scripts/image-playground.js?v=20261122-2permodel"></script>
         <script src="src/scripts/prompt-builder.js?v=20261023-format"></script>
         <script src="src/scripts/playground-library.js?v=20260908-modelcaps"></script>
         <script src="src/scripts/lorebook-handler.js?v=20261119-revise"></script>
