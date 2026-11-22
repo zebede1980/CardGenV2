@@ -16,6 +16,17 @@ draws twice, grouped in the grid (up to 4 models, so up to 8 images). `_playgrou
 image model): tab order, panels switch, no sideways scroll, 2 per model sends 2 requests per ticked model,
 remembered on reload, 1 per model and plain counts unchanged. Not tried on the iPhone.
 
+## Local model survey (2026-11-22): Ideogram 4 parked
+
+Joe dropped `local/flux3-klein` from his model list (results consistently a bit off). A survey of ComfyUI's
+local image templates found nothing clearly better than what's installed. **Ideogram 4.0** (Comfy-Org/Ideogram-4,
+int8, Ideogram non-commercial licence) was started and **parked before testing**: it runs two 9.6 GB DiTs per
+step (conditional + unconditional guider, won't both fit in 16 GB), has a built-in NSFW safety filter,
+is text-to-image only, and ranks below Qwen 2.1 / level with H3 on Arena. Its strength is typography and
+layout, not portraits. If revisited: the template is `image_ideogram4_t2i_int8`; the existing
+`qwen3vl_8b_int8_convrot` and `flux2-vae` serve as its text encoder and VAE. Possible later adds: SeedVR2
+(3B/7B int8) as a free local upscaler for ⬆️ Enhance; Anima v1 as an Illustrious alternative.
+
 ## A notification tap no longer replaces the open app (2026-11-20) — deployed 2026-11-20 (`9177cb2`, frontend + storywriterbackend)
 
 After deploying: the site serves the new `card-recovery.js` version and `sw.js`, and the backend builds
