@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Playground: 🔍 Describe (2026-11-22) — committed, not deployed
+## Playground: 🔍 Describe (2026-11-22) — deployed 2026-11-22 (`be89bb0`, proxy + frontend)
 
 🔍 Describe beside 💾 Save to library: the vision model (`api.text.visionModel`, else the text model)
 describes the working image as a reusable prompt (`describeImageForPrompt` in `api-image.js`: medium +
