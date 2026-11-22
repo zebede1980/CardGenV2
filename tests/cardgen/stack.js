@@ -88,6 +88,7 @@ Keep replies short and wary.
 function replyKind(body) {
   const text = (body.messages || []).map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n");
   if (/Revise the following character according to this request/.test(text)) return "revise";
+  if (/recreate them from your words alone/.test(text)) return "describe";
   if (/identify and list supporting cast members/.test(text)) return "cast-list";
   if (/Generate the supporting cast member JSON now/.test(text)) return "cast-member";
   if (/You make targeted edits to roleplay character cards/.test(text)) return "card-edit";
@@ -130,6 +131,7 @@ const REPLIES = {
   posthistory: "Post-history written on its own.",
   examples: "<START>\n{{char}}: \"Mind the step.\"",
   "image-prompt": "A weathered lighthouse keeper in a yellow oilskin, storm light, 35mm photograph.",
+  describe: "A 35mm film photo of a lighthouse on a rocky point at dusk, its lamp lit, waves breaking below, warm orange sky fading to blue.",
   other: "A plain reply.",
 };
 

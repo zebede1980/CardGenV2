@@ -173,6 +173,50 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("an edit lands in Recent as an edit", list.items[0].tool === "edit" && list.items[0].prompt === "make it night time", JSON.stringify(list.items[0]));
   check("the edit instruction tops Edit's Recent group", (await until(() => recentOptions(page, "edit").then((o) => o[0] === "make it night time" && o)))[0] === "make it night time");
 
+  // 🔍 Describe the working image.
+  const DESCRIBED = require("./stack").REPLIES.describe;
+  const describeIdle = () => page.waitForFunction(() => !document.getElementById("describe-playground-image-btn").disabled, null, { timeout: 20000 });
+  const setHidden = (hidden) => page.evaluate((h) => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (h ? "hidden" : "visible") });
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+  check("🔍 Describe shows beside 💾 Save", await page.locator("#describe-playground-image-btn").isVisible());
+  check("the description box starts hidden", !(await page.locator("#playground-describe-box").isVisible()));
+  const describeHold = model.hold("describe", 1);
+  const describesBefore = model.count("describe");
+  await page.click("#describe-playground-image-btn");
+  await until(() => describeHold.reached, { what: "describe held mid-stream" });
+  check("the box opens while it writes, button disabled", await page.locator("#playground-describe-box").isVisible()
+    && await page.locator("#describe-playground-image-btn").isDisabled());
+  await until(async () => (await page.inputValue("#playground-describe-text")).length > 0, { what: "first chunk shown" });
+  check("text streams into the box", DESCRIBED.startsWith(await page.inputValue("#playground-describe-text")));
+  await setHidden(true);
+  describeHold.release();
+  await sleep(500);
+  await setHidden(false);
+  await describeIdle();
+  check("the full description lands after a hide mid-stream", (await page.inputValue("#playground-describe-text")) === DESCRIBED, await page.inputValue("#playground-describe-text"));
+  check("…from one model call", model.count("describe") === describesBefore + 1, model.count("describe") - describesBefore);
+  const describeCall = model.calls.filter((c) => c.kind === "describe").pop();
+  check("the call streams and sends the working image", describeCall.stream
+    && JSON.stringify(describeCall.body.messages).includes("image_url"));
+
+  const describeScroll = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  check("description box: no sideways scroll at 390px", describeScroll <= 0, describeScroll);
+  await page.locator("#playground-describe-box").screenshot({ path: path.join(os.tmpdir(), "playground-describe-390.png") });
+  await page.click("#playground-describe-use-btn");
+  check("🪄 Use to generate fills the Generate box", (await page.inputValue("#playground-generate-prompt")) === DESCRIBED);
+  check("…and opens the Generate tab", await page.locator("#pg-panel-generate").isVisible());
+  check("the description stays up for the same picture", await page.locator("#playground-describe-box").isVisible());
+  await page.evaluate((url) => window.app.updatePlaygroundImagePreview(url + "#other"), PNG);
+  check("a new working image hides the description", !(await page.locator("#playground-describe-box").isVisible()));
+
+  model.failNext.describe = 500;
+  await page.click("#describe-playground-image-btn");
+  await describeIdle();
+  check("a failed describe leaves no box and frees the button", !(await page.locator("#playground-describe-box").isVisible()));
+
   // Library → Recent.
   await page.click("#pg-tab-library");
   check("Library opens on Saved", (await page.getAttribute("#pg-library-view-saved", "aria-pressed")) === "true");

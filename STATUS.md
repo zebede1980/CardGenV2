@@ -7,6 +7,19 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Playground: 🔍 Describe (2026-11-22) — committed, not deployed
+
+🔍 Describe beside 💾 Save to library: the vision model (`api.text.visionModel`, else the text model)
+describes the working image as a reusable prompt (`describeImageForPrompt` in `api-image.js`: medium +
+subject, appearance, pose and camera, setting, lighting and style, 100–200 words, nudity described
+plainly). Not Character Gen's `describeReferenceImage`, which is worded for roleplay cards and leaves out
+style and framing. Streams into an editable box under the picture (resumable, like every vision call);
+🪄 Use to generate puts it in the Generate box, 📋 Copy, ✕ Close. The box hides when the working image
+changes. A failed or cut-off reply shows nothing. **Tested:** `playground.test.js` (56, 12 new: streams,
+hidden mid-stream → lands with one model call, Use to generate, hidden on a new picture, failure, no
+sideways scroll at 390), `runs.test.js` 79. **Not tested:** the real vision model (does Gemini refuse
+NSFW pictures?), the iPhone. **Deploy:** frontend + proxy (`api-image.js` is a shared script).
+
 ## Playground: tool tabs on top, "2 per model" (2026-11-22) — deployed 2026-11-22 (`83c5c51`, frontend; the proxy was recreated with it)
 
 The Generate / Crop / Edit / Reimagine / … tabs (`#playground-tool-tabs`) moved above the drop zone and

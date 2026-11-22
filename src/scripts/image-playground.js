@@ -189,6 +189,30 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.savePlaygroundImageToLibrary(this.playgroundImageUrl, this._currentPlaygroundLabel()));
     }
 
+    document.getElementById("describe-playground-image-btn")?.addEventListener("click", () => this.handleDescribePlaygroundImage());
+    document.getElementById("playground-describe-use-btn")?.addEventListener("click", () => {
+      const text = document.getElementById("playground-describe-text")?.value?.trim();
+      const promptEl = document.getElementById("playground-generate-prompt");
+      if (!text || !promptEl) return;
+      promptEl.value = text;
+      promptEl.dispatchEvent(new Event("input", { bubbles: true }));
+      this._setPlaygroundToolTab("generate");
+      promptEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    document.getElementById("playground-describe-copy-btn")?.addEventListener("click", async () => {
+      const text = document.getElementById("playground-describe-text")?.value || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        this.showNotification("Description copied", "success");
+      } catch (_) {
+        this.showNotification("Couldn't copy: select the text and copy it instead", "warning");
+      }
+    });
+    document.getElementById("playground-describe-close-btn")?.addEventListener("click", () => {
+      const box = document.getElementById("playground-describe-box");
+      if (box) box.style.display = "none";
+    });
+
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
 
@@ -790,6 +814,61 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     const saveRow = document.getElementById("playground-save-row");
     if (saveRow) saveRow.style.display = dataUrl ? "block" : "none";
+
+    // A description of an earlier version would read as one of this picture.
+    // Left up while one is being written: it lands for the picture it was asked for.
+    const describeBox = document.getElementById("playground-describe-box");
+    if (describeBox && !this._pgDescribing && dataUrl !== this._pgDescribedUrl) describeBox.style.display = "none";
+  },
+
+  // Streams the description into the box as it arrives. Resumable like every
+  // vision call (streamedText), so a phone locked part-way picks it up on wake.
+  async handleDescribePlaygroundImage() {
+    const source = this.playgroundImageUrl;
+    if (!source) {
+      this.showNotification("Upload, paste or generate an image first", "warning");
+      return;
+    }
+    if (this._pgDescribing) return;
+
+    const btn = document.getElementById("describe-playground-image-btn");
+    const box = document.getElementById("playground-describe-box");
+    const textEl = document.getElementById("playground-describe-text");
+    this._pgDescribing = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "🔍 Describing…";
+    }
+    if (box) box.style.display = "block";
+    if (textEl) {
+      textEl.value = "";
+      textEl.placeholder = "Looking at the picture…";
+    }
+
+    try {
+      let streamed = "";
+      const description = await window.apiHandler.describeImageForPrompt(source, {
+        onStream: (chunk) => {
+          streamed += chunk;
+          if (textEl) textEl.value = streamed;
+        },
+      });
+      if (textEl) textEl.value = description;
+      this._pgDescribedUrl = source;
+    } catch (error) {
+      console.error("Playground describe error:", error);
+      // A half-streamed reply is a cut-off one, not a description.
+      if (textEl) textEl.value = "";
+      if (box) box.style.display = "none";
+      this.showNotification(`Couldn't describe the picture: ${error.message}`, "error", 6000);
+    } finally {
+      this._pgDescribing = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "🔍 Describe";
+      }
+      if (textEl) textEl.placeholder = "";
+    }
   },
 
   // How the working image came to be, as recorded in the history strip — saved

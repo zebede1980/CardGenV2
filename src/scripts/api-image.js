@@ -1409,6 +1409,43 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
     return this._visionTextOrThrow(await this.streamedText(data, "Image analysis", { warnOnTruncation: false }), "Image analysis");
   },
 
+  // Playground's 🔍 Describe. Unlike describeReferenceImage (which feeds a
+  // roleplay card and so ignores how the picture was made), this covers
+  // framing, lighting and art style too, so the result works as a prompt.
+  async describeImageForPrompt(imageDataUrl, { onStream = null } = {}) {
+    if (!imageDataUrl) throw new Error("A picture is required");
+
+    const model = this.config.get("api.text.visionModel") || this.config.get("api.text.model");
+    if (!model) throw new Error("No vision model or text model configured");
+
+    const systemPrompt = `You describe pictures so that an AI image model could recreate them from your words alone. Write ONE paragraph of 100 to 200 words, in this order:
+1. The medium and subject in one opening sentence (for example "A 35mm film photo of a young woman…" or "A cel-shaded anime illustration of two knights…").
+2. The subject(s) in precise visual detail: face and features, eye colour, skin, hair colour, length and style, build, tattoos, scars, piercings, make-up, and each item of clothing and accessory with its colours and materials.
+3. Pose, action and expression, and the camera: framing, angle and distance.
+4. The setting, key props, time of day and weather.
+5. Lighting, colour palette, depth of field, and the exact art style or photographic look.
+Describe only what can be seen, plainly and factually, including any nudity. No character names, headings, lists or quotation marks, no preamble, and no remarks about uncertainty or policy.`;
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this picture." },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    };
+
+    const raw = await this.streamedText(data, "Image description", { onStream, warnOnTruncation: false });
+    return this._visionTextOrThrow(this._cleanWrittenPrompt(raw), "Image description");
+  },
+
   // A cut-off vision reply is either empty or half a sentence (or, via the
   // reasoning_content fallback, the model's thinking) — none of which should
   // land in a description field as if it were a result.
