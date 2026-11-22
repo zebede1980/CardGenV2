@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Lightbox uses the whole screen; Describe toggles (2026-11-22) — committed, not deployed
+## Lightbox uses the whole screen; Describe toggles (2026-11-22) — deployed 2026-11-22 (`d201dfd`, frontend only)
 
 Joe on the iPhone: the lightbox zoomed inside the picture's own box and wouldn't pan. Cause:
 `.gallery-image-container` was capped at 90vw × 80vh with `overflow: hidden` and hugged the picture, so a
