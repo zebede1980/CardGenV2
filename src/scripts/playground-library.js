@@ -51,7 +51,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.showNotification("Saved to your image library", "success");
       // Only refresh what is on screen; the library tab renders from scratch
       // each time it is opened anyway.
-      if (this._pgActiveTab === "library") this.renderPlaygroundLibrary();
+      if (this._pgActiveTab === "library" && this._pgLibraryView !== "recent") this.renderPlaygroundLibrary();
       return row;
     } catch (error) {
       console.error("Playground library save failed:", error);
@@ -72,21 +72,68 @@ Object.assign(CharacterGeneratorApp.prototype, {
     return "";
   },
 
+  // 💾 Saved (the library proper) or 🕘 Recent (everything made in the last
+  // few days, kept by the proxy). Both render into the same grid.
+  _initPlaygroundLibraryViews() {
+    if (this._pgLibraryViewsReady) return;
+    this._pgLibraryViewsReady = true;
+    this._pgLibraryView = "saved";
+    for (const view of ["saved", "recent"]) {
+      document.getElementById(`pg-library-view-${view}`)?.addEventListener("click", () => {
+        if (this._pgLibraryView === view) return;
+        this._pgLibraryView = view;
+        this.renderPlaygroundLibrary();
+      });
+    }
+  },
+
+  _syncPlaygroundLibraryViewButtons() {
+    for (const view of ["saved", "recent"]) {
+      const btn = document.getElementById(`pg-library-view-${view}`);
+      if (!btn) continue;
+      const on = this._pgLibraryView === view;
+      btn.classList.toggle("btn-primary", on);
+      btn.classList.toggle("btn-outline", !on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  },
+
   async renderPlaygroundLibrary() {
     const grid = document.getElementById("playground-library-grid");
     const status = document.getElementById("playground-library-status");
     if (!grid) return;
+    this._initPlaygroundLibraryViews();
+    this._syncPlaygroundLibraryViewButtons();
+    const recent = this._pgLibraryView === "recent";
+    const intro = document.getElementById("playground-library-intro");
+    if (intro) {
+      intro.textContent = recent
+        ? "Every picture the Playground made recently, kept for a few days without pressing 💾. Use 💾 Keep on one to move it into Saved for good."
+        : "Images you have kept with 💾. Click one to view it full-screen; 🎭 clears the Character Generator and starts a brand-new character from it.";
+    }
+    // A slow list for one view must not land on top of the other.
+    const renderToken = (this._pgLibraryRenderToken || 0) + 1;
+    this._pgLibraryRenderToken = renderToken;
 
     if (status) {
       status.style.display = "block";
       status.style.color = "";
-      status.textContent = "Loading your saved images…";
+      status.textContent = recent ? "Loading recent pictures…" : "Loading your saved images…";
     }
+    grid.innerHTML = "";
 
     let rows;
+    let keepDays = 3;
     try {
-      rows = await (this.storage?.listPlaygroundImages?.() ?? []);
+      if (recent) {
+        const listing = await this.storage.listPlaygroundRecent();
+        keepDays = listing.keepDays || keepDays;
+        rows = (listing.items || []).map(item => ({ ...item, recent: true, label: this._playgroundRecentLabel(item) }));
+      } else {
+        rows = await (this.storage?.listPlaygroundImages?.() ?? []);
+      }
     } catch (error) {
+      if (renderToken !== this._pgLibraryRenderToken) return;
       // A failed load must never look like an empty library — see
       // listPlaygroundImages in storage.js. Offers a retry rather than leaving
       // the tab stuck, since the usual cause is a flaky mobile connection.
@@ -96,7 +143,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (status) {
         status.style.display = "block";
         status.style.color = "var(--error)";
-        status.textContent = `Could not load your library: ${error.message}. `;
+        status.textContent = `Could not load ${recent ? "recent pictures" : "your library"}: ${error.message}. `;
         const retry = document.createElement("button");
         retry.type = "button";
         retry.className = "btn-small";
@@ -107,16 +154,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
+    if (renderToken !== this._pgLibraryRenderToken) return;
     this._playgroundLibraryRows = rows;
     grid.innerHTML = "";
 
     if (status) {
       if (rows.length === 0) {
         status.style.display = "block";
-        status.textContent = "Nothing saved yet. Use 💾 on an image in the Playground to keep it here.";
+        status.textContent = recent
+          ? `Nothing from the last ${keepDays} days yet. Every picture the Playground makes shows up here for ${keepDays} days.`
+          : "Nothing saved yet. Use 💾 on an image in the Playground to keep it here.";
         return;
       }
-      status.style.display = "none";
+      status.style.display = recent ? "block" : "none";
+      if (recent) status.textContent = `${rows.length} picture${rows.length === 1 ? "" : "s"} from the last ${keepDays} days, newest first.`;
     }
 
     rows.forEach((row, index) => grid.appendChild(this._buildPlaygroundLibraryTile(row, index)));
@@ -143,9 +194,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
       ${row.prompt ? `<div title="${escapeHtml(row.prompt)}" style="padding: 0 0.5rem 0.4rem; font-size: 0.7rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(row.prompt)}</div>` : ""}
       <div style="display: flex; gap: 0.25rem; padding: 0 0.4rem 0.45rem; flex-wrap: wrap; margin-top: auto;">
         <button type="button" data-pg-reopen class="btn-small" title="Bring this back into the Playground as the working image">✏️ Edit</button>
+        ${row.recent ? `<button type="button" data-pg-keep class="btn-small" title="Keep this one in your library for good">💾 Keep</button>` : ""}
         <button type="button" data-pg-newchar class="btn-small" title="Start a new character from this image">🎭 New character</button>
         <button type="button" data-pg-download class="btn-small" title="Download to this device">⬇</button>
-        <button type="button" data-pg-delete class="btn-small" title="Delete from your library">🗑️</button>
+        <button type="button" data-pg-delete class="btn-small" title="${row.recent ? "Remove from Recent" : "Delete from your library"}">🗑️</button>
       </div>
     `;
 
@@ -154,7 +206,34 @@ Object.assign(CharacterGeneratorApp.prototype, {
     tile.querySelector("[data-pg-newchar]")?.addEventListener("click", () => this.sendPlaygroundImageToNewCharacter(row));
     tile.querySelector("[data-pg-download]")?.addEventListener("click", () => this.downloadPlaygroundLibraryImage(row));
     tile.querySelector("[data-pg-delete]")?.addEventListener("click", () => this.deletePlaygroundLibraryImage(row));
+    const keepBtn = tile.querySelector("[data-pg-keep]");
+    keepBtn?.addEventListener("click", () => this.keepPlaygroundRecentImage(row, keepBtn));
     return tile;
+  },
+
+  _playgroundRecentLabel(item) {
+    const verb = { generate: "Generated", edit: "Edited", reimagine: "Reimagined", enhance: "Enhanced", combine: "Combined" }[item.tool] || "Made";
+    return item.model ? `${verb} (${item.model})` : verb;
+  },
+
+  // Copies a Recent picture into Saved; it stays in Recent until it expires.
+  async keepPlaygroundRecentImage(row, btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Keeping…";
+    }
+    let saved = null;
+    try {
+      const dataUrl = await this._playgroundLibraryDataUrl(row);
+      saved = await this.savePlaygroundImageToLibrary(dataUrl, row.label, row.prompt || "");
+    } catch (error) {
+      console.error("Keeping a recent picture failed:", error);
+      this.showNotification(`Could not keep it: ${error.message}`, "error", 6000);
+    }
+    if (btn) {
+      btn.disabled = !!saved;
+      btn.textContent = saved ? "✓ Kept" : "💾 Keep";
+    }
   },
 
   // Full-screen viewing reuses the app's existing lightbox, which already has
@@ -169,7 +248,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   downloadPlaygroundLibraryImage(row) {
     const a = document.createElement("a");
     a.href = this._playgroundLibraryImageUrl(row);
-    a.download = `playground-image-${row.id}.png`;
+    a.download = `playground-${row.recent ? "recent" : "image"}-${row.id}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -177,9 +256,13 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   async deletePlaygroundLibraryImage(row) {
-    if (!confirm("Delete this image from your library? This cannot be undone.")) return;
+    const question = row.recent
+      ? "Remove this picture from Recent? It cannot be brought back."
+      : "Delete this image from your library? This cannot be undone.";
+    if (!confirm(question)) return;
     try {
-      await this.storage.deletePlaygroundImage(row.id);
+      if (row.recent) await this.storage.deletePlaygroundRecent(row.id);
+      else await this.storage.deletePlaygroundImage(row.id);
       this.showNotification("Image deleted", "success");
       await this.renderPlaygroundLibrary();
     } catch (error) {

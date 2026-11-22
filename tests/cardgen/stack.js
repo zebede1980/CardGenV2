@@ -263,6 +263,18 @@ function startBackend() {
       if (req.method === "DELETE") { map.delete(decodeURIComponent(id)); return send(200, { success: true }); }
     }
     if (url.pathname === "/api/push/internal/jobs-done") { state.pushes.push(body); return send(200, {}); }
+    // The Playground library's rows (the proxy keeps the bytes on disk).
+    if ((m = url.pathname.match(/^\/api\/playground\/images(?:\/(\d+))?$/))) {
+      const rows = kindMap(user(uid), "playground");
+      if (req.method === "GET") return send(200, [...rows.values()].reverse());
+      if (req.method === "POST") {
+        state.nextPlaygroundId = (state.nextPlaygroundId || 0) + 1;
+        const row = { id: state.nextPlaygroundId, label: body.label || "", prompt: body.prompt || "", created_at: new Date().toISOString() };
+        rows.set(String(row.id), row);
+        return send(200, row);
+      }
+      if (req.method === "DELETE") return rows.delete(m[1]) ? send(200, { success: true }) : send(404, { detail: "not found" });
+    }
     if (req.method === "GET") return send(200, []);
     return send(200, {});
   });

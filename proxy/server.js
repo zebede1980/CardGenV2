@@ -1478,6 +1478,212 @@ app.get("/api/storage/playground-images/:id/image", requireAuth, async (req, res
   }
 });
 
+// ── Playground: recent pictures and prompt history ─────────────────────────────
+// Every picture a Playground tool makes is kept for a few days without anyone
+// pressing 💾, so "the one from yesterday" can still be found. Requests ask for
+// it with `__keep: { tool, prompt }` and the proxy saves the picture when the
+// job finishes, so a locked phone or a discarded tab loses nothing and the
+// phone never uploads the bytes a second time. Files on this box's disk with an
+// index per user; no database row, since they expire on their own.
+
+const PLAYGROUND_RECENT = {
+  MAX_AGE_MS: envInt("PLAYGROUND_RECENT_DAYS", 3) * 24 * 60 * 60 * 1000,
+  MAX_ITEMS: envInt("PLAYGROUND_RECENT_MAX", 300),
+};
+const PLAYGROUND_KEEP_TOOLS = new Set(["generate", "edit", "reimagine", "enhance", "combine"]);
+const PLAYGROUND_RECENT_ID_RE = /^r_\d{10,16}_[a-z0-9]{4,12}$/;
+const PLAYGROUND_PROMPT_TOOLS = new Set(["generate", "edit", "combine"]);
+const PLAYGROUND_PROMPT_HISTORY_MAX = 30;
+const PLAYGROUND_PROMPT_MAX_CHARS = 8000;
+
+function playgroundKeepFrom(body) {
+  const keep = body && body.__keep;
+  if (!keep || typeof keep !== "object" || !PLAYGROUND_KEEP_TOOLS.has(keep.tool)) return null;
+  return {
+    tool: keep.tool,
+    prompt: typeof keep.prompt === "string" ? keep.prompt.slice(0, PLAYGROUND_PROMPT_MAX_CHARS) : "",
+    model: typeof body.model === "string" ? body.model.slice(0, 200) : "",
+  };
+}
+
+// Each user's index is read, changed and written back; one change at a time
+// per user, so two pictures finishing together can't drop each other.
+const playgroundUserLocks = new Map();
+function withPlaygroundLock(userId, fn) {
+  const key = String(userId);
+  const run = (playgroundUserLocks.get(key) || Promise.resolve()).then(fn, fn);
+  const settled = run.catch(() => {});
+  playgroundUserLocks.set(key, settled);
+  settled.then(() => { if (playgroundUserLocks.get(key) === settled) playgroundUserLocks.delete(key); });
+  return run;
+}
+
+function playgroundRecentDir(userId) {
+  const dir = path.join(getUserDataDir(userId), "playground-recent");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+async function readJsonFile(file, fallback) {
+  try {
+    return JSON.parse(await fsPromises.readFile(file, "utf8"));
+  } catch (error) {
+    if (error.code !== "ENOENT") console.warn(`[playground] could not read ${path.basename(file)}:`, error.message);
+    return fallback;
+  }
+}
+
+async function writeJsonFileAtomic(file, value) {
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fsPromises.writeFile(tmp, JSON.stringify(value));
+  await fsPromises.rename(tmp, file);
+}
+
+// Drops entries past their age or beyond the newest MAX_ITEMS, and any file the
+// index doesn't list (a crash between writing a picture and the index).
+async function prunePlaygroundRecent(dir, items, now = Date.now()) {
+  const kept = items
+    .filter((item) => item && PLAYGROUND_RECENT_ID_RE.test(item.id) && now - item.createdAt < PLAYGROUND_RECENT.MAX_AGE_MS)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, PLAYGROUND_RECENT.MAX_ITEMS);
+  const keepIds = new Set(kept.map((item) => item.id));
+  const files = await fsPromises.readdir(dir).catch(() => []);
+  await Promise.all(files
+    .filter((name) => name.endsWith(".img") && !keepIds.has(name.slice(0, -4)))
+    .map((name) => fsPromises.unlink(path.join(dir, name)).catch(() => {})));
+  return kept;
+}
+
+async function keepPlaygroundImage(job) {
+  const keep = job.keep;
+  job.keep = null;
+  try {
+    const dataUrl = await imageResultToDataUrl(job.result);
+    const match = /^data:([\w.+/-]+);base64,(.*)$/s.exec(dataUrl);
+    if (!match) throw new Error("not a base64 image");
+    const bytes = Buffer.from(match[2], "base64");
+    await withPlaygroundLock(job.userId, async () => {
+      const dir = playgroundRecentDir(job.userId);
+      const indexFile = path.join(dir, "index.json");
+      const createdAt = Date.now();
+      const item = {
+        id: `r_${createdAt}_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+        createdAt,
+        tool: keep.tool,
+        model: keep.model,
+        prompt: keep.prompt,
+        mime: match[1],
+      };
+      await fsPromises.writeFile(path.join(dir, `${item.id}.img`), bytes);
+      const items = await readJsonFile(indexFile, []);
+      await writeJsonFileAtomic(indexFile, await prunePlaygroundRecent(dir, [item, ...(Array.isArray(items) ? items : [])]));
+    });
+  } catch (error) {
+    console.warn(`[playground] could not keep the picture from job ${job.id}:`, error.message);
+  }
+}
+
+app.get("/api/storage/playground-recent", requireAuth, async (req, res) => {
+  try {
+    const items = await withPlaygroundLock(req.user.userId, async () => {
+      const dir = playgroundRecentDir(req.user.userId);
+      const indexFile = path.join(dir, "index.json");
+      const stored = await readJsonFile(indexFile, []);
+      const kept = await prunePlaygroundRecent(dir, Array.isArray(stored) ? stored : []);
+      if (kept.length !== stored.length) await writeJsonFileAtomic(indexFile, kept);
+      return kept;
+    });
+    res.json({
+      keepDays: PLAYGROUND_RECENT.MAX_AGE_MS / (24 * 60 * 60 * 1000),
+      max: PLAYGROUND_RECENT.MAX_ITEMS,
+      items: items.map(({ id, createdAt, tool, model, prompt }) => ({
+        id, createdAt, tool, model, prompt,
+        url: `/api/storage/playground-recent/${id}/image`,
+      })),
+    });
+  } catch (e) {
+    console.error("[playground] recent list error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/storage/playground-recent/:id/image", requireAuth, async (req, res) => {
+  const id = String(req.params.id);
+  if (!PLAYGROUND_RECENT_ID_RE.test(id)) return res.status(400).end();
+  const dir = playgroundRecentDir(req.user.userId);
+  const items = await readJsonFile(path.join(dir, "index.json"), []);
+  const item = Array.isArray(items) ? items.find((entry) => entry.id === id) : null;
+  if (!item) return res.status(404).end();
+  try {
+    const bytes = await fsPromises.readFile(path.join(dir, `${id}.img`));
+    res.setHeader("Content-Type", /^image\/[\w.+-]+$/.test(item.mime) ? item.mime : "image/png");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.send(bytes);
+  } catch (error) {
+    res.status(error.code === "ENOENT" ? 404 : 500).end();
+  }
+});
+
+app.delete("/api/storage/playground-recent/:id", requireAuth, async (req, res) => {
+  const id = String(req.params.id);
+  if (!PLAYGROUND_RECENT_ID_RE.test(id)) return res.status(400).json({ error: "invalid id" });
+  try {
+    await withPlaygroundLock(req.user.userId, async () => {
+      const dir = playgroundRecentDir(req.user.userId);
+      const indexFile = path.join(dir, "index.json");
+      const items = await readJsonFile(indexFile, []);
+      await writeJsonFileAtomic(indexFile, (Array.isArray(items) ? items : []).filter((item) => item.id !== id));
+      await fsPromises.unlink(path.join(dir, `${id}.img`)).catch(() => {});
+    });
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[playground] recent delete error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// The last prompts typed into Generate, Edit and Combine, newest first. Its own
+// small file rather than the account config, which is re-sent whole on every
+// settings change.
+function playgroundPromptsFile(userId) {
+  return path.join(getUserDataDir(userId), "playground-prompts.json");
+}
+
+function cleanPromptHistory(stored) {
+  const history = {};
+  for (const tool of PLAYGROUND_PROMPT_TOOLS) {
+    const list = stored && Array.isArray(stored[tool]) ? stored[tool] : [];
+    history[tool] = list
+      .filter((entry) => entry && typeof entry.text === "string" && entry.text.trim())
+      .slice(0, PLAYGROUND_PROMPT_HISTORY_MAX);
+  }
+  return history;
+}
+
+app.get("/api/storage/playground-prompts", requireAuth, async (req, res) => {
+  res.json(cleanPromptHistory(await readJsonFile(playgroundPromptsFile(req.user.userId), {})));
+});
+
+app.post("/api/storage/playground-prompts", requireAuth, async (req, res) => {
+  const tool = req.body?.tool;
+  const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, PLAYGROUND_PROMPT_MAX_CHARS) : "";
+  if (!PLAYGROUND_PROMPT_TOOLS.has(tool) || !text) return res.status(400).json({ error: "tool and text are required" });
+  try {
+    const history = await withPlaygroundLock(req.user.userId, async () => {
+      const file = playgroundPromptsFile(req.user.userId);
+      const current = cleanPromptHistory(await readJsonFile(file, {}));
+      current[tool] = [{ text, at: Date.now() }, ...current[tool].filter((entry) => entry.text !== text)]
+        .slice(0, PLAYGROUND_PROMPT_HISTORY_MAX);
+      await writeJsonFileAtomic(file, current);
+      return current;
+    });
+    res.json(history);
+  } catch (e) {
+    console.error("[playground] prompt history error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Migrate JSON configuration files to PostgreSQL (Config, Prompts, History, etc.) ─
 app.post("/api/storage/migrate-all", requireAuth, async (req, res) => {
   const dir = getUserDataDir(req.user.userId);
@@ -2262,6 +2468,7 @@ function countRunningJobsForUser(userId) {
 function createGenerationJob(userId, abortController, clientRef = null, req = null) {
   const job = {
     notify: req ? jobNotifyInfo(req) : null,
+    keep: req ? playgroundKeepFrom(req.body) : null, // Playground: save the picture to Recent when done
     keptBytes: 0, // > 0 once kept for KEPT_RETENTION_MS
     id: randomUUID(),
     clientRef: typeof clientRef === "string" ? clientRef.slice(0, 100) : null,
@@ -2474,6 +2681,7 @@ function finishGenerationJob(job, status, { finishReason, error } = {}) {
   });
   job.listeners.clear();
   onJobFinished(job);
+  if (status === "done" && job.keep && job.result) keepPlaygroundImage(job);
 }
 
 /**
@@ -4463,7 +4671,7 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
     // This supports APIs like NanoGPT that need n, response_format, etc. —
     // minus resumable/clientRef, which are our own bookkeeping and not
     // something the upstream image API should ever see.
-    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, __landing: _landing, ...forwardedBody } = req.body;
+    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, __landing: _landing, __keep: _keep, ...forwardedBody } = req.body;
     const requestBody = {
       ...forwardedBody,
     };
@@ -4629,7 +4837,7 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
     // the other way round, `n: 1` and friends were dead code — whatever the
     // client sent overrode them. `resumable`/`clientRef` are our own
     // bookkeeping and are stripped, exactly as /api/image/generations does.
-    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, __landing: _landing, ...forwardedBody } = req.body;
+    const { resumable: _resumable, clientRef: _clientRef, __jobLabel: _jobLabel, __landing: _landing, __keep: _keep, ...forwardedBody } = req.body;
     const requestBody = { ...forwardedBody, model, prompt, input_references, n: forwardedBody.n || 1 };
 
     if (resumable) {

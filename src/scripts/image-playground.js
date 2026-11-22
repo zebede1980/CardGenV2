@@ -194,6 +194,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Prompt presets for each of the three text-driven tools.
     ["generate", "edit", "combine"].forEach(tool => this._initPlaygroundPresets(tool));
+    this._loadPlaygroundPromptHistory();
     this._initPlaygroundAngles();
 
     this._updatePlaygroundUpscaleModelDropdown();
@@ -330,6 +331,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     try {
       const resultUrl = await window.apiHandler.upscaleImage({
         imageBase64: this.playgroundImageUrl, model, scale, instruction,
+        keep: { tool: "enhance", prompt: instruction },
       });
       const dataUrl = await this._urlToDataUrl(resultUrl);
 
@@ -539,6 +541,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const n = parseInt(document.getElementById("playground-generate-count")?.value, 10) || 1;
       models = Array(n).fill(model);
     }
+    if (!takes) this._rememberPlaygroundPrompt("generate", prompt);
     const count = models.length;
     // Grid whenever there's a choice to make, including a single ticked model
     // in per-model mode, so its tile still says which model drew it.
@@ -573,7 +576,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const model = models[index];
       const prompt = promptAt(index);
       try {
-        const resultUrl = await window.apiHandler.generateImageFromPrompt({ prompt, model, aspectRatio });
+        const resultUrl = await window.apiHandler.generateImageFromPrompt({
+          prompt, model, aspectRatio, keep: { tool: "generate", prompt },
+        });
         const dataUrl = await this._urlToDataUrl(resultUrl);
         if (showGrid) this._pgGenerateResults[index] = { url: dataUrl, model, prompt };
 
@@ -824,6 +829,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       || this.config.get("api.image.editModel")
       || "flux-2-pro-image-to-image";
 
+    this._rememberPlaygroundPrompt("edit", instruction);
     const actionBtn = document.getElementById("edit-playground-image-btn");
     const statusEl = document.getElementById("playground-edit-status");
     if (actionBtn) actionBtn.disabled = true;
@@ -837,7 +843,9 @@ Object.assign(CharacterGeneratorApp.prototype, {
     try {
       const imageBase64 = this.playgroundImageUrl;
 
-      const resultUrl = await window.apiHandler.editImage({ imageBase64, instruction, model: editModel });
+      const resultUrl = await window.apiHandler.editImage({
+        imageBase64, instruction, model: editModel, keep: { tool: "edit", prompt: instruction },
+      });
 
       const dataUrl = await this._urlToDataUrl(resultUrl);
 
@@ -1077,6 +1085,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         try {
           const resultUrl = await window.apiHandler.reimagineImage({
             imageBase64: source, prompt, model, likeness, aspectRatio: shape.aspectRatio, dims: shape.dims,
+            keep: { tool: "reimagine", prompt },
           });
           const dataUrl = await this._urlToDataUrl(resultUrl);
           landed++;
@@ -1315,6 +1324,42 @@ Object.assign(CharacterGeneratorApp.prototype, {
       : "playground-combine-instruction";
   },
 
+  // The last 30 prompts sent from Generate, Edit and Combine, per account
+  // (GET/POST /api/storage/playground-prompts), shown as "Recent" in each
+  // box's presets dropdown. A failed load just leaves the group out.
+  async _loadPlaygroundPromptHistory() {
+    try {
+      const res = await (window.authFetch || fetch)("/api/storage/playground-prompts");
+      if (!res.ok) return;
+      this._setPlaygroundPromptHistory(await res.json());
+    } catch (error) {
+      console.warn("Playground prompt history could not be loaded:", error.message);
+    }
+  },
+
+  _setPlaygroundPromptHistory(history) {
+    if (!history || typeof history !== "object") return;
+    this._pgPromptHistory = history;
+    ["generate", "edit", "combine"].forEach(tool => {
+      const current = document.getElementById(`playground-${tool}-preset`)?.value || "";
+      this._renderPlaygroundPresets(tool, current.startsWith("recent:") ? "" : current);
+    });
+  },
+
+  // Fire and forget: a prompt that fails to save must never hold up the picture.
+  _rememberPlaygroundPrompt(tool, text) {
+    const trimmed = (text || "").trim();
+    if (!trimmed) return;
+    (window.authFetch || fetch)("/api/storage/playground-prompts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tool, text: trimmed }),
+    })
+      .then(res => (res.ok ? res.json() : null))
+      .then(history => this._setPlaygroundPromptHistory(history))
+      .catch(error => console.warn("Playground prompt history could not be saved:", error.message));
+  },
+
   _initPlaygroundPresets(tool) {
     const select = document.getElementById(`playground-${tool}-preset`);
     const saveBtn = document.getElementById(`playground-${tool}-preset-save`);
@@ -1346,6 +1391,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
   _findPlaygroundPreset(tool, id) {
     if (!id) return null;
+    if (id.startsWith("recent:")) {
+      const entry = (this._pgPromptHistory?.[tool] || [])[parseInt(id.slice(7), 10)];
+      return entry ? { id, name: entry.text, text: entry.text, builtIn: true } : null;
+    }
     const builtIn = (PLAYGROUND_BUILTIN_PRESETS[tool] || [])
       .map((preset, i) => ({ ...preset, id: `builtin:${i}`, builtIn: true }));
     return [...builtIn, ...this._userPlaygroundPresets(tool)].find(preset => preset.id === id) || null;
@@ -1370,6 +1419,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (mine.length > 0) {
       html += `<optgroup label="Yours">`
         + mine.map(preset => option(preset.id, preset.name, selectedId === preset.id)).join("")
+        + `</optgroup>`;
+    }
+    const recent = this._pgPromptHistory?.[tool] || [];
+    if (recent.length > 0) {
+      const short = (text) => {
+        const line = text.replace(/\s+/g, " ");
+        return line.length > 70 ? `${line.slice(0, 69)}…` : line;
+      };
+      html += `<optgroup label="Recent">`
+        + recent.map((entry, i) => option(`recent:${i}`, short(entry.text), selectedId === `recent:${i}`)).join("")
         + `</optgroup>`;
     }
     select.innerHTML = html;
@@ -1495,6 +1554,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
 
+    this._rememberPlaygroundPrompt("combine", instruction);
     const btn = document.getElementById("combine-images-btn");
     const statusEl = document.getElementById("playground-combine-status");
     if (btn) btn.disabled = true;
@@ -1510,6 +1570,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         images: [this.playgroundImageUrl, this.combineImage2Url],
         instruction,
         model: combineModel,
+        keep: { tool: "combine", prompt: instruction },
       });
 
       const dataUrl = await this._urlToDataUrl(resultUrl);

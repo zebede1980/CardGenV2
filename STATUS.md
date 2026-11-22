@@ -16,6 +16,26 @@ draws twice, grouped in the grid (up to 4 models, so up to 8 images). `_playgrou
 image model): tab order, panels switch, no sideways scroll, 2 per model sends 2 requests per ticked model,
 remembered on reload, 1 per model and plain counts unchanged. Not tried on the iPhone.
 
+## Playground: Recent pictures + prompt history (2026-11-22) — committed, not deployed
+
+- **Every Playground picture is kept for 3 days** (Generate, Edit, Reimagine, Enhance, Combine; not Crop,
+  not Character Gen or Messenger). The page tags the request `__keep: { tool, prompt }` (a `keep` option on
+  the five `api-image.js` calls); `createGenerationJob` reads it and `finishGenerationJob` saves the picture
+  (`keepPlaygroundImage` in `server.js`), so it is kept even if the phone locked or the tab was discarded, and
+  the phone never uploads it again. Stored on the proxy's disk, not the database: `users/<id>/playground-recent/`
+  (`<id>.img` + `index.json`), pruned on every write and list to 3 days and 300 pictures
+  (`PLAYGROUND_RECENT_DAYS`, `PLAYGROUND_RECENT_MAX`), with unlisted files swept. One write at a time per user.
+  Routes: `GET /api/storage/playground-recent`, `GET …/:id/image`, `DELETE …/:id`.
+- **📚 Library → 💾 Saved / 🕘 Recent.** Recent tiles: ✏️ Edit, 💾 Keep (copies into Saved, stays in Recent),
+  🎭, ⬇, 🗑️. A picture the page rejected as "blank" (safety filter) is still kept, as the provider returned it.
+- **Prompt history:** the last 30 prompts sent from Generate, Edit and Combine each, newest first, repeats moved
+  to the top, as a "Recent" group in each box's presets dropdown. Per account in
+  `users/<id>/playground-prompts.json` (`GET/POST /api/storage/playground-prompts`), not in the config, which
+  is re-sent whole on every settings change.
+- **Tested:** `tests/cardgen/playground.test.js`, 43 checks (real proxy + page, WebKit 390 / 320 dark / 430 dark).
+  **Not tested:** a real provider's URL result being fetched and kept (the fake returns a data URL), the local GPU
+  route, the iPhone. **Deploy:** proxy + frontend (the proxy rebuild drops in-flight jobs).
+
 ## Local model survey (2026-11-22): Ideogram 4 parked
 
 Joe dropped `local/flux3-klein` from his model list (results consistently a bit off). Its DiT file and the

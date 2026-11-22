@@ -187,6 +187,26 @@ class CharacterStorage {
     if (!res.ok) throw new Error("Failed to delete the image");
   }
 
+  // Every picture the Playground made in the last few days: { keepDays, max, items }.
+  // Throws on failure, like listPlaygroundImages, so an outage never looks empty.
+  async listPlaygroundRecent() {
+    const res = await authFetch(`${this.baseUrl}/api/storage/playground-recent`);
+    if (!res.ok) {
+      let detail = `server returned ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body?.error) detail = body.error;
+      } catch (_) { /* keep the status-based message */ }
+      throw new Error(detail);
+    }
+    return await res.json();
+  }
+
+  async deletePlaygroundRecent(id) {
+    const res = await authFetch(`${this.baseUrl}/api/storage/playground-recent/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to remove the picture");
+  }
+
   async reorderGalleryImages(cardId, orderedIds) {
     const res = await authFetch(`${this.baseUrl}/api/storage/cards/${cardId}/gallery/reorder`, {
       method: "PUT",

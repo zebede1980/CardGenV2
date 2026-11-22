@@ -30,6 +30,7 @@ The same two variables run the rest:
 | `runs.test.js` | no | the run engine through the real proxy: a whole card with nobody watching, stop, resume, a proxy restart mid-run, errors, limits |
 | `phase0.test.js` | WebKit | History drafts, recovery after a discarded tab, streamed single calls (setting off) |
 | `landing.test.js` | WebKit | a picture nobody collected is saved to History with its card: page gone, collected in time, confirmed, landed on request, two tabs; and a replaced page: the open card back (unsaved text too), its pictures offered to pick (finished, still drawing, Compare Models), closed early → History, another card's → History |
+| `playground.test.js` | WebKit | Image Playground: every picture kept in Recent for 3 days (also when the tab closes mid-draw), expiry and the count cap, other users refused; prompt history in the presets dropdowns; Library's Saved/Recent views, 💾 Keep, 🗑️; 2 per model; tool tabs above the drop zone |
 | `runs-page.test.js` | WebKit | card runs from the page: hidden page, discarded tab, attach on reload, Stop, restart, two devices; and that the proxy's prompt host builds the same requests as the page |
 
 `stack.js` is the shared stack: `model.hold(kind)` pauses a model reply mid-stream so a test can

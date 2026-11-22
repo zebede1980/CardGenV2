@@ -346,7 +346,9 @@ Object.assign(APIHandler.prototype, {
   // injection, per-model prompt-length prefs). This one just sends whatever
   // the user typed straight to the model via the same /api/image/generations
   // proxy route, for the Playground's "create from nothing" tab.
-  async generateImageFromPrompt({ prompt, model, aspectRatio }) {
+  // keep: { tool, prompt } asks the proxy to file the picture under Playground's
+  // Recent for a few days (playgroundKeepFrom in server.js).
+  async generateImageFromPrompt({ prompt, model, aspectRatio, keep = null }) {
     const trimmedPrompt = (prompt || "").trim();
     if (!trimmedPrompt) throw new Error("A prompt is required to generate an image.");
 
@@ -371,6 +373,7 @@ Object.assign(APIHandler.prototype, {
     // strand a paid-for image with nowhere to land.
     data.resumable = true;
     data.__jobLabel = "Playground image";
+    if (keep) data.__keep = keep;
 
     const startedAt = performance.now();
     const response = await this.makeRequest("/api/image/generations", data, true);
@@ -413,7 +416,7 @@ Object.assign(APIHandler.prototype, {
   // image-to-image model the user marked ⬆️ Enhance. A weak model will re-imagine
   // detail rather than recover it; that is a property of the model, not a bug
   // here, which is why the choice is exposed rather than hardcoded.
-  async upscaleImage({ imageBase64, model, scale = 2, instruction = "" }) {
+  async upscaleImage({ imageBase64, model, scale = 2, instruction = "", keep = null }) {
     if (!imageBase64) throw new Error("An image is required to upscale.");
 
     const upscaleModel = model || this.config.get("api.image.upscaleModel") || this.config.get("api.image.editModel");
@@ -446,6 +449,7 @@ Object.assign(APIHandler.prototype, {
       resumable: true,
       __jobLabel: "Image enhance",
     };
+    if (keep) data.__keep = keep;
     // Tier models reject pixel sizes; 2k is the step up from their 1k default.
     await this.loadImageCatalog();
     if (usesResolutionTiers(upscaleModel)) {
@@ -506,7 +510,7 @@ Object.assign(APIHandler.prototype, {
   // source as a base64 data URI.
   // captioned: the instruction is already a full caption (Reimagine's written
   // prompt), so a model that needs one doesn't get it rewritten.
-  async editImage({ imageBase64, instruction, model, aspectRatio, captioned = false, clientRef = null, reframe = false }) {
+  async editImage({ imageBase64, instruction, model, aspectRatio, captioned = false, clientRef = null, reframe = false, keep = null }) {
     if (!imageBase64) throw new Error("An image is required to edit.");
     let trimmedInstruction = (instruction || "").trim();
     if (!trimmedInstruction) throw new Error("An edit instruction is required.");
@@ -539,6 +543,7 @@ Object.assign(APIHandler.prototype, {
     data.resumable = true;
     data.__jobLabel = "Image edit";
     if (clientRef) data.clientRef = clientRef;
+    if (keep) data.__keep = keep;
     // Local Qwen edits: draw at aspectRatio rather than the source's shape.
     if (reframe) data.reframe = true;
     const startedAt = performance.now();
@@ -744,10 +749,10 @@ Describe only what can be seen. No character names, no headings, lists or quotat
 
   // dims: exact { width, height } for a local model ("same shape as the
   // source"); otherwise aspectRatio picks the size as for any other request.
-  async reimagineImage({ imageBase64, prompt, model, aspectRatio, dims, likeness = "close" }) {
+  async reimagineImage({ imageBase64, prompt, model, aspectRatio, dims, likeness = "close", keep = null }) {
     const route = this.reimagineRoute(model);
-    if (route === "reference") return this.editImage({ imageBase64, instruction: prompt, model, aspectRatio, captioned: true });
-    if (route === "words" && !dims) return this.generateImageFromPrompt({ prompt, model, aspectRatio });
+    if (route === "reference") return this.editImage({ imageBase64, instruction: prompt, model, aspectRatio, captioned: true, keep });
+    if (route === "words" && !dims) return this.generateImageFromPrompt({ prompt, model, aspectRatio, keep });
 
     const data = {
       model,
@@ -758,6 +763,7 @@ Describe only what can be seen. No character names, no headings, lists or quotat
       resumable: true,
       __jobLabel: "Reimagine",
     };
+    if (keep) data.__keep = keep;
     if (route === "local") {
       data.image = imageBase64;
       data.reimagine = likeness;
@@ -1547,7 +1553,7 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
   // (POST {base}/images) with an `input_references` array field, not the
   // OpenAI-compatible /images/generations or /images/edits shapes — hence its
   // own proxy route (/api/image/combine) rather than reusing editImage's.
-  async combineImages({ images, instruction, model }) {
+  async combineImages({ images, instruction, model, keep = null }) {
     if (!images || images.length < 2) throw new Error("At least two images are required to combine.");
     let trimmedInstruction = (instruction || "").trim();
     if (!trimmedInstruction) throw new Error("A combining instruction is required.");
@@ -1583,6 +1589,7 @@ ${Array.from({ length: n }, (_, i) => `### TAKE ${i + 1}: <what changed, 2–5 w
     // and collects it on reconnect exactly as Generate and Edit do.
     payload.resumable = true;
     payload.__jobLabel = "Image combine";
+    if (keep) payload.__keep = keep;
     const startedAt = performance.now();
     const response = await this.makeRequest("/api/image/combine", payload, true);
 
