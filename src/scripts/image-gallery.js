@@ -38,6 +38,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const overlay = document.getElementById("gallery-lightbox");
     if (!overlay) return;
     overlay.classList.add("show");
+    overlay.classList.remove("chrome-hidden");
     document.body.style.overflow = "hidden";
     overlay.setAttribute("aria-hidden", "false");
 
@@ -160,7 +161,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // under the fingers, the cursor or the double-tap. No point means the
   // middle of the screen (the toolbar buttons).
   _galleryZoomTo(scale, clientX, clientY) {
-    const next = Math.max(this._GALLERY_MIN_SCALE, Math.min(this._GALLERY_MAX_SCALE, scale));
+    const next = Math.max(this._GALLERY_MIN_SCALE, Math.min(this._galleryMaxScale(), scale));
     const c = this._galleryRestCentre();
     const qx = (clientX ?? window.innerWidth / 2) - c.x;
     const qy = (clientY ?? window.innerHeight / 2) - c.y;
@@ -172,8 +173,26 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   _GALLERY_MIN_SCALE: 1,
-  _GALLERY_MAX_SCALE: 5,
+  _GALLERY_MAX_SCALE: 6,
   _GALLERY_DOUBLE_TAP_SCALE: 2.5,
+
+  // At least 6×, more for a big picture shown small: up to twice its own
+  // pixels (a 2048 px picture on a 390 px phone goes to ~10×), 16× at most.
+  _galleryMaxScale() {
+    const img = document.getElementById("gallery-image");
+    const fit = img?.naturalWidth && img.offsetWidth ? img.naturalWidth / img.offsetWidth : 0;
+    return Math.min(16, Math.max(this._GALLERY_MAX_SCALE, fit * 2));
+  },
+
+  // Whether a screen point is on the picture as drawn now (zoom included).
+  _galleryPointOnImage(x, y) {
+    const r = document.getElementById("gallery-image")?.getBoundingClientRect();
+    return !!r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  },
+
+  _galleryToggleChrome() {
+    document.getElementById("gallery-lightbox")?.classList.toggle("chrome-hidden");
+  },
 
   // Double-tap / double-click: zoom in on that spot, or back out if zoomed.
   _galleryToggleZoom(clientX, clientY) {
@@ -382,6 +401,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
     // Pan start
     this._onGalleryMouseDown = (e) => {
+      this._galleryMouseDownAt = { x: e.clientX, y: e.clientY };
       if (this._galleryScale <= 1) return;
       e.preventDefault();
       this._galleryIsPanning = true;
@@ -462,7 +482,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       if (e.touches.length === 2 && pinch) {
         const c = this._galleryRestCentre();
         const m = mid(e.touches);
-        const scale = Math.max(this._GALLERY_MIN_SCALE, Math.min(this._GALLERY_MAX_SCALE, pinch.scale * (dist(e.touches) / pinch.dist)));
+        const scale = Math.max(this._GALLERY_MIN_SCALE, Math.min(this._galleryMaxScale(), pinch.scale * (dist(e.touches) / pinch.dist)));
         this._galleryScale = scale;
         this._galleryPanX = m.x - c.x - scale * pinch.ux;
         this._galleryPanY = m.y - c.y - scale * pinch.uy;
@@ -512,10 +532,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
       } else if (!swipe.moved) {
         const now = Date.now();
         if (lastTap && now - lastTap.at < 300 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 40) {
+          clearTimeout(this._galleryTapTimer);
           this._galleryToggleZoom(t.clientX, t.clientY);
           lastTap = null;
         } else {
+          // A single tap waits out the double-tap window: on the picture it
+          // shows or hides the toolbar, off it it closes, as the backdrop did.
           lastTap = { x: t.clientX, y: t.clientY, at: now };
+          const { x, y } = lastTap;
+          clearTimeout(this._galleryTapTimer);
+          this._galleryTapTimer = setTimeout(() => {
+            if (!document.getElementById("gallery-lightbox")?.classList.contains("show")) return;
+            if (this._galleryPointOnImage(x, y)) this._galleryToggleChrome();
+            else this.closeGallery();
+          }, 300);
         }
       }
       swipe = null;
@@ -529,13 +559,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
     container.addEventListener("gesturestart", this._onGalleryGesture);
     container.addEventListener("gesturechange", this._onGalleryGesture);
 
-    // Click on overlay backdrop to close
+    // Mouse: a click off the picture closes, unless it ended a drag. Touch
+    // taps are handled in touchend; the clicks they synthesise are ignored.
     this._onGalleryOverlayClick = (e) => {
-      if (e.target === document.getElementById("gallery-lightbox")) {
-        this.closeGallery();
-      }
+      if (Date.now() - (this._galleryLastTouchAt || 0) < 800) return;
+      const down = this._galleryMouseDownAt;
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+      if (!this._galleryPointOnImage(e.clientX, e.clientY)) this.closeGallery();
     };
-    document.getElementById("gallery-lightbox")?.addEventListener("click", this._onGalleryOverlayClick);
+    container.addEventListener("click", this._onGalleryOverlayClick);
 
     // Button bindings — bound once ever, not per-open. These handlers read
     // current state (this._galleryImages/_galleryCurrentIdx) at click-time
@@ -580,7 +612,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       container?.removeEventListener("gesturestart", this._onGalleryGesture);
       container?.removeEventListener("gesturechange", this._onGalleryGesture);
     }
-    if (this._onGalleryOverlayClick) document.getElementById("gallery-lightbox")?.removeEventListener("click", this._onGalleryOverlayClick);
+    if (this._onGalleryOverlayClick) container?.removeEventListener("click", this._onGalleryOverlayClick);
+    clearTimeout(this._galleryTapTimer);
   },
 
   /* ── Tap-to-zoom on the main working images ─────────────────────────────── */

@@ -7,6 +7,23 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Lightbox uses the whole screen; Describe toggles (2026-11-22) — committed, not deployed
+
+Joe on the iPhone: the lightbox zoomed inside the picture's own box and wouldn't pan. Cause:
+`.gallery-image-container` was capped at 90vw × 80vh with `overflow: hidden` and hugged the picture, so a
+zoomed picture was cropped to its resting box, and a touch outside it hit the backdrop (a tap there closed).
+- **The picture area is now the whole screen** (`main.css`): the picture rests fitted to the screen, zoomed
+  it fills it, and pinch/pan start anywhere. Toolbar, arrows and caption float over it.
+- **Tap on the picture** hides/shows them (`chrome-hidden`, after the 300 ms double-tap window); a tap off
+  the picture closes, as the backdrop did. Mouse: a click off the picture closes unless it ended a drag.
+- **Max zoom** is twice the picture's own pixels, 6×–16× (`_galleryMaxScale`; was a flat 5×). The 50 ms
+  transform transition is gone (lag under a finger). Applies everywhere the lightbox opens.
+- **🔍 Describe** is now a toggle: "Hide description" while open, "Show description" (no call) for the same
+  picture, **🔄 Describe again** in the box replaces ✕ Close; a failed redo keeps the old text.
+- **Tested:** `lightbox.test.js` (new, 28: WebKit 390 px with synthetic touches + 1280 px mouse), playground
+  63, landing 46. **Not tested:** a real iPhone (real multi-touch; whether Safari renders a 10× zoom sharp).
+  **Deploy:** frontend only (`--no-deps`).
+
 ## Playground: 🔍 Describe (2026-11-22) — deployed 2026-11-22 (`be89bb0`, proxy + frontend)
 
 🔍 Describe beside 💾 Save to library: the vision model (`api.text.visionModel`, else the text model)

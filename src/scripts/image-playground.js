@@ -189,7 +189,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.savePlaygroundImageToLibrary(this.playgroundImageUrl, this._currentPlaygroundLabel()));
     }
 
-    document.getElementById("describe-playground-image-btn")?.addEventListener("click", () => this.handleDescribePlaygroundImage());
+    document.getElementById("describe-playground-image-btn")?.addEventListener("click", () => this.togglePlaygroundDescription());
     document.getElementById("playground-describe-use-btn")?.addEventListener("click", () => {
       const text = document.getElementById("playground-describe-text")?.value?.trim();
       const promptEl = document.getElementById("playground-generate-prompt");
@@ -208,10 +208,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
         this.showNotification("Couldn't copy: select the text and copy it instead", "warning");
       }
     });
-    document.getElementById("playground-describe-close-btn")?.addEventListener("click", () => {
-      const box = document.getElementById("playground-describe-box");
-      if (box) box.style.display = "none";
-    });
+    document.getElementById("playground-describe-again-btn")?.addEventListener("click", () => this.handleDescribePlaygroundImage());
 
     const editBtn = document.getElementById("edit-playground-image-btn");
     if (editBtn) editBtn.addEventListener("click", () => this.handleEditPlaygroundImage());
@@ -819,6 +816,38 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // Left up while one is being written: it lands for the picture it was asked for.
     const describeBox = document.getElementById("playground-describe-box");
     if (describeBox && !this._pgDescribing && dataUrl !== this._pgDescribedUrl) describeBox.style.display = "none";
+    this._syncPlaygroundDescribeButton();
+  },
+
+  _playgroundDescriptionShown() {
+    return document.getElementById("playground-describe-box")?.style.display === "block";
+  },
+
+  // The button's label says what a tap will do: hide the box, bring back the
+  // description already written for this picture (free), or write one.
+  _syncPlaygroundDescribeButton() {
+    const btn = document.getElementById("describe-playground-image-btn");
+    if (!btn || this._pgDescribing) return;
+    const kept = this._pgDescribedUrl === this.playgroundImageUrl
+      && !!document.getElementById("playground-describe-text")?.value.trim();
+    btn.textContent = this._playgroundDescriptionShown() ? "🔍 Hide description"
+      : kept ? "🔍 Show description"
+      : "🔍 Describe";
+  },
+
+  togglePlaygroundDescription() {
+    if (this._pgDescribing) return;
+    const box = document.getElementById("playground-describe-box");
+    if (this._playgroundDescriptionShown()) {
+      box.style.display = "none";
+    } else if (this._pgDescribedUrl === this.playgroundImageUrl
+      && document.getElementById("playground-describe-text")?.value.trim()) {
+      box.style.display = "block";
+    } else {
+      this.handleDescribePlaygroundImage();
+      return;
+    }
+    this._syncPlaygroundDescribeButton();
   },
 
   // Streams the description into the box as it arrives. Resumable like every
@@ -834,6 +863,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const btn = document.getElementById("describe-playground-image-btn");
     const box = document.getElementById("playground-describe-box");
     const textEl = document.getElementById("playground-describe-text");
+    const previous = this._pgDescribedUrl === source ? (textEl?.value || "") : "";
     this._pgDescribing = true;
     if (btn) {
       btn.disabled = true;
@@ -857,17 +887,16 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._pgDescribedUrl = source;
     } catch (error) {
       console.error("Playground describe error:", error);
-      // A half-streamed reply is a cut-off one, not a description.
-      if (textEl) textEl.value = "";
-      if (box) box.style.display = "none";
+      // A half-streamed reply is a cut-off one, not a description. Describe
+      // again puts the one it was replacing back.
+      if (textEl) textEl.value = previous;
+      if (box) box.style.display = previous ? "block" : "none";
       this.showNotification(`Couldn't describe the picture: ${error.message}`, "error", 6000);
     } finally {
       this._pgDescribing = false;
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "🔍 Describe";
-      }
+      if (btn) btn.disabled = false;
       if (textEl) textEl.placeholder = "";
+      this._syncPlaygroundDescribeButton();
     }
   },
 

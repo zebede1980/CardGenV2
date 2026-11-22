@@ -202,6 +202,26 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("the call streams and sends the working image", describeCall.stream
     && JSON.stringify(describeCall.body.messages).includes("image_url"));
 
+  const describeLabel = () => page.textContent("#describe-playground-image-btn").then((t) => t.trim());
+  const describeShown = () => page.locator("#playground-describe-box").isVisible();
+  check("while shown, the button offers to hide it", (await describeLabel()) === "🔍 Hide description", await describeLabel());
+  await page.click("#describe-playground-image-btn");
+  check("tapping it again hides the description", !(await describeShown()));
+  check("…and offers it back", (await describeLabel()) === "🔍 Show description", await describeLabel());
+  await page.click("#describe-playground-image-btn");
+  check("showing it again costs no model call", await describeShown()
+    && (await page.inputValue("#playground-describe-text")) === DESCRIBED
+    && model.count("describe") === describesBefore + 1);
+  model.failNext.describe = 500;
+  await page.click("#playground-describe-again-btn");
+  await describeIdle();
+  check("a failed 🔄 Describe again keeps the description it was replacing", await describeShown()
+    && (await page.inputValue("#playground-describe-text")) === DESCRIBED);
+  const againBefore = model.count("describe");
+  await page.click("#playground-describe-again-btn");
+  await describeIdle();
+  check("🔄 Describe again asks the model afresh", model.count("describe") > againBefore
+    && (await page.inputValue("#playground-describe-text")) === DESCRIBED);
   const describeScroll = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check("description box: no sideways scroll at 390px", describeScroll <= 0, describeScroll);
   await page.locator("#playground-describe-box").screenshot({ path: path.join(os.tmpdir(), "playground-describe-390.png") });
@@ -209,8 +229,9 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check("🪄 Use to generate fills the Generate box", (await page.inputValue("#playground-generate-prompt")) === DESCRIBED);
   check("…and opens the Generate tab", await page.locator("#pg-panel-generate").isVisible());
   check("the description stays up for the same picture", await page.locator("#playground-describe-box").isVisible());
-  await page.evaluate((url) => window.app.updatePlaygroundImagePreview(url + "#other"), PNG);
+  await page.evaluate((url) => { window.app.playgroundImageUrl = url + "#other"; window.app.updatePlaygroundImagePreview(url + "#other"); }, PNG);
   check("a new working image hides the description", !(await page.locator("#playground-describe-box").isVisible()));
+  check("…and the button describes afresh", (await describeLabel()) === "🔍 Describe", await describeLabel());
 
   model.failNext.describe = 500;
   await page.click("#describe-playground-image-btn");
