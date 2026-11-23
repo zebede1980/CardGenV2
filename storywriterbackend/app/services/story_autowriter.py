@@ -34,6 +34,7 @@ from typing import Optional
 from app.models import SessionLocal, Settings, Story, StorySegment
 from app.services import push
 from app.services.card_parser import extract_relevant_lorebook_entries
+from app.services.context_manager import SEX_SCENES
 from app.services.llm_service import (
     LLMService,
     UTILITY_TEMPERATURE,
@@ -89,6 +90,15 @@ PROSE_RULES = (
     "titles, bullet points, bold text or other formatting. Keep paragraphs full and readable; avoid strings of "
     "one-sentence paragraphs. No meta-commentary, no notes to the reader, never mention the plan. Finish at a natural "
     "sentence boundary."
+)
+
+# The planner squeezed sex into one clause of a chapter's events, so the writer
+# had a sentence's worth of room for it.
+PLAN_SEX_SCENES = (
+    "If the story includes sex, because the author's idea or the cards lead there, name each sex scene in its "
+    "chapter's events and build that chapter around it, so it has room to be written slowly, rather than squeezing "
+    "it between other events. Don't soften or leave out an adult premise. Don't add sex where nothing in the idea or "
+    "the cards points to it. Everyone involved is an adult (18+)."
 )
 
 # A steering note or idea is the user's text going into a prompt; cap it so a
@@ -284,6 +294,7 @@ def build_plan_messages(settings: Settings, cards: list, config: dict) -> list:
         f"How closely to follow the cards: {FAITHFULNESS[config['faithfulness']]}",
         f"The ending: {ENDINGS[config['ending']]}",
         f"Shape: {_structure_hint(n)}",
+        PLAN_SEX_SCENES,
         ("The author's idea for the story:\n" + config["idea"]) if config["idea"]
         else "No premise was given: invent the most interesting story these characters could be in.",
         """Reply with JSON only, no other text, in exactly this shape:
@@ -374,6 +385,7 @@ def build_chapter_messages(settings: Settings, cards: list, plan: dict, config: 
         system.append(CARDS_NOTE + "\n\n" + "\n\n".join("Character card:\n" + card_text(c, lore_scan) for c in cards))
     system.append("THE PLAN\n" + outline_text(plan))
     system.append(PROSE_RULES)
+    system.append(SEX_SCENES)
 
     user = []
     if earlier:
@@ -394,7 +406,8 @@ def build_chapter_messages(settings: Settings, cards: list, plan: dict, config: 
     if chapter < n:
         nxt = plan["chapters"][chapter]
         brief.append(f"The next chapter (do not write any of it): {nxt['events']}")
-    brief.append(f"Length: about {config['words']} words.")
+    brief.append(f"Length: about {config['words']} words. A chapter with a sex scene may run up to half as long "
+                 "again; spend the extra on that scene.")
     if chapter == 1:
         brief.append("Open in a scene, not with background. Bring the characters in through what they do and say.")
     else:

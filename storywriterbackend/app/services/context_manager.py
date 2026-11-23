@@ -4,6 +4,17 @@ from app.models import Story, StorySegment, CharacterCard, Settings, SteeringIns
 from app.services.card_parser import extract_relevant_lorebook_entries
 import json
 
+# Shared with the auto-writer. Without it models reached for a fade to black or
+# got a sex scene over with in a paragraph or two.
+SEX_SCENES = (
+    "Sex scenes: this is adult fiction for an adult reader. When the story reaches sex, write it on the page and "
+    "explicitly; never fade to black, cut away or skip to afterwards. Take it slowly and build it moment by moment: "
+    "the approach and the tension before it, undressing, each touch and how it lands, what each person feels in "
+    "their body and in their head, what they say and the sounds they make, and how it shifts as it goes on. Give it "
+    "real space, not a paragraph or two. Don't hurry towards the climax or summarise the end of it. Keep everyone "
+    "true to their personality throughout. Everyone in a sex scene is an adult (18+)."
+)
+
 class ContextManager:
     # [STORY-CONTEXT-SCALING 2026-08-12] should_summarize/get_segments_to_summarize
     # used to gate on a fixed segment COUNT (summary_threshold, default 10)
@@ -114,7 +125,10 @@ class ContextManager:
             "Do not include meta-commentary, do not acknowledge the user or instructions, "
             "and do not include the steering notes in the story text. "
             "Always finish your output at a natural sentence or paragraph boundary — never mid-sentence. "
-            "Only output the next part of the narrative."
+            "Only output the next part of the narrative.\n\n"
+            + SEX_SCENES
+            + " If a sex scene is under way when this section has reached its length, stop at a natural sentence "
+            "inside the scene and leave the rest for the next section rather than rushing it to an end."
         )
 
         # ── Token budget ──────────────────────────────────────────────────────
