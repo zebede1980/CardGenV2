@@ -33,6 +33,7 @@ The same two variables run the rest:
 | `playground.test.js` | WebKit | Image Playground: every picture kept in Recent for 3 days (also when the tab closes mid-draw), expiry and the count cap, other users refused; prompt history in the presets dropdowns; Library's Saved/Recent views, 💾 Keep, 🗑️; 2 per model; tool tabs above the drop zone; 🔍 Describe |
 | `lightbox.test.js` | WebKit | the lightbox: full-screen picture area, pinch and pan from anywhere, max zoom from the picture's pixels, tap hides the toolbar, tap off closes, swipe; mouse at 1280 px |
 | `story-setup.test.js` | WebKit | Story Writer's New story sheet: ✍️ Freeform (opening written at once, then Continue with a steer) and the planned lengths (an autowrite run); Story Writer's backend faked in the browser |
+| `image-jobs.test.js` | no | an image request sent again under the same clientRef joins the job drawing it or gets the finished picture (one model call); a failed job starts afresh; `/api/jobs?clientRef=` puts done before running before failed |
 | `runs-page.test.js` | WebKit | card runs from the page: hidden page, discarded tab, attach on reload, Stop, restart, two devices; and that the proxy's prompt host builds the same requests as the page |
 
 `stack.js` is the shared stack: `model.hold(kind)` pauses a model reply mid-stream so a test can

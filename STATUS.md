@@ -7,6 +7,27 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Image retries join the running job (2026-11-23) — committed, not deployed
+
+Joe's Qwen edit in the Playground (desktop Chrome) never arrived. From the logs: the edit took ~85 s on the
+GPU; the browser closed the request at ~60 s (NPM 499) and the page re-sent the POST, three times, each a
+new ComfyUI job; then `GET /api/jobs?clientRef=` returned the **newest** duplicate (still queued, then
+deleted by Joe), so the page waited on a job that would never finish. The first picture was saved to
+Playground Recent at 15:42.
+- **Fixed (`proxy/server.js`):** `joinExistingImageJob` at the top of `/api/image/generations` and
+  `/api/image/combine` (hosted and local): a resumable request whose clientRef already has a running or
+  finished job for that user joins it (answered when it finishes) or gets the result, instead of drawing
+  again. A ref whose job failed starts afresh. `/api/jobs?clientRef=` sorts done, then running, then
+  failed (`byJobPreference`); the unfiltered list is still newest first.
+- **Not found: why the browser gave up at 60 s.** Joe's image timeout is 180 s, the frontend nginx's
+  300 s, and 499 means the client hung up. Nor why the first two retries didn't look for the job first
+  (`_tryCollectResult` should have, and NPM shows only one lookup). The console's `[API] Attempt N
+  failed: …` lines would say.
+- **Tested:** `tests/cardgen/image-jobs.test.js` (new, 14; 9 fail on the old code), runs 79, playground
+  63, landing 46 (two early runs failed different checks while the PC's GPU was thrashing; 8 later runs
+  clean, and no request in that suite reaches the join). **Not tested:** the local ComfyUI route itself
+  (shares the same check at the route top), the iPhone. **Deploy:** proxy only.
+
 ## Story Writer: ✍️ Freeform beside the lengths (2026-11-23) — deployed 2026-11-23 (`0e8cff0`, frontend only; the site serves the new version)
 
 Joe couldn't find the old part-by-part mode after the auto-writer went in. It was still there as "✍️ Write it

@@ -2492,6 +2492,50 @@ function createGenerationJob(userId, abortController, clientRef = null, req = nu
   return job;
 }
 
+// Which of a clientRef's jobs a returning client wants: a finished one over
+// one still running over a failed one, then the newest.
+const JOB_STATUS_RANK = { done: 0, running: 1, error: 2 };
+function byJobPreference(a, b) {
+  return (JOB_STATUS_RANK[a.status] ?? 3) - (JOB_STATUS_RANK[b.status] ?? 3) || b.createdAt - a.createdAt;
+}
+
+/**
+ * An image request sent again under the same clientRef (the page retrying after
+ * its connection dropped or timed out) joins the job already drawing it, or
+ * gets the finished picture, instead of paying for a second one. Before this,
+ * each retry queued another local-GPU job behind the first. Returns true when
+ * it has answered the request. A ref whose only job failed starts afresh.
+ */
+function joinExistingImageJob(req, res) {
+  const { resumable, clientRef } = req.body || {};
+  if (!resumable || typeof clientRef !== "string" || !clientRef) return false;
+  const ref = clientRef.slice(0, 100);
+  const now = Date.now();
+  const job = [...generationJobs.values()]
+    .filter((j) => j.userId === req.user.userId && j.clientRef === ref && j.status !== "error" && !jobIsExpired(j, now))
+    .sort(byJobPreference)[0];
+  if (!job) return false;
+
+  const answer = () => {
+    if (res.writableEnded || res.destroyed) return;
+    if (job.status === "done") return res.json(job.result);
+    res.status(502).json({ error: { code: "502", message: job.error || "Generation failed" } });
+  };
+  if (job.status !== "running") {
+    console.log(`[jobs] repeat request for image job ${job.id}: sent the finished result`);
+    answer();
+    return true;
+  }
+  console.log(`[jobs] repeat request joined running image job ${job.id}`);
+  job.subscribers++;
+  job.listeners.add(answer);
+  res.on("close", () => {
+    job.listeners.delete(answer);
+    if (job.status === "running") job.subscribers = Math.max(0, job.subscribers - 1);
+  });
+  return true;
+}
+
 // ── "It's done" pushes (plans/ios-app.md, Stage 3) ──────────────────────────
 //
 // Each page load sends X-Page-Id (random) and X-Page-View (the tab it's on) with
@@ -3066,7 +3110,7 @@ app.get("/api/jobs", requireAuth, (req, res) => {
       subscribers: job.subscribers,
     });
   }
-  list.sort((a, b) => b.createdAt - a.createdAt);
+  list.sort(wantRef ? byJobPreference : (a, b) => b.createdAt - a.createdAt);
   res.json({ jobs: list });
 });
 
@@ -4631,6 +4675,7 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
   try {
     const { model, prompt, size, resumable, clientRef } = req.body;
 
+    if (joinExistingImageJob(req, res)) return;
     if (isLocalComfyModel(model)) return handleLocalComfyImage(req, res);
 
     const apiKey = req.headers["x-api-key"];
@@ -4801,6 +4846,7 @@ app.post("/api/image/combine", requireAuth, async (req, res) => {
   try {
     const { model, prompt, input_references } = req.body;
 
+    if (joinExistingImageJob(req, res)) return;
     if (isLocalComfyModel(model)) {
       if (!Array.isArray(input_references) || input_references.length < 2) {
         return res.status(400).json({ error: { code: "400", message: "At least two input_references images are required" } });
