@@ -7,7 +7,10 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Narration chunks; Story Writer sex scenes (2026-11-23) — committed, not deployed
+## Narration chunks; Story Writer sex scenes (2026-11-23) — deployed 2026-11-23 (`9fc2181`, frontend + storywriterbackend)
+
+After deploying: the backend started cleanly with both prompt rules loaded; the site serves
+`storywriter.js?v=20261123-ttsmerge` with the merge. No story generated or narrated on the live site yet.
 
 - **Narration** (`TTSPlayer._takeNextRequest`, `storywriter.js`): paragraphs already queued for the same voice
   go to TTS together up to 450 chars (`MERGE_UP_TO_CHARS`). Kokoro speaks ≤510 phonemes (~500 chars of
