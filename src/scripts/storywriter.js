@@ -279,6 +279,33 @@ class TTSPlayer {
         }
     }
 
+    /**
+     * Kokoro speaks up to 510 phonemes (about 500 characters of English) as one
+     * piece, with intonation planned across it, and cuts anything longer. One
+     * paragraph per request left most pieces half used and lone dialogue lines
+     * spoken with no context. So paragraphs already waiting for the same voice
+     * go together, up to MERGE_UP_TO_CHARS. It only takes what is queued and
+     * never waits for more text, so narration starts no later while streaming.
+     */
+    static MERGE_UP_TO_CHARS = 450;
+
+    _takeNextRequest() {
+        const first = this.textQueue.shift();
+        const voice = first.voiceOverride || this.voice;
+        let text = first.text;
+        while (this.textQueue.length > 0) {
+            const next = this.textQueue[0];
+            if ((next.voiceOverride || this.voice) !== voice) break;
+            if (text.length + 2 + next.text.length > TTSPlayer.MERGE_UP_TO_CHARS) break;
+            // A heading or a line with no closing punctuation would otherwise run
+            // straight into the next sentence.
+            if (!/[.!?…:;,"'”’)\]]$/.test(text)) text += '.';
+            text += ' ' + next.text;
+            this.textQueue.shift();
+        }
+        return { text, voiceOverride: first.voiceOverride };
+    }
+
     async _maybeLoadNext() {
         if (this.stopped || this.paused || this.loading || this.textQueue.length === 0) {
             if (this.textQueue.length === 0 && !this.loading && !this._queueLowFired && !this.stopped) {
@@ -294,10 +321,8 @@ class TTSPlayer {
         }
 
         this.loading = true;
-        const queueItem = this.textQueue.shift();
-        const text = queueItem.text;
-        const voiceOverride = queueItem.voiceOverride;
-        
+        const { text, voiceOverride } = this._takeNextRequest();
+
         if (this.textQueue.length === 0 && !this._queueLowFired && !this.stopped) {
             this._queueLowFired = true;
             if (this.onQueueLow) this.onQueueLow();
