@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Image retries join the running job (2026-11-23) — committed, not deployed
+## Image retries join the running job (2026-11-23) — deployed 2026-11-23 (`fb5f65b`, proxy only)
 
 Joe's Qwen edit in the Playground (desktop Chrome) never arrived. From the logs: the edit took ~85 s on the
 GPU; the browser closed the request at ~60 s (NPM 499) and the page re-sent the POST, three times, each a
@@ -26,7 +26,8 @@ Playground Recent at 15:42.
 - **Tested:** `tests/cardgen/image-jobs.test.js` (new, 14; 9 fail on the old code), runs 79, playground
   63, landing 46 (two early runs failed different checks while the PC's GPU was thrashing; 8 later runs
   clean, and no request in that suite reaches the join). **Not tested:** the local ComfyUI route itself
-  (shares the same check at the route top), the iPhone. **Deploy:** proxy only.
+  (shares the same check at the route top), the iPhone. **After deploying:** the proxy came up healthy with 14 runs
+  reloaded and the new code in `/app/server.js`; `/api/jobs` answers 401 without a token. No edit tried yet.
 
 ## Story Writer: ✍️ Freeform beside the lengths (2026-11-23) — deployed 2026-11-23 (`0e8cff0`, frontend only; the site serves the new version)
 
