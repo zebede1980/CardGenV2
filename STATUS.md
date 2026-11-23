@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Story Writer: ✍️ Freeform beside the lengths (2026-11-23) — committed, not deployed
+## Story Writer: ✍️ Freeform beside the lengths (2026-11-23) — deployed 2026-11-23 (`0e8cff0`, frontend only; the site serves the new version)
 
 Joe couldn't find the old part-by-part mode after the auto-writer went in. It was still there as "✍️ Write it
 with me" in the sheet's footer, under Length / Ending / the cards slider, which don't apply to it. Now **✍️ Freeform**
