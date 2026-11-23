@@ -3,7 +3,8 @@
  * storywriterbackend/app/services/story_autowriter.py.
  *
  * - The New Story sheet: cards, an optional idea, length, ending, how closely
- *   to follow the cards, and the mode (write it all, or write it with me).
+ *   to follow the cards. Freeform, beside the lengths, is the hand-driven
+ *   mode: no plan, a part at a time, steered before each one.
  *   No title needed: the AI names the story.
  * - The run panel in the workspace: progress, the chapter being written as it
  *   arrives, Stop / Resume, a note for the next chapter, and the outline on
@@ -23,6 +24,7 @@
         { id: 'medium', label: 'Medium', sub: '~8,000 words · 7 chapters', time: 'about 10–15 min' },
         { id: 'long', label: 'Long', sub: '~15,000 words · 11 chapters', time: 'about 15–25 min' },
         { id: 'epic', label: 'Epic', sub: '~30,000 words · 18 chapters', time: 'about 25–40 min' },
+        { id: 'freeform', label: '✍️ Freeform', sub: 'No plan or set length: a part at a time', time: 'you can steer before each part' },
     ];
     const ENDINGS = [
         ['any', '🎲 AI decides'], ['happy', '😊 Happy'], ['bittersweet', '🌗 Bittersweet'],
@@ -136,12 +138,16 @@
                         <section class="pb-panel" data-el="auto-only">
                             <span class="pb-label">Length</span>
                             <div class="saw-lengths" data-el="lengths"></div>
-                            <span class="pb-label">Ending</span>
-                            <div class="pb-row" data-el="endings"></div>
-                            <label class="pb-label" for="saw-faith">How closely to follow the cards</label>
-                            <input id="saw-faith" type="range" min="1" max="5" step="1" class="saw-range">
-                            <div class="saw-range-labels"><span>Faithful</span><span>Balanced</span><span>Off the rails</span></div>
-                            <p class="pb-hint" data-el="faith-hint"></p>
+                            <p class="pb-hint" data-el="freeform-hint">It writes the opening, then you read, add a note
+                                if you like, and press Continue for the next part. It goes wherever you steer it.</p>
+                            <div class="saw-planned" data-el="planned-only">
+                                <span class="pb-label">Ending</span>
+                                <div class="pb-row" data-el="endings"></div>
+                                <label class="pb-label" for="saw-faith">How closely to follow the cards</label>
+                                <input id="saw-faith" type="range" min="1" max="5" step="1" class="saw-range">
+                                <div class="saw-range-labels"><span>Faithful</span><span>Balanced</span><span>Off the rails</span></div>
+                                <p class="pb-hint" data-el="faith-hint"></p>
+                            </div>
                         </section>
                         <section class="pb-panel">
                             <label class="pb-label" for="saw-title-input">Title <span class="pb-soft">(optional)</span></label>
@@ -151,7 +157,7 @@
                         <p class="pb-hint" data-el="error" role="alert" style="color: var(--error, #e55);"></p>
                     </div>
                     <div class="pb-footer">
-                        <button type="button" class="btn-outline pb-wide" data-act="manual">✍️ Write it with me</button>
+                        <button type="button" class="btn-primary pb-wide" data-act="manual">✍️ Start writing</button>
                         <button type="button" class="btn-primary pb-wide" data-act="auto">✨ Write the whole story</button>
                     </div>
                 </div>`;
@@ -190,6 +196,11 @@
             this.sheet.querySelector('#saw-faith').value = String(this.form.faithfulness);
             const [name, text] = FAITH[this.form.faithfulness];
             q('faith-hint').innerHTML = `<b>${name}.</b> ${esc(text)}`;
+            const free = this.form.length === 'freeform';
+            q('planned-only').hidden = free;
+            q('freeform-hint').hidden = !free;
+            this.sheet.querySelector('[data-act="manual"]').hidden = !free;
+            this.sheet.querySelector('[data-act="auto"]').hidden = free;
         }
 
         _renderPicked() {
@@ -222,8 +233,8 @@
             this._setBusy(true);
             try {
                 let story;
+                savePrefs(this.form);
                 if (mode === 'auto') {
-                    savePrefs(this.form);
                     story = await postJson('/stories/autowrite', { title, card_ids, idea, ...this.form });
                 } else {
                     story = await postJson('/stories/', { title, synopsis: idea, card_ids });
@@ -232,6 +243,8 @@
                 this.sheet.querySelector('#saw-idea').value = '';
                 this.sheet.querySelector('#saw-title-input').value = '';
                 await this.app.openStory(story.id);
+                // Freeform: write the opening now; every later part waits for Continue.
+                if (mode === 'manual') this.app.generateNext();
             } catch (e) {
                 errorEl.textContent = e.message.toLowerCase().includes('api key')
                     ? '⚠️ ' + e.message + ' Set your API credentials in ⚙️ API Settings first.'
@@ -244,8 +257,8 @@
         _setBusy(busy) {
             this.busy = busy;
             this.sheet.querySelectorAll('.pb-footer button').forEach((b) => { b.disabled = busy; });
-            const auto = this.sheet.querySelector('[data-act="auto"]');
-            auto.textContent = busy ? '⏳ Starting…' : '✨ Write the whole story';
+            this.sheet.querySelector('[data-act="auto"]').textContent = busy ? '⏳ Starting…' : '✨ Write the whole story';
+            this.sheet.querySelector('[data-act="manual"]').textContent = busy ? '⏳ Starting…' : '✍️ Start writing';
         }
 
         // ── Workspace ────────────────────────────────────────────────────────

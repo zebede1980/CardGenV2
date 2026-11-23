@@ -4222,6 +4222,9 @@ html.saw-open, html.saw-open body { overflow: hidden; }
 #sw-setup-sheet .saw-lengths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
 #sw-setup-sheet .saw-length { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-width: 0; padding: 0.6rem 0.7rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-muted); color: var(--text-primary); font: inherit; font-size: 0.78rem; text-align: left; cursor: pointer; }
 #sw-setup-sheet .saw-length b { font-size: 0.92rem; }
+#sw-setup-sheet .saw-length[data-length="freeform"] { grid-column: 1 / -1; }
+#sw-setup-sheet .saw-planned { display: flex; flex-direction: column; gap: 0.5rem; }
+#sw-setup-sheet [hidden] { display: none !important; }
 #sw-setup-sheet .saw-length[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 #sw-setup-sheet .saw-chip { min-height: 2.25rem; padding: 0.4rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-strong); color: var(--text-primary); font: inherit; font-size: 0.85rem; cursor: pointer; }
 #sw-setup-sheet .saw-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }

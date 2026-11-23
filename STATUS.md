@@ -7,6 +7,18 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Story Writer: ✍️ Freeform beside the lengths (2026-11-23) — committed, not deployed
+
+Joe couldn't find the old part-by-part mode after the auto-writer went in. It was still there as "✍️ Write it
+with me" in the sheet's footer, under Length / Ending / the cards slider, which don't apply to it. Now **✍️ Freeform**
+is a fifth tile under Short–Epic (full width): picking it hides Ending and the slider, shows a one-line hint, and
+the footer becomes **✍️ Start writing**, which creates a plain story (idea → synopsis) and **writes the opening at
+once** (`generateNext()`); every later part waits for Continue, with the steer box as before. The choice is
+remembered with the other sheet prefs (`cardgen.storySetup.v1`). Planned lengths are unchanged.
+**Tested:** `tests/cardgen/story-setup.test.js` (new, 44: WebKit 390 light / 320 dark, `/api/sw/*` faked with
+`page.route`; needs `serviceWorkers: "block"` or the routes miss). **Not tested:** the iPhone, a real model.
+**Deploy:** frontend only.
+
 ## Narration chunks; Story Writer sex scenes (2026-11-23) — deployed 2026-11-23 (`9fc2181`, frontend + storywriterbackend)
 
 After deploying: the backend started cleanly with both prompt rules loaded; the site serves
