@@ -7,6 +7,21 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Narration chunks; Story Writer sex scenes (2026-11-23) — committed, not deployed
+
+- **Narration** (`TTSPlayer._takeNextRequest`, `storywriter.js`): paragraphs already queued for the same voice
+  go to TTS together up to 450 chars (`MERGE_UP_TO_CHARS`). Kokoro speaks ≤510 phonemes (~500 chars of
+  English, measured ~1 per char) as one piece and splits anything longer, so bigger requests add no context.
+  Stored stories: paragraph median 259 chars, 90th pct 535, 21% under 80. Never waits for more text, so
+  streaming starts no later. Merged paragraphs lose the paragraph pause (a sentence pause instead). Applies to
+  every provider and to Adventure's Read aloud. **Tested:** 6 Node checks of the merge. **Not tested:** by ear,
+  the Story Writer WebKit suite (not on this PC), the iPhone. **Deploy:** frontend only.
+- **Sex scenes** (`SEX_SCENES` in `context_manager.py`, used by Continue and every auto-written chapter;
+  `PLAN_SEX_SCENES` in the planner): on the page, explicit, slow and moment by moment, no fade to black, adults
+  only; Continue leaves an unfinished scene for the next section; a chapter with one may run 1.5× long; the
+  planner builds a chapter around such a scene and doesn't soften an adult premise. **Tested:** 102 backend
+  tests. **Not tested:** a real model. **Deploy:** storywriterbackend (interrupts running auto-writes).
+
 ## Lightbox uses the whole screen; Describe toggles (2026-11-22) — deployed 2026-11-22 (`d201dfd`, frontend only)
 
 Joe on the iPhone: the lightbox zoomed inside the picture's own box and wouldn't pan. Cause:
