@@ -92,6 +92,7 @@ function replyKind(body) {
   if (/identify and list supporting cast members/.test(text)) return "cast-list";
   if (/Generate the supporting cast member JSON now/.test(text)) return "cast-member";
   if (/You make targeted edits to roleplay character cards/.test(text)) return "card-edit";
+  if (/You tag roleplay character cards/.test(text)) return "tags";
   if (/<example_messages>|three tagged sections/.test(text)) return "finishing";
   if (/# \[Scenario Title\]/.test(text)) return "card-scenario";
   if (/The Roleplay's Setup/.test(text) && /Profile/.test(text) && /template/i.test(text)) return "card";
@@ -131,6 +132,8 @@ const REPLIES = {
   posthistory: "Post-history written on its own.",
   examples: "<START>\n{{char}}: \"Mind the step.\"",
   "image-prompt": "A weathered lighthouse keeper in a yellow oilskin, storm light, 35mm photograph.",
+  // Messy on purpose: the page's parser folds "Sci Fi" and "ELF", drops the duplicate.
+  tags: '["female", "Sci Fi", "ELF", "knight", "dominant", "romance", "nsfw", "female", "lighthouse keeper"]',
   describe: "A 35mm film photo of a lighthouse on a rocky point at dusk, its lamp lit, waves breaking below, warm orange sky fading to blue.",
   other: "A plain reply.",
 };
@@ -235,6 +238,17 @@ function startBackend() {
   };
   const kindMap = (u, kind) => (u.kinds[kind] ||= new Map());
   state.history = (userId) => [...kindMap(user(String(userId)), "history").values()];
+  // Library cards, as the real backend's character_cards rows (tags a comma string).
+  state.cards = (userId) => kindMap(user(String(userId)), "cards");
+  state.tagPatches = [];   // { userId, id, tags }
+  state.addCard = (userId, row) => {
+    state.nextCardId = (state.nextCardId || 1000) + 1;
+    const now = new Date().toISOString().replace("Z", "");
+    const card = { id: state.nextCardId, name: "Card", description: "", personality: "", scenario: "", first_mes: "",
+      tags: "", character_book: "", created_at: now, updated_at: now, uses: 0, last_used_at: null, ...row };
+    state.cards(userId).set(String(card.id), card);
+    return card;
+  };
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
@@ -265,6 +279,36 @@ function startBackend() {
       if (req.method === "DELETE") { map.delete(decodeURIComponent(id)); return send(200, { success: true }); }
     }
     if (url.pathname === "/api/push/internal/jobs-done") { state.pushes.push(body); return send(200, {}); }
+    if (url.pathname.startsWith("/api/cards/")) {
+      const cards = state.cards(uid);
+      const tagList = (c) => String(c.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+      if (url.pathname === "/api/cards/summary") {
+        return send(200, [...cards.values()].map((c) => ({ id: c.id, name: c.name, tags: tagList(c), created_at: c.created_at,
+          updated_at: c.updated_at, blurb: String(c.description || "").slice(0, 240), has_lorebook: !!c.character_book,
+          uses: c.uses || 0, last_used_at: c.last_used_at || null })));
+      }
+      if (url.pathname === "/api/cards/search") {
+        const words = String(url.searchParams.get("q") || "").toLowerCase().split(/\s+/).filter(Boolean);
+        if (!words.length) return send(200, []);
+        return send(200, [...cards.values()].filter((c) => {
+          const text = [c.name, c.description, c.personality, c.scenario, c.first_mes, c.tags].join(" ").toLowerCase();
+          return words.every((w) => text.includes(w));
+        }).map((c) => c.id));
+      }
+      if (url.pathname === "/api/cards/" && req.method === "GET") return send(200, [...cards.values()]);
+      if ((m = url.pathname.match(/^\/api\/cards\/(\d+)\/tags$/)) && req.method === "PATCH") {
+        const card = cards.get(m[1]);
+        if (!card) return send(404, { detail: "Card not found" });
+        card.tags = Array.isArray(body.tags) ? body.tags.join(",") : String(body.tags || "");
+        state.tagPatches.push({ userId: uid, id: card.id, tags: card.tags });
+        return send(200, { id: card.id, tags: tagList(card) });
+      }
+      if ((m = url.pathname.match(/^\/api\/cards\/(\d+)$/))) {
+        const card = cards.get(m[1]);
+        if (req.method === "DELETE") { cards.delete(m[1]); return send(200, { success: true }); }
+        return card ? send(200, card) : send(404, { detail: "Card not found" });
+      }
+    }
     // The Playground library's rows (the proxy keeps the bytes on disk).
     if ((m = url.pathname.match(/^\/api\/playground\/images(?:\/(\d+))?$/))) {
       const rows = kindMap(user(uid), "playground");

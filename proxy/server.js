@@ -845,6 +845,82 @@ app.delete("/api/storage/prompts/:id", requireAuth, async (req, res) => {
 });
 
 // ── Shared helper: translate a flat DB card row into the shape the UI expects ─
+/** A request to the Python backend as this user (internal headers). */
+function backendRequest(userId, method, p, body) {
+  const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
+  return fetch(`${internalUrl}${p}`, {
+    method,
+    headers: internalBackendHeaders(userId),
+    body: body === undefined ? undefined : JSON.stringify(body),
+    timeout: 30000,
+  });
+}
+
+// ── Card thumbnails ───────────────────────────────────────────────────────────
+// Portraits are stored as uploaded: a median of ~290 KB and up to 8 MB. A grid
+// of them was most of what made Home slow on the phone. These are small WebP
+// copies in card-thumbs/, made on first request and remade when the portrait
+// file is newer than the copy. sharp is loaded lazily: if it's missing or
+// fails, the route sends the full picture as it always did.
+const THUMB_WIDTHS = [160, 320, 480, 640];
+let sharpModule;
+function loadSharp() {
+  if (sharpModule === undefined) {
+    try {
+      sharpModule = require("sharp");
+      sharpModule.concurrency(1);
+      sharpModule.cache(false);
+    } catch (error) {
+      console.warn("[Card Storage] sharp unavailable, thumbnails send the full picture:", error.message);
+      sharpModule = null;
+    }
+  }
+  return sharpModule;
+}
+const thumbsInFlight = new Map();
+
+async function cardThumbnail(userId, cardId, imgFile, requestedWidth) {
+  const sharp = loadSharp();
+  if (!sharp || !/^[A-Za-z0-9_-]{1,80}$/.test(String(cardId))) return null;
+  const asked = Number(requestedWidth) || 320;
+  const width = THUMB_WIDTHS.find((w) => w >= asked) || THUMB_WIDTHS[THUMB_WIDTHS.length - 1];
+  const source = await fsPromises.stat(imgFile);
+  const thumbDir = path.join(getUserDataDir(userId), "card-thumbs");
+  const thumbFile = path.join(thumbDir, `${cardId}-${width}.webp`);
+  const etag = `"${Math.round(source.mtimeMs)}-${source.size}-${width}"`;
+  try {
+    const kept = await fsPromises.stat(thumbFile);
+    if (kept.mtimeMs >= source.mtimeMs) return { buffer: await fsPromises.readFile(thumbFile), etag };
+  } catch (_) { /* not made yet */ }
+
+  // Several tiles asking for the same picture at once make it once.
+  if (thumbsInFlight.has(thumbFile)) return { buffer: await thumbsInFlight.get(thumbFile), etag };
+  const making = (async () => {
+    const buffer = await sharp(imgFile, { failOn: "none", limitInputPixels: 100e6 })
+      .rotate()
+      .resize({ width, withoutEnlargement: true })
+      .webp({ quality: 78 })
+      .toBuffer();
+    await fsPromises.mkdir(thumbDir, { recursive: true });
+    await fsPromises.writeFile(`${thumbFile}.tmp`, buffer);
+    await fsPromises.rename(`${thumbFile}.tmp`, thumbFile);
+    return buffer;
+  })();
+  thumbsInFlight.set(thumbFile, making);
+  try {
+    return { buffer: await making, etag };
+  } finally {
+    thumbsInFlight.delete(thumbFile);
+  }
+}
+
+function deleteCardThumbnails(userId, cardId) {
+  const thumbDir = path.join(getUserDataDir(userId), "card-thumbs");
+  for (const width of THUMB_WIDTHS) {
+    fsPromises.unlink(path.join(thumbDir, `${cardId}-${width}.webp`)).catch(() => { });
+  }
+}
+
 function translateDbCard(c) {
   let altGreetings = [];
   let charBook = undefined;
@@ -913,6 +989,23 @@ app.get("/api/storage/cards/thumbnail", requireAuth, async (req, res) => {
     return res.status(404).end();
   }
 
+  // ?w=<px>: a small copy for grids (Home's browser), made once and kept.
+  // Without it, the full portrait as before (the card sheet, the lightbox).
+  if (req.query.w !== undefined) {
+    try {
+      const small = await cardThumbnail(req.user.userId, cardId, imgFile, req.query.w);
+      if (small) {
+        if (req.headers["if-none-match"] === small.etag) return res.status(304).end();
+        res.setHeader("Content-Type", "image/webp");
+        res.setHeader("ETag", small.etag);
+        res.setHeader("Cache-Control", "private, max-age=300");
+        return res.send(small.buffer);
+      }
+    } catch (error) {
+      console.warn(`[Card Storage] thumbnail for ${cardId} failed, sending the full picture: ${error.message}`);
+    }
+  }
+
   try {
     const [imgBuf, mime] = await Promise.all([
       fsPromises.readFile(imgFile),
@@ -924,6 +1017,51 @@ app.get("/api/storage/cards/thumbnail", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("Card thumbnail error:", error);
     res.status(500).end();
+  }
+});
+
+// ── Home's character browser ─────────────────────────────────────────────────
+// A light row per library card (no card text) and a text search, so Home
+// doesn't download every card in full to show a grid. Registered before
+// /:id for the same reason as the thumbnail route.
+
+app.get("/api/storage/cards/summary", requireAuth, async (req, res) => {
+  try {
+    const r = await backendRequest(req.user.userId, "GET", "/api/cards/summary");
+    if (!r.ok) throw new Error(`Database returned ${r.status}`);
+    const rows = await r.json();
+    let pictures = new Set();
+    try {
+      pictures = new Set((await fsPromises.readdir(path.join(getUserDataDir(req.user.userId), "card-images")))
+        .filter((f) => f.endsWith(".img")).map((f) => f.slice(0, -4)));
+    } catch (_) { /* no pictures yet */ }
+    res.json(rows.map((c) => ({
+      id: c.id,
+      name: c.name || "Unnamed Character",
+      tags: Array.isArray(c.tags) ? c.tags : [],
+      createdAt: c.created_at,
+      updatedAt: c.updated_at || c.created_at,
+      blurb: c.blurb || "",
+      hasLorebook: !!c.has_lorebook,
+      uses: c.uses || 0,
+      lastUsedAt: c.last_used_at || null,
+      hasImage: pictures.has(String(c.id)),
+    })));
+  } catch (e) {
+    console.error("[Card Storage] GET /api/storage/cards/summary Error:", e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
+app.get("/api/storage/cards/search", requireAuth, async (req, res) => {
+  const q = String(req.query.q || "").slice(0, 200);
+  try {
+    const r = await backendRequest(req.user.userId, "GET", `/api/cards/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error(`Database returned ${r.status}`);
+    res.json({ ids: await r.json() });
+  } catch (e) {
+    console.error("[Card Storage] GET /api/storage/cards/search Error:", e.message);
+    res.status(502).json({ error: e.message });
   }
 });
 
@@ -1196,6 +1334,7 @@ app.delete("/api/storage/cards/:id", requireAuth, async (req, res) => {
     if (!response.ok) throw new Error("Failed to delete card from database");
     deleteCardHistoryImages(imgDir, cardId);
     deleteCardGalleryImages(imgDir, cardId);
+    deleteCardThumbnails(req.user.userId, cardId);
     for (const ext of [".img", ".mime"]) {
       const f = path.join(imgDir, `${cardId}${ext}`);
       if (fs.existsSync(f)) fsPromises.unlink(f).catch(() => { });
@@ -5935,6 +6074,16 @@ require("./runs/card-runs").register(app, {
   searchCharacter: (name, isFictional) => (BRAVE_SEARCH_ENABLED ? searchCharacterDetails(String(name || "").trim(), !!isFictional) : null),
   reportDone: reportRunDone,
   loadUserConfig,
+});
+
+// 🏷️ Tag untagged cards (proxy/runs/tag-runs.js): Home's bulk tagger.
+require("./runs/tag-runs").register(app, {
+  requireAuth,
+  dataDir: DATA_DIR,
+  getUserDataDir,
+  callTextUpstream,
+  loadUserConfig,
+  backendRequest,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
