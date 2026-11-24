@@ -321,6 +321,24 @@ async function pageHalf(browser, stack, { width, height, dark }) {
   await page.evaluate(() => document.getElementById("card-gallery-info-close").click());
 
   await page.screenshot({ path: path.join(os.tmpdir(), `home-browse-${width}${dark ? "-dark" : ""}.png`) });
+
+  // Character Gen's library sidebar waits until Character Gen is shown,
+  // and then reads the light list, never every card's full text.
+  const fullList = (r) => /\/api\/storage\/cards(\?|$)/.test(r.url);
+  const libList = (r) => /\/api\/storage\/cards\/library$/.test(r.url);
+  check(`${tag}: Home never downloaded the full card list`, !requests.some(fullList), requests.filter(fullList).map((r) => r.url).join(" "));
+  // (Roleplay Chat's persona list reads the light list at start-up too.)
+  const libBefore = requests.filter(libList).length;
+  check(`${tag}: ...and Character Gen's library stays unfilled while on Home`, await page.$$eval("#stored-cards-list .library-item", (e) => e.length) === 0, libBefore);
+  await page.click("#tab-cardgen");
+  await page.waitForFunction(() => document.querySelectorAll("#stored-cards-list .library-item").length > 0, null, { timeout: 8000 }).catch(() => {});
+  const lib = await page.evaluate(() => ({ n: document.querySelectorAll("#stored-cards-list .library-item").length,
+    names: [...document.querySelectorAll("#stored-cards-list .library-item-title")].slice(0, 3).map((e) => e.textContent) }));
+  check(`${tag}: opening Character Gen loads its library from the light list`, requests.filter(libList).length === libBefore + 1 && lib.n === 130 && lib.names.every(Boolean), JSON.stringify(lib));
+  check(`${tag}: ...still without the full list`, !requests.some(fullList));
+  await page.click("#stored-cards-list [data-action=load-card]");
+  await page.waitForFunction(() => (document.getElementById("character-output")?.textContent || "").length > 0 || !!window.app?.currentCharacter, null, { timeout: 8000 }).catch(() => {});
+  check(`${tag}: Load on a library row still opens the full card`, await page.evaluate(() => !!window.app?.currentCharacter?.name));
   await ctx.close();
 }
 

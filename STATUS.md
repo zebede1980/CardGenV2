@@ -1,11 +1,32 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-24 (Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-25 (light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## Light card lists at start-up; new app icon (2026-11-25) — committed, not deployed
+
+- **Every app start downloaded every card in full** (11.3 MB for Joe's 481 cards + 30 history), twice, whatever
+  tab was open. That turned out to be **Roleplay Chat's persona dropdown** (`chat-handler.js` `loadPersonas`, at
+  init and on opening Chat), not only Character Gen's library sidebar. Both only show names.
+- New proxy route `GET /api/storage/cards/library` (before `/:id`): the backend's `/api/cards/summary` + history,
+  cut to `{id, characterName, isPermanent, createdAt, updatedAt}`. `storage.listCardsLite()` reads it (falls back
+  to `listCards()` if the proxy is older). Used by: the library sidebar, the persona dropdown, Prompt builder's
+  🖼️ Match → Characters, the save paths' "existing card / createdAt" lookups, and Clear history.
+- `refreshLibraryViews` does nothing while `#view-cardgen` is hidden except mark the lists stale; a
+  MutationObserver on the view's style fills them when Character Gen is next shown, however it is shown.
+- Still on the full list (on demand only): 🖼️ Gallery, Messenger's and Adventure's card pickers (`cardGallery.open`
+  shows card text).
+- **New icon:** fanned character cards + gold sparkle on a purple night sky. Source `icons/icon.svg`; PNGs made with
+  sharp (apple-touch 180, 192, 512, maskable 512 with the art in the middle 78%, favicon 256 rounded). `?v=20261125`
+  on the links and manifest. **iOS keeps the icon from when the app was added to the Home Screen:** remove and re-add
+  it to see the new one.
+- Tests: `home-browse` 145 (new: no full list on start, library unfilled on Home, fills from the light list when
+  Character Gen opens, Load still opens the full card); all other suites green. Not tested on the iPhone.
+- Deploy: proxy + frontend.
 
 ## Home: character browser + 🏷️ AI tagging (2026-11-24) — deployed 2026-11-24 (`b3242de`, proxy + storywriterbackend + frontend)
 
@@ -59,9 +80,7 @@ heading), and opening Home downloaded every card in full (~4.7 MB with lorebooks
   browser; the page in WebKit 390 / 320 dark / 1280; tagging from the page with the page hidden mid-run);
   backend `tests/test_card_summary.py` (new, 4) and all 106 backend tests. **Not tested:** the iPhone; a real
   full tagging run (it's about to be Joe's first).
-- **Not changed, worth doing:** Character Gen's library sidebar still downloads every card in full at app start
-  (`refreshLibraryViews` from `main.js` init → `GET /api/storage/cards`), whatever tab is open. Making it load
-  when Character Gen is first opened would take the ~4.7 MB off every app start.
+- **Follow-up done 2026-11-25:** see "Light card lists at start-up" above.
 - **Deploy:** proxy (new `sharp` dependency → image rebuild) + storywriterbackend + frontend.
 
 ## Image retries join the running job (2026-11-23) — deployed 2026-11-23 (`fb5f65b`, proxy only; the running proxy has `joinExistingImageJob`)

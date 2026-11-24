@@ -346,7 +346,7 @@
       const token = window.cardgenAuth?.getToken() || localStorage.getItem("cardgen_auth_token") || "";
       try {
         if (tab === "cards") {
-          const cards = await window.characterStorage.listCards();
+          const cards = await (window.characterStorage.listCardsLite || window.characterStorage.listCards).call(window.characterStorage);
           const ordered = [...cards.filter(c => c.isPermanent), ...cards.filter(c => !c.isPermanent)];
           this.matchItems.cards = ordered.map(c => {
             const base = `/api/storage/cards/thumbnail?cardId=${encodeURIComponent(c.id)}`;

@@ -1301,7 +1301,7 @@ class RoleplayChatHandler {
             return;
         }
         try {
-            const allCards = await window.characterStorage.listCards();
+            const allCards = await (window.characterStorage.listCardsLite || window.characterStorage.listCards).call(window.characterStorage);
             this.availablePersonas = allCards.filter(c => c.isPermanent);
 
             this.availablePersonas.sort((a, b) => {

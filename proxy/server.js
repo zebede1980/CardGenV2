@@ -1053,6 +1053,36 @@ app.get("/api/storage/cards/summary", requireAuth, async (req, res) => {
   }
 });
 
+// Character Gen's library sidebar: just what its list shows (names, dates,
+// saved vs history), not every card's full text like /api/storage/cards.
+app.get("/api/storage/cards/library", requireAuth, async (req, res) => {
+  try {
+    const [r, histItems] = await Promise.all([
+      backendRequest(req.user.userId, "GET", "/api/cards/summary"),
+      readHistory(req.user.userId),
+    ]);
+    if (!r.ok) throw new Error(`Database returned ${r.status}`);
+    const rows = await r.json();
+    const lite = (c, isPermanent) => ({
+      id: c.id,
+      characterName: c.characterName || "Unnamed Character",
+      isPermanent,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt || c.createdAt,
+    });
+    res.json([
+      ...rows.map((c) => lite({
+        id: c.id, characterName: c.name,
+        createdAt: c.created_at, updatedAt: c.updated_at || c.created_at,
+      }, true)),
+      ...histItems.map((h) => lite(h, false)),
+    ]);
+  } catch (e) {
+    console.error("[Card Storage] GET /api/storage/cards/library Error:", e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
 app.get("/api/storage/cards/search", requireAuth, async (req, res) => {
   const q = String(req.query.q || "").slice(0, 200);
   try {
