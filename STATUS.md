@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Light card lists at start-up; new app icon (2026-11-25) — committed, not deployed
+## Light card lists at start-up; new app icon (2026-11-25) — deployed 2026-11-25 (`57f8f5b`, proxy + frontend; live light list 74 KB / 155 ms vs 11.3 MB)
 
 - **Every app start downloaded every card in full** (11.3 MB for Joe's 481 cards + 30 history), twice, whatever
   tab was open. That turned out to be **Roleplay Chat's persona dropdown** (`chat-handler.js` `loadPersonas`, at
