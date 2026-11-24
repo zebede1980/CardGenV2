@@ -7,7 +7,7 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Image retries join the running job (2026-11-23) — committed, not deployed
+## Image retries join the running job (2026-11-23) — deployed 2026-11-23 (`fb5f65b`, proxy only; the running proxy has `joinExistingImageJob`)
 
 Joe's Qwen edit in the Playground (desktop Chrome) never arrived. From the logs: the edit took ~85 s on the
 GPU; the browser closed the request at ~60 s (NPM 499) and the page re-sent the POST, three times, each a
