@@ -1,13 +1,13 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-24 (Home character browser + AI tagging; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-24 (Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Home: character browser + 🏷️ AI tagging (2026-11-24) — committed, not deployed
+## Home: character browser + 🏷️ AI tagging (2026-11-24) — deployed 2026-11-24 (`b3242de`, proxy + storywriterbackend + frontend)
 
 Joe's library had grown to 481 cards (25 pages of 20). Browsing was slow and clumsy: search matched any word
 in any card's text, Prev/Next jumped the scroll (the grid emptied, the page shrank, then a smooth scroll to the
@@ -48,6 +48,13 @@ heading), and opening Home downloaded every card in full (~4.7 MB with lorebooks
   ~2.5–3.6 s and ~1,500 tokens each, no reasoning, good tags (e.g. Neill Ratcliffe → female, fantasy, elf,
   royalty, dominant, cold, confident, dark, romance, nsfw). The replies come in ```json fences; the parser
   handles them.
+- **After deploying (checked live as Joe):** summary 481 cards in 211 KB / 92 ms (the old full list: 10.7 MB /
+  457 ms); a tile thumbnail 22 KB (portrait 1,236 KB), 101 ms to make, 5 ms after; sharp 0.33.5 loads in the
+  Alpine image; the site serves the new script versions. **The tagging run was started for Joe and finished:**
+  451 tagged, 0 failed, 4.7 min (~2 cards/s). Now 0 untagged; 341 distinct tags, 167 on 2+ cards (the chips show
+  the top 40 of those). Commonest: female 435, nsfw 417, modern 325, human 271, mysterious 201, dark 192,
+  romance 174. `tokens` in the run reads 0: nano-gpt sends no usage on streamed replies (cosmetic).
+  **Not yet seen on the iPhone.**
 - **Tested:** `tests/cardgen/home-browse.test.js` (new, 130 checks: proxy routes + tagging run without a
   browser; the page in WebKit 390 / 320 dark / 1280; tagging from the page with the page hidden mid-run);
   backend `tests/test_card_summary.py` (new, 4) and all 106 backend tests. **Not tested:** the iPhone; a real
