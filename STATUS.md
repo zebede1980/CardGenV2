@@ -7,6 +7,14 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
+## Next: 🎭 Persona mode (planned 2026-11-25, nothing built)
+
+The player's own character as a generated card (`kind='persona'`), made in Character Gen, picked the
+same way in Chat, Messenger and Adventure, and followed by id (edits reach every chat).
+`saved_user_personas` moves into it. Plan, decisions and phases: `plans/persona-mode.md`. Found while
+planning: Chat's "use a card as persona" copies the card's `{{char}}` text as the persona and never
+reads `user_persona_card_id`.
+
 ## Light card lists at start-up; new app icon (2026-11-25) — deployed 2026-11-25 (`57f8f5b`, proxy + frontend; live light list 74 KB / 155 ms vs 11.3 MB)
 
 - **Every app start downloaded every card in full** (11.3 MB for Joe's 481 cards + 30 history), twice, whatever
