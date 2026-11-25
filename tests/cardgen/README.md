@@ -34,6 +34,7 @@ The same two variables run the rest:
 | `lightbox.test.js` | WebKit | the lightbox: full-screen picture area, pinch and pan from anywhere, max zoom from the picture's pixels, tap hides the toolbar, tap off closes, swipe; mouse at 1280 px |
 | `story-setup.test.js` | WebKit | Story Writer's New story sheet: ✍️ Freeform (opening written at once, then Continue with a steer) and the planned lengths (an autowrite run); Story Writer's backend faked in the browser |
 | `image-jobs.test.js` | no | an image request sent again under the same clientRef joins the job drawing it or gets the finished picture (one model call); a failed job starts afresh; `/api/jobs?clientRef=` puts done before running before failed |
+| `home-browse.test.js` | both | Home's character browser: the light card list, text search and WebP thumbnails through the proxy; the 🏷️ tagging run (nobody watching, three at a time, Stop, a restart, five failures in a row, a refused key, another user); then the page at 390 / 320 dark / 1280: the grid growing as you scroll, the sticky bar, search ranking, 📝 Descriptions, tag and used filters, sorts remembered, the card sheet, tagging from the page with the page hidden |
 | `runs-page.test.js` | WebKit | card runs from the page: hidden page, discarded tab, attach on reload, Stop, restart, two devices; and that the proxy's prompt host builds the same requests as the page |
 
 `stack.js` is the shared stack: `model.hold(kind)` pauses a model reply mid-stream so a test can

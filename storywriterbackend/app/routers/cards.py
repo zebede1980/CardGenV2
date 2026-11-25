@@ -89,6 +89,117 @@ def list_cards(db: Session = Depends(get_db), current_user: User = Depends(get_c
         func.coalesce(CharacterCard.updated_at, CharacterCard.created_at).desc()
     ).all()
 
+# ── Home's character browser ────────────────────────────────────────────────
+# The full list above sends every card's whole text (lorebooks included, ~5 MB
+# for a few hundred cards). Home only needs enough to show, sort and filter a
+# tile, so it reads this instead and fetches a card's text when one is opened.
+
+BLURB_CHARS = 240
+
+
+def _blurb(description: str, name: str = "") -> str:
+    """The description's opening words, without the markdown headings."""
+    lines = [ln.strip() for ln in (description or "").splitlines()]
+    text = " ".join(ln for ln in lines if ln and not ln.startswith("#"))
+    text = text.replace("**", "").replace("{{char}}", name or "they").replace("{{user}}", "you").strip()
+    return text[:BLURB_CHARS]
+
+
+def _iso(value):
+    return value.isoformat() if value else None
+
+
+@router.get("/summary")
+def card_summaries(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """One light row per card: name, tags, dates, a blurb, and how often and how
+    lately it has been in a roleplay or Messenger chat, a story or an adventure."""
+    from sqlalchemy import func
+    from app.models import AdventureCharacterLink, AdventureSession, ChatCharacterLink, RoleplayChat, Story, StoryCard
+
+    uid = current_user.id
+    uses = {}
+
+    def note(card_id, at):
+        count, last = uses.get(card_id, (0, None))
+        uses[card_id] = (count + 1, at if (at and (last is None or at > last)) else last)
+
+    for card_id, at in (db.query(ChatCharacterLink.card_id, RoleplayChat.updated_at)
+                        .join(RoleplayChat, RoleplayChat.id == ChatCharacterLink.chat_id)
+                        .filter(RoleplayChat.user_id == uid)):
+        note(card_id, at)
+    for card_id, at in (db.query(StoryCard.card_id, Story.updated_at)
+                        .join(Story, Story.id == StoryCard.story_id)
+                        .filter(Story.user_id == uid)):
+        note(card_id, at)
+    for card_id, at in (db.query(AdventureCharacterLink.card_id, AdventureSession.updated_at)
+                        .join(AdventureSession, AdventureSession.id == AdventureCharacterLink.adventure_id)
+                        .filter(AdventureSession.user_id == uid)):
+        note(card_id, at)
+
+    rows = (db.query(CharacterCard.id, CharacterCard.name, CharacterCard.tags, CharacterCard.created_at,
+                     CharacterCard.updated_at, func.substr(CharacterCard.description, 1, 1200),
+                     func.length(func.coalesce(CharacterCard.character_book, "")))
+            .filter(CharacterCard.user_id == uid)
+            .order_by(func.coalesce(CharacterCard.updated_at, CharacterCard.created_at).desc())
+            .all())
+    out = []
+    for card_id, name, tags, created_at, updated_at, description, book_len in rows:
+        count, last = uses.get(card_id, (0, None))
+        out.append({
+            "id": card_id,
+            "name": name or "",
+            "tags": [t.strip() for t in (tags or "").split(",") if t.strip()],
+            "created_at": _iso(created_at),
+            "updated_at": _iso(updated_at or created_at),
+            "blurb": _blurb(description, name),
+            "has_lorebook": (book_len or 0) > 4,  # more than "null" / "{}"
+            "uses": count,
+            "last_used_at": _iso(last),
+        })
+    return out
+
+
+@router.get("/search")
+def search_card_text(q: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Ids of the cards whose text holds every word of `q` (name, description,
+    personality, scenario, first message or tags). Home's "Descriptions" search."""
+    words = [w for w in q.lower().split() if w][:8]
+    if not words:
+        return []
+    from sqlalchemy import func
+
+    text = func.lower(
+        func.coalesce(CharacterCard.name, "") + " " + func.coalesce(CharacterCard.description, "") + " "
+        + func.coalesce(CharacterCard.personality, "") + " " + func.coalesce(CharacterCard.scenario, "") + " "
+        + func.coalesce(CharacterCard.first_mes, "") + " " + func.coalesce(CharacterCard.tags, "")
+    )
+    query = db.query(CharacterCard.id).filter(CharacterCard.user_id == current_user.id)
+    for word in words:
+        escaped = word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.filter(text.like(f"%{escaped}%", escape="\\"))
+    return [row[0] for row in query.all()]
+
+
+@router.patch("/{card_id}/tags")
+def set_card_tags(card_id: int, body: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Replace a card's tags and nothing else. Leaves updated_at alone, so tagging
+    doesn't reorder anything sorted by last edit (Character Gen's library)."""
+    tags = body.get("tags")
+    if isinstance(tags, list):
+        tags = ",".join(str(t).strip() for t in tags if str(t).strip())
+    if not isinstance(tags, str):
+        raise HTTPException(status_code=400, detail="tags must be a list or a comma-separated string")
+    # Setting updated_at to itself keeps the column's onupdate from firing.
+    changed = (db.query(CharacterCard)
+               .filter(CharacterCard.id == card_id, CharacterCard.user_id == current_user.id)
+               .update({CharacterCard.tags: tags[:2000], CharacterCard.updated_at: CharacterCard.updated_at},
+                       synchronize_session=False))
+    if not changed:
+        raise HTTPException(status_code=404, detail="Card not found")
+    db.commit()
+    return {"id": card_id, "tags": [t for t in tags.split(",") if t]}
+
+
 @router.get("/{card_id}", response_model=CharacterCardOut)
 def get_card(card_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     card = db.query(CharacterCard).filter(CharacterCard.id == card_id, CharacterCard.user_id == current_user.id).first()

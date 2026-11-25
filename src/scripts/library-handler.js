@@ -251,7 +251,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
 
       if (specificId) {
         cardData.id = specificId;
-        const cards = await this.storage.listCards();
+        const cards = await this._listLibraryCards();
         const existing = cards.find((c) => c.id === specificId);
         if (existing && existing.createdAt) {
           cardData.createdAt = existing.createdAt;
@@ -438,7 +438,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const charName = this.currentCharacter.name || "Unnamed Character";
 
     if (this.storageReady && this.storage) {
-      const cards = await this.storage.listCards();
+      const cards = await this._listLibraryCards();
       const permanentCards = cards.filter((c) => c.isPermanent);
       const existingCard = permanentCards.find(
         (c) => c.characterName === charName,
@@ -468,16 +468,43 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
 
+  _listLibraryCards() {
+    return this.storage.listCardsLite ? this.storage.listCardsLite() : this.storage.listCards();
+  },
+
+  // The library lists live in Character Gen. While another tab is showing,
+  // a refresh just marks them stale, and they load when Character Gen is
+  // next shown (however it gets shown: tab, Home's Edit, a PWA shortcut).
+  _libraryViewHidden() {
+    const view = document.getElementById("view-cardgen");
+    if (!view) return false;
+    if (!this._libraryViewWatch && typeof MutationObserver === "function") {
+      this._libraryViewWatch = new MutationObserver(() => {
+        if (this._libraryStale && view.style.display !== "none") {
+          this._libraryStale = false;
+          this.refreshLibraryViews();
+        }
+      });
+      this._libraryViewWatch.observe(view, { attributes: true, attributeFilter: ["style", "class", "hidden"] });
+    }
+    return view.style.display === "none" || view.hidden;
+  },
+
   async refreshLibraryViews() {
     if (!this.storageReady || !this.storage) {
       this.renderStorageUnavailableState();
       return;
     }
+    if (this._libraryViewHidden()) {
+      this._libraryStale = true;
+      return;
+    }
+    this._libraryStale = false;
 
     try {
       const [prompts, cards] = await Promise.all([
         this.storage.listPrompts(),
-        this.storage.listCards(),
+        this._listLibraryCards(),
       ]);
 
       prompts.sort((a, b) => {
@@ -788,7 +815,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (!this.storageReady || !this.storage) return;
     if (!confirm("Delete all history snapshots? This cannot be undone. Permanent saves are not affected.")) return;
     try {
-      const cards = await this.storage.listCards();
+      const cards = await this._listLibraryCards();
       const tempCards = cards.filter(c => !c.isPermanent);
       await Promise.all(tempCards.map(c => this.storage.deleteCard(c.id)));
       await this.refreshLibraryViews();

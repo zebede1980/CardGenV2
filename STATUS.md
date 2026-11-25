@@ -1,13 +1,89 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-20 (notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-25 (light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Image retries join the running job (2026-11-23) — deployed 2026-11-23 (`fb5f65b`, proxy only)
+## Light card lists at start-up; new app icon (2026-11-25) — deployed 2026-11-25 (`57f8f5b`, proxy + frontend; live light list 74 KB / 155 ms vs 11.3 MB)
+
+- **Every app start downloaded every card in full** (11.3 MB for Joe's 481 cards + 30 history), twice, whatever
+  tab was open. That turned out to be **Roleplay Chat's persona dropdown** (`chat-handler.js` `loadPersonas`, at
+  init and on opening Chat), not only Character Gen's library sidebar. Both only show names.
+- New proxy route `GET /api/storage/cards/library` (before `/:id`): the backend's `/api/cards/summary` + history,
+  cut to `{id, characterName, isPermanent, createdAt, updatedAt}`. `storage.listCardsLite()` reads it (falls back
+  to `listCards()` if the proxy is older). Used by: the library sidebar, the persona dropdown, Prompt builder's
+  🖼️ Match → Characters, the save paths' "existing card / createdAt" lookups, and Clear history.
+- `refreshLibraryViews` does nothing while `#view-cardgen` is hidden except mark the lists stale; a
+  MutationObserver on the view's style fills them when Character Gen is next shown, however it is shown.
+- Still on the full list (on demand only): 🖼️ Gallery, Messenger's and Adventure's card pickers (`cardGallery.open`
+  shows card text).
+- **New icon:** fanned character cards + gold sparkle on a purple night sky. Source `icons/icon.svg`; PNGs made with
+  sharp (apple-touch 180, 192, 512, maskable 512 with the art in the middle 78%, favicon 256 rounded). `?v=20261125`
+  on the links and manifest. **iOS keeps the icon from when the app was added to the Home Screen:** remove and re-add
+  it to see the new one.
+- Tests: `home-browse` 145 (new: no full list on start, library unfilled on Home, fills from the light list when
+  Character Gen opens, Load still opens the full card); all other suites green. Not tested on the iPhone.
+- Deploy: proxy + frontend.
+
+## Home: character browser + 🏷️ AI tagging (2026-11-24) — deployed 2026-11-24 (`b3242de`, proxy + storywriterbackend + frontend)
+
+Joe's library had grown to 481 cards (25 pages of 20). Browsing was slow and clumsy: search matched any word
+in any card's text, Prev/Next jumped the scroll (the grid emptied, the page shrank, then a smooth scroll to the
+heading), and opening Home downloaded every card in full (~4.7 MB with lorebooks) plus full-size portraits
+(median ~290 KB, up to 8 MB) for every tile.
+- **Light list:** `GET /api/storage/cards/summary` (backend `GET /api/cards/summary`): id, name, tags, dates, a
+  240-char blurb, has-lorebook, and **uses / last used** counted from roleplay + Messenger chats, stories and
+  adventures. The card's text is fetched only for 📄 Full card.
+- **Thumbnails:** `/api/storage/cards/thumbnail?cardId=…&w=320` → a WebP made with **sharp** (new proxy
+  dependency, `0.33.5`), kept in `users/<id>/card-thumbs/<id>-<w>.webp`, remade when the portrait file is newer,
+  ETag/304. Widths snap to 160/320/480/640. No `w` → the full picture as before. If sharp fails to load, the
+  full picture is sent. Deleting a card deletes its thumbnails.
+- **The page** (`home-handler.js`, CSS under "Home: character browser"): one grid that grows 48 at a time as you
+  scroll (scroll listener + IntersectionObserver: headless WebKit's IO missed a transition after a batch was
+  added, so IO alone stalled), small 3:4 tiles (3 a row on a 375+ phone, 2 at 320). A **sticky bar**: search,
+  sort (Newest · Last edited · Last used · Most used · A–Z · Oldest), and a sideways-scrolling chip row:
+  📝 Descriptions, 💬 Used, 🌱 Never used, then the 40 commonest tags (AND when several are picked), ✕ Clear.
+  Changing a filter while scrolled deep brings the results back to just under the bar, not to the page top.
+  Sort, the used filter and Descriptions are remembered (`cardgen.homeBrowse.v1`). `#view-home` uses
+  `overflow-x: clip` (was `hidden`, which would stop the bar sticking).
+- **Search** matches names and tags only, ranked: name starts with the word → a word in the name starts with it
+  → name contains it → tag → tag contains; every word must match. **📝 Descriptions** adds the backend's text
+  search (`GET /api/cards/search?q=`: every word, in name/description/personality/scenario/first message/tags).
+- **Tapping a tile** opens a card sheet (bottom sheet on a phone): portrait, made date, usage, 📚 lorebook, tags
+  (tap one to filter by it), the blurb, and 💬 Chat · 📖 Story · 💌 Text · ✏️ Edit · 📄 Full card · 🗑️ Delete
+  (the old per-tile buttons, same handlers).
+- **🏷️ Tag N untagged** (only 30 of 481 had tags): the proxy tags them itself (`proxy/runs/tag-runs.js`,
+  `GET/POST /api/card-tags/run`, `POST …/run/stop`), 3 at a time, with the page's own `generateTags`
+  through the prompt host, so the editor's ✨ tags and these match. **`generateTags` now picks from a fixed
+  vocabulary** (`CARD_TAG_VOCABULARY` in `api-character.js`: who, setting, species, role, personality, tone,
+  nsfw/sfw, plus at most 2 extras) with synonyms folded (`CARD_TAG_SYNONYMS`), so filters group cards together.
+  Only untagged cards are picked, so a stopped, failed or restart-interrupted run is just started again. Stops
+  after 5 failures in a row, or at once on a 401/402/403 from the model. Saves with `PATCH /api/cards/:id/tags`,
+  which leaves `updated_at` alone (Character Gen's library is sorted by it). Uses the settings the page sends,
+  else the saved config. State: `users/<id>/tag-run.json` (no keys). The page polls every 3 s while visible
+  and refreshes the grid as tags land.
+- **Live check before deploy:** the tag prompt on 3 of Joe's real cards with `deepseek/deepseek-v4-pro-0813`:
+  ~2.5–3.6 s and ~1,500 tokens each, no reasoning, good tags (e.g. Neill Ratcliffe → female, fantasy, elf,
+  royalty, dominant, cold, confident, dark, romance, nsfw). The replies come in ```json fences; the parser
+  handles them.
+- **After deploying (checked live as Joe):** summary 481 cards in 211 KB / 92 ms (the old full list: 10.7 MB /
+  457 ms); a tile thumbnail 22 KB (portrait 1,236 KB), 101 ms to make, 5 ms after; sharp 0.33.5 loads in the
+  Alpine image; the site serves the new script versions. **The tagging run was started for Joe and finished:**
+  451 tagged, 0 failed, 4.7 min (~2 cards/s). Now 0 untagged; 341 distinct tags, 167 on 2+ cards (the chips show
+  the top 40 of those). Commonest: female 435, nsfw 417, modern 325, human 271, mysterious 201, dark 192,
+  romance 174. `tokens` in the run reads 0: nano-gpt sends no usage on streamed replies (cosmetic).
+  **Not yet seen on the iPhone.**
+- **Tested:** `tests/cardgen/home-browse.test.js` (new, 130 checks: proxy routes + tagging run without a
+  browser; the page in WebKit 390 / 320 dark / 1280; tagging from the page with the page hidden mid-run);
+  backend `tests/test_card_summary.py` (new, 4) and all 106 backend tests. **Not tested:** the iPhone; a real
+  full tagging run (it's about to be Joe's first).
+- **Follow-up done 2026-11-25:** see "Light card lists at start-up" above.
+- **Deploy:** proxy (new `sharp` dependency → image rebuild) + storywriterbackend + frontend.
+
+## Image retries join the running job (2026-11-23) — deployed 2026-11-23 (`fb5f65b`, proxy only; the running proxy has `joinExistingImageJob`)
 
 Joe's Qwen edit in the Playground (desktop Chrome) never arrived. From the logs: the edit took ~85 s on the
 GPU; the browser closed the request at ~60 s (NPM 499) and the page re-sent the POST, three times, each a
@@ -26,8 +102,7 @@ Playground Recent at 15:42.
 - **Tested:** `tests/cardgen/image-jobs.test.js` (new, 14; 9 fail on the old code), runs 79, playground
   63, landing 46 (two early runs failed different checks while the PC's GPU was thrashing; 8 later runs
   clean, and no request in that suite reaches the join). **Not tested:** the local ComfyUI route itself
-  (shares the same check at the route top), the iPhone. **After deploying:** the proxy came up healthy with 14 runs
-  reloaded and the new code in `/app/server.js`; `/api/jobs` answers 401 without a token. No edit tried yet.
+  (shares the same check at the route top), the iPhone. **Deploy:** proxy only.
 
 ## Story Writer: ✍️ Freeform beside the lengths (2026-11-23) — deployed 2026-11-23 (`0e8cff0`, frontend only; the site serves the new version)
 

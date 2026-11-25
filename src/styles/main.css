@@ -5783,6 +5783,175 @@ body.msg-kb-open .msg-bottom { padding-bottom: 0.45rem; }
     #view-home .hr-tile:hover { transform: none; }
 }
 
+/* ── Home: character browser (home-handler.js) ──────────────────────────────
+   One grid that grows as you scroll, under a bar that sticks to the top of the
+   screen. Small tiles (3 a row on most phones); tapping one opens the card
+   sheet with the actions. */
+#view-home .home-wrap { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+/* [hidden] must win over the display set by .btn-outline, img { display: block } and the like. */
+#view-home [hidden], .hcs-overlay [hidden] { display: none !important; }
+#view-home .hc-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+#view-home .hc-title { margin: 0; font-size: 1.8rem; color: var(--text-primary); scroll-margin-top: 1rem; }
+#view-home .hc-total { font-size: 1rem; font-weight: 600; color: var(--text-secondary); vertical-align: middle; padding: 0.1rem 0.55rem; border-radius: 999px; background: var(--accent-soft); }
+#view-home .hc-tag-btn { padding: 0.5rem 0.9rem; font-size: 0.9rem; }
+
+#view-home .hc-bar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; flex-direction: column; gap: 0.55rem;
+    margin: 0 -0.5rem; padding: 0.6rem 0.5rem;
+    background: var(--bg-page);
+    background: color-mix(in srgb, var(--bg-page) 94%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border); border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+html.pwa #view-home .hc-bar { top: env(safe-area-inset-top, 0px); }
+#view-home .hc-search-row { display: flex; gap: 0.5rem; min-width: 0; }
+#view-home .hc-search {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 0.4rem;
+    padding: 0 0.4rem 0 0.75rem; border: 1px solid var(--border-strong); border-radius: 999px;
+    background: var(--surface-strong);
+}
+#view-home .hc-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+#view-home .hc-search-icon { font-size: 0.9rem; opacity: 0.7; }
+#view-home .hc-search input {
+    flex: 1 1 auto; min-width: 0; width: 100%; padding: 0.6rem 0; border: 0; outline: none;
+    background: transparent; color: var(--text-primary); font: inherit; font-size: 16px; /* no zoom on iOS */
+    -webkit-appearance: none; appearance: none;
+}
+#view-home .hc-search input::-webkit-search-cancel-button { display: none; }
+#view-home .hc-clear {
+    flex: none; width: 1.9rem; height: 1.9rem; border: 0; border-radius: 50%; padding: 0;
+    background: var(--accent-soft); color: var(--text-secondary); cursor: pointer; font-size: 0.85rem;
+}
+#view-home .hc-sort {
+    flex: none; max-width: 9.5rem; padding: 0.5rem 1.9rem 0.5rem 0.8rem; border: 1px solid var(--border-strong); border-radius: 999px;
+    color: var(--text-primary); font: inherit; font-size: 16px; cursor: pointer;
+    /* Safari draws its own (light) control unless told not to; longhands, not the
+       background shorthand, so nothing resets the arrow. */
+    -webkit-appearance: none; appearance: none;
+    background-color: var(--surface-strong);
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%), linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+    background-position: right 0.95rem center, right 0.65rem center;
+    background-size: 0.32rem 0.32rem, 0.32rem 0.32rem;
+    background-repeat: no-repeat;
+}
+#view-home .hc-chips {
+    display: flex; gap: 0.4rem; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch; padding-bottom: 0.1rem; min-width: 0;
+}
+#view-home .hc-chips::-webkit-scrollbar { display: none; }
+.hc-chip {
+    flex: none; display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.35rem 0.75rem; border-radius: 999px; border: 1px solid var(--border-strong);
+    background: var(--surface-strong); color: var(--text-primary); font: inherit; font-size: 0.85rem; line-height: 1.2;
+    white-space: nowrap; cursor: pointer;
+}
+.hc-chip:hover { border-color: var(--accent); }
+.hc-chip.hc-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hc-chip .hc-n { font-size: 0.75rem; opacity: 0.65; }
+.hc-chip.hc-chip-clear { color: var(--error); }
+#view-home .hc-sep { flex: none; width: 1px; margin: 0.2rem 0.15rem; background: var(--border-strong); }
+#view-home .hc-summary { margin: 0.6rem 0 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
+
+#view-home .hc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
+#view-home .hc-note {
+    grid-column: 1 / -1; margin: 0; padding: 2rem 1rem; text-align: center;
+    color: var(--text-secondary); border: 1px dashed var(--border); border-radius: 0.8rem;
+}
+#view-home .hc-tile {
+    display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; padding: 0; margin: 0;
+    border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.hc-pic {
+    position: relative; display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden;
+    border-radius: 0.7rem; background: var(--surface-muted); border: 1px solid var(--border);
+}
+.hc-pic img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+.hc-pic.hc-noimg::before {
+    content: attr(data-initial); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 2.4rem; font-weight: 700; color: var(--text-soft);
+}
+#view-home .hc-tile:hover .hc-pic, #view-home .hc-tile:focus-visible .hc-pic { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+#view-home .hc-tile:focus-visible { outline: none; }
+#view-home .hc-name {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 0.95rem; font-weight: 600; line-height: 1.25; color: var(--text-primary); overflow-wrap: anywhere;
+}
+#view-home .hc-meta { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-home .hc-more { height: 1px; }
+#view-home .hc-more.hc-more-on { height: 4rem; }
+
+/* Tagging progress */
+#view-home .hc-tag-status {
+    margin: 0 0 0.75rem; padding: 0.7rem 0.9rem; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong); background: var(--surface-strong); font-size: 0.88rem;
+}
+#view-home .hc-tag-head { display: flex; align-items: center; gap: 0.6rem; }
+#view-home .hc-tag-text { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.6rem; row-gap: 0.1rem; }
+#view-home .hc-tag-title { font-weight: 600; color: var(--text-primary); }
+#view-home .hc-tag-counts { color: var(--text-secondary); }
+#view-home .hc-tag-head > button { flex: none; }
+#view-home .hc-x { border: 0; background: none; color: var(--text-secondary); font-size: 1rem; cursor: pointer; padding: 0.2rem 0.4rem; }
+#view-home .hc-tag-bar { margin-top: 0.55rem; height: 6px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
+#view-home .hc-tag-bar > span { display: block; height: 100%; background: var(--accent); transition: width 0.4s ease; }
+#view-home .hc-tag-recent { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.15rem; color: var(--text-secondary); font-size: 0.8rem; }
+#view-home .hc-tag-recent span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-home .hc-tag-error { margin-top: 0.45rem; color: var(--warning); font-size: 0.82rem; }
+
+/* The card sheet: a bottom sheet on a phone, a centred box on a wide screen. */
+html.hcs-open, html.hcs-open body { overflow: hidden; }
+.hcs-overlay {
+    position: fixed; inset: 0; z-index: 1500; display: flex; align-items: center; justify-content: center;
+    padding: 1rem; background: rgba(8, 12, 20, 0.55); backdrop-filter: blur(3px);
+}
+.hcs-overlay[hidden] { display: none; }
+.hcs-sheet {
+    position: relative; width: min(560px, 100%); max-height: min(88dvh, 760px); overflow-y: auto; overscroll-behavior: contain;
+    padding: 1.25rem; border-radius: var(--radius-md); background: var(--surface-strong); color: var(--text-primary);
+    border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg);
+}
+.hcs-close {
+    position: absolute; top: 0.6rem; right: 0.6rem; width: 2.2rem; height: 2.2rem; border-radius: 50%;
+    border: 0; background: var(--accent-soft); color: var(--text-primary); font-size: 1rem; cursor: pointer;
+}
+.hcs-top { display: flex; gap: 1rem; align-items: flex-start; }
+.hcs-pic {
+    position: relative; flex: none; width: 38%; max-width: 200px; aspect-ratio: 3 / 4; padding: 0; overflow: hidden;
+    border-radius: 0.7rem; border: 1px solid var(--border); background: var(--surface-muted); cursor: zoom-in;
+}
+.hcs-pic img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+.hcs-pic.hc-noimg::before {
+    content: attr(data-initial); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 3rem; font-weight: 700; color: var(--text-soft);
+}
+.hcs-info { flex: 1 1 auto; min-width: 0; padding-right: 2rem; }
+.hcs-name { margin: 0 0 0.4rem; font-size: 1.35rem; line-height: 1.2; overflow-wrap: anywhere; }
+.hcs-meta { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.82rem; color: var(--text-secondary); }
+.hcs-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.7rem; }
+.hcs-tags .hc-chip { font-size: 0.78rem; padding: 0.25rem 0.6rem; }
+.hcs-notags { font-size: 0.8rem; color: var(--text-soft); }
+.hcs-blurb { margin: 0.9rem 0 0; font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary); }
+.hcs-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 1rem; }
+.hcs-actions button { padding: 0.7rem 0.5rem; font-size: 0.95rem; border-radius: 0.6rem; }
+.hcs-overlay .hcs-actions .hcs-delete, [data-theme="dark"] .hcs-overlay .hcs-actions .hcs-delete { color: var(--error); }
+
+@media (max-width: 768px) {
+    #view-home .home-wrap { padding: 1rem; }
+    #view-home .hc-title { font-size: 1.4rem; }
+    #view-home .hc-bar { margin: 0 -0.25rem; padding: 0.5rem 0.25rem; }
+    #view-home .hc-sort { max-width: 7.5rem; padding: 0.5rem 0.45rem; }
+    #view-home .hc-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.85rem 0.6rem; }
+    #view-home .hc-name { font-size: 0.82rem; }
+    #view-home .hc-meta { font-size: 0.7rem; }
+    .hcs-overlay { align-items: flex-end; padding: 0; }
+    .hcs-sheet {
+        width: 100%; max-height: 88dvh; border-radius: var(--radius-md) var(--radius-md) 0 0; border-bottom: 0;
+        padding: 1.1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+    .hcs-name { font-size: 1.2rem; }
+}
+
 /* ── Installed app (Home Screen) ─────────────────────────────────────────────
    html.pwa is set in index.html's <head> when running from the Home Screen.
    With the black-translucent status bar the page starts under the clock, so

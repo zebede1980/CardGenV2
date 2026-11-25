@@ -102,6 +102,21 @@ class CharacterStorage {
     }
   }
 
+  // Names, dates and saved-vs-history only: the library sidebar and the
+  // save checks don't need every card's full text (megabytes with a big
+  // collection). Falls back to the full list if the proxy is older.
+  async listCardsLite() {
+    try {
+      const res = await authFetch(`${this.baseUrl}/api/storage/cards/library`);
+      if (!res.ok) return this.listCards();
+      const rows = await res.json();
+      return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    } catch (e) {
+      console.error("Failed to list the card library:", e);
+      return [];
+    }
+  }
+
   async getCard(id) {
     const res = await authFetch(`${this.baseUrl}/api/storage/cards/${id}`);
     if (!res.ok) return null;

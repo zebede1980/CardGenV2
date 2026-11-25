@@ -13,6 +13,100 @@
 // old 8192. It is only a ceiling, so the headroom costs nothing unless used.
 const MAIN_CARD_MAX_TOKENS = 16384;
 
+// ── Card tags ────────────────────────────────────────────────────────────────
+// The tags generateTags picks from, by group, with how many of each a card
+// gets. Home's browser filters by these, so a word that means the same as one
+// here should map onto it (CARD_TAG_SYNONYMS) rather than become a new tag.
+const CARD_TAG_VOCABULARY = {
+  who: { pick: "exactly 1", tags: ["female", "male", "non-binary", "group", "narrator"],
+    note: '"group" when the card plays several main characters; "narrator" for a scenario or world card with no single main character' },
+  setting: { pick: "1-2", tags: ["modern", "fantasy", "sci-fi", "historical", "medieval", "post-apocalyptic", "cyberpunk", "supernatural", "steampunk", "western", "space", "dystopia", "mythology", "school", "college", "workplace", "military", "small town", "rural", "royal court"] },
+  species: { pick: "1-2", tags: ["human", "elf", "dwarf", "orc", "demon", "succubus", "angel", "vampire", "werewolf", "kemonomimi", "monster girl", "dragon", "fairy", "mermaid", "ghost", "undead", "android", "robot", "alien", "slime", "giantess", "shapeshifter"],
+    note: '"human" when the character is human; "kemonomimi" for animal ears/tails on a human' },
+  role: { pick: "1-2", tags: ["student", "teacher", "boss", "coworker", "neighbour", "roommate", "wife", "husband", "girlfriend", "boyfriend", "ex", "childhood friend", "best friend", "rival", "stranger", "milf", "maid", "nurse", "doctor", "scientist", "police", "detective", "soldier", "knight", "mage", "witch", "warrior", "adventurer", "hunter", "mercenary", "assassin", "thief", "pirate", "criminal", "villain", "hero", "royalty", "noble", "celebrity", "athlete", "artist", "musician", "bartender", "waitress", "shopkeeper", "gamer", "goth", "cheerleader", "captive", "captor"],
+    note: "what the character is to the user, or does for a living" },
+  personality: { pick: "2-3", tags: ["dominant", "submissive", "shy", "confident", "flirty", "seductive", "sweet", "cold", "sarcastic", "playful", "cheerful", "grumpy", "stoic", "innocent", "mysterious", "motherly", "protective", "possessive", "jealous", "yandere", "tsundere", "kuudere", "dandere", "bratty", "tomboy", "nerdy", "lazy", "arrogant", "kind", "cruel", "manipulative", "clumsy", "energetic", "lonely"] },
+  tone: { pick: "1-2", tags: ["romance", "slow burn", "comedy", "drama", "dark", "wholesome", "slice of life", "adventure", "action", "mystery", "horror", "angst", "thriller"] },
+  content: { pick: "exactly 1", tags: ["nsfw", "sfw"],
+    note: '"nsfw" when the card is built around sex or clearly expects explicit scenes; otherwise "sfw"' },
+};
+const CARD_TAG_SYNONYMS = {
+  "scifi": "sci-fi", "sci fi": "sci-fi", "science fiction": "sci-fi", "science-fiction": "sci-fi",
+  "post apocalyptic": "post-apocalyptic", "postapocalyptic": "post-apocalyptic", "apocalypse": "post-apocalyptic",
+  "non binary": "non-binary", "nonbinary": "non-binary", "enby": "non-binary",
+  "multiple characters": "group", "multiple": "group", "ensemble": "group",
+  "scenario": "narrator", "world": "narrator", "rpg": "narrator",
+  "neighbor": "neighbour", "slow-burn": "slow burn", "slice-of-life": "slice of life",
+  "catgirl": "kemonomimi", "cat girl": "kemonomimi", "foxgirl": "kemonomimi", "fox girl": "kemonomimi", "nekomimi": "kemonomimi",
+  "monstergirl": "monster girl", "monster-girl": "monster girl", "robot girl": "android",
+  "mommy": "milf", "mother figure": "motherly", "brat": "bratty", "dom": "dominant", "sub": "submissive",
+  "office": "workplace", "high school": "school", "university": "college",
+  "royal": "royalty", "princess": "royalty", "prince": "royalty", "queen": "royalty", "king": "royalty",
+  "wizard": "mage", "sorceress": "mage", "sorcerer": "mage", "cop": "police", "nsfw-friendly": "nsfw", "smut": "nsfw",
+};
+const CARD_TAG_MAX_EXTRA = 2;
+
+function cardTagVocabularySet() {
+  return new Set(Object.values(CARD_TAG_VOCABULARY).flatMap((g) => g.tags));
+}
+
+/** Lowercase, synonyms folded, deduplicated; vocabulary tags first, then at most two others. */
+function normalizeCardTags(raw) {
+  const known = cardTagVocabularySet();
+  const seen = new Set();
+  const inList = [];
+  const extra = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    let tag = String(item == null ? "" : item).toLowerCase().replace(/[_#"'`]/g, " ").replace(/\s+/g, " ").trim();
+    tag = CARD_TAG_SYNONYMS[tag] || tag;
+    if (!tag || tag.length > 25 || seen.has(tag) || !/^[a-z0-9][a-z0-9 -]*$/.test(tag)) continue;
+    seen.add(tag);
+    if (known.has(tag)) inList.push(tag);
+    else if (tag.split(" ").length <= 3) extra.push(tag);
+  }
+  return [...inList.slice(0, 14), ...extra.slice(0, CARD_TAG_MAX_EXTRA)];
+}
+
+/** The tag array in a model reply (reasoning, code fences and chatter around it ignored). */
+function parseCardTagReply(output) {
+  const text = String(output || "").replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/```(?:json)?/gi, "");
+  const candidates = text.match(/\[[\s\S]*?\]/g) || [];
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    try {
+      const parsed = JSON.parse(candidates[i]);
+      if (Array.isArray(parsed)) {
+        const tags = normalizeCardTags(parsed);
+        if (tags.length) return tags;
+      }
+    } catch (_) { /* try the next one */ }
+  }
+  return [];
+}
+
+function buildCardTagPrompt(character) {
+  const c = character || {};
+  const groups = Object.entries(CARD_TAG_VOCABULARY).map(([name, g]) =>
+    `- ${name} (${g.pick}${g.note ? `; ${g.note}` : ""}): ${g.tags.join(", ")}`).join("\n");
+  const systemPrompt = `You tag roleplay character cards so they can be found again in a large collection. Read the card and choose tags from this list:
+
+${groups}
+
+Rules:
+- Take the stated number from each group. Choose what the card is mainly about, not every passing detail.
+- For a group card, tag the main characters together (their genders: "group"; their species: the one or two that matter).
+- Use the tags exactly as written above.
+- You may add at most ${CARD_TAG_MAX_EXTRA} tags that are not in the list, and only for something that defines this card and nothing above covers (a lowercase word or two).
+- Output ONLY a JSON array of strings, nothing else.`;
+  const userPrompt = `Name: ${c.name || "Unknown"}
+Description: ${String(c.description || "").slice(0, 1500)}
+Personality: ${String(c.personality || "").slice(0, 500)}
+Scenario: ${String(c.scenario || "").slice(0, 500)}
+First message: ${String(c.firstMessage || c.first_mes || "").slice(0, 400)}
+
+Output the JSON array of tags only.`;
+  return { systemPrompt, userPrompt };
+}
+
 const NameGenShared = (() => {
   // Every Western naming tradition now comes from NameBank (see
   // src/scripts/name-bank.js), which draws real names from published name
@@ -1356,32 +1450,15 @@ Generate ${count} example dialogue message(s) for this character. Remember: one-
     }
   },
 
+  // ✨ in the card editor, and the proxy's bulk tagger (proxy/runs/tag-runs.js),
+  // which runs this same code. Tags come from one vocabulary
+  // (CARD_TAG_VOCABULARY) so Home's tag filter groups cards together; a
+  // free-form tagger gives "sci-fi", "scifi" and "science fiction" for the
+  // same thing, and hundreds of tags used once.
   async generateTags(character) {
     if (!character) throw new Error("Character is required to generate tags");
     const model = this.config.get("api.text.model");
-
-    const systemPrompt = `You are a tagging assistant for SillyTavern character cards. Analyse the character and output a JSON array of concise, lowercase tags that describe the character. Tags should cover:
-- Gender (e.g. "female", "male", "non-binary")
-- Species / race if not human (e.g. "elf", "android", "vampire")
-- Setting / genre (e.g. "fantasy", "sci-fi", "modern", "historical", "post-apocalyptic")
-- Personality archetype (e.g. "tsundere", "mentor", "villain", "anti-hero")
-- Occupation or role (e.g. "detective", "witch", "soldier")
-- Notable traits (e.g. "sarcastic", "loyal", "mysterious")
-- Content tone (e.g. "romance", "action", "comedy", "dark", "wholesome")
-
-Rules:
-- Output ONLY a valid JSON array of strings, nothing else.
-- 5–12 tags total.
-- All lowercase, no special characters except hyphens.
-- No tag longer than 25 characters.`;
-
-    const userPrompt = `Name: ${character.name || "Unknown"}
-Description: ${(character.description || "").slice(0, 800)}
-Personality: ${(character.personality || "").slice(0, 400)}
-Scenario: ${(character.scenario || "").slice(0, 300)}
-First message: ${(character.firstMessage || "").slice(0, 300)}
-
-Output a JSON array of tags only.`;
+    const { systemPrompt, userPrompt } = buildCardTagPrompt(character);
 
     const data = {
       model,
@@ -1391,21 +1468,14 @@ Output a JSON array of tags only.`;
       ],
       // Classification against a closed vocabulary — creativity is corruption.
       temperature: 0.2,
-      max_tokens: 150,
+      max_tokens: 400,
     };
 
     try {
       const output = await this.streamedText(data, "Tags");
-      let parsed;
-      try {
-        parsed = JSON.parse(output);
-      } catch (e) {
-        const arrayMatch = output.match(/\[[\s\S]*?\]/);
-        if (arrayMatch) parsed = JSON.parse(arrayMatch[0]);
-        else throw new Error("Could not parse tags from response");
-      }
-      if (!Array.isArray(parsed)) throw new Error("Response was not an array");
-      return parsed.map(t => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 12);
+      const tags = parseCardTagReply(output);
+      if (!tags.length) throw new Error("Could not parse tags from response");
+      return tags;
     } catch (error) {
       console.error("=== TAG GENERATION FAILED ===", error);
       throw error;
