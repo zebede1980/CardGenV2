@@ -1,13 +1,17 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (🖌️ Paint an area built, not deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (🖌️ Paint an area deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## 🖌️ Paint an area (2026-11-26) — built, **not deployed** (proxy + frontend)
+## 🖌️ Paint an area (2026-11-26) — deployed 2026-11-26 (`da28c1e`, proxy + frontend)
+
+After deploying: both healthy, the running proxy has `addPaintPasteBack`, the site serves the new scripts. **No painted
+edit has gone through the live site yet** (a check from inside the container would have needed a token minted as Joe;
+not done). To try: Playground → ✨ Edit → ✏️ Change it → 🖌️ Paint an area, a local model, paint, type, edit.
 
 ✨ Edit → ✏️ Change it → **🖌️ Paint an area**: paint over the picture (S / M / L brush, 🧽 Erase, ↶ Undo, ✕ Clear),
 type the change as usual, **✨ Edit the painted area**. Only the painted part changes.
