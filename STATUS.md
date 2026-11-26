@@ -30,6 +30,10 @@ age, gender, voice, isDefault). Plan, decisions and deviations: `plans/persona-m
 - **Tested:** backend 117 (11 new); `persona.test.js` 53 (proxy + WebKit 390 / 320 dark, incl. page
   hidden mid-write and the tab discarded mid-write); parser, runs 79, phase 0 50, runs-page 81 and
   the other cardgen suites re-run. **Not tested:** a real model writing a persona, the iPhone.
+- **Flaky:** `landing.test.js` "reopened: the picture is offered to pick" failed 3 of 10 runs with this
+  work, 0 of 4 completed runs on the commit before it; no page errors, and it couldn't be caught again
+  in 4 instrumented runs. Nothing here touches that code path, but not proven unrelated. home-browse's
+  tagging check failed once only when run alongside another suite (145/145 alone).
 - **To try after deploying:** Character Gen → 🎭 Persona, generate, Save to Library; ★ it on Home;
   start a Messenger chat (it should be pre-picked); edit the persona and see the next reply use it.
 
