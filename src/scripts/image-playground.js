@@ -147,7 +147,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // just using Edit with a good image-to-image model. Generate is the only
     // tab that doesn't require an existing working image — it's how one gets
     // created from nothing but a prompt.
-    ["generate", "crop", "edit", "reimagine", "enhance", "combine", "library"].forEach(tab => {
+    ["generate", "crop", "edit", "reimagine", "extend", "enhance", "combine", "library"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
@@ -252,6 +252,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     this._initPlaygroundReimagine();
+    this._initPlaygroundExtend();
   },
 
   // Switches which of the Generate / Crop / Edit / Combine panels is
@@ -261,8 +262,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // openCropModal('playground') a button click used to.
   _setPlaygroundToolTab(tab) {
     this._pgActiveTab = tab;
-    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", reimagine: "pg-tab-reimagine", enhance: "pg-tab-enhance", combine: "pg-tab-combine", library: "pg-tab-library" };
-    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", reimagine: "pg-panel-reimagine", enhance: "pg-panel-enhance", combine: "pg-panel-combine", library: "pg-panel-library" };
+    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", reimagine: "pg-tab-reimagine", extend: "pg-tab-extend", enhance: "pg-tab-enhance", combine: "pg-tab-combine", library: "pg-tab-library" };
+    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", reimagine: "pg-panel-reimagine", extend: "pg-panel-extend", enhance: "pg-panel-enhance", combine: "pg-panel-combine", library: "pg-panel-library" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -282,6 +283,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     if (tab === "reimagine") this._renderReimagineSource();
+    if (tab === "extend") this._renderExtendPreview();
 
     if (!this.playgroundImageUrl) return;
     if (tab === "crop") this.openCropModal('playground');
@@ -817,6 +819,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const describeBox = document.getElementById("playground-describe-box");
     if (describeBox && !this._pgDescribing && dataUrl !== this._pgDescribedUrl) describeBox.style.display = "none";
     this._syncPlaygroundDescribeButton();
+    if (this._pgActiveTab === "extend") this._renderExtendPreview();
   },
 
   _playgroundDescriptionShown() {
@@ -1222,6 +1225,241 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } finally {
       if (btn) btn.disabled = false;
       if (statusEl) statusEl.style.display = "none";
+    }
+  },
+
+  // ── Extend ─────────────────────────────────────────────────────────────────
+  // Outpainting on the local GPU (apiHandler.extendImage → MOSS AnyPaint). The
+  // frame shows the new shape with the working image in it: drag the picture,
+  // tap where it should go, or use the 3×3 buttons. The proxy does the exact
+  // sizing (extendLayout in server.js); the preview is the same shape maths
+  // without its rounding to 16 px.
+
+  _initPlaygroundExtend() {
+    const byId = (id) => document.getElementById(id);
+    this._extendPos = this._extendPos || { x: 0.5, y: 0.5 };
+    [["playground-extend-ratio", "api.image.extendRatio", "16:9"], ["playground-extend-room", "api.image.extendRoom", "1"]]
+      .forEach(([id, key, fallback]) => {
+        const select = byId(id);
+        if (!select) return;
+        const saved = String(this.config.get(key) ?? fallback);
+        select.value = [...select.options].some((o) => o.value === saved) ? saved : fallback;
+        select.addEventListener("change", (e) => {
+          this.config.set(key, e.target.value);
+          this._renderExtendPreview();
+        });
+      });
+
+    const snap = byId("playground-extend-snap");
+    if (snap) {
+      const arrows = ["↖", "↑", "↗", "←", "•", "→", "↙", "↓", "↘"];
+      const names = ["top left", "top", "top right", "left", "middle", "right", "bottom left", "bottom", "bottom right"];
+      snap.innerHTML = arrows.map((arrow, i) => {
+        const label = `Picture at the ${names[i]}`;
+        return `<button type="button" data-x="${(i % 3) / 2}" data-y="${Math.floor(i / 3) / 2}" title="${label}" aria-label="${label}">${arrow}</button>`;
+      }).join("");
+      snap.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-x]");
+        if (!btn || btn.disabled) return;
+        this._extendPos = { x: parseFloat(btn.dataset.x), y: parseFloat(btn.dataset.y) };
+        this._renderExtendPreview({ quick: true });
+      });
+    }
+
+    // Grabbing the picture keeps the finger on the same spot of it; touching
+    // the empty area brings the picture's middle under the finger.
+    const frame = byId("playground-extend-frame");
+    if (frame) {
+      let drag = null;
+      const move = (e) => {
+        if (!drag) return;
+        const clamp = (v) => Math.min(1, Math.max(0, v));
+        const freeX = drag.frame.width - drag.picture.width;
+        const freeY = drag.frame.height - drag.picture.height;
+        this._extendPos = {
+          x: freeX > 0.5 ? clamp((e.clientX - drag.frame.left - drag.dx) / freeX) : this._extendPos.x,
+          y: freeY > 0.5 ? clamp((e.clientY - drag.frame.top - drag.dy) / freeY) : this._extendPos.y,
+        };
+        this._renderExtendPreview({ quick: true });
+      };
+      frame.addEventListener("pointerdown", (e) => {
+        if (!this._extendSource) return;
+        const box = frame.getBoundingClientRect();
+        const pic = byId("playground-extend-picture").getBoundingClientRect();
+        const onPicture = e.clientX >= pic.left && e.clientX <= pic.right && e.clientY >= pic.top && e.clientY <= pic.bottom;
+        drag = {
+          frame: box,
+          picture: pic,
+          dx: onPicture ? e.clientX - pic.left : pic.width / 2,
+          dy: onPicture ? e.clientY - pic.top : pic.height / 2,
+        };
+        try { frame.setPointerCapture(e.pointerId); } catch (_) { /* synthetic events */ }
+        e.preventDefault();
+        move(e);
+      });
+      frame.addEventListener("pointermove", move);
+      const end = () => { drag = null; };
+      frame.addEventListener("pointerup", end);
+      frame.addEventListener("pointercancel", end);
+    }
+
+    byId("extend-playground-image-btn")?.addEventListener("click", () => this.handleExtendPlaygroundImage());
+    window.addEventListener("resize", () => {
+      if (this._pgActiveTab === "extend") this._renderExtendPreview({ quick: true });
+    });
+  },
+
+  _extendSourceSize(url) {
+    if (this._extendSizeFor?.url === url) return this._extendSizeFor.size;
+    const size = new Promise((resolve) => {
+      const probe = new Image();
+      probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight });
+      probe.onerror = () => resolve(null);
+      probe.src = url;
+    });
+    this._extendSizeFor = { url, size };
+    return size;
+  },
+
+  _extendSettings() {
+    const ratioValue = document.getElementById("playground-extend-ratio")?.value || "16:9";
+    const [rw, rh] = ratioValue.split(":").map(Number);
+    const room = parseFloat(document.getElementById("playground-extend-room")?.value) || 1;
+    return { ratioValue, ratio: rw / rh, room };
+  },
+
+  // The canvas in source pixels, as extendLayout works it out before scaling.
+  _extendCanvas(w, h, ratio, room) {
+    let canvasW = w;
+    let canvasH = h;
+    if (ratio > w / h) canvasW = h * ratio;
+    else canvasH = w / ratio;
+    return { canvasW: canvasW * room, canvasH: canvasH * room };
+  },
+
+  async _renderExtendPreview({ quick = false } = {}) {
+    const byId = (id) => document.getElementById(id);
+    const frame = byId("playground-extend-frame");
+    const picture = byId("playground-extend-picture");
+    const note = byId("playground-extend-note");
+    const btn = byId("extend-playground-image-btn");
+    if (!frame || !picture) return;
+
+    const url = this.playgroundImageUrl;
+    if (!url) {
+      frame.style.display = "none";
+      this._extendSource = null;
+      if (note) note.textContent = "Upload, paste or generate a picture first.";
+      if (btn && !this._extending) btn.disabled = true;
+      this._syncExtendSnap(false, false);
+      return;
+    }
+    if (!quick || this._extendSource?.url !== url) {
+      const size = await this._extendSourceSize(url);
+      if (url !== this.playgroundImageUrl) return;
+      this._extendSource = size?.w ? { url, ...size } : null;
+    }
+    const source = this._extendSource;
+    if (!source) {
+      frame.style.display = "none";
+      if (note) note.textContent = "Couldn't read this picture's size.";
+      return;
+    }
+
+    const { ratio, room } = this._extendSettings();
+    const { canvasW, canvasH } = this._extendCanvas(source.w, source.h, ratio, room);
+    // Full width, but never taller than about half the screen.
+    frame.style.display = "";
+    const available = frame.parentElement?.clientWidth || 320;
+    const maxHeight = Math.max(160, window.innerHeight * 0.45);
+    let frameW = available;
+    let frameH = (frameW * canvasH) / canvasW;
+    if (frameH > maxHeight) {
+      frameH = maxHeight;
+      frameW = (frameH * canvasW) / canvasH;
+    }
+    const picW = (frameW * source.w) / canvasW;
+    const picH = (frameH * source.h) / canvasH;
+    const { x, y } = this._extendPos;
+    frame.style.width = `${Math.round(frameW)}px`;
+    frame.style.height = `${Math.round(frameH)}px`;
+    if (picture.getAttribute("src") !== url) picture.src = url;
+    Object.assign(picture.style, {
+      width: `${picW}px`,
+      height: `${picH}px`,
+      left: `${(frameW - picW) * x}px`,
+      top: `${(frameH - picH) * y}px`,
+    });
+
+    const roomX = canvasW / source.w > 1.01;
+    const roomY = canvasH / source.h > 1.01;
+    this._syncExtendSnap(roomX, roomY);
+    if (note) {
+      note.textContent = roomX || roomY
+        ? "Drag your picture, tap where it should go, or use the arrows. The checked area is drawn new."
+        : "Your picture is already this shape: pick another shape or add some room.";
+    }
+    if (btn && !this._extending) btn.disabled = !(roomX || roomY);
+  },
+
+  // Along a side with no new room the position means nothing, so those
+  // buttons are off; the lit one is where the picture is now.
+  _syncExtendSnap(roomX, roomY) {
+    const { x, y } = this._extendPos || { x: 0.5, y: 0.5 };
+    document.querySelectorAll("#playground-extend-snap button[data-x]").forEach((btn) => {
+      const bx = parseFloat(btn.dataset.x);
+      const by = parseFloat(btn.dataset.y);
+      btn.disabled = (!roomX && bx !== 0.5) || (!roomY && by !== 0.5);
+      const near = (a, b) => Math.abs(a - b) < 0.02;
+      btn.classList.toggle("active", !btn.disabled && (!roomX || near(bx, x)) && (!roomY || near(by, y)) && (roomX || roomY));
+    });
+  },
+
+  async handleExtendPlaygroundImage() {
+    const source = this.playgroundImageUrl;
+    if (!source) {
+      this.showNotification("Upload, paste or generate an image first", "warning");
+      return;
+    }
+    const size = await this._extendSourceSize(source);
+    if (!size?.w) {
+      this.showNotification("Couldn't read this picture's size", "error");
+      return;
+    }
+    const { ratioValue, ratio, room } = this._extendSettings();
+    const prompt = document.getElementById("playground-extend-prompt")?.value?.trim() || "";
+    const { x, y } = this._extendPos;
+    const btn = document.getElementById("extend-playground-image-btn");
+    const statusEl = document.getElementById("playground-extend-status");
+    this._extending = true;
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.textContent = "⤢ Drawing the new edges on your GPU…";
+    }
+    try {
+      const resultUrl = await window.apiHandler.extendImage({
+        imageBase64: source,
+        extend: { sourceWidth: size.w, sourceHeight: size.h, ratio, x, y, room },
+        prompt,
+        keep: { tool: "extend", prompt: prompt || `Extended to ${ratioValue}` },
+      });
+      const dataUrl = await this._urlToDataUrl(resultUrl);
+      this.playgroundImageUrl = dataUrl;
+      this.updatePlaygroundImagePreview(dataUrl);
+      if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
+      this._addPlaygroundHistoryEntry(dataUrl, `Extended to ${ratioValue}`, {
+        tool: "extend", model: "local/moss-image", prompt, ratio: ratioValue, room, x, y,
+      });
+      this.showNotification("Picture extended!", "success");
+    } catch (error) {
+      console.error("Playground extend error:", error);
+      this.showNotification(`Failed: ${error.message}`, "error", 6000);
+    } finally {
+      this._extending = false;
+      if (statusEl) statusEl.style.display = "none";
+      if (btn) btn.disabled = false;
+      if (this._pgActiveTab === "extend") this._renderExtendPreview();
     }
   },
 

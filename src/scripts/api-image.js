@@ -794,6 +794,44 @@ Describe only what can be seen. No character names, no headings, lists or quotat
     return resultUrl;
   },
 
+  // ⤢ Extend (outpainting) on the local GPU: MOSS AnyPaint, whatever the user's
+  // model list holds. `extend` is { sourceWidth, sourceHeight, ratio, x, y, room }:
+  // the proxy works out the canvas from it (extendLayout in server.js).
+  // `prompt` is optional and describes the whole finished picture.
+  async extendImage({ imageBase64, extend, prompt = "", keep = null }) {
+    if (!imageBase64) throw new Error("An image is required to extend.");
+    const model = "local/moss-image";
+    const data = {
+      model,
+      prompt: (prompt || "").trim(),
+      image: imageBase64,
+      extend,
+      n: 1,
+      response_format: "url",
+      seed: Math.floor(Math.random() * 2147483647),
+      resumable: true,
+      __jobLabel: "Extend",
+    };
+    if (keep) data.__keep = keep;
+
+    const startedAt = performance.now();
+    const response = await this.makeRequest("/api/image/generations", data, true);
+    if (!response.ok) {
+      const errorText = await response.text();
+      let message = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        message = parsed.error?.message || parsed.message || parsed.error || errorText;
+      } catch (e) { /* not JSON */ }
+      throw new Error(`Extend failed (${response.status}): ${message}`);
+    }
+    const result = await response.json();
+    const resultUrl = result.data?.[0]?.url || result.image || result.url;
+    if (!resultUrl) throw new Error("Unexpected response from the image model: " + JSON.stringify(result).slice(0, 300));
+    recordImageModelRun(model, performance.now() - startedAt, this.config);
+    return resultUrl;
+  },
+
   // Loads `imageUrl` and checks whether it's a suspiciously uniform (near
   // solid-color) image — the signature of a silent safety-filter block rather
   // than a real generation. Fetches via the proxy first so the canvas read

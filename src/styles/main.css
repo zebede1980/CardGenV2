@@ -2158,6 +2158,72 @@ h6.rcf-heading { font-size: 0.75rem; }
     flex: 0 0 auto;
 }
 
+/* Playground → Extend: the new shape, with the picture placed in it. The
+   checked area is what gets drawn. Snap buttons styled under the id: see
+   "Things that bite" in STATUS.md (main.js's dark button rule). */
+.pg-extend-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.pg-extend-frame {
+    position: relative;
+    max-width: 100%;
+    overflow: hidden;
+    /* An outline, not a border: it takes no room, so the picture's place in
+       the frame is exactly the place on the canvas. */
+    outline: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-muted);
+    background-image:
+        linear-gradient(45deg, rgba(127, 127, 127, 0.22) 25%, transparent 25%, transparent 75%, rgba(127, 127, 127, 0.22) 75%),
+        linear-gradient(45deg, rgba(127, 127, 127, 0.22) 25%, transparent 25%, transparent 75%, rgba(127, 127, 127, 0.22) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: grab;
+}
+
+.pg-extend-frame img {
+    position: absolute;
+    display: block;
+    pointer-events: none;
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+#playground-extend-snap {
+    display: grid;
+    grid-template-columns: repeat(3, 2.4rem);
+    gap: 0.25rem;
+}
+
+#playground-extend-snap button {
+    width: 2.4rem;
+    height: 2.4rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 1rem;
+    line-height: 1;
+}
+
+#playground-extend-snap button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+#playground-extend-snap button:disabled {
+    opacity: 0.3;
+}
+
 /* Magnifying glass trigger on image cards */
 .gallery-zoom-trigger {
     position: absolute;

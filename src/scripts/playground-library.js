@@ -212,7 +212,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   _playgroundRecentLabel(item) {
-    const verb = { generate: "Generated", edit: "Edited", reimagine: "Reimagined", enhance: "Enhanced", combine: "Combined" }[item.tool] || "Made";
+    const verb = { generate: "Generated", edit: "Edited", reimagine: "Reimagined", extend: "Extended", enhance: "Enhanced", combine: "Combined" }[item.tool] || "Made";
     return item.model ? `${verb} (${item.model})` : verb;
   },
 

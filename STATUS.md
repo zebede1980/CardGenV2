@@ -1,11 +1,39 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (⤢ Playground Extend built, not deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## ⤢ Playground Extend (2026-11-26) — built, **not deployed** (needs proxy + frontend)
+
+Outpainting, local GPU only (Joe's choice), with **MOSS AnyPaint**: the inpainting LoRA on MOSS-Image *Base* plus
+a DMD2 8-step LoRA, already on the PC for SparkleImage (its 2026-11-17 evaluation: seamless outpainting, ~3 s warm;
+Qwen edit can't outpaint). A new ⤢ Extend tab after Reimagine:
+- **New shape** (1:1 … 21:9) and **Extra room** (Shape only / A little more / More / Lots = 1, 1.25, 1.5, 2× each way).
+- **Place the picture**: a frame preview of the new shape (checked = drawn new; never taller than ~45% of the screen);
+  drag the picture, tap the empty area, or the 3×3 arrow buttons. Buttons along a side with no new room are off.
+- Optional "What's in the new area?": AnyPaint wants the *whole finished picture* described, not a change; empty sends
+  a generic "carry on what's there" prompt (`ANYPAINT.defaultPrompt`).
+- **Proxy** (`server.js`): `extend: { sourceWidth, sourceHeight, ratio, x, y, room }` on a `local/moss-image` request →
+  `parseExtendRequest` / `extendLayout` (canvas 1–1.5 MP, every size a multiple of 16) → `buildMossExtendGraph`
+  (`ImageScale` then `MOSSAnyPaintPrepare` with padding, no mask). Resumable and kept in Recent (`__keep` tool
+  `extend`) like the other tools. `extend` on a hosted model is refused before any call.
+- `apiHandler.extendImage` in `api-image.js` (a shared script, so the proxy image rebuilds).
+- **Tested:** `extend.test.js` (new, 59: fake ComfyUI + real proxy + WebKit 390 / 320 dark, incl. the tab closed
+  mid-draw); playground 63, runs 79, image-jobs 14, lightbox 28, landing 46. **Not tested:** the real GPU (ComfyUI was
+  off), a real result's quality, the iPhone (real touch drag).
+- **Licence note:** AnyPaint LoRA's licence not checked here; MOSS-Image itself is OpenMOSS's.
+
+## Queue (2026-11-26)
+1. **Edit vs Reimagine**: merge into one tab with a "how far it can move from the original" switch.
+2. **🖌️ Paint to change** (masked edit) with AnyPaint: paint over an area, redraw only that. AnyPaint does take a mask
+   (SparkleImage's Mark & remove uses it) and keeps everything else. From SparkleImage's tests: great for removing
+   things and replacing whole objects (~3 s); weak on faces and fine detail (it never sees what's under the mask and
+   redraws whole 16 px blocks, ArcFace 0.76 vs Qwen edit's 0.90), so composite by the blocks it redrew. Needs a
+   paint-a-mask control that works with a finger.
 
 ## 🎭 Personas (2026-11-26) — deployed 2026-11-26 (`991cce8`, storywriterbackend + proxy + frontend)
 

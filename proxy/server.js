@@ -1683,7 +1683,7 @@ const PLAYGROUND_RECENT = {
   MAX_AGE_MS: envInt("PLAYGROUND_RECENT_DAYS", 3) * 24 * 60 * 60 * 1000,
   MAX_ITEMS: envInt("PLAYGROUND_RECENT_MAX", 300),
 };
-const PLAYGROUND_KEEP_TOOLS = new Set(["generate", "edit", "reimagine", "enhance", "combine"]);
+const PLAYGROUND_KEEP_TOOLS = new Set(["generate", "edit", "reimagine", "extend", "enhance", "combine"]);
 const PLAYGROUND_RECENT_ID_RE = /^r_\d{10,16}_[a-z0-9]{4,12}$/;
 const PLAYGROUND_PROMPT_TOOLS = new Set(["generate", "edit", "combine"]);
 const PLAYGROUND_PROMPT_HISTORY_MAX = 30;
@@ -3861,6 +3861,8 @@ const LOCAL_COMFY_MODELS = {
     editSteps: { default: 30, min: 12, max: 50 },
     maxReferences: 1,
     buildGraph: buildMossGraph,
+    // ⤢ Extend goes to AnyPaint on MOSS Base (see ANYPAINT).
+    buildExtendGraph: buildMossExtendGraph,
   },
   // One entry, two checkpoints: Dev draws from a prompt, Edit Turbo (distilled
   // for editing only) does every edit, in 4 steps. Single-picture edits were
@@ -4391,6 +4393,115 @@ function buildMossGraph({ prompt, seed, steps, width, height, sourceImages }) {
   };
 }
 
+// ⤢ Extend (outpainting): MOSS AnyPaint, the inpainting LoRA on MOSS-Image
+// *Base* (not the SFT model above) with a DMD2 8-step LoRA, from the node pack's
+// (alexw5702-afk/moss-anypaint) shipped API graph. Its validated settings only:
+// 8 steps, CFG 1, euler/simple, both LoRAs at 1.0. The prepare node pads the
+// picture and generates the padding; no mask is needed for that. The prompt
+// describes the whole finished picture, not a change.
+// Tested in SparkleImage (2026-11-17): seamless outpainting, ~3 s warm at 1.1 MP.
+const ANYPAINT = {
+  unet: "moss_image_base_int8_convrot.safetensors",
+  anypaintLora: "moss_anypaint_rank32.safetensors",
+  // lodestones/MOSS-Image-Base-8-steps-dmd's lora_dmd2.safetensors, renamed on the PC.
+  dmd2Lora: "moss_base_dmd2_8step.safetensors",
+  // Canvas size. Small pictures are brought up to the minimum, since MOSS
+  // draws poorly below ~1 MP; big ones come down to the maximum.
+  minMegapixels: 1.0,
+  maxMegapixels: 1.5,
+  maxRoom: 2,
+  defaultPrompt: "the same picture continued naturally beyond its original edges, the same scene, medium, style, lighting, perspective and level of detail",
+};
+
+// Where the picture sits on the extended canvas. `ratio` is the canvas's
+// width / height, `x` and `y` (0..1) place the picture in the free space
+// (0 = left / top edge), and `room` (1..2) widens the canvas in both
+// directions beyond just fitting the shape. Everything is a multiple of 16,
+// as the prepare node needs.
+function extendLayout({ sourceWidth, sourceHeight, ratio, x, y, room }) {
+  let canvasW = sourceWidth;
+  let canvasH = sourceHeight;
+  if (ratio > sourceWidth / sourceHeight) canvasW = sourceHeight * ratio;
+  else canvasH = sourceWidth / ratio;
+  canvasW *= room;
+  canvasH *= room;
+
+  const MP = 1024 * 1024;
+  const area = canvasW * canvasH;
+  const target = Math.min(Math.max(area, ANYPAINT.minMegapixels * MP), ANYPAINT.maxMegapixels * MP);
+  const scale = Math.sqrt(target / area);
+  const snap = (n) => Math.max(16, Math.round(n / 16) * 16);
+  const width = snap(sourceWidth * scale);
+  const height = snap(sourceHeight * scale);
+  const canvasWidth = Math.max(width, snap(canvasW * scale));
+  const canvasHeight = Math.max(height, snap(canvasH * scale));
+  const freeX = canvasWidth - width;
+  const freeY = canvasHeight - height;
+  const left = Math.round((freeX * x) / 16) * 16;
+  const top = Math.round((freeY * y) / 16) * 16;
+  return { width, height, left, right: freeX - left, top, bottom: freeY - top, canvasWidth, canvasHeight };
+}
+
+// Checks the page's `extend` block and returns the layout, or throws a 400.
+function parseExtendRequest(extend) {
+  const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : NaN);
+  const sourceWidth = num(extend.sourceWidth);
+  const sourceHeight = num(extend.sourceHeight);
+  const ratio = num(extend.ratio);
+  const x = num(extend.x ?? 0.5);
+  const y = num(extend.y ?? 0.5);
+  const room = num(extend.room ?? 1);
+  if (!(sourceWidth >= 16 && sourceWidth <= 16384 && sourceHeight >= 16 && sourceHeight <= 16384)) {
+    throw new LocalComfyError(400, "Extend needs the picture's size");
+  }
+  if (!(ratio >= 0.25 && ratio <= 4)) throw new LocalComfyError(400, "Extend's shape must be between 1:4 and 4:1");
+  if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) throw new LocalComfyError(400, "Extend's position must be between 0 and 1");
+  if (!(room >= 1 && room <= ANYPAINT.maxRoom)) throw new LocalComfyError(400, `Extend's extra room must be between 1 and ${ANYPAINT.maxRoom}`);
+  const layout = extendLayout({ sourceWidth, sourceHeight, ratio, x, y, room });
+  if (layout.canvasWidth === layout.width && layout.canvasHeight === layout.height) {
+    throw new LocalComfyError(400, "The picture is already that shape: pick another shape or add some room");
+  }
+  return layout;
+}
+
+function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
+  return {
+    1: { class_type: "UNETLoader", inputs: { unet_name: ANYPAINT.unet, weight_dtype: "default" } },
+    2: { class_type: "LoraLoaderModelOnly", inputs: { model: ["1", 0], lora_name: ANYPAINT.anypaintLora, strength_model: 1.0 } },
+    15: { class_type: "LoraLoaderModelOnly", inputs: { model: ["2", 0], lora_name: ANYPAINT.dmd2Lora, strength_model: 1.0 } },
+    3: { class_type: "MOSSAnyPaintModelPatch", inputs: { model: ["15", 0], kv_cache: true } },
+    4: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3.5_9b_int8_convrot.safetensors", type: "moss_image", device: "default" } },
+    5: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae_small.safetensors" } },
+    6: { class_type: "LoadImage", inputs: { image: sourceImage } },
+    // The picture at its place on the canvas, at a multiple of 16.
+    17: {
+      class_type: "ImageScale",
+      inputs: { image: ["6", 0], upscale_method: "lanczos", width: layout.width, height: layout.height, crop: "disabled" },
+    },
+    7: {
+      class_type: "MOSSAnyPaintPrepare",
+      inputs: {
+        source: ["17", 0], left: layout.left, top: layout.top, right: layout.right, bottom: layout.bottom,
+        reference_max_edge: 384, boundary_redraw_px: 32,
+      },
+    },
+    8: {
+      class_type: "MOSSAnyPaintEncode",
+      inputs: { clip: ["4", 0], vae: ["5", 0], semantic_reference: ["7", 0], known_image: ["7", 1], keep_mask: ["7", 3], prompt },
+    },
+    9: { class_type: "CLIPTextEncode", inputs: { clip: ["4", 0], text: "" } },
+    11: {
+      class_type: "KSampler",
+      inputs: {
+        model: ["3", 0], positive: ["8", 0], negative: ["9", 0], latent_image: ["8", 1],
+        seed, steps: 8, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+      },
+    },
+    12: { class_type: "VAEDecode", inputs: { samples: ["11", 0], vae: ["5", 0] } },
+    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["12", 0], filename_prefix: "cardgen/extend" } },
+  };
+}
+
 // Bria FIBO 2.0, from the test workflow in ComfyUI's PR #17240 (there is no
 // gallery template for the local model yet; the "Bria" templates there call
 // Bria's paid API). Dev: 30 steps, CFG 5. Edit Turbo: 4 steps, CFG 1. Both
@@ -4625,13 +4736,23 @@ async function runLocalComfyImage(body) {
     throw new LocalComfyError(503, "The local GPU isn't configured on this server (COMFYUI_URL / COMFYUI_API_KEY)");
   }
   const spec = LOCAL_COMFY_MODELS[body.model];
-  const prompt = (body.prompt || "").trim();
+  const extending = body.extend !== undefined && body.extend !== null;
+  let extendLayoutPlan = null;
+  if (extending) {
+    if (typeof body.extend !== "object") throw new LocalComfyError(400, "extend must be an object");
+    if (!spec.buildExtendGraph) throw new LocalComfyError(400, `${spec.name} can't extend pictures`);
+    if (!body.image || Array.isArray(body.input_references)) throw new LocalComfyError(400, "Extend needs one source picture");
+    if (body.reimagine !== undefined) throw new LocalComfyError(400, "Extend and reimagine can't be combined");
+    extendLayoutPlan = parseExtendRequest(body.extend);
+  }
+  // Extend works without a description: the model sees the whole picture.
+  const prompt = (body.prompt || "").trim() || (extending ? ANYPAINT.defaultPrompt : "");
   if (!prompt) throw new LocalComfyError(400, "A prompt is required");
   // Edit sends one `image`; Combine sends `input_references`, as for nano-gpt.
   const references = Array.isArray(body.input_references) ? body.input_references : body.image ? [body.image] : [];
   // A text-to-image model would silently ignore the source and return an
   // unrelated picture, so refuse instead.
-  if (references.length && !spec.capabilities.edit) {
+  if (references.length && !spec.capabilities.edit && !extending) {
     throw new LocalComfyError(400, `${spec.name} can't edit images — pick an edit model`);
   }
   if (references.length > 1 && !spec.capabilities.combine) {
@@ -4665,11 +4786,12 @@ async function runLocalComfyImage(body) {
   const range = (sourceImage && spec.editSteps) || spec.steps;
   const steps = Math.min(range.max, Math.max(range.min, parseInt(body.steps, 10) || range.default));
 
-  const build = likeness !== undefined ? spec.buildReimagineGraph : spec.buildGraph;
-  const graph = build({
-    prompt: prompt.slice(0, 8000), seed, steps, sourceImage, sourceImages, likeness, reframe: body.reframe === true,
-    ...localComfyDims(body, spec.maxMegapixels),
-  });
+  const graph = extending
+    ? spec.buildExtendGraph({ prompt: prompt.slice(0, 8000), seed, sourceImage, layout: extendLayoutPlan })
+    : (likeness !== undefined ? spec.buildReimagineGraph : spec.buildGraph)({
+      prompt: prompt.slice(0, 8000), seed, steps, sourceImage, sourceImages, likeness, reframe: body.reframe === true,
+      ...localComfyDims(body, spec.maxMegapixels),
+    });
   const submit = await localComfyFetch("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4681,7 +4803,8 @@ async function runLocalComfyImage(body) {
     throw new LocalComfyError(502, `Local GPU rejected the workflow (${submit.status}) — are the ${spec.name} models installed?`);
   }
   const { prompt_id: promptId } = await submit.json();
-  const kind = likeness !== undefined ? `reimagine (${likeness})`
+  const kind = extending ? `extend (${extendLayoutPlan.canvasWidth}x${extendLayoutPlan.canvasHeight})`
+    : likeness !== undefined ? `reimagine (${likeness})`
     : sourceImages.length > 1 ? `combine (${sourceImages.length} pictures)` : sourceImage ? "edit" : "generation";
   console.log(`[comfy] queued ${spec.name} ${kind} ${promptId}`);
 
@@ -4870,6 +4993,9 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
 
     if (joinExistingImageJob(req, res)) return;
     if (isLocalComfyModel(model)) return handleLocalComfyImage(req, res);
+    if (req.body.extend !== undefined) {
+      return res.status(400).json({ error: { code: "400", message: "Extend runs on the local GPU only" } });
+    }
 
     const apiKey = req.headers["x-api-key"];
     const apiUrl = req.headers["x-api-url"];
