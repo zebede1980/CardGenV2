@@ -16,6 +16,8 @@ from app.database import get_db, SessionLocal
 from app import models, schemas
 from app.services.llm_service import LLMService, UTILITY_TEMPERATURE, with_think_tags, strip_think, needs_prose, prose_after_reasoning, supports_reasoning_flag
 from app.services.card_parser import extract_relevant_lorebook_entries
+from app.services import persona as persona_svc
+from app.services.messenger_prompt import sub_macros
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
 from app.services import push
@@ -447,6 +449,8 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
     messages = []
 
     system_parts = []
+    persona_svc.sync_chat(db, chat)  # the chat follows its persona card
+    user_name = (chat.user_persona_name or "").strip() or "User"
 
     # 1. System Prompt (user-authored)
     system_prompt = chat.system_prompt or ""
@@ -486,21 +490,24 @@ def build_chat_prompt(chat: models.RoleplayChat, db: Session, speaker_name: str 
 
     # 2. Character Cards
     for card in chat.characters:
-        card_text = f"Name: {card.name}\nDescription: {card.description}\nPersonality: {card.personality}\nScenario: {card.scenario}"
+        # {{char}} / {{user}} used to reach the model literally, so the persona's
+        # name never replaced {{user}} in a card.
+        sub = lambda t, n=(card.name or "Character"): sub_macros(t or "", n, user_name)
+        card_text = f"Name: {card.name}\nDescription: {sub(card.description)}\nPersonality: {sub(card.personality)}\nScenario: {sub(card.scenario)}"
 
         if card.mes_example and include_examples:
-            card_text += f"\nExample Messages:\n{card.mes_example}"
+            card_text += f"\nExample Messages:\n{sub(card.mes_example)}"
 
         # Per-card system prompt (card-level instructions set by the card author,
         # e.g. language, tone rules, or scenario-specific constraints).
         # This is distinct from the chat-level system_prompt on RoleplayChat.
         if card.system_prompt:
-            card_text += f"\nCharacter Instructions:\n{card.system_prompt}"
+            card_text += f"\nCharacter Instructions:\n{sub(card.system_prompt)}"
 
         if card.character_book:
             relevant_lore = extract_relevant_lorebook_entries(card.character_book, recent_history_text)
             if relevant_lore:
-                card_text += "\nLorebook:\n" + "\n".join(relevant_lore)
+                card_text += "\nLorebook:\n" + "\n".join(sub(entry) for entry in relevant_lore)
 
         system_parts.append(f"Character: {card.name}\n{card_text}")
 
@@ -913,6 +920,7 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
         user_persona_detail=chat_in.user_persona_detail,
         user_persona_card_id=chat_in.user_persona_card_id
     )
+    persona_svc.apply_to_chat(db, new_chat)  # a persona card fills the copied fields
     db.add(new_chat)
     db.flush() # Flush to get the new chat ID
 
@@ -942,7 +950,7 @@ def create_chat(chat_in: schemas.RoleplayChatCreate, db: Session = Depends(get_d
                 # Substitute SillyTavern template variables before storing the
                 # opening message — the user sees this text directly in the chat
                 # bubble, so literal {{char}} or {{user}} would look broken.
-                user_display_name = chat_in.user_persona_name or "User"
+                user_display_name = new_chat.user_persona_name or "User"
                 msg_content = (msg_content
                                .replace("{{char}}", card.name or "Character")
                                .replace("{{Char}}", card.name or "Character")
@@ -967,6 +975,7 @@ def get_chat(chat_id: str, db: Session = Depends(get_db), current_user: models.U
     chat = db.query(models.RoleplayChat).filter(models.RoleplayChat.id == chat_id, models.RoleplayChat.user_id == str(current_user.id)).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
+    persona_svc.sync_chat(db, chat)
     return chat
 
 @router.patch("/{chat_id}", response_model=schemas.RoleplayChatOut)
@@ -983,6 +992,14 @@ def update_chat(chat_id: str, chat_in: schemas.RoleplayChatUpdate, db: Session =
         chat.writing_style = chat_in.writing_style
     if chat_in.response_length is not None:
         chat.response_length = chat_in.response_length
+    # Switching who you play. Later turns only; the history stays as it is.
+    for field in ("user_persona_name", "user_persona_age", "user_persona_gender", "user_persona_detail"):
+        value = getattr(chat_in, field)
+        if value is not None:
+            setattr(chat, field, value[:2000] if field == "user_persona_detail" else value[:80])
+    if "user_persona_card_id" in chat_in.model_fields_set:
+        chat.user_persona_card_id = chat_in.user_persona_card_id or None
+        persona_svc.apply_to_chat(db, chat)
 
     db.commit()
     db.refresh(chat)

@@ -20,6 +20,7 @@ from app.services.story_autowriter import name_story
 from app.routers.settings import get_or_create_settings
 from app.routers.auth import get_current_user
 from app.services import push
+from app.services import persona as persona_svc
 from app.routers.chat import WRITING_STYLE_PRESETS
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])
@@ -223,6 +224,7 @@ def _arc_note(arc: int, beats_done: int) -> Optional[str]:
 def build_adventure_prompt(session_data: models.AdventureSession, db: Session, max_input_tokens: int = None,
                            enable_cot: bool = True, native_reasoning: bool = False,
                            previous_reply: str = None, roll: dict = None, nudge: bool = True):
+    persona_svc.sync_adventure(db, session_data)  # the protagonist follows its persona card
     cfg = adventure_config(session_data)
     protagonist = cfg["mode"] == "protagonist"
     hero = cfg["persona_name"]
@@ -691,6 +693,7 @@ def create_session(session_in: schemas.AdventureSessionCreate, db: Session = Dep
         db.add(link)
 
     db.commit()
+    persona_svc.sync_adventure(db, new_session)
     db.refresh(new_session)
     return new_session
 
@@ -698,6 +701,7 @@ def create_session(session_in: schemas.AdventureSessionCreate, db: Session = Dep
 def get_session(session_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     session_data = _get_session(db, session_id, current_user)
     _drop_orphans(db, session_data)
+    persona_svc.sync_adventure(db, session_data)
     return session_data
 
 @router.patch("/{session_id}", response_model=schemas.AdventureSessionOut)
@@ -717,6 +721,7 @@ def update_session(session_id: str, payload: schemas.AdventureSessionUpdate, db:
     if payload.journal is not None:
         session_data.journal = json.dumps(payload.journal)
     db.commit()
+    persona_svc.sync_adventure(db, session_data)
     db.refresh(session_data)
     return session_data
 

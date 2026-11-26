@@ -19,9 +19,16 @@ class CharacterCardCreate(BaseModel):
     post_history_instructions: str = ""
     character_book: str = ""
     image_path: str = ""
+    # Left out (None) by a save means "keep what the card has": an update
+    # replaces every field, and an older client must not turn a persona back
+    # into a character.
+    kind: Optional[str] = None
+    persona: Optional[str] = None
 
 class CharacterCardOut(CharacterCardCreate):
     id: int
+    kind: str = "character"
+    persona: Optional[str] = ""
     created_at: datetime
     updated_at: Optional[datetime] = None
     class Config:
@@ -429,6 +436,7 @@ class MessengerChatCreate(BaseModel):
     user_persona_age: str = ""
     user_persona_gender: str = ""
     user_persona_detail: str = ""
+    user_persona_card_id: Optional[int] = None
 
 class MessengerChatUpdate(BaseModel):
     settings: Optional[dict] = None
@@ -437,6 +445,8 @@ class MessengerChatUpdate(BaseModel):
     user_persona_age: Optional[str] = None
     user_persona_gender: Optional[str] = None
     user_persona_detail: Optional[str] = None
+    # Sent (even as null) when the persona is switched; null means "just a name".
+    user_persona_card_id: Optional[int] = None
 
 class MessengerSendRequest(BaseModel):
     content: str = ""

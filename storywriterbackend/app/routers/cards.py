@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
+import json
 import os
 import shutil
 import uuid
@@ -11,6 +12,7 @@ from app.models import CharacterCard, CharacterCardGalleryImage, User
 from app.schemas import CharacterCardOut, CharacterCardCreate
 from app.services.card_parser import parse_card
 from app.routers.auth import get_current_user
+from app.services import persona as persona_svc
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
@@ -59,9 +61,12 @@ async def upload_card(file: UploadFile = File(...), db: Session = Depends(get_db
 
 @router.post("/", response_model=CharacterCardOut)
 def create_card(card: CharacterCardCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    fields = card.model_dump()
+    fields["kind"] = persona_svc.clean_kind(fields.get("kind"))
+    fields["persona"] = persona_svc.clean_meta(fields.get("persona")) if fields["kind"] == "persona" else ""
     db_card = CharacterCard(
         user_id=current_user.id,
-        **card.model_dump()
+        **fields
     )
     db.add(db_card)
     db.commit()
@@ -74,8 +79,21 @@ def update_card(card_id: int, card: CharacterCardCreate, db: Session = Depends(g
     if not db_card:
         raise HTTPException(status_code=404, detail="Card not found")
     
-    for key, value in card.model_dump().items():
+    fields = card.model_dump()
+    kind, persona = fields.pop("kind", None), fields.pop("persona", None)
+    for key, value in fields.items():
         setattr(db_card, key, value)
+    # Left out means "keep": an older client's save must not turn a persona back
+    # into a character or drop its age, gender and voice.
+    if kind is not None:
+        db_card.kind = persona_svc.clean_kind(kind)
+    if persona is not None:
+        old_meta = persona_svc.meta(db_card)
+        new_meta = json.loads(persona_svc.clean_meta(persona))
+        new_meta["isDefault"] = old_meta["isDefault"]  # only /default changes that
+        db_card.persona = json.dumps(new_meta)
+    if db_card.kind != "persona":
+        db_card.persona = ""
     db_card.updated_at = datetime.utcnow()
         
     db.commit()
@@ -138,13 +156,28 @@ def card_summaries(db: Session = Depends(get_db), current_user: User = Depends(g
 
     rows = (db.query(CharacterCard.id, CharacterCard.name, CharacterCard.tags, CharacterCard.created_at,
                      CharacterCard.updated_at, func.substr(CharacterCard.description, 1, 1200),
-                     func.length(func.coalesce(CharacterCard.character_book, "")))
+                     func.length(func.coalesce(CharacterCard.character_book, "")),
+                     CharacterCard.kind, CharacterCard.persona)
             .filter(CharacterCard.user_id == uid)
             .order_by(func.coalesce(CharacterCard.updated_at, CharacterCard.created_at).desc())
             .all())
+    # A card is also used where it was played as you (persona), as well as where it was cast.
+    for card_id, at in (db.query(RoleplayChat.user_persona_card_id, RoleplayChat.updated_at)
+                        .filter(RoleplayChat.user_id == uid, RoleplayChat.user_persona_card_id.isnot(None))):
+        note(card_id, at)
+    for session_config, at in (db.query(AdventureSession.play_config, AdventureSession.updated_at)
+                               .filter(AdventureSession.user_id == str(uid))):
+        try:
+            card_id = int((json.loads(session_config or "{}").get("persona") or {}).get("cardId") or 0)
+        except (TypeError, ValueError, AttributeError):
+            card_id = 0
+        if card_id:
+            note(card_id, at)
+
     out = []
-    for card_id, name, tags, created_at, updated_at, description, book_len in rows:
+    for card_id, name, tags, created_at, updated_at, description, book_len, kind, persona_json in rows:
         count, last = uses.get(card_id, (0, None))
+        kind = persona_svc.clean_kind(kind)
         out.append({
             "id": card_id,
             "name": name or "",
@@ -155,8 +188,29 @@ def card_summaries(db: Session = Depends(get_db), current_user: User = Depends(g
             "has_lorebook": (book_len or 0) > 4,  # more than "null" / "{}"
             "uses": count,
             "last_used_at": _iso(last),
+            "kind": kind,
         })
+        if kind == "persona":
+            m = persona_svc.meta(persona_json or "")
+            out[-1]["persona"] = {"age": m["age"], "gender": m["gender"], "isDefault": m["isDefault"]}
     return out
+
+
+@router.post("/{card_id}/default-persona")
+def make_default_persona(card_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """This persona is pre-picked whenever a chat or adventure asks who you are.
+    One per account; making another the default clears the old one."""
+    card = db.query(CharacterCard).filter(CharacterCard.id == card_id, CharacterCard.user_id == current_user.id).first()
+    if not card or card.kind != "persona":
+        raise HTTPException(status_code=404, detail="Persona not found")
+    persona_svc.set_default(db, current_user.id, card_id)
+    return {"id": card_id, "isDefault": True}
+
+
+@router.delete("/default-persona")
+def clear_default_persona(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    persona_svc.set_default(db, current_user.id, None)
+    return {"isDefault": False}
 
 
 @router.get("/search")

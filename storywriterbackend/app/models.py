@@ -38,6 +38,10 @@ class CharacterCard(Base):
     post_history_instructions = Column(Text, default="")
     character_book = Column(Text, default="")  # JSON string of lorebook
     image_path = Column(Text, default="")
+    # "character" (the AI plays it) or "persona" (the player's own character).
+    kind = Column(String, nullable=False, default="character")
+    # Persona-only extras as JSON: {"age", "gender", "voice", "isDefault"}.
+    persona = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

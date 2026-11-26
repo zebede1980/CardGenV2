@@ -160,12 +160,20 @@ def run_migrations():
             ("roleplay_chats", "mode", "VARCHAR NOT NULL DEFAULT 'roleplay'"),
             ("roleplay_chats", "messenger", "TEXT NOT NULL DEFAULT ''"),
             ("chat_messages", "reaction", "VARCHAR NOT NULL DEFAULT ''"),
+            # 🎭 Personas: the player's own character is a card of kind 'persona'
+            ("character_cards", "kind", "VARCHAR NOT NULL DEFAULT 'character'"),
+            ("character_cards", "persona", "TEXT NOT NULL DEFAULT ''"),
         ):
             if _table_exists(conn, table) and not _column_exists(conn, table, column):
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
 
 def init_db():
     run_migrations()
+    from app.services.persona import migrate_saved_personas
+    with SessionLocal() as db:
+        made = migrate_saved_personas(db)
+        if made:
+            print(f"[personas] moved {made} saved persona(s) into persona cards")
 
 def get_db():
     db = SessionLocal()

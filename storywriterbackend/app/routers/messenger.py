@@ -23,6 +23,7 @@ from app.services.gen_stream import close_open_think, sse_from_queue
 from app.services.llm_service import (LLMService, UTILITY_TEMPERATURE, needs_prose, prose_after_reasoning,
                                       strip_think, supports_reasoning_flag, with_think_tags)
 from app.services import messenger_prompt as mp
+from app.services import persona as persona_svc
 from app.services import push
 
 router = APIRouter(prefix="/messenger", tags=["messenger"])
@@ -38,6 +39,7 @@ def _get_chat(db: Session, chat_id: str, user) -> models.RoleplayChat:
         models.RoleplayChat.mode == "messenger").first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
+    persona_svc.sync_chat(db, chat)  # the chat follows its persona card
     return chat
 
 
@@ -98,7 +100,9 @@ def create_chat(body: schemas.MessengerChatCreate, db: Session = Depends(get_db)
         user_persona_name=(body.user_persona_name or "User").strip()[:80] or "User",
         user_persona_age=body.user_persona_age or "", user_persona_gender=body.user_persona_gender or "",
         user_persona_detail=body.user_persona_detail or "",
+        user_persona_card_id=body.user_persona_card_id,
     )
+    persona_svc.apply_to_chat(db, chat)
     db.add(chat)
     db.flush()
     for c in cards:
@@ -117,6 +121,9 @@ def update_chat(chat_id: str, body: schemas.MessengerChatUpdate, db: Session = D
         value = getattr(body, field)
         if value is not None:
             setattr(chat, field, value.strip()[:2000] if field != "title" else (value.strip()[:200] or chat.title))
+    if "user_persona_card_id" in body.model_fields_set:
+        chat.user_persona_card_id = body.user_persona_card_id or None
+        persona_svc.apply_to_chat(db, chat)
     db.commit()
     db.refresh(chat)
     return chat
