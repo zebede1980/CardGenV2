@@ -4464,8 +4464,19 @@ function parseExtendRequest(extend) {
   return layout;
 }
 
+// Room on all four sides in one pass draws a frame round the picture: a
+// poster border, a darkened vignette or a ghosted copy, with made-up lettering
+// (tested 2026-11-26, 5 of 5 with the default prompt and with "a wide shot
+// photograph"; only a full description of the scene avoided it). One axis at a
+// time was fine in every test, so room on both axes is drawn in two passes,
+// the sides and then the top and bottom, each pass seeing the last one's result.
 function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
-  return {
+  const sides = layout.left + layout.right > 0;
+  const ends = layout.top + layout.bottom > 0;
+  const passes = sides && ends
+    ? [{ left: layout.left, right: layout.right, top: 0, bottom: 0 }, { left: 0, right: 0, top: layout.top, bottom: layout.bottom }]
+    : [{ left: layout.left, right: layout.right, top: layout.top, bottom: layout.bottom }];
+  const graph = {
     1: { class_type: "UNETLoader", inputs: { unet_name: ANYPAINT.unet, weight_dtype: "default" } },
     2: { class_type: "LoraLoaderModelOnly", inputs: { model: ["1", 0], lora_name: ANYPAINT.anypaintLora, strength_model: 1.0 } },
     15: { class_type: "LoraLoaderModelOnly", inputs: { model: ["2", 0], lora_name: ANYPAINT.dmd2Lora, strength_model: 1.0 } },
@@ -4478,28 +4489,32 @@ function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
       class_type: "ImageScale",
       inputs: { image: ["6", 0], upscale_method: "lanczos", width: layout.width, height: layout.height, crop: "disabled" },
     },
-    7: {
-      class_type: "MOSSAnyPaintPrepare",
-      inputs: {
-        source: ["17", 0], left: layout.left, top: layout.top, right: layout.right, bottom: layout.bottom,
-        reference_max_edge: 384, boundary_redraw_px: 32,
-      },
-    },
-    8: {
-      class_type: "MOSSAnyPaintEncode",
-      inputs: { clip: ["4", 0], vae: ["5", 0], semantic_reference: ["7", 0], known_image: ["7", 1], keep_mask: ["7", 3], prompt },
-    },
     9: { class_type: "CLIPTextEncode", inputs: { clip: ["4", 0], text: "" } },
-    11: {
+  };
+  let image = ["17", 0];
+  passes.forEach((pad, i) => {
+    const base = 100 + i * 10;
+    const [prep, encode, sample, decode] = [base, base + 1, base + 2, base + 3].map(String);
+    graph[prep] = {
+      class_type: "MOSSAnyPaintPrepare",
+      inputs: { source: image, ...pad, reference_max_edge: 384, boundary_redraw_px: 32 },
+    };
+    graph[encode] = {
+      class_type: "MOSSAnyPaintEncode",
+      inputs: { clip: ["4", 0], vae: ["5", 0], semantic_reference: [prep, 0], known_image: [prep, 1], keep_mask: [prep, 3], prompt },
+    };
+    graph[sample] = {
       class_type: "KSampler",
       inputs: {
-        model: ["3", 0], positive: ["8", 0], negative: ["9", 0], latent_image: ["8", 1],
-        seed, steps: 8, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+        model: ["3", 0], positive: [encode, 0], negative: ["9", 0], latent_image: [encode, 1],
+        seed: (seed + i) % 2147483647, steps: 8, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
       },
-    },
-    12: { class_type: "VAEDecode", inputs: { samples: ["11", 0], vae: ["5", 0] } },
-    [LOCAL_COMFY_OUTPUT_NODE]: { class_type: "SaveImage", inputs: { images: ["12", 0], filename_prefix: "cardgen/extend" } },
-  };
+    };
+    graph[decode] = { class_type: "VAEDecode", inputs: { samples: [sample, 0], vae: ["5", 0] } };
+    image = [decode, 0];
+  });
+  graph[LOCAL_COMFY_OUTPUT_NODE] = { class_type: "SaveImage", inputs: { images: image, filename_prefix: "cardgen/extend" } };
+  return graph;
 }
 
 // Bria FIBO 2.0, from the test workflow in ComfyUI's PR #17240 (there is no

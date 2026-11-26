@@ -15,16 +15,30 @@ Qwen edit can't outpaint). A new ⤢ Extend tab after Reimagine:
 - **New shape** (1:1 … 21:9) and **Extra room** (Shape only / A little more / More / Lots = 1, 1.25, 1.5, 2× each way).
 - **Place the picture**: a frame preview of the new shape (checked = drawn new; never taller than ~45% of the screen);
   drag the picture, tap the empty area, or the 3×3 arrow buttons. Buttons along a side with no new room are off.
-- Optional "What's in the new area?": AnyPaint wants the *whole finished picture* described, not a change; empty sends
-  a generic "carry on what's there" prompt (`ANYPAINT.defaultPrompt`).
+- Optional **Description**: AnyPaint wants the *whole finished picture* described, not a change; empty sends a generic
+  "carry on what's there" prompt (`ANYPAINT.defaultPrompt`). **✍️ Describe it** fills the box from the vision model
+  (the same call as 🔍 Describe, only when tapped). When over 60% of the result is new and the box is empty, the note
+  under the frame warns.
+- **Room on both axes runs in two passes** (sides, then top and bottom, in one ComfyUI graph).
 - **Proxy** (`server.js`): `extend: { sourceWidth, sourceHeight, ratio, x, y, room }` on a `local/moss-image` request →
   `parseExtendRequest` / `extendLayout` (canvas 1–1.5 MP, every size a multiple of 16) → `buildMossExtendGraph`
   (`ImageScale` then `MOSSAnyPaintPrepare` with padding, no mask). Resumable and kept in Recent (`__keep` tool
   `extend`) like the other tools. `extend` on a hosted model is refused before any call.
 - `apiHandler.extendImage` in `api-image.js` (a shared script, so the proxy image rebuilds).
 - **Tested:** `extend.test.js` (new, 59: fake ComfyUI + real proxy + WebKit 390 / 320 dark, incl. the tab closed
-  mid-draw); playground 63, runs 79, image-jobs 14, lightbox 28, landing 46. **Not tested:** the real GPU (ComfyUI was
-  off), a real result's quality, the iPhone (real touch drag).
+  mid-draw); playground 63, runs 79, image-jobs 14, lightbox 28, landing 46. **Not tested:** the iPhone (real touch drag),
+  the deployed proxy through the gateway.
+- **On the PC's GPU (2026-11-26, the staged proxy against local ComfyUI, 17 runs on a photo of two children at a swing
+  set, landscape and a portrait crop):** one axis (sides, or top and bottom, or one side) seamless, ~9 s warm (38 s
+  cold); two passes 14–21 s. Findings that shaped it:
+  - **All four sides in one pass drew a frame round the picture** every time (poster border, vignette, ghosted copy,
+    fake lettering), with the default prompt and with "a wide shot photograph"; only a full scene description avoided
+    it. Two passes fixed it with or without a description.
+  - **Most of the canvas new + no description** (portrait → 16:9 with room 1.5, ~77% new) wandered into a street scene
+    with poster lettering on 2 of 2 seeds; with a one-line scene description it was excellent. Hence the warning.
+  - A face right at the picture's edge gets redrawn (AnyPaint redraws a 32 px band at the seam,
+    `boundary_redraw_px`), so a person cut off by the edge comes back as a different face.
+  - Square with room from a landscape left a faint brightness step at the original's top and bottom edges.
 - **Licence note:** AnyPaint LoRA's licence not checked here; MOSS-Image itself is OpenMOSS's.
 
 ## Queue (2026-11-26)

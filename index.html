@@ -2810,15 +2810,18 @@
                                 </div>
                                 <p id="playground-extend-note" style="font-size: 0.72rem; color: var(--text-soft); margin: 0.4rem 0 0.75rem;"></p>
 
-                                <label for="playground-extend-prompt" class="label" style="display:block; margin-bottom:0.35rem;">
-                                    What's in the new area? <span style="font-weight: normal; color: var(--text-soft);">(optional)</span>
-                                </label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                                    <label for="playground-extend-prompt" class="label" style="margin: 0;">
+                                        Description <span style="font-weight: normal; color: var(--text-soft);">(optional)</span>
+                                    </label>
+                                    <button type="button" id="playground-extend-describe-btn" class="btn-small" style="white-space: nowrap;" title="Have the vision model describe your picture into the box (one quick call)">✍️ Describe it</button>
+                                </div>
                                 <textarea
                                     id="playground-extend-prompt"
                                     class="input"
                                     rows="2"
                                     maxlength="2000"
-                                    placeholder="Leave empty to carry on what's there. Or describe the whole finished picture, e.g. a woman on a beach at sunset, the sea behind her, gulls overhead"
+                                    placeholder="Leave empty to carry on what's there. For a big extension, describe the whole finished picture, e.g. a woman on a beach at sunset, the sea behind her, gulls overhead"
                                 ></textarea>
 
                                 <button type="button" id="extend-playground-image-btn" class="btn-primary" style="margin-top: 0.75rem;">⤢ Extend</button>

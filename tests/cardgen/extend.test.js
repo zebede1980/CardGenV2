@@ -69,11 +69,13 @@ function startComfy() {
 }
 
 const node = (graph, type) => Object.values(graph).find((n) => n.class_type === type);
+const preps = (graph) => Object.values(graph).filter((n) => n.class_type === "MOSSAnyPaintPrepare").map((n) => n.inputs);
+// Padding summed over the passes (one, or two when there is room on both axes).
 const pads = (graph) => {
-  const i = node(graph, "MOSSAnyPaintPrepare").inputs;
+  const sum = (k) => preps(graph).reduce((t, i) => t + i[k], 0);
   const s = node(graph, "ImageScale").inputs;
-  return { left: i.left, right: i.right, top: i.top, bottom: i.bottom, w: s.width, h: s.height,
-    cw: s.width + i.left + i.right, ch: s.height + i.top + i.bottom };
+  const [left, right, top, bottom] = ["left", "right", "top", "bottom"].map(sum);
+  return { left, right, top, bottom, w: s.width, h: s.height, cw: s.width + left + right, ch: s.height + top + bottom, passes: preps(graph).length };
 };
 
 (async () => {
@@ -109,7 +111,7 @@ const pads = (graph) => {
     JSON.stringify(g).slice(0, 400));
   check("the uploaded picture is the one scaled and padded", node(g, "LoadImage").inputs.image === "cardgen/up1.png"
     && node(g, "MOSSAnyPaintPrepare").inputs.source[0] === Object.keys(g).find((k) => g[k].class_type === "ImageScale"));
-  check("16:9 from a portrait: room left and right only, centred", p.top === 0 && p.bottom === 0 && p.left > 0 && Math.abs(p.left - p.right) <= 16, JSON.stringify(p));
+  check("16:9 from a portrait: one pass, room left and right only, centred", p.passes === 1 && p.top === 0 && p.bottom === 0 && p.left > 0 && Math.abs(p.left - p.right) <= 16, JSON.stringify(p));
   check("the canvas is 16:9 (within the 16 px rounding)", Math.abs(p.cw / p.ch - 16 / 9) < 0.03, `${p.cw}x${p.ch}`);
   check("the canvas is 1–1.5 MP", p.cw * p.ch >= 0.97 * MP && p.cw * p.ch <= 1.53 * MP, p.cw * p.ch / MP);
   check("every size and pad is a multiple of 16", mult16(p), JSON.stringify(p));
@@ -129,6 +131,17 @@ const pads = (graph) => {
   await extend({ sourceWidth: 600, sourceHeight: 900, ratio: 2 / 3, x: 0.5, y: 0.5, room: 1.5 });
   p = pads(lastGraph());
   check("the same shape with extra room pads all four sides", p.left > 0 && p.right > 0 && p.top > 0 && p.bottom > 0, JSON.stringify(p));
+  g = lastGraph();
+  const [pass1, pass2] = preps(g);
+  const decodeOf = (prepInputs) => g[prepInputs.source[0]];
+  check("…in two passes: the sides, then the top and bottom", p.passes === 2
+    && pass1.left > 0 && pass1.right > 0 && pass1.top === 0 && pass1.bottom === 0
+    && pass2.left === 0 && pass2.right === 0 && pass2.top > 0 && pass2.bottom > 0, JSON.stringify([pass1, pass2]));
+  check("…the second pass works on the first one's result, and that's what is saved",
+    decodeOf(pass1).class_type === "ImageScale" && decodeOf(pass2).class_type === "VAEDecode"
+    && g[g[56].inputs.images[0]].class_type === "VAEDecode" && g[56].inputs.images[0] !== pass2.source[0],
+    JSON.stringify(Object.keys(g)));
+  check("…with a different seed for each pass", new Set(Object.values(g).filter((n) => n.class_type === "KSampler").map((n) => n.inputs.seed)).size === 2);
   check("…and the picture is about 2/3 of the canvas each way", Math.abs(p.w / p.cw - 2 / 3) < 0.04 && Math.abs(p.h / p.ch - 2 / 3) < 0.04, JSON.stringify(p));
 
   await extend({ sourceWidth: 300, sourceHeight: 300, ratio: 16 / 9, x: 0.5, y: 0.5, room: 1 });
@@ -259,6 +272,29 @@ const pads = (graph) => {
   place = await picturePlace(page);
   check("↘ puts it in the bottom right corner", place.right < 1 && place.bottom < 1 && place.left > 20 && place.top > 20, JSON.stringify(place));
   check("the shape and room are remembered", await page.evaluate(() => window.app.config.get("api.image.extendRatio") === "2:3" && window.app.config.get("api.image.extendRoom") === "1.5"));
+
+  // A big extension asks for a description; ✍️ Describe it for me writes one.
+  const note = () => page.textContent("#playground-extend-note");
+  check("a medium extension doesn't nag", !/Most of this will be new/.test(await note()), await note());
+  await page.selectOption("#playground-extend-room", "2");
+  check("a big one with an empty box warns", /Most of this will be new/.test(await note()), await note());
+  await page.fill("#playground-extend-prompt", "a park");
+  check("…not once something is written", !/Most of this will be new/.test(await note()), await note());
+  await page.fill("#playground-extend-prompt", "");
+  const describesBefore = model.count("describe");
+  await page.click("#playground-extend-describe-btn");
+  await page.waitForFunction(() => !document.getElementById("playground-extend-describe-btn").disabled, null, { timeout: 15000 });
+  check("✍️ Describe it for me fills the box from one vision call",
+    (await page.inputValue("#playground-extend-prompt")) === require("./stack").REPLIES.describe && model.count("describe") === describesBefore + 1,
+    await page.inputValue("#playground-extend-prompt"));
+  check("…and the warning goes", !/Most of this will be new/.test(await note()));
+  model.failNext.describe = 500;
+  await page.fill("#playground-extend-prompt", "kept");
+  await page.click("#playground-extend-describe-btn");
+  await page.waitForFunction(() => !document.getElementById("playground-extend-describe-btn").disabled, null, { timeout: 15000 });
+  check("a failed describe puts back what was there", (await page.inputValue("#playground-extend-prompt")) === "kept");
+  await page.fill("#playground-extend-prompt", "");
+  await page.selectOption("#playground-extend-room", "1.5");
 
   const sw = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check("no sideways scroll at 390px", sw <= 0, sw);

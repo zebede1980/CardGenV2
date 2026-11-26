@@ -1304,6 +1304,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     byId("extend-playground-image-btn")?.addEventListener("click", () => this.handleExtendPlaygroundImage());
+    byId("playground-extend-describe-btn")?.addEventListener("click", () => this.handleDescribeForExtend());
+    byId("playground-extend-prompt")?.addEventListener("input", () => this._renderExtendPreview({ quick: true }));
     window.addEventListener("resize", () => {
       if (this._pgActiveTab === "extend") this._renderExtendPreview({ quick: true });
     });
@@ -1394,10 +1396,17 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const roomX = canvasW / source.w > 1.01;
     const roomY = canvasH / source.h > 1.01;
     this._syncExtendSnap(roomX, roomY);
+    // Tested 2026-11-26: with most of the picture new and no description, the
+    // model tends to invent a poster, a street or lettering; describing the
+    // scene kept it on track.
+    const newShare = 1 - (source.w * source.h) / (canvasW * canvasH);
+    const described = !!document.getElementById("playground-extend-prompt")?.value.trim();
     if (note) {
-      note.textContent = roomX || roomY
-        ? "Drag your picture, tap where it should go, or use the arrows. The checked area is drawn new."
-        : "Your picture is already this shape: pick another shape or add some room.";
+      note.textContent = !(roomX || roomY)
+        ? "Your picture is already this shape: pick another shape or add some room."
+        : newShare > 0.6 && !described
+          ? "⚠️ Most of this will be new. Describe the whole picture below (or ✍️ Describe it), or the model may wander off and invent signs or lettering."
+          : "Drag your picture, tap where it should go, or use the arrows. The checked area is drawn new.";
     }
     if (btn && !this._extending) btn.disabled = !(roomX || roomY);
   },
@@ -1413,6 +1422,37 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const near = (a, b) => Math.abs(a - b) < 0.02;
       btn.classList.toggle("active", !btn.disabled && (!roomX || near(bx, x)) && (!roomY || near(by, y)) && (roomX || roomY));
     });
+  },
+
+  // Fills the box with a description of the working image (the same call as
+  // 🔍 Describe). AnyPaint wants the whole finished picture described.
+  async handleDescribeForExtend() {
+    const source = this.playgroundImageUrl;
+    if (!source) {
+      this.showNotification("Upload, paste or generate an image first", "warning");
+      return;
+    }
+    const box = document.getElementById("playground-extend-prompt");
+    const btn = document.getElementById("playground-extend-describe-btn");
+    const before = box?.value || "";
+    if (btn) btn.disabled = true;
+    try {
+      let streamed = "";
+      const text = await window.apiHandler.describeImageForPrompt(source, {
+        onStream: (chunk) => {
+          streamed += chunk;
+          if (box) box.value = streamed;
+        },
+      });
+      if (box) box.value = text;
+    } catch (error) {
+      if (box) box.value = before;
+      console.error("Extend describe error:", error);
+      this.showNotification(`Couldn't describe the picture: ${error.message}`, "error", 6000);
+    } finally {
+      if (btn) btn.disabled = false;
+      this._renderExtendPreview({ quick: true });
+    }
   },
 
   async handleExtendPlaygroundImage() {
