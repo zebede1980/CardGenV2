@@ -85,8 +85,28 @@ A slow-burn coastal mystery.
 Keep replies short and wary.
 </post_history>`;
 
+const CARD_PERSONA = `# Joe Marsh
+
+Joe Marsh is a night-shift paramedic in Leeds with a reputation for staying calm.
+
+**Age:** 34
+**Gender:** Man, he/him
+**Appearance:** Tall and lean, close-cropped dark hair, a scar through his left eyebrow.
+**Background:** Grew up in Hull and served as an army medic.
+
+## Personality
+
+- Dry humour
+- Patient with strangers, short with bureaucracy
+
+## Voice
+
+Flat Yorkshire vowels, few words.`;
+
 function replyKind(body) {
   const text = (body.messages || []).map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n");
+  if (/You revise personas for AI roleplay/.test(text)) return "persona-revise";
+  if (/You are a persona creator/.test(text)) return "persona";
   if (/Revise the following character according to this request/.test(text)) return "revise";
   if (/recreate them from your words alone/.test(text)) return "describe";
   if (/identify and list supporting cast members/.test(text)) return "cast-list";
@@ -127,6 +147,13 @@ const REPLIES = {
   }),
   card: CARD_SINGLE,
   "card-scenario": CARD_SCENARIO,
+  persona: CARD_PERSONA,
+  "persona-revise": JSON.stringify({
+    name: "Mira Okafor", age: "41", gender: "Woman, she/her",
+    description: "# Mira Okafor\n\nMira Okafor keeps the lighthouse on a spit of rock off the Cornish coast. Weathered hands, grey eyes.",
+    personality: "- Patient\n- Wary of strangers",
+    voice: "Slow Cornish vowels; says little.",
+  }),
   finishing: FINISHING,
   notes: "Notes written on their own.",
   posthistory: "Post-history written on its own.",
@@ -282,10 +309,37 @@ function startBackend() {
     if (url.pathname.startsWith("/api/cards/")) {
       const cards = state.cards(uid);
       const tagList = (c) => String(c.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+      const meta = (c) => { try { return JSON.parse(c.persona || "{}"); } catch (_) { return {}; } };
       if (url.pathname === "/api/cards/summary") {
         return send(200, [...cards.values()].map((c) => ({ id: c.id, name: c.name, tags: tagList(c), created_at: c.created_at,
           updated_at: c.updated_at, blurb: String(c.description || "").slice(0, 240), has_lorebook: !!c.character_book,
-          uses: c.uses || 0, last_used_at: c.last_used_at || null })));
+          uses: c.uses || 0, last_used_at: c.last_used_at || null, kind: c.kind || "character",
+          ...(c.kind === "persona" ? { persona: { age: meta(c).age || "", gender: meta(c).gender || "", isDefault: !!meta(c).isDefault } } : {}) })));
+      }
+      // Card saves, as the real backend: a kind or persona left out keeps what the card has.
+      const cleanKind = (k) => (k === "persona" ? "persona" : "character");
+      if (url.pathname === "/api/cards/" && req.method === "POST") {
+        const kind = cleanKind(body.kind);
+        const card = state.addCard(uid, { ...body, kind, persona: kind === "persona" ? JSON.stringify({ ...meta(body), isDefault: false }) : "" });
+        state.cardSaves = [...(state.cardSaves || []), { method: "POST", userId: uid, body }];
+        return send(200, card);
+      }
+      if ((m = url.pathname.match(/^\/api\/cards\/(\d+)$/)) && req.method === "PUT") {
+        const card = cards.get(m[1]);
+        if (!card) return send(404, { detail: "Card not found" });
+        const { kind, persona, ...fields } = body;
+        Object.assign(card, fields, { updated_at: new Date().toISOString().replace("Z", "") });
+        if (kind !== undefined && kind !== null) card.kind = cleanKind(kind);
+        if (persona !== undefined && persona !== null) card.persona = JSON.stringify({ ...meta({ persona }), isDefault: !!meta(card).isDefault });
+        if (card.kind !== "persona") card.persona = "";
+        state.cardSaves = [...(state.cardSaves || []), { method: "PUT", userId: uid, body }];
+        return send(200, card);
+      }
+      if ((m = url.pathname.match(/^\/api\/cards\/(\d+)\/default-persona$/)) && req.method === "POST") {
+        const card = cards.get(m[1]);
+        if (!card || card.kind !== "persona") return send(404, { detail: "Persona not found" });
+        for (const c of cards.values()) if (c.kind === "persona") c.persona = JSON.stringify({ ...meta(c), isDefault: c === card });
+        return send(200, { id: card.id, isDefault: true });
       }
       if (url.pathname === "/api/cards/search") {
         const words = String(url.searchParams.get("q") || "").toLowerCase().split(/\s+/).filter(Boolean);
