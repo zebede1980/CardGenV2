@@ -4537,6 +4537,42 @@ function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
   return graph;
 }
 
+// 🖌️ Paint an area: any local edit, with only the painted part kept. The edit
+// model works on the whole picture as usual; its result is scaled back to the
+// original's size and pasted over the original through the mask (white =
+// change), grown a little and softened, so nothing outside the painted area
+// changes at all. Tested 2026-11-26 on the PC: Qwen Lightning with a plain
+// instruction removed a person cleanly and put a cap on a head first time;
+// MOSS AnyPaint needed the whole scene described and, with no description,
+// drew something new in the hole (a balloon; with a tighter mask, a different
+// person), so it isn't used here.
+const PAINT_PASTE = { growPx: 12, blurRadius: 8, blurSigma: 4.0 };
+
+function addPaintPasteBack(graph, { sourceImage, maskImage }) {
+  const save = graph[LOCAL_COMFY_OUTPUT_NODE];
+  const edited = save.inputs.images;
+  Object.assign(graph, {
+    900: { class_type: "LoadImage", inputs: { image: sourceImage } },
+    901: { class_type: "GetImageSize", inputs: { image: ["900", 0] } },
+    902: { class_type: "LoadImageMask", inputs: { image: maskImage, channel: "red" } },
+    903: { class_type: "MaskToImage", inputs: { mask: ["902", 0] } },
+    904: { class_type: "ImageScale", inputs: { image: ["903", 0], upscale_method: "bilinear", width: ["901", 0], height: ["901", 1], crop: "disabled" } },
+    905: { class_type: "ImageToMask", inputs: { image: ["904", 0], channel: "red" } },
+    906: { class_type: "ThresholdMask", inputs: { mask: ["905", 0], value: 0.5 } },
+    907: { class_type: "GrowMask", inputs: { mask: ["906", 0], expand: PAINT_PASTE.growPx, tapered_corners: true } },
+    908: { class_type: "MaskToImage", inputs: { mask: ["907", 0] } },
+    909: { class_type: "ImageBlur", inputs: { image: ["908", 0], blur_radius: PAINT_PASTE.blurRadius, sigma: PAINT_PASTE.blurSigma } },
+    910: { class_type: "ImageToMask", inputs: { image: ["909", 0], channel: "red" } },
+    911: { class_type: "ImageScale", inputs: { image: edited, upscale_method: "lanczos", width: ["901", 0], height: ["901", 1], crop: "disabled" } },
+    912: {
+      class_type: "ImageCompositeMasked",
+      inputs: { destination: ["900", 0], source: ["911", 0], x: 0, y: 0, resize_source: false, mask: ["910", 0] },
+    },
+  });
+  save.inputs.images = ["912", 0];
+  return graph;
+}
+
 // Bria FIBO 2.0, from the test workflow in ComfyUI's PR #17240 (there is no
 // gallery template for the local model yet; the "Bria" templates there call
 // Bria's paid API). Dev: 30 steps, CFG 5. Edit Turbo: 4 steps, CFG 1. Both
@@ -4780,6 +4816,16 @@ async function runLocalComfyImage(body) {
     if (body.reimagine !== undefined) throw new LocalComfyError(400, "Extend and reimagine can't be combined");
     extendLayoutPlan = parseExtendRequest(body.extend);
   }
+  const painting = body.inpaint !== undefined && body.inpaint !== null;
+  let paintMask = null;
+  if (painting) {
+    if (typeof body.inpaint !== "object") throw new LocalComfyError(400, "inpaint must be an object");
+    if (!spec.capabilities.edit) throw new LocalComfyError(400, `${spec.name} can't edit images — pick an edit model`);
+    if (!body.image || Array.isArray(body.input_references)) throw new LocalComfyError(400, "Painting an area needs one source picture");
+    if (extending || body.reimagine !== undefined) throw new LocalComfyError(400, "Paint can't be combined with extend or reimagine");
+    if (typeof body.inpaint.mask !== "string") throw new LocalComfyError(400, "Paint needs the painted mask");
+    paintMask = parseImageDataUri(body.inpaint.mask);
+  }
   // Extend works without a description: the model sees the whole picture.
   const prompt = (body.prompt || "").trim() || (extending ? ANYPAINT.defaultPrompt : "");
   if (!prompt) throw new LocalComfyError(400, "A prompt is required");
@@ -4817,6 +4863,7 @@ async function runLocalComfyImage(body) {
   const sourceImages = [];
   for (const image of parsed) sourceImages.push(await uploadLocalComfyImage(image));
   const sourceImage = sourceImages[0] || null;
+  const maskImage = paintMask ? await uploadLocalComfyImage(paintMask) : null;
   const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed : Math.floor(Math.random() * 2147483647);
   const range = (sourceImage && spec.editSteps) || spec.steps;
   const steps = Math.min(range.max, Math.max(range.min, parseInt(body.steps, 10) || range.default));
@@ -4827,6 +4874,7 @@ async function runLocalComfyImage(body) {
       prompt: prompt.slice(0, 8000), seed, steps, sourceImage, sourceImages, likeness, reframe: body.reframe === true,
       ...localComfyDims(body, spec.maxMegapixels),
     });
+  if (painting) addPaintPasteBack(graph, { sourceImage, maskImage });
   const submit = await localComfyFetch("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4839,6 +4887,7 @@ async function runLocalComfyImage(body) {
   }
   const { prompt_id: promptId } = await submit.json();
   const kind = extending ? `extend (${extendLayoutPlan.canvasWidth}x${extendLayoutPlan.canvasHeight})`
+    : painting ? "edit (painted area)"
     : likeness !== undefined ? `reimagine (${likeness})`
     : sourceImages.length > 1 ? `combine (${sourceImages.length} pictures)` : sourceImage ? "edit" : "generation";
   console.log(`[comfy] queued ${spec.name} ${kind} ${promptId}`);
@@ -5028,8 +5077,8 @@ app.post("/api/image/generations", requireAuth, async (req, res) => {
 
     if (joinExistingImageJob(req, res)) return;
     if (isLocalComfyModel(model)) return handleLocalComfyImage(req, res);
-    if (req.body.extend !== undefined) {
-      return res.status(400).json({ error: { code: "400", message: "Extend runs on the local GPU only" } });
+    if (req.body.extend !== undefined || req.body.inpaint !== undefined) {
+      return res.status(400).json({ error: { code: "400", message: "Extend and painting an area run on the local GPU only" } });
     }
 
     const apiKey = req.headers["x-api-key"];

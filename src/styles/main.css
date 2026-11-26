@@ -2146,6 +2146,63 @@ h6.rcf-heading { font-size: 0.75rem; }
     display: none !important;
 }
 
+/* Playground → Edit → 🖌️ Paint an area: the picture with a paint layer over
+   it, sized in JS (_renderPaintStage). Tool buttons styled under the id: see
+   "Things that bite" in STATUS.md. */
+.pg-paint-stage {
+    position: relative;
+    margin: 0 auto 0.5rem;
+    max-width: 100%;
+}
+
+.pg-paint-stage img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.pg-paint-stage canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.55;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+#playground-paint-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    justify-content: center;
+}
+
+#playground-paint-tools button {
+    min-width: 2.3rem;
+    height: 2.3rem;
+    padding: 0 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+}
+
+#playground-paint-tools button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+#playground-paint-tools button:disabled {
+    opacity: 0.4;
+}
+
 /* Playground → Edit → New shot: the pinned source picture */
 .pg-reimagine-source {
     display: flex;

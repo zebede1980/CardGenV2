@@ -1,11 +1,11 @@
 // Image Playground ⤢ Extend (outpainting on the local GPU with MOSS AnyPaint).
 // The real proxy against a fake ComfyUI that records each workflow it is sent,
 // then the real page in headless WebKit. See README.md.
-const http = require("http");
 const os = require("os");
 const path = require("path");
 const { webkit } = require(process.env.PLAYWRIGHT_CORE || "playwright-core");
 const { start, sleep } = require("./stack");
+const { startComfy, PNG_B64 } = require("./fake-comfy");
 
 const repo = path.resolve(__dirname, "..", "..");
 let failed = 0, passed = 0;
@@ -22,51 +22,6 @@ const until = async (fn, { timeout = 15000, step = 50, what = "condition" } = {}
     await sleep(step);
   }
 };
-const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-
-// ── A fake ComfyUI: /system_stats, /upload/image, /prompt, /history, /view ──
-function startComfy() {
-  const state = { prompts: [], uploads: 0, hold: null, failNext: null };
-  state.holdNext = () => {
-    let release;
-    const gate = new Promise((r) => (release = r));
-    state.hold = { gate, release, reached: false };
-    return state.hold;
-  };
-  const done = new Map();
-  const server = http.createServer(async (req, res) => {
-    const json = (status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
-    if (req.headers["x-api-key"] !== "comfy-key") return json(401, {});
-    const chunks = [];
-    for await (const c of req) chunks.push(c);
-    const body = Buffer.concat(chunks);
-    if (req.url === "/system_stats") return json(200, { system: {} });
-    if (req.url === "/upload/image") { state.uploads++; return json(200, { name: `up${state.uploads}.png`, subfolder: "cardgen" }); }
-    if (req.url === "/prompt") {
-      const id = `p${state.prompts.length + 1}`;
-      state.prompts.push({ id, graph: JSON.parse(body.toString()).prompt });
-      const hold = state.hold;
-      state.hold = null;
-      const fail = state.failNext;
-      state.failNext = null;
-      if (hold) { hold.reached = true; hold.gate.then(() => done.set(id, fail)); }
-      else done.set(id, fail);
-      return json(200, { prompt_id: id });
-    }
-    const history = req.url.match(/^\/history\/(.+)$/);
-    if (history) {
-      const id = decodeURIComponent(history[1]);
-      if (!done.has(id)) return json(200, {});
-      const fail = done.get(id);
-      if (fail) return json(200, { [id]: { status: { completed: false, status_str: "error", messages: [["execution_error", { exception_message: fail }]] } } });
-      return json(200, { [id]: { status: { completed: true, status_str: "success" }, outputs: { 56: { images: [{ filename: "out.png", subfolder: "cardgen", type: "output" }] } } } });
-    }
-    if (req.url.startsWith("/view")) { res.writeHead(200, { "Content-Type": "image/png" }); return res.end(Buffer.from(PNG_B64, "base64")); }
-    if (req.url === "/queue" || req.url === "/interrupt") return json(200, {});
-    json(404, {});
-  });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, port: server.address().port, state })));
-}
 
 const node = (graph, type) => Object.values(graph).find((n) => n.class_type === type);
 const preps = (graph) => Object.values(graph).filter((n) => n.class_type === "MOSSAnyPaintPrepare").map((n) => n.inputs);

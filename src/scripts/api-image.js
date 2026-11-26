@@ -510,7 +510,9 @@ Object.assign(APIHandler.prototype, {
   // source as a base64 data URI.
   // captioned: the instruction is already a full caption (Reimagine's written
   // prompt), so a model that needs one doesn't get it rewritten.
-  async editImage({ imageBase64, instruction, model, aspectRatio, captioned = false, clientRef = null, reframe = false, keep = null }) {
+  // inpaintMask: a PNG data URL, white where the picture may change (🖌️ Paint
+  // an area; local models only, the proxy pastes the rest back unchanged).
+  async editImage({ imageBase64, instruction, model, aspectRatio, captioned = false, clientRef = null, reframe = false, keep = null, inpaintMask = null }) {
     if (!imageBase64) throw new Error("An image is required to edit.");
     let trimmedInstruction = (instruction || "").trim();
     if (!trimmedInstruction) throw new Error("An edit instruction is required.");
@@ -546,6 +548,7 @@ Object.assign(APIHandler.prototype, {
     if (keep) data.__keep = keep;
     // Local Qwen edits: draw at aspectRatio rather than the source's shape.
     if (reframe) data.reframe = true;
+    if (inpaintMask) data.inpaint = { mask: inpaintMask };
     const startedAt = performance.now();
     const response = await this.makeRequest("/api/image/generations", data, true);
 

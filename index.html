@@ -24,7 +24,7 @@
                 document.querySelector('meta[name="theme-color"]').content = dark ? "#0d1117" : "#f3f7fb";
             })();
         </script>
-        <link rel="stylesheet" href="src/styles/main.css?v=20261126-editmodes" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261126-paint" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -2646,6 +2646,31 @@
                                 </div>
                                 <p id="pg-edit-mode-note" style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem;"></p>
 
+                                <!-- 🖌️ Paint an area: only the painted part changes. The mask goes
+                                     with the edit and the proxy pastes everything else back
+                                     unchanged (addPaintPasteBack in server.js); local models only.
+                                     See the "Paint an area" section of image-playground.js. -->
+                                <div class="pg-change-only" style="margin-bottom: 0.75rem;">
+                                    <button type="button" id="playground-paint-toggle" class="btn-small" aria-expanded="false">🖌️ Paint an area</button>
+                                    <div id="playground-paint" style="display: none;">
+                                        <p style="font-size: 0.75rem; color: var(--text-soft); margin: 0.5rem 0 0.4rem;">Paint over the part to change. Everything else stays exactly as it is.</p>
+                                        <div id="playground-paint-stage" class="pg-paint-stage">
+                                            <img id="playground-paint-picture" alt="Your picture" draggable="false">
+                                            <canvas id="playground-paint-canvas" aria-label="Paint over the part to change"></canvas>
+                                        </div>
+                                        <div id="playground-paint-tools" role="toolbar" aria-label="Brush">
+                                            <span style="font-size: 0.75rem; color: var(--text-soft);">Brush:</span>
+                                            <button type="button" data-size="s" aria-label="Small brush">S</button>
+                                            <button type="button" data-size="m" aria-label="Medium brush">M</button>
+                                            <button type="button" data-size="l" aria-label="Large brush">L</button>
+                                            <button type="button" id="playground-paint-erase" aria-pressed="false">🧽 Erase</button>
+                                            <button type="button" id="playground-paint-undo">↶ Undo</button>
+                                            <button type="button" id="playground-paint-clear">✕ Clear</button>
+                                        </div>
+                                        <p id="playground-paint-note" style="font-size: 0.72rem; color: var(--text-soft); margin: 0.4rem 0 0;"></p>
+                                    </div>
+                                </div>
+
                                 <div id="playground-reimagine-source" class="pg-reimagine-source pg-newshot-only" style="display: none;">
                                     <img id="playground-reimagine-source-img" alt="New shot source">
                                     <div style="flex: 1; min-width: 0;">
@@ -3057,7 +3082,7 @@
         <script src="src/scripts/character-search.js?v=20261126-persona"></script>
         <script src="src/scripts/prompt-look.js?v=20261018-cardlooks"></script>
         <script src="src/scripts/h3-edit-caption-prompt.js?v=20261113-h3image"></script>
-        <script src="src/scripts/api-image.js?v=20261126-extend"></script>
+        <script src="src/scripts/api-image.js?v=20261126-paint"></script>
         <script src="src/scripts/api-lorebook.js?v=20261119-cast"></script>
         <script src="src/scripts/character-generator.js?v=20261126-persona"></script>
         <script src="src/scripts/image-generator.js?v=20260922-imagefixes"></script>
@@ -3069,7 +3094,7 @@
         <script src="src/scripts/character-display.js?v=20261126-persona"></script>
         <script src="src/scripts/image-handler.js?v=20261120-reopen"></script>
         <script src="src/scripts/image-cropper.js?v=20260922-imagefixes"></script>
-        <script src="src/scripts/image-playground.js?v=20261126-editmodes"></script>
+        <script src="src/scripts/image-playground.js?v=20261126-paint"></script>
         <script src="src/scripts/prompt-builder.js?v=20261125-lib"></script>
         <script src="src/scripts/playground-library.js?v=20261126-extend"></script>
         <script src="src/scripts/lorebook-handler.js?v=20261119-revise"></script>

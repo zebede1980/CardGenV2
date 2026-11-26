@@ -248,11 +248,15 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this._updatePlaygroundEditModelDropdown();
     const editModelSelect = document.getElementById("playground-edit-model");
     if (editModelSelect) {
-      editModelSelect.addEventListener("change", (e) => this.config.set("api.image.editModel", e.target.value));
+      editModelSelect.addEventListener("change", (e) => {
+        this.config.set("api.image.editModel", e.target.value);
+        this._syncPaintControls();
+      });
     }
 
     this._initPlaygroundReimagine();
     this._initPlaygroundEditMode();
+    this._initPlaygroundPaint();
     this._initPlaygroundExtend();
   },
 
@@ -826,6 +830,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (describeBox && !this._pgDescribing && dataUrl !== this._pgDescribedUrl) describeBox.style.display = "none";
     this._syncPlaygroundDescribeButton();
     if (this._pgActiveTab === "extend") this._renderExtendPreview();
+    if (this._paintOpen) this._renderPaintStage();
   },
 
   _playgroundDescriptionShown() {
@@ -945,11 +950,19 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const editModel = document.getElementById("playground-edit-model")?.value
       || this.config.get("api.image.editModel")
       || "flux-2-pro-image-to-image";
+    const inpaintMask = this._paintActive() ? this._paintMaskDataUrl() : null;
+    if (inpaintMask && !isLocalImageModel(editModel)) {
+      this.showNotification("Painting an area works with 💻 local edit models: pick one above", "warning", 6000);
+      return;
+    }
 
     this._rememberPlaygroundPrompt("edit", instruction);
     const actionBtn = document.getElementById("edit-playground-image-btn");
     const statusEl = document.getElementById("playground-edit-status");
-    if (actionBtn) actionBtn.disabled = true;
+    if (actionBtn) {
+      actionBtn.disabled = true;
+      actionBtn.dataset.busy = "1";
+    }
     if (statusEl) {
       statusEl.style.display = "block";
       statusEl.textContent = window.apiHandler.needsEditCaption(editModel)
@@ -961,7 +974,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const imageBase64 = this.playgroundImageUrl;
 
       const resultUrl = await window.apiHandler.editImage({
-        imageBase64, instruction, model: editModel, keep: { tool: "edit", prompt: instruction },
+        imageBase64, instruction, model: editModel, keep: { tool: "edit", prompt: instruction }, inpaintMask,
       });
 
       const dataUrl = await this._urlToDataUrl(resultUrl);
@@ -969,7 +982,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.playgroundImageUrl = dataUrl;
       this.updatePlaygroundImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
-      this._addPlaygroundHistoryEntry(dataUrl, `Edited (${editModel})`, {
+      this._addPlaygroundHistoryEntry(dataUrl, inpaintMask ? `Edited (${editModel}, painted area)` : `Edited (${editModel})`, {
         tool: "edit",
         model: editModel,
         prompt: instruction,
@@ -980,8 +993,12 @@ Object.assign(CharacterGeneratorApp.prototype, {
       console.error("Playground edit error:", error);
       this.showNotification(`Failed: ${error.message}`, "error", 6000);
     } finally {
-      if (actionBtn) actionBtn.disabled = false;
+      if (actionBtn) {
+        actionBtn.disabled = false;
+        delete actionBtn.dataset.busy;
+      }
       if (statusEl) statusEl.style.display = "none";
+      this._syncPaintControls();
     }
   },
 
@@ -1287,6 +1304,218 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (newShot) {
       this._renderReimagineSource();
       this._syncReimagineControls();
+    }
+  },
+
+  // ── Paint an area ──────────────────────────────────────────────────────────
+  // ✏️ Change it with a painted mask: the edit model works on the whole
+  // picture, and the proxy pastes everything outside the paint back unchanged
+  // (addPaintPasteBack in server.js). The paint layer is a canvas over the
+  // picture at its natural size, capped at PAINT_MASK_MAX_SIDE; strokes are
+  // drawn in one colour and the layer shown half see-through, so overlaps
+  // don't darken. The mask survives a result of the same size (try again with
+  // the same area) and is cleared by a picture of a different size.
+
+  _PAINT_MASK_MAX_SIDE: 1536,
+  _PAINT_BRUSH: { s: 0.025, m: 0.05, l: 0.1 },
+  _PAINT_UNDO_MAX: 15,
+
+  _initPlaygroundPaint() {
+    const byId = (id) => document.getElementById(id);
+    this._paintSize = this._paintSize || "m";
+    this._paintErasing = false;
+    byId("playground-paint-toggle")?.addEventListener("click", () => {
+      this._paintOpen = !this._paintOpen;
+      this._renderPaintStage();
+    });
+    document.querySelectorAll("#playground-paint-tools button[data-size]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._paintSize = btn.dataset.size;
+        this._syncPaintControls();
+      });
+    });
+    byId("playground-paint-erase")?.addEventListener("click", () => {
+      this._paintErasing = !this._paintErasing;
+      this._syncPaintControls();
+    });
+    byId("playground-paint-undo")?.addEventListener("click", () => this._paintUndo());
+    byId("playground-paint-clear")?.addEventListener("click", () => {
+      const p = this._paint;
+      if (!p?.painted) return;
+      p.undo.push(p.ctx.getImageData(0, 0, p.width, p.height));
+      p.ctx.clearRect(0, 0, p.width, p.height);
+      this._paintChanged();
+    });
+
+    const canvas = byId("playground-paint-canvas");
+    if (!canvas) return;
+    let last = null;
+    const at = (e) => {
+      const r = canvas.getBoundingClientRect();
+      return { x: ((e.clientX - r.left) * canvas.width) / r.width, y: ((e.clientY - r.top) * canvas.height) / r.height };
+    };
+    const strokeTo = (pt) => {
+      const { ctx } = this._paint;
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(pt.x, pt.y);
+      ctx.stroke();
+      last = pt;
+    };
+    canvas.addEventListener("pointerdown", (e) => {
+      const p = this._paint;
+      if (!p || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* synthetic events */ }
+      p.undo.push(p.ctx.getImageData(0, 0, p.width, p.height));
+      if (p.undo.length > this._PAINT_UNDO_MAX) p.undo.shift();
+      const width = this._PAINT_BRUSH[this._paintSize] * Math.max(p.width, p.height);
+      Object.assign(p.ctx, {
+        globalCompositeOperation: this._paintErasing ? "destination-out" : "source-over",
+        strokeStyle: "#ff2d95", fillStyle: "#ff2d95", lineWidth: width, lineCap: "round", lineJoin: "round",
+      });
+      last = at(e);
+      p.ctx.beginPath();
+      p.ctx.arc(last.x, last.y, width / 2, 0, Math.PI * 2);
+      p.ctx.fill();
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (last && this._paint) strokeTo(at(e));
+    });
+    const end = () => {
+      if (!last) return;
+      last = null;
+      this._paintChanged();
+    };
+    canvas.addEventListener("pointerup", end);
+    canvas.addEventListener("pointercancel", end);
+    window.addEventListener("resize", () => { if (this._paintOpen) this._renderPaintStage(); });
+  },
+
+  // Painting counts only while the paint area is open and something is painted.
+  _paintActive() {
+    return !!(this._paintOpen && this._paint?.painted && this._paint.url === this.playgroundImageUrl);
+  },
+
+  async _renderPaintStage() {
+    const byId = (id) => document.getElementById(id);
+    const wrap = byId("playground-paint");
+    const toggle = byId("playground-paint-toggle");
+    if (!wrap || !toggle) return;
+    wrap.style.display = this._paintOpen ? "" : "none";
+    toggle.textContent = this._paintOpen ? "✕ Stop painting" : "🖌️ Paint an area";
+    toggle.setAttribute("aria-expanded", String(!!this._paintOpen));
+    if (!this._paintOpen) return this._syncPaintControls();
+
+    const url = this.playgroundImageUrl;
+    const stage = byId("playground-paint-stage");
+    const img = byId("playground-paint-picture");
+    const canvas = byId("playground-paint-canvas");
+    if (!url) {
+      stage.style.display = "none";
+      return this._syncPaintControls();
+    }
+    // Shown only once its paint layer fits this picture, so a first stroke
+    // can't land before there's anything to paint on.
+    if (this._paint?.url !== url) {
+      stage.style.display = "none";
+      const size = await this._extendSourceSize(url);
+      if (url !== this.playgroundImageUrl || !size?.w) return;
+      const scale = Math.min(1, this._PAINT_MASK_MAX_SIDE / Math.max(size.w, size.h));
+      const width = Math.round(size.w * scale);
+      const height = Math.round(size.h * scale);
+      const same = this._paint && this._paint.natural.w === size.w && this._paint.natural.h === size.h;
+      if (same) {
+        this._paint.url = url;
+      } else {
+        canvas.width = width;
+        canvas.height = height;
+        this._paint = { url, natural: size, width, height, ctx: canvas.getContext("2d"), undo: [], painted: false };
+      }
+      img.src = url;
+    }
+    stage.style.display = "";
+    // Full width, never taller than about half the screen.
+    const available = wrap.clientWidth || 320;
+    const maxHeight = Math.max(200, window.innerHeight * 0.55);
+    const ratio = this._paint.natural.w / this._paint.natural.h;
+    let w = available;
+    let h = w / ratio;
+    if (h > maxHeight) {
+      h = maxHeight;
+      w = h * ratio;
+    }
+    stage.style.width = `${Math.round(w)}px`;
+    stage.style.height = `${Math.round(h)}px`;
+    this._syncPaintControls();
+  },
+
+  _paintChanged() {
+    const p = this._paint;
+    if (!p) return;
+    const data = p.ctx.getImageData(0, 0, p.width, p.height).data;
+    let painted = false;
+    for (let i = 3; i < data.length; i += 4) if (data[i] > 0) { painted = true; break; }
+    p.painted = painted;
+    this._syncPaintControls();
+  },
+
+  _paintUndo() {
+    const p = this._paint;
+    const snapshot = p?.undo.pop();
+    if (!snapshot) return;
+    p.ctx.putImageData(snapshot, 0, 0);
+    this._paintChanged();
+  },
+
+  // White where painted, black elsewhere, at the paint layer's size.
+  _paintMaskDataUrl() {
+    const p = this._paint;
+    const out = document.createElement("canvas");
+    out.width = p.width;
+    out.height = p.height;
+    const octx = out.getContext("2d");
+    const src = p.ctx.getImageData(0, 0, p.width, p.height).data;
+    const mask = octx.createImageData(p.width, p.height);
+    for (let i = 0; i < src.length; i += 4) {
+      const v = src[i + 3] > 0 ? 255 : 0;
+      mask.data[i] = mask.data[i + 1] = mask.data[i + 2] = v;
+      mask.data[i + 3] = 255;
+    }
+    octx.putImageData(mask, 0, 0);
+    return out.toDataURL("image/png");
+  },
+
+  // Tool buttons, the Edit button's wording, and the local-model rule.
+  _syncPaintControls() {
+    document.querySelectorAll("#playground-paint-tools button[data-size]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.size === this._paintSize);
+    });
+    const erase = document.getElementById("playground-paint-erase");
+    if (erase) {
+      erase.classList.toggle("active", !!this._paintErasing);
+      erase.setAttribute("aria-pressed", String(!!this._paintErasing));
+    }
+    const p = this._paint;
+    const undo = document.getElementById("playground-paint-undo");
+    if (undo) undo.disabled = !p?.undo.length;
+    const clear = document.getElementById("playground-paint-clear");
+    if (clear) clear.disabled = !p?.painted;
+
+    const active = this._paintActive();
+    const model = document.getElementById("playground-edit-model")?.value || "";
+    const localModel = isLocalImageModel(model);
+    const note = document.getElementById("playground-paint-note");
+    if (note) {
+      note.textContent = !this.playgroundImageUrl ? "Upload, paste or generate a picture first."
+        : !localModel ? "⚠️ Painting an area works with 💻 local edit models: pick one under Model."
+        : active ? "Now describe the change below. Only the painted part will change."
+        : "";
+    }
+    const btn = document.getElementById("edit-playground-image-btn");
+    if (btn) {
+      btn.textContent = active ? "✨ Edit the painted area" : "✨ Edit Image";
+      if (!btn.dataset.busy) btn.disabled = active && !localModel;
     }
   },
 

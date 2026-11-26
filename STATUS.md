@@ -1,13 +1,35 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (✨ Edit + Reimagine merged, not deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (🖌️ Paint an area built, not deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## ✨ Playground Edit and Reimagine merged (2026-11-26) — built, **not deployed** (frontend only)
+## 🖌️ Paint an area (2026-11-26) — built, **not deployed** (proxy + frontend)
+
+✨ Edit → ✏️ Change it → **🖌️ Paint an area**: paint over the picture (S / M / L brush, 🧽 Erase, ↶ Undo, ✕ Clear),
+type the change as usual, **✨ Edit the painted area**. Only the painted part changes.
+- **How:** the edit model edits the whole picture as normal, then the proxy pastes it over the original through the
+  mask, grown 12 px and softened (`addPaintPasteBack` in `server.js`: `LoadImageMask` → scaled to the original's own
+  size → `ThresholdMask` → `GrowMask` → `ImageBlur` → `ImageCompositeMasked`). Works on **any local edit model** (Qwen,
+  Lightning, FIBO, Klein, H3, MOSS); a hosted model is refused (the page disables the button and says so). The mask is
+  `inpaint: { mask }` on an ordinary `editImage` request, kept in Recent as an edit.
+- **Page** (`image-playground.js` "Paint an area"): a canvas over the picture at its natural size (capped 1536 px),
+  strokes in one colour shown half see-through; the mask is white where painted. The paint area stays hidden until
+  its layer fits the picture (a first stroke before that was lost). The painted area is kept for a result of the same
+  size (try again) and cleared for a picture of another size.
+- **Why not AnyPaint** (the plan): tested on the PC with a photo of two children. AnyPaint needs the whole finished
+  picture described; with no description it filled a removed girl's place with a balloon, and with a tighter mask
+  (her hand left outside it) it drew **a different, older-looking girl in a crop top and shorts**. Qwen Lightning with
+  a plain instruction removed her cleanly, put a red cap on the boy first time and turned his shirt yellow, ~6 s warm,
+  with **0.00 mean change outside the painted area** at full size.
+- **Tested:** `paint.test.js` (new, 44); edit-modes 25, extend 70, playground 63, runs 79, landing 46, image-jobs 14;
+  3 painted edits on the PC's GPU through the staged proxy. **Not tested:** a real finger on the iPhone, hosted models
+  (not built: the paste-back would have to run in the proxy with sharp).
+
+## ✨ Playground Edit and Reimagine merged (2026-11-26) — deployed 2026-11-26 (`208dde8`, frontend only)
 
 The 🔄 Reimagine tab is gone; ✨ Edit has a two-way switch at the top (`_setPlaygroundEditMode` in
 `image-playground.js`, remembered as `api.image.editMode`):
@@ -64,11 +86,7 @@ Qwen edit can't outpaint). A new ⤢ Extend tab after Reimagine:
 - **Licence note:** AnyPaint LoRA's licence not checked here; MOSS-Image itself is OpenMOSS's.
 
 ## Queue (2026-11-26)
-1. **🖌️ Paint to change** (masked edit) with AnyPaint: paint over an area, redraw only that. AnyPaint does take a mask
-   (SparkleImage's Mark & remove uses it) and keeps everything else. From SparkleImage's tests: great for removing
-   things and replacing whole objects (~3 s); weak on faces and fine detail (it never sees what's under the mask and
-   redraws whole 16 px blocks, ArcFace 0.76 vs Qwen edit's 0.90), so composite by the blocks it redrew. Needs a
-   paint-a-mask control that works with a finger.
+- Empty. Possible: 🖌️ Paint an area on hosted edit models (paste-back in the proxy with sharp).
 
 ## 🎭 Personas (2026-11-26) — deployed 2026-11-26 (`991cce8`, storywriterbackend + proxy + frontend)
 
