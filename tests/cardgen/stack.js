@@ -108,6 +108,7 @@ function replyKind(body) {
   if (/You revise personas for AI roleplay/.test(text)) return "persona-revise";
   if (/You are a persona creator/.test(text)) return "persona";
   if (/Revise the following character according to this request/.test(text)) return "revise";
+  if (/extends a picture outwards/.test(text)) return "extend-describe";
   if (/recreate them from your words alone/.test(text)) return "describe";
   if (/identify and list supporting cast members/.test(text)) return "cast-list";
   if (/Generate the supporting cast member JSON now/.test(text)) return "cast-member";
@@ -162,6 +163,7 @@ const REPLIES = {
   // Messy on purpose: the page's parser folds "Sci Fi" and "ELF", drops the duplicate.
   tags: '["female", "Sci Fi", "ELF", "knight", "dominant", "romance", "nsfw", "female", "lighthouse keeper"]',
   describe: "A 35mm film photo of a lighthouse on a rocky point at dusk, its lamp lit, waves breaking below, warm orange sky fading to blue.",
+  "extend-describe": "A wide 35mm film photo of a lighthouse on a long rocky headland at dusk, its lamp lit, the cliffs and a shingle beach running away on both sides, waves breaking below, warm orange sky fading to blue.",
   other: "A plain reply.",
 };
 

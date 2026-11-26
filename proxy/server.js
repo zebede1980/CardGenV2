@@ -4414,6 +4414,13 @@ const ANYPAINT = {
   // the original is faded back in across the same band.
   seamFeatherPx: 32,
   defaultPrompt: "the same picture continued naturally beyond its original edges, the same scene, medium, style, lighting, perspective and level of detail",
+  // Only with no description (the page's vision call failed or refused). On a
+  // 16:9 picture extended to 1:1 (2026-11-26) the default prompt alone drew a
+  // book-cover title or a grey panel 3 of 3 times; with this negative at CFG 2
+  // still 4 of 8, at twice the GPU time. A description of the finished picture
+  // was clean 8 of 8, so this is a weak safety net, not the fix.
+  fallbackNegative: "text, letters, words, typography, title, caption, logo, watermark, banner, poster, book cover, border, frame, grey panel",
+  fallbackCfg: 2.0,
 };
 
 // Where the picture sits on the extended canvas. `ratio` is the canvas's
@@ -4474,6 +4481,8 @@ function parseExtendRequest(extend) {
 // time was fine in every test, so room on both axes is drawn in two passes,
 // the sides and then the top and bottom, each pass seeing the last one's result.
 function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
+  const described = !!prompt;
+  if (!described) prompt = ANYPAINT.defaultPrompt;
   const sides = layout.left + layout.right > 0;
   const ends = layout.top + layout.bottom > 0;
   const passes = sides && ends
@@ -4492,8 +4501,9 @@ function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
       class_type: "ImageScale",
       inputs: { image: ["6", 0], upscale_method: "lanczos", width: layout.width, height: layout.height, crop: "disabled" },
     },
-    9: { class_type: "CLIPTextEncode", inputs: { clip: ["4", 0], text: "" } },
+    9: { class_type: "CLIPTextEncode", inputs: { clip: ["4", 0], text: described ? "" : ANYPAINT.fallbackNegative } },
   };
+  const cfg = described ? 1.0 : ANYPAINT.fallbackCfg;
   let image = ["17", 0];
   passes.forEach((pad, i) => {
     const base = 100 + i * 10;
@@ -4510,7 +4520,7 @@ function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
       class_type: "KSampler",
       inputs: {
         model: ["3", 0], positive: [encode, 0], negative: ["9", 0], latent_image: [encode, 1],
-        seed: (seed + i) % 2147483647, steps: 8, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
+        seed: (seed + i) % 2147483647, steps: 8, cfg, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
       },
     };
     graph[decode] = { class_type: "VAEDecode", inputs: { samples: [sample, 0], vae: ["5", 0] } };
@@ -4826,9 +4836,9 @@ async function runLocalComfyImage(body) {
     if (typeof body.inpaint.mask !== "string") throw new LocalComfyError(400, "Paint needs the painted mask");
     paintMask = parseImageDataUri(body.inpaint.mask);
   }
-  // Extend works without a description: the model sees the whole picture.
-  const prompt = (body.prompt || "").trim() || (extending ? ANYPAINT.defaultPrompt : "");
-  if (!prompt) throw new LocalComfyError(400, "A prompt is required");
+  // Extend works without a description (buildMossExtendGraph's fallback).
+  const prompt = (body.prompt || "").trim();
+  if (!prompt && !extending) throw new LocalComfyError(400, "A prompt is required");
   // Edit sends one `image`; Combine sends `input_references`, as for nano-gpt.
   const references = Array.isArray(body.input_references) ? body.input_references : body.image ? [body.image] : [];
   // A text-to-image model would silently ignore the source and return an

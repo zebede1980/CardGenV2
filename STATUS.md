@@ -1,11 +1,34 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (🖌️ Paint an area deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (⤢ Extend writes a description of the finished picture first, committed; 🖌️ Paint an area deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
+
+## ⤢ Extend: no more titles and grey banners (2026-11-26) — committed, **not deployed**
+
+Joe extended a 16:9 fantasy picture to 1:1 with all the room below, twice: both came back with a made-up
+book-cover title over a grey band, and with his prompt "Extend the picture itself - do not add any words or
+logos" it lettered **"Extend"**. AnyPaint reads the box as the caption of the whole picture, and at CFG 1
+there is no negative prompt, so "no text" can't work. 44% new, so the page's 60% warning never showed.
+- **Tested on the PC's GPU** (the proxy's real graph builder, Joe's picture cropped back to 1024×576, same seeds):
+  default prompt 3/3 bad; **what ✍️ Describe it wrote (the picture as it stood, "cropped at the thighs") 3/3 bad**;
+  a description of the *finished* taller picture (full length, boots, the path and flowers below) **8/8 clean**;
+  default prompt + a negative against lettering at CFG 2: still 4/8 bad, at twice the GPU time.
+- **Now:** every extend first has the vision model write that description (`describeExtendedPicture` in
+  `api-image.js`, `EXTEND_DESCRIBE_SYSTEM_PROMPT`): it sees the picture plus where the new room is in words
+  (`extendGeometryText`, the same sums as `extendLayout`), and the box ("What should the new part show?") is
+  folded in as scene content. It is told never to name text, logos, frames or edges, even to say they're absent.
+  Streamed and resumable. ✍️ Describe it and the 60% warning are gone.
+- **If the vision model fails or refuses** (`_extendDescriptionOrNothing`) the extend still runs on the proxy's
+  default prompt + the negative at CFG 2 (`ANYPAINT.fallbackNegative`), and the page warns it may have lettering.
+- **Tested:** `extend.test.js` 77 (describe first, geometry + wish sent, fallback on failure and on refusal,
+  page hidden mid-description → one call, one draw); playground 63, runs 79, edit-modes 25, paint 44, image-jobs 14.
+  **Not tested: the real vision model writing the description** (needs a paid call with Joe's key: try it
+  after deploying on the same picture), NSFW pictures (Gemini may refuse → the weak fallback), the iPhone.
+- **Deploy:** proxy (`api-image.js` is a shared script) + frontend.
 
 ## 🖌️ Paint an area (2026-11-26) — deployed 2026-11-26 (`da28c1e`, proxy + frontend)
 

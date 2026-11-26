@@ -1595,8 +1595,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     byId("extend-playground-image-btn")?.addEventListener("click", () => this.handleExtendPlaygroundImage());
-    byId("playground-extend-describe-btn")?.addEventListener("click", () => this.handleDescribeForExtend());
-    byId("playground-extend-prompt")?.addEventListener("input", () => this._renderExtendPreview({ quick: true }));
     window.addEventListener("resize", () => {
       if (this._pgActiveTab === "extend") this._renderExtendPreview({ quick: true });
     });
@@ -1687,17 +1685,10 @@ Object.assign(CharacterGeneratorApp.prototype, {
     const roomX = canvasW / source.w > 1.01;
     const roomY = canvasH / source.h > 1.01;
     this._syncExtendSnap(roomX, roomY);
-    // Tested 2026-11-26: with most of the picture new and no description, the
-    // model tends to invent a poster, a street or lettering; describing the
-    // scene kept it on track.
-    const newShare = 1 - (source.w * source.h) / (canvasW * canvasH);
-    const described = !!document.getElementById("playground-extend-prompt")?.value.trim();
     if (note) {
       note.textContent = !(roomX || roomY)
         ? "Your picture is already this shape: pick another shape or add some room."
-        : newShare > 0.6 && !described
-          ? "⚠️ Most of this will be new. Describe the whole picture below (or ✍️ Describe it), or the model may wander off and invent signs or lettering."
-          : "Drag your picture, tap where it should go, or use the arrows. The checked area is drawn new.";
+        : "Drag your picture, tap where it should go, or use the arrows. The checked area is drawn new.";
     }
     if (btn && !this._extending) btn.disabled = !(roomX || roomY);
   },
@@ -1715,37 +1706,6 @@ Object.assign(CharacterGeneratorApp.prototype, {
     });
   },
 
-  // Fills the box with a description of the working image (the same call as
-  // 🔍 Describe). AnyPaint wants the whole finished picture described.
-  async handleDescribeForExtend() {
-    const source = this.playgroundImageUrl;
-    if (!source) {
-      this.showNotification("Upload, paste or generate an image first", "warning");
-      return;
-    }
-    const box = document.getElementById("playground-extend-prompt");
-    const btn = document.getElementById("playground-extend-describe-btn");
-    const before = box?.value || "";
-    if (btn) btn.disabled = true;
-    try {
-      let streamed = "";
-      const text = await window.apiHandler.describeImageForPrompt(source, {
-        onStream: (chunk) => {
-          streamed += chunk;
-          if (box) box.value = streamed;
-        },
-      });
-      if (box) box.value = text;
-    } catch (error) {
-      if (box) box.value = before;
-      console.error("Extend describe error:", error);
-      this.showNotification(`Couldn't describe the picture: ${error.message}`, "error", 6000);
-    } finally {
-      if (btn) btn.disabled = false;
-      this._renderExtendPreview({ quick: true });
-    }
-  },
-
   async handleExtendPlaygroundImage() {
     const source = this.playgroundImageUrl;
     if (!source) {
@@ -1758,22 +1718,27 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
     const { ratioValue, ratio, room } = this._extendSettings();
-    const prompt = document.getElementById("playground-extend-prompt")?.value?.trim() || "";
+    const wish = document.getElementById("playground-extend-prompt")?.value?.trim() || "";
     const { x, y } = this._extendPos;
+    const extend = { sourceWidth: size.w, sourceHeight: size.h, ratio, x, y, room };
     const btn = document.getElementById("extend-playground-image-btn");
     const statusEl = document.getElementById("playground-extend-status");
     this._extending = true;
     if (btn) btn.disabled = true;
-    if (statusEl) {
+    const status = (text) => {
+      if (!statusEl) return;
       statusEl.style.display = "block";
-      statusEl.textContent = "⤢ Drawing the new edges on your GPU…";
-    }
+      statusEl.textContent = text;
+    };
     try {
+      status("✍️ Describing the finished picture…");
+      const prompt = await window.apiHandler._extendDescriptionOrNothing({ imageBase64: source, extend, wish });
+      status("⤢ Drawing the new edges on your GPU…");
       const resultUrl = await window.apiHandler.extendImage({
         imageBase64: source,
-        extend: { sourceWidth: size.w, sourceHeight: size.h, ratio, x, y, room },
+        extend,
         prompt,
-        keep: { tool: "extend", prompt: prompt || `Extended to ${ratioValue}` },
+        keep: { tool: "extend", prompt: wish || `Extended to ${ratioValue}` },
       });
       const dataUrl = await this._urlToDataUrl(resultUrl);
       this.playgroundImageUrl = dataUrl;
@@ -1782,7 +1747,8 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this._addPlaygroundHistoryEntry(dataUrl, `Extended to ${ratioValue}`, {
         tool: "extend", model: "local/moss-image", prompt, ratio: ratioValue, room, x, y,
       });
-      this.showNotification("Picture extended!", "success");
+      if (prompt) this.showNotification("Picture extended!", "success");
+      else this.showNotification("Extended without a description (the vision model didn't write one), so it may have added lettering. Try again if so.", "warning", 8000);
     } catch (error) {
       console.error("Playground extend error:", error);
       this.showNotification(`Failed: ${error.message}`, "error", 6000);

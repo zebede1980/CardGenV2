@@ -59,10 +59,10 @@ const pads = (graph) => {
   check("an extend succeeds", r.status === 200 && /^data:image\/png/.test(r.json?.data?.[0]?.url || ""), r.text);
   let g = lastGraph();
   let p = pads(g);
-  check("it runs AnyPaint on MOSS Base with both LoRAs, 8 steps, CFG 1",
+  check("it runs AnyPaint on MOSS Base with both LoRAs, 8 steps",
     node(g, "UNETLoader").inputs.unet_name === "moss_image_base_int8_convrot.safetensors"
     && Object.values(g).filter((n) => n.class_type === "LoraLoaderModelOnly").map((n) => n.inputs.lora_name).join() === "moss_anypaint_rank32.safetensors,moss_base_dmd2_8step.safetensors"
-    && !!node(g, "MOSSAnyPaintModelPatch") && node(g, "KSampler").inputs.steps === 8 && node(g, "KSampler").inputs.cfg === 1,
+    && !!node(g, "MOSSAnyPaintModelPatch") && node(g, "KSampler").inputs.steps === 8,
     JSON.stringify(g).slice(0, 400));
   check("the uploaded picture is the one scaled and padded", node(g, "LoadImage").inputs.image === "cardgen/up1.png"
     && node(g, "MOSSAnyPaintPrepare").inputs.source[0] === Object.keys(g).find((k) => g[k].class_type === "ImageScale"));
@@ -72,6 +72,9 @@ const pads = (graph) => {
   check("every size and pad is a multiple of 16", mult16(p), JSON.stringify(p));
   check("the picture keeps its shape", Math.abs(p.w / p.h - 600 / 900) < 0.03, `${p.w}x${p.h}`);
   check("no description → the default carry-on prompt", /continued naturally beyond its original edges/.test(node(g, "MOSSAnyPaintEncode").inputs.prompt));
+  check("…with a negative against lettering, at CFG 2", /typography.*logo.*banner/.test(node(g, "CLIPTextEncode").inputs.text)
+    && g[node(g, "KSampler").inputs.negative[0]] === node(g, "CLIPTextEncode") && node(g, "KSampler").inputs.cfg === 2,
+    JSON.stringify([node(g, "CLIPTextEncode").inputs.text, node(g, "KSampler").inputs.cfg]));
   // The original is pasted back over the result, fading in only along sides that meet new room.
   const paste = node(g, "ImageCompositeMasked").inputs;
   const fade = node(g, "FeatherMask").inputs;
@@ -87,6 +90,7 @@ const pads = (graph) => {
   p = pads(lastGraph());
   check("x = 0 puts the picture at the left edge", p.left === 0 && p.right > 0, JSON.stringify(p));
   check("a description goes to the model as written", node(lastGraph(), "MOSSAnyPaintEncode").inputs.prompt === "a beach at sunset");
+  check("…at CFG 1 with an empty negative", node(lastGraph(), "KSampler").inputs.cfg === 1 && node(lastGraph(), "CLIPTextEncode").inputs.text === "");
 
   await extend({ sourceWidth: 1600, sourceHeight: 900, ratio: 9 / 16, x: 0.5, y: 1, room: 1 });
   p = pads(lastGraph());
@@ -108,6 +112,7 @@ const pads = (graph) => {
     && g[g[56].inputs.images[0]].inputs.destination[0] !== pass2.source[0],
     JSON.stringify(Object.keys(g)));
   check("…with a different seed for each pass", new Set(Object.values(g).filter((n) => n.class_type === "KSampler").map((n) => n.inputs.seed)).size === 2);
+  check("…and the fallback CFG on both", Object.values(g).filter((n) => n.class_type === "KSampler").every((n) => n.inputs.cfg === 2));
   check("…and the picture is about 2/3 of the canvas each way", Math.abs(p.w / p.cw - 2 / 3) < 0.04 && Math.abs(p.h / p.ch - 2 / 3) < 0.04, JSON.stringify(p));
 
   await extend({ sourceWidth: 300, sourceHeight: 300, ratio: 16 / 9, x: 0.5, y: 0.5, room: 1 });
@@ -239,38 +244,31 @@ const pads = (graph) => {
   check("↘ puts it in the bottom right corner", place.right < 1 && place.bottom < 1 && place.left > 20 && place.top > 20, JSON.stringify(place));
   check("the shape and room are remembered", await page.evaluate(() => window.app.config.get("api.image.extendRatio") === "2:3" && window.app.config.get("api.image.extendRoom") === "1.5"));
 
-  // A big extension asks for a description; ✍️ Describe it for me writes one.
-  const note = () => page.textContent("#playground-extend-note");
-  check("a medium extension doesn't nag", !/Most of this will be new/.test(await note()), await note());
+  // The description is written for every extend now, so no button and no nag.
   await page.selectOption("#playground-extend-room", "2");
-  check("a big one with an empty box warns", /Most of this will be new/.test(await note()), await note());
-  await page.fill("#playground-extend-prompt", "a park");
-  check("…not once something is written", !/Most of this will be new/.test(await note()), await note());
-  await page.fill("#playground-extend-prompt", "");
-  const describesBefore = model.count("describe");
-  await page.click("#playground-extend-describe-btn");
-  await page.waitForFunction(() => !document.getElementById("playground-extend-describe-btn").disabled, null, { timeout: 15000 });
-  check("✍️ Describe it for me fills the box from one vision call",
-    (await page.inputValue("#playground-extend-prompt")) === require("./stack").REPLIES.describe && model.count("describe") === describesBefore + 1,
-    await page.inputValue("#playground-extend-prompt"));
-  check("…and the warning goes", !/Most of this will be new/.test(await note()));
-  model.failNext.describe = 500;
-  await page.fill("#playground-extend-prompt", "kept");
-  await page.click("#playground-extend-describe-btn");
-  await page.waitForFunction(() => !document.getElementById("playground-extend-describe-btn").disabled, null, { timeout: 15000 });
-  check("a failed describe puts back what was there", (await page.inputValue("#playground-extend-prompt")) === "kept");
-  await page.fill("#playground-extend-prompt", "");
+  check("no ✍️ Describe it button and no warning for a big extension",
+    !(await page.locator("#playground-extend-describe-btn").count()) && !/Most of this will be new/.test(await page.textContent("#playground-extend-note")));
   await page.selectOption("#playground-extend-room", "1.5");
 
   const sw = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check("no sideways scroll at 390px", sw <= 0, sw);
   await page.locator("#pg-panel-extend").screenshot({ path: path.join(os.tmpdir(), "extend-390.png") });
 
-  // Extend from the page.
+  // Extend from the page: the vision model describes the finished picture
+  // first, then the GPU draws from that description.
+  const { REPLIES } = require("./stack");
+  const lastDescribe = () => model.calls.filter((c) => c.kind === "extend-describe").pop();
+  const userText = (call) => JSON.stringify(call.body.messages[1].content);
   const promptsBefore = comfy.state.prompts.length;
+  const describesBefore = model.count("extend-describe");
+  const describeHold = model.hold("extend-describe", 1);
   const hold = comfy.state.holdNext();
   await page.fill("#playground-extend-prompt", "a lighthouse on the cliff behind");
   await page.click("#extend-playground-image-btn");
+  await until(() => describeHold.reached, { what: "description held" });
+  check("first: the status says it is describing, the button is off", await page.locator("#extend-playground-image-btn").isDisabled()
+    && /Describing the finished picture/.test(await page.textContent("#playground-extend-status")));
+  describeHold.release();
   await until(() => hold.reached, { what: "extend held on the GPU" });
   check("while drawing: the button is off and the status shows", await page.locator("#extend-playground-image-btn").isDisabled()
     && /Drawing the new edges/.test(await page.textContent("#playground-extend-status")));
@@ -278,13 +276,76 @@ const pads = (graph) => {
   await page.waitForFunction(() => !document.getElementById("extend-playground-image-btn").disabled, null, { timeout: 20000 });
   g = lastGraph();
   p = pads(g);
-  check("the page sends one extend with its settings", comfy.state.prompts.length === promptsBefore + 1
+  const call = lastDescribe();
+  check("one vision call, streamed, with the picture", model.count("extend-describe") === describesBefore + 1
+    && call.stream && /image_url/.test(userText(call)));
+  check("…told where the new room is and what the user asked for",
+    /New picture is added above it \(\d+% of the finished picture's height\), to its left \(\d+% of the finished picture's width\)/.test(userText(call))
+    && /What the user wants: a lighthouse on the cliff behind/.test(userText(call)), userText(call).slice(-400));
+  check("the GPU gets the written description, at CFG 1", comfy.state.prompts.length === promptsBefore + 1
     && p.left > 0 && p.top > 0 && p.right === 0 && p.bottom === 0
-    && node(g, "MOSSAnyPaintEncode").inputs.prompt === "a lighthouse on the cliff behind", JSON.stringify(p));
+    && node(g, "MOSSAnyPaintEncode").inputs.prompt === REPLIES["extend-describe"] && node(g, "KSampler").inputs.cfg === 1,
+    JSON.stringify([p, node(g, "MOSSAnyPaintEncode").inputs.prompt]));
   check("the result becomes the working image", await page.evaluate((b64) => window.app.playgroundImageUrl === "data:image/png;base64," + b64, PNG_B64));
   check("…with a history entry", await page.evaluate(() => (window.app.playgroundHistory || []).some((e) => e.label === "Extended to 2:3")));
   const keptFromPage = await until(async () => { const l = await recent(); return l.items[0]?.prompt === "a lighthouse on the cliff behind" && l.items[0]; }, { what: "page extend kept" });
   check("…and it is kept in Recent", keptFromPage.tool === "extend");
+
+  // The click handler reads the picture's size before it disables the button,
+  // so wait for the draw to reach the GPU and then for the button.
+  const extendAndWait = async () => {
+    await setPicture(page);
+    const before = comfy.state.prompts.length;
+    await page.click("#extend-playground-image-btn");
+    await until(() => comfy.state.prompts.length > before, { what: "extend reached the GPU" });
+    await page.waitForFunction(() => !document.getElementById("extend-playground-image-btn").disabled, null, { timeout: 20000 });
+    return comfy.state.prompts.length - before;
+  };
+
+  // Nothing typed: the description is still written.
+  await page.fill("#playground-extend-prompt", "");
+  await extendAndWait();
+  check("an empty box still gets a description, asking to continue the scene",
+    /nothing in particular; continue the scene/.test(userText(lastDescribe()))
+    && node(lastGraph(), "MOSSAnyPaintEncode").inputs.prompt === REPLIES["extend-describe"]);
+
+  // The vision model fails or refuses: the extend still happens, on the proxy's fallback.
+  for (const [what, arrange] of [
+    ["fails", () => { model.failAll["extend-describe"] = 500; }],
+    ["refuses", () => { model.replies["extend-describe"] = "I'm sorry, I can't help with that request."; }],
+  ]) {
+    arrange();
+    const drawn = await extendAndWait();
+    delete model.failAll["extend-describe"];
+    g = lastGraph();
+    check(`the vision model ${what}: extended anyway, on the default prompt at CFG 2`, drawn === 1
+      && /continued naturally/.test(node(g, "MOSSAnyPaintEncode").inputs.prompt) && node(g, "KSampler").inputs.cfg === 2,
+      node(g, "MOSSAnyPaintEncode").inputs.prompt);
+    check(`…and the page says it went without a description`, await page.evaluate(() => document.body.innerText.includes("Extended without a description")));
+  }
+  model.replies["extend-describe"] = REPLIES["extend-describe"];
+
+  // The iPhone case: the page is hidden while the description streams.
+  const setHidden = (hidden) => page.evaluate((h) => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (h ? "hidden" : "visible") });
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+  const hiddenBefore = { describes: model.count("extend-describe"), draws: comfy.state.prompts.length };
+  await setPicture(page);
+  const hiddenHold = model.hold("extend-describe", 1);
+  await page.click("#extend-playground-image-btn");
+  await until(() => hiddenHold.reached, { what: "description held before hiding" });
+  await setHidden(true);
+  hiddenHold.release();
+  await sleep(500);
+  await setHidden(false);
+  await until(() => comfy.state.prompts.length > hiddenBefore.draws, { what: "draw after waking" });
+  await page.waitForFunction(() => !document.getElementById("extend-playground-image-btn").disabled, null, { timeout: 20000 });
+  check("hidden mid-description: one vision call, one draw, from the full description",
+    model.count("extend-describe") === hiddenBefore.describes + 1 && comfy.state.prompts.length === hiddenBefore.draws + 1
+    && node(lastGraph(), "MOSSAnyPaintEncode").inputs.prompt === REPLIES["extend-describe"],
+    JSON.stringify([model.count("extend-describe") - hiddenBefore.describes, comfy.state.prompts.length - hiddenBefore.draws]));
 
   // A failure frees the button and says so.
   await setPicture(page);
