@@ -1520,7 +1520,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
   },
 
   // ── Extend ─────────────────────────────────────────────────────────────────
-  // Outpainting on the local GPU (apiHandler.extendImage → MOSS AnyPaint). The
+  // Outpainting on the local GPU (apiHandler.extendImage → Qwen Lightning). The
   // frame shows the new shape with the working image in it: drag the picture,
   // tap where it should go, or use the 3×3 buttons. The proxy does the exact
   // sizing (extendLayout in server.js); the preview is the same shape maths
@@ -1718,37 +1718,31 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
     const { ratioValue, ratio, room } = this._extendSettings();
-    const wish = document.getElementById("playground-extend-prompt")?.value?.trim() || "";
+    const prompt = document.getElementById("playground-extend-prompt")?.value?.trim() || "";
     const { x, y } = this._extendPos;
-    const extend = { sourceWidth: size.w, sourceHeight: size.h, ratio, x, y, room };
     const btn = document.getElementById("extend-playground-image-btn");
     const statusEl = document.getElementById("playground-extend-status");
     this._extending = true;
     if (btn) btn.disabled = true;
-    const status = (text) => {
-      if (!statusEl) return;
+    if (statusEl) {
       statusEl.style.display = "block";
-      statusEl.textContent = text;
-    };
+      statusEl.textContent = "⤢ Drawing the new edges on your GPU…";
+    }
     try {
-      status("✍️ Describing the finished picture…");
-      const prompt = await window.apiHandler._extendDescriptionOrNothing({ imageBase64: source, extend, wish });
-      status("⤢ Drawing the new edges on your GPU…");
       const resultUrl = await window.apiHandler.extendImage({
         imageBase64: source,
-        extend,
+        extend: { sourceWidth: size.w, sourceHeight: size.h, ratio, x, y, room },
         prompt,
-        keep: { tool: "extend", prompt: wish || `Extended to ${ratioValue}` },
+        keep: { tool: "extend", prompt: prompt || `Extended to ${ratioValue}` },
       });
       const dataUrl = await this._urlToDataUrl(resultUrl);
       this.playgroundImageUrl = dataUrl;
       this.updatePlaygroundImagePreview(dataUrl);
       if (typeof this.updateCropButtonVisibility === "function") this.updateCropButtonVisibility();
       this._addPlaygroundHistoryEntry(dataUrl, `Extended to ${ratioValue}`, {
-        tool: "extend", model: "local/moss-image", prompt, ratio: ratioValue, room, x, y,
+        tool: "extend", model: "local/qwen-image-2.1-lightning", prompt, ratio: ratioValue, room, x, y,
       });
-      if (prompt) this.showNotification("Picture extended!", "success");
-      else this.showNotification("Extended without a description (the vision model didn't write one), so it may have added lettering. Try again if so.", "warning", 8000);
+      this.showNotification("Picture extended!", "success");
     } catch (error) {
       console.error("Playground extend error:", error);
       this.showNotification(`Failed: ${error.message}`, "error", 6000);

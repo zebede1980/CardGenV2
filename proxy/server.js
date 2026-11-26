@@ -3834,6 +3834,8 @@ const LOCAL_COMFY_MODELS = {
     maxReferences: 3,
     buildGraph: buildQwenLightningGraph,
     buildReimagineGraph: buildQwenLightningReimagineGraph,
+    // ⤢ Extend: the picture on a green canvas, as an edit (see QWEN_EXTEND).
+    buildExtendGraph: buildQwenExtendGraph,
   },
   "local/z-image-turbo": {
     name: "Z-Image-Turbo",
@@ -3861,8 +3863,6 @@ const LOCAL_COMFY_MODELS = {
     editSteps: { default: 30, min: 12, max: 50 },
     maxReferences: 1,
     buildGraph: buildMossGraph,
-    // ⤢ Extend goes to AnyPaint on MOSS Base (see ANYPAINT).
-    buildExtendGraph: buildMossExtendGraph,
   },
   // One entry, two checkpoints: Dev draws from a prompt, Edit Turbo (distilled
   // for editing only) does every edit, in 4 steps. Single-picture edits were
@@ -4393,41 +4393,40 @@ function buildMossGraph({ prompt, seed, steps, width, height, sourceImages }) {
   };
 }
 
-// ⤢ Extend (outpainting): MOSS AnyPaint, the inpainting LoRA on MOSS-Image
-// *Base* (not the SFT model above) with a DMD2 8-step LoRA, from the node pack's
-// (alexw5702-afk/moss-anypaint) shipped API graph. Its validated settings only:
-// 8 steps, CFG 1, euler/simple, both LoRAs at 1.0. The prepare node pads the
-// picture and generates the padding; no mask is needed for that. The prompt
-// describes the whole finished picture, not a change.
-// Tested in SparkleImage (2026-11-17): seamless outpainting, ~3 s warm at 1.1 MP.
-const ANYPAINT = {
-  unet: "moss_image_base_int8_convrot.safetensors",
-  anypaintLora: "moss_anypaint_rank32.safetensors",
-  // lodestones/MOSS-Image-Base-8-steps-dmd's lora_dmd2.safetensors, renamed on the PC.
-  dmd2Lora: "moss_base_dmd2_8step.safetensors",
-  // Canvas size. Small pictures are brought up to the minimum, since MOSS
-  // draws poorly below ~1 MP; big ones come down to the maximum.
+// ⤢ Extend (outpainting) as an ordinary edit, the way ComfyUI's own "any
+// aspect ratio" templates do it (Klein 9B image extend, Nano Banana Pro
+// outpaint): the picture sits on the larger canvas, the empty room is solid
+// green, the edit model is asked to fill the green, and the original is
+// pasted back over the result, fading in along the sides that meet new room.
+// Tested on the PC (2026-11-26), Qwen-Image 2.1 Lightning, ~4 s warm:
+//  - a 16:9 fantasy picture to 1:1 with all the room below: 8 of 8 seeds clean
+//    (legs, boots, path, flowers). MOSS AnyPaint, the model used before, drew
+//    a book-cover title or a grey panel 3 of 3 times there with no description,
+//    and needed a vision-written description of the finished picture to behave;
+//  - the same picture with room on all four sides, in one pass: 4 of 4 clean
+//    (AnyPaint drew a frame round the picture unless it went in two passes);
+//  - a 2:3 crop widened to 3:2: 4 of 4 with no lettering, the scene carried on.
+// "Remove the green part" (the Klein template's wording) left a flat grey slab
+// once in 8; asking to replace it with more of the scene didn't.
+// The overall colour shift was 1-7 of 255, which the fade hides, so no colour
+// match node (the templates use KJNodes' ColorMatch; nothing here needs a
+// custom node).
+const QWEN_EXTEND = {
+  prompt: "Replace the green area with more of the same scene, continuing the picture naturally so it becomes one seamless picture.",
+  // Canvas size. Qwen draws at the reference's own size (resolution 0), which
+  // must be a multiple of 32.
   minMegapixels: 1.0,
   maxMegapixels: 1.5,
+  snap: 32,
   maxRoom: 2,
-  // The model redraws this much of the original along each seam (boundary_redraw_px);
-  // the original is faded back in across the same band.
   seamFeatherPx: 32,
-  defaultPrompt: "the same picture continued naturally beyond its original edges, the same scene, medium, style, lighting, perspective and level of detail",
-  // Only with no description (the page's vision call failed or refused). On a
-  // 16:9 picture extended to 1:1 (2026-11-26) the default prompt alone drew a
-  // book-cover title or a grey panel 3 of 3 times; with this negative at CFG 2
-  // still 4 of 8, at twice the GPU time. A description of the finished picture
-  // was clean 8 of 8, so this is a weak safety net, not the fix.
-  fallbackNegative: "text, letters, words, typography, title, caption, logo, watermark, banner, poster, book cover, border, frame, grey panel",
-  fallbackCfg: 2.0,
+  fill: 0x00ff00,
 };
 
 // Where the picture sits on the extended canvas. `ratio` is the canvas's
 // width / height, `x` and `y` (0..1) place the picture in the free space
 // (0 = left / top edge), and `room` (1..2) widens the canvas in both
-// directions beyond just fitting the shape. Everything is a multiple of 16,
-// as the prepare node needs.
+// directions beyond just fitting the shape. Every size is a multiple of 32.
 function extendLayout({ sourceWidth, sourceHeight, ratio, x, y, room }) {
   let canvasW = sourceWidth;
   let canvasH = sourceHeight;
@@ -4438,17 +4437,18 @@ function extendLayout({ sourceWidth, sourceHeight, ratio, x, y, room }) {
 
   const MP = 1024 * 1024;
   const area = canvasW * canvasH;
-  const target = Math.min(Math.max(area, ANYPAINT.minMegapixels * MP), ANYPAINT.maxMegapixels * MP);
+  const target = Math.min(Math.max(area, QWEN_EXTEND.minMegapixels * MP), QWEN_EXTEND.maxMegapixels * MP);
   const scale = Math.sqrt(target / area);
-  const snap = (n) => Math.max(16, Math.round(n / 16) * 16);
+  const step = QWEN_EXTEND.snap;
+  const snap = (n) => Math.max(step, Math.round(n / step) * step);
   const width = snap(sourceWidth * scale);
   const height = snap(sourceHeight * scale);
   const canvasWidth = Math.max(width, snap(canvasW * scale));
   const canvasHeight = Math.max(height, snap(canvasH * scale));
   const freeX = canvasWidth - width;
   const freeY = canvasHeight - height;
-  const left = Math.round((freeX * x) / 16) * 16;
-  const top = Math.round((freeY * y) / 16) * 16;
+  const left = Math.round((freeX * x) / step) * step;
+  const top = Math.round((freeY * y) / step) * step;
   return { width, height, left, right: freeX - left, top, bottom: freeY - top, canvasWidth, canvasHeight };
 }
 
@@ -4466,7 +4466,7 @@ function parseExtendRequest(extend) {
   }
   if (!(ratio >= 0.25 && ratio <= 4)) throw new LocalComfyError(400, "Extend's shape must be between 1:4 and 4:1");
   if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) throw new LocalComfyError(400, "Extend's position must be between 0 and 1");
-  if (!(room >= 1 && room <= ANYPAINT.maxRoom)) throw new LocalComfyError(400, `Extend's extra room must be between 1 and ${ANYPAINT.maxRoom}`);
+  if (!(room >= 1 && room <= QWEN_EXTEND.maxRoom)) throw new LocalComfyError(400, `Extend's extra room must be between 1 and ${QWEN_EXTEND.maxRoom}`);
   const layout = extendLayout({ sourceWidth, sourceHeight, ratio, x, y, room });
   if (layout.canvasWidth === layout.width && layout.canvasHeight === layout.height) {
     throw new LocalComfyError(400, "The picture is already that shape: pick another shape or add some room");
@@ -4474,76 +4474,41 @@ function parseExtendRequest(extend) {
   return layout;
 }
 
-// Room on all four sides in one pass draws a frame round the picture: a
-// poster border, a darkened vignette or a ghosted copy, with made-up lettering
-// (tested 2026-11-26, 5 of 5 with the default prompt and with "a wide shot
-// photograph"; only a full description of the scene avoided it). One axis at a
-// time was fine in every test, so room on both axes is drawn in two passes,
-// the sides and then the top and bottom, each pass seeing the last one's result.
-function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
-  const described = !!prompt;
-  if (!described) prompt = ANYPAINT.defaultPrompt;
-  const sides = layout.left + layout.right > 0;
-  const ends = layout.top + layout.bottom > 0;
-  const passes = sides && ends
-    ? [{ left: layout.left, right: layout.right, top: 0, bottom: 0 }, { left: 0, right: 0, top: layout.top, bottom: layout.bottom }]
-    : [{ left: layout.left, right: layout.right, top: layout.top, bottom: layout.bottom }];
-  const graph = {
-    1: { class_type: "UNETLoader", inputs: { unet_name: ANYPAINT.unet, weight_dtype: "default" } },
-    2: { class_type: "LoraLoaderModelOnly", inputs: { model: ["1", 0], lora_name: ANYPAINT.anypaintLora, strength_model: 1.0 } },
-    15: { class_type: "LoraLoaderModelOnly", inputs: { model: ["2", 0], lora_name: ANYPAINT.dmd2Lora, strength_model: 1.0 } },
-    3: { class_type: "MOSSAnyPaintModelPatch", inputs: { model: ["15", 0], kv_cache: true } },
-    4: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3.5_9b_int8_convrot.safetensors", type: "moss_image", device: "default" } },
-    5: { class_type: "VAELoader", inputs: { vae_name: "flux2-vae_small.safetensors" } },
-    6: { class_type: "LoadImage", inputs: { image: sourceImage } },
-    // The picture at its place on the canvas, at a multiple of 16.
+// `prompt` is what the user typed for the new area, or "".
+function buildQwenExtendGraph({ prompt, seed, sourceImage, layout }) {
+  const wish = (prompt || "").trim();
+  const instruction = wish ? `${QWEN_EXTEND.prompt} In the new area: ${/[.!?]$/.test(wish) ? wish : `${wish}.`}` : QWEN_EXTEND.prompt;
+  const graph = buildQwenLightningGraph({ prompt: instruction, seed, steps: 4, sourceImage, sourceImages: [sourceImage] });
+  // The edit's own resize nodes (79, 77) are replaced by the green canvas,
+  // already a multiple of 32, which the encoder takes as it is.
+  delete graph[79];
+  delete graph[77];
+  Object.assign(graph, {
     17: {
       class_type: "ImageScale",
-      inputs: { image: ["6", 0], upscale_method: "lanczos", width: layout.width, height: layout.height, crop: "disabled" },
+      inputs: { image: ["78", 0], upscale_method: "lanczos", width: layout.width, height: layout.height, crop: "disabled" },
     },
-    9: { class_type: "CLIPTextEncode", inputs: { clip: ["4", 0], text: described ? "" : ANYPAINT.fallbackNegative } },
-  };
-  const cfg = described ? 1.0 : ANYPAINT.fallbackCfg;
-  let image = ["17", 0];
-  passes.forEach((pad, i) => {
-    const base = 100 + i * 10;
-    const [prep, encode, sample, decode] = [base, base + 1, base + 2, base + 3].map(String);
-    graph[prep] = {
-      class_type: "MOSSAnyPaintPrepare",
-      inputs: { source: image, ...pad, reference_max_edge: 384, boundary_redraw_px: 32 },
-    };
-    graph[encode] = {
-      class_type: "MOSSAnyPaintEncode",
-      inputs: { clip: ["4", 0], vae: ["5", 0], semantic_reference: [prep, 0], known_image: [prep, 1], keep_mask: [prep, 3], prompt },
-    };
-    graph[sample] = {
-      class_type: "KSampler",
-      inputs: {
-        model: ["3", 0], positive: [encode, 0], negative: ["9", 0], latent_image: [encode, 1],
-        seed: (seed + i) % 2147483647, steps: 8, cfg, sampler_name: "euler", scheduler: "simple", denoise: 1.0,
-      },
-    };
-    graph[decode] = { class_type: "VAEDecode", inputs: { samples: [sample, 0], vae: ["5", 0] } };
-    image = [decode, 0];
+    18: { class_type: "EmptyImage", inputs: { width: layout.canvasWidth, height: layout.canvasHeight, batch_size: 1, color: QWEN_EXTEND.fill } },
+    19: { class_type: "ImageCompositeMasked", inputs: { destination: ["18", 0], source: ["17", 0], x: layout.left, y: layout.top, resize_source: false } },
   });
-  // AnyPaint redraws the whole canvas, steering the original part back towards
-  // what was there rather than keeping it: colours shifted and faces changed
-  // (tested 2026-11-26, up to 6% of the original's pixels well off, and a face
-  // near the seam became another person). So the original is pasted back over
-  // the result. Only along a side that meets new room is the model's own
-  // redraw kept, fading into the original across the band it was told to
-  // redraw, so the join doesn't show.
-  const feather = (pad) => (pad > 0 ? ANYPAINT.seamFeatherPx : 0);
-  graph[200] = { class_type: "SolidMask", inputs: { value: 1.0, width: layout.width, height: layout.height } };
-  graph[201] = {
-    class_type: "FeatherMask",
-    inputs: { mask: ["200", 0], left: feather(layout.left), top: feather(layout.top), right: feather(layout.right), bottom: feather(layout.bottom) },
-  };
-  graph[202] = {
-    class_type: "ImageCompositeMasked",
-    inputs: { destination: image, source: ["17", 0], x: layout.left, y: layout.top, resize_source: false, mask: ["201", 0] },
-  };
-  graph[LOCAL_COMFY_OUTPUT_NODE] = { class_type: "SaveImage", inputs: { images: ["202", 0], filename_prefix: "cardgen/extend" } };
+  graph[64].inputs["images.image_1"] = ["19", 0];
+  graph[76].inputs.image = ["19", 0];
+  // The original pasted back unchanged, fading in only along a side that meets
+  // new room, so the join doesn't show.
+  const feather = (pad) => (pad > 0 ? QWEN_EXTEND.seamFeatherPx : 0);
+  Object.assign(graph, {
+    200: { class_type: "SolidMask", inputs: { value: 1.0, width: layout.width, height: layout.height } },
+    201: {
+      class_type: "FeatherMask",
+      inputs: { mask: ["200", 0], left: feather(layout.left), top: feather(layout.top), right: feather(layout.right), bottom: feather(layout.bottom) },
+    },
+    202: {
+      class_type: "ImageCompositeMasked",
+      inputs: { destination: ["8", 0], source: ["17", 0], x: layout.left, y: layout.top, resize_source: false, mask: ["201", 0] },
+    },
+  });
+  graph[LOCAL_COMFY_OUTPUT_NODE].inputs.images = ["202", 0];
+  graph[LOCAL_COMFY_OUTPUT_NODE].inputs.filename_prefix = "cardgen/extend";
   return graph;
 }
 
@@ -4836,7 +4801,7 @@ async function runLocalComfyImage(body) {
     if (typeof body.inpaint.mask !== "string") throw new LocalComfyError(400, "Paint needs the painted mask");
     paintMask = parseImageDataUri(body.inpaint.mask);
   }
-  // Extend works without a description (buildMossExtendGraph's fallback).
+  // Extend works without a description (buildQwenExtendGraph's own prompt).
   const prompt = (body.prompt || "").trim();
   if (!prompt && !extending) throw new LocalComfyError(400, "A prompt is required");
   // Edit sends one `image`; Combine sends `input_references`, as for nano-gpt.

@@ -1,33 +1,48 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (⤢ Extend writes a description of the finished picture first, committed; 🖌️ Paint an area deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (⤢ Extend rebuilt on Qwen Lightning with a green canvas, committed; 🖌️ Paint an area deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## ⤢ Extend: no more titles and grey banners (2026-11-26) — committed, **not deployed**
+## ⤢ Extend rebuilt on Qwen Lightning: green canvas, as an edit (2026-11-26) — committed, **not deployed**
 
-Joe extended a 16:9 fantasy picture to 1:1 with all the room below, twice: both came back with a made-up
-book-cover title over a grey band, and with his prompt "Extend the picture itself - do not add any words or
-logos" it lettered **"Extend"**. AnyPaint reads the box as the caption of the whole picture, and at CFG 1
-there is no negative prompt, so "no text" can't work. 44% new, so the page's 60% warning never showed.
-- **Tested on the PC's GPU** (the proxy's real graph builder, Joe's picture cropped back to 1024×576, same seeds):
-  default prompt 3/3 bad; **what ✍️ Describe it wrote (the picture as it stood, "cropped at the thighs") 3/3 bad**;
-  a description of the *finished* taller picture (full length, boots, the path and flowers below) **8/8 clean**;
-  default prompt + a negative against lettering at CFG 2: still 4/8 bad, at twice the GPU time.
-- **Now:** every extend first has the vision model write that description (`describeExtendedPicture` in
-  `api-image.js`, `EXTEND_DESCRIBE_SYSTEM_PROMPT`): it sees the picture plus where the new room is in words
-  (`extendGeometryText`, the same sums as `extendLayout`), and the box ("What should the new part show?") is
-  folded in as scene content. It is told never to name text, logos, frames or edges, even to say they're absent.
-  Streamed and resumable. ✍️ Describe it and the 60% warning are gone.
-- **If the vision model fails or refuses** (`_extendDescriptionOrNothing`) the extend still runs on the proxy's
-  default prompt + the negative at CFG 2 (`ANYPAINT.fallbackNegative`), and the page warns it may have lettering.
-- **Tested:** `extend.test.js` 77 (describe first, geometry + wish sent, fallback on failure and on refusal,
-  page hidden mid-description → one call, one draw); playground 63, runs 79, edit-modes 25, paint 44, image-jobs 14.
-  **Not tested: the real vision model writing the description** (needs a paid call with Joe's key: try it
-  after deploying on the same picture), NSFW pictures (Gemini may refuse → the weak fallback), the iPhone.
+Joe extended a 16:9 fantasy picture to 1:1 with all the room below, twice, on MOSS AnyPaint: both came back with a
+made-up book-cover title over a grey band, and with "Extend the picture itself - do not add any words or logos" in
+the box it lettered **"Extend"**. AnyPaint reads its prompt as the caption of the whole finished picture, and at
+CFG 1 there is no negative prompt.
+- **The idea came from ComfyUI's own "any aspect ratio" templates** (Klein 9B image extend, Nano Banana Pro/2
+  outpaint, Joe spotted one on Comfy's home screen): the picture on the bigger canvas, the empty room **solid
+  green**, an ordinary **edit** model asked to fill the green, the original pasted back.
+- **Tested on the PC's GPU (Joe's picture, same seeds):**
+  - AnyPaint, default prompt: 3/3 title or grey panel. AnyPaint + the ✍️ Describe-it text (the picture as it
+    stood): 3/3 bad. AnyPaint + a hand-written description of the *finished* picture: 8/8 clean. AnyPaint + a
+    negative against lettering at CFG 2: 4/8 bad.
+  - **Qwen Lightning, green canvas, "Replace the green area with more of the same scene, continuing the picture
+    naturally so it becomes one seamless picture.": 8/8 clean, ~4 s warm, no description, no vision call.**
+    "Remove the green part" (the Klein template's wording): 7/8 (one flat grey slab).
+  - All four sides at once (room 1.5): 12 of 13 clean, in one pass (AnyPaint needed two and still drew frames).
+    The bad one: her head redrawn a little higher above the top seam, so a ghost head showed over the pasted
+    original; a re-run fixes it. Same risk as before for anyone cut off by the picture's edge.
+  - A 2:3 crop of Joe's spider picture widened to 3:2: 4/4 no lettering (2 added skulls to the forest floor);
+    with "the spider legs carry on out to their full length" typed, the legs did. 3:2 → 2:3: clean.
+  - Overall colour shift 1–7 of 255, hidden by the 32 px fade, so no ColorMatch (the templates use KJNodes';
+    the proxy still needs no custom node).
+- **Now** (`QWEN_EXTEND`, `extendLayout`, `buildQwenExtendGraph` in `server.js`; `extendImage` in `api-image.js`):
+  Extend is `local/qwen-image-2.1-lightning`'s `buildExtendGraph`, whatever is in the user's model list. The
+  base Lightning edit graph with its resize nodes swapped for `ImageScale` → `EmptyImage` (green, the canvas)
+  → `ImageCompositeMasked`, taken by the encoder at its own size (canvas 1–1.5 MP, **multiples of 32**: Qwen
+  rounds to 32, so 16 made the paste-back stretch); then the original pasted back (`SolidMask` → `FeatherMask`
+  32 px on sides that meet new room → `ImageCompositeMasked`). One pass for any layout. The box ("What should
+  the new part show?") is added as "In the new area: …". MOSS no longer extends; `ANYPAINT` and the
+  describe-first step committed earlier the same day (`7d833da`, never deployed) are gone.
+- **Tested:** `extend.test.js` 65 (graph shape, green canvas fed to the encoder, layouts, paste-back and fade,
+  typed text, refusals incl. MOSS, Recent, page flow with no text-model call, tab closed mid-draw); playground 63,
+  runs 79, edit-modes 25, paint 44, image-jobs 14; the proxy's real builder on the PC's ComfyUI (down, four sides,
+  3:2 → 2:3, Joe's own wording). **Not tested:** through the deployed proxy, NSFW pictures, a picture that is
+  mostly green itself (the templates say to change the fill colour then), the iPhone.
 - **Deploy:** proxy (`api-image.js` is a shared script) + frontend.
 
 ## 🖌️ Paint an area (2026-11-26) — deployed 2026-11-26 (`da28c1e`, proxy + frontend)
@@ -70,7 +85,7 @@ The 🔄 Reimagine tab is gone; ✨ Edit has a two-way switch at the top (`_setP
 - **Tested:** `edit-modes.test.js` (new, 25: WebKit 390 / 320 dark); playground 63, extend 70, lightbox 28. **Not
   tested:** the iPhone, a real model.
 
-## ⤢ Playground Extend (2026-11-26) — deployed 2026-11-26 (`63fdc52`, then the paste-back in `a5e4032`, proxy + frontend); **confirmed by Joe in the app: works well**
+## ⤢ Playground Extend (2026-11-26) — **replaced by the Qwen version above**; this AnyPaint version deployed 2026-11-26 (`63fdc52`, then the paste-back in `a5e4032`, proxy + frontend); **confirmed by Joe in the app: works well**
 
 Outpainting, local GPU only (Joe's choice), with **MOSS AnyPaint**: the inpainting LoRA on MOSS-Image *Base* plus
 a DMD2 8-step LoRA, already on the PC for SparkleImage (its 2026-11-17 evaluation: seamless outpainting, ~3 s warm;

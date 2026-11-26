@@ -33,40 +33,6 @@ Keep every explicit edit, constraint, count, position, style cue and piece of wo
 
 Output only the instruction.`;
 
-// ⤢ Extend's caption writer. See describeExtendedPicture.
-const EXTEND_DESCRIBE_SYSTEM_PROMPT = `You write the caption for an image model that extends a picture outwards. The model gets the user's picture placed on a larger canvas and paints the whole larger picture from your caption alone, keeping the user's picture where it is. A caption of the picture as it looks now, or an instruction, makes it fill the new space with posters, lettering or blank panels. So describe the finished, larger picture as if it were a single photo or artwork that already exists.
-
-Write ONE paragraph of 80 to 160 words, in this order:
-1. The medium and the framing of the finished picture in one opening sentence, for example "A full-length digital fantasy illustration of…" or "A wide-angle landscape photograph of…". The framing must suit the larger picture: room added below a person cut off at the thighs means they are now seen down to their feet; room added at the sides means a wider view.
-2. The main subject(s), briefly: who or what they are, their clothing, pose and expression.
-3. What fills the newly added parts, concretely, as a natural continuation of what is at that edge: the rest of a body, the ground or floor, more of the room, sky, landscape or crowd. Name them as things in the scene, never as "the extension" or "the new area".
-4. The rest of the setting, the lighting, the colour palette and the exact art style or photographic look, matching the user's picture.
-If the user asks for something particular in the new space, make it part of the scene. If they ask for something to be left out, simply don't describe it.
-
-Never mention text, words, letters, titles, logos, signs, watermarks, borders, frames, panels, edges, extending or outpainting, not even to say they are absent. Describe only what can be seen, plainly and factually, including any nudity. No character names, headings, lists or quotation marks, no preamble.`;
-
-// Where the new room goes, in words, from Extend's settings (the same sums as
-// extendLayout in server.js, before its rounding to 16 px).
-function extendGeometryText({ sourceWidth, sourceHeight, ratio, x = 0.5, y = 0.5, room = 1 }) {
-  let w = sourceWidth;
-  let h = sourceHeight;
-  if (ratio > w / h) w = h * ratio;
-  else h = w / ratio;
-  w *= room;
-  h *= room;
-  const freeX = w - sourceWidth;
-  const freeY = h - sourceHeight;
-  const pct = (n, of) => Math.round((100 * n) / of);
-  const added = [
-    ["above it", freeY * y, h, "height"],
-    ["below it", freeY * (1 - y), h, "height"],
-    ["to its left", freeX * x, w, "width"],
-    ["to its right", freeX * (1 - x), w, "width"],
-  ].filter(([, n, of]) => pct(n, of) >= 2).map(([where, n, of, dim]) => `${where} (${pct(n, of)}% of the finished picture's ${dim})`);
-  const shape = Math.abs(w / h - 1) < 0.03 ? "square" : w > h ? "landscape" : "portrait";
-  return `The finished picture is ${shape}, ${(w / h).toFixed(2)}:1 width to height. The user's picture fills ${pct(sourceWidth, w)}% of its width and ${pct(sourceHeight, h)}% of its height. New picture is added ${added.join(", ") || "around it"}.`;
-}
-
 // A refusal instead of an edit caption: an apology or "I can't…" opening, or a
 // short reply that mentions a policy. A real caption is 50–150 words of
 // instruction ("Change the…", "Create a photograph of…").
@@ -831,76 +797,15 @@ Describe only what can be seen. No character names, no headings, lists or quotat
     return resultUrl;
   },
 
-  // AnyPaint draws the whole extended canvas from one caption, which must
-  // describe the FINISHED picture. Tested 2026-11-26 on a 16:9 fantasy
-  // illustration extended to 1:1 with all the room below, 3 seeds each:
-  //  - the default "carry on" prompt drew a book-cover title or a grey panel, 3/3;
-  //  - 🔍 Describe's description of the picture as it stood ("cropped at the
-  //    thighs") failed the same way, 3/3;
-  //  - a typed instruction was lettered onto the picture ("Extend");
-  //  - a description of the finished, taller picture (full length, the path
-  //    and flowers below her) came out clean, 8/8.
-  // So the vision model writes that description, given the picture and where
-  // the new room is, with whatever the user typed folded in as content.
-  async describeExtendedPicture({ imageBase64, extend, wish = "", onStream = null }) {
-    const model = this.config.get("api.text.visionModel") || this.config.get("api.text.model");
-    if (!model) throw new Error("No vision model or text model configured to describe the extended picture");
-    const request = (wish || "").trim();
-    const data = {
-      model,
-      messages: [
-        { role: "system", content: EXTEND_DESCRIBE_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            { type: "image_url", image_url: { url: imageBase64 } },
-            {
-              type: "text",
-              text: `${extendGeometryText(extend)}\n`
-                + `What the user wants: ${request || "nothing in particular; continue the scene naturally."}\n`
-                + "Write the caption of the finished picture.",
-            },
-          ],
-        },
-      ],
-      temperature: 0.3,
-      max_tokens: 2048,
-    };
-    const raw = await this.streamedText(data, "Extend description", { onStream, warnOnTruncation: false });
-    const text = this._visionTextOrThrow(this._cleanWrittenPrompt(raw), "Extend description");
-    console.log("Extend description:", text);
-    return text;
-  },
-
-  // The description, or "" when the vision model refuses or fails: the proxy
-  // then uses its own prompt with a negative against lettering, which still
-  // drew lettering half the time in the same test. A ■ Stop still stops.
-  async _extendDescriptionOrNothing(args) {
-    const stopSerial = this.stopSerial;
-    let text = "";
-    try {
-      text = await this.describeExtendedPicture(args);
-    } catch (error) {
-      if (this.stopSerial !== stopSerial) throw error;
-      console.warn("Extend description failed, extending without one:", error.message);
-      return "";
-    }
-    if (this.stopSerial !== stopSerial) throw new Error("Generation stopped by user.");
-    if (looksLikeRefusal(text)) {
-      console.warn("Vision model refused the extend description, extending without one:", text);
-      return "";
-    }
-    return text;
-  },
-
-  // ⤢ Extend (outpainting) on the local GPU: MOSS AnyPaint, whatever the user's
-  // model list holds. `extend` is { sourceWidth, sourceHeight, ratio, x, y, room }:
-  // the proxy works out the canvas from it (extendLayout in server.js).
-  // `prompt` is the finished picture's description (describeExtendedPicture);
-  // empty, the proxy uses its own.
+  // ⤢ Extend (outpainting) on the local GPU: the picture on a green canvas,
+  // filled in by Qwen-Image 2.1 Lightning as an edit (buildQwenExtendGraph in
+  // server.js), whatever the user's model list holds. `extend` is
+  // { sourceWidth, sourceHeight, ratio, x, y, room }: the proxy works out the
+  // canvas from it (extendLayout). `prompt` is optional: what the new part
+  // should show, added to the proxy's own instruction.
   async extendImage({ imageBase64, extend, prompt = "", keep = null }) {
     if (!imageBase64) throw new Error("An image is required to extend.");
-    const model = "local/moss-image";
+    const model = "local/qwen-image-2.1-lightning";
     const data = {
       model,
       prompt: (prompt || "").trim(),
