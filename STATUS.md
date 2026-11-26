@@ -1,13 +1,17 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (🎭 personas built, not deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## 🎭 Personas (2026-11-26) — built, **not deployed** (needs storywriterbackend + proxy + frontend)
+## 🎭 Personas (2026-11-26) — deployed 2026-11-26 (`991cce8`, storywriterbackend + proxy + frontend)
+
+After deploying (DB backed up first: `~/backups/cardgen-db-20261126-1138-prepersona.sql.gz`): all containers
+healthy, the backend started cleanly, the 11 `saved_user_personas` rows became 11 persona cards (484 characters
+beside them), and the site serves `persona-picker.js?v=20261126-persona`. Nothing signed-in tried on the live site yet.
 
 The player's own character as a card (`character_cards.kind = 'persona'`, extras in `persona` JSON:
 age, gender, voice, isDefault). Plan, decisions and deviations: `plans/persona-mode.md`.
