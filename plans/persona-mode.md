@@ -1,6 +1,7 @@
 # Persona mode: who you play, as a card
 
-Status: **planned, nothing built** (2026-11-25).
+Status: **built 2026-11-26, all six phases; not deployed.** See "What was built" at the end for the
+deviations from the plan below.
 
 A persona is the player's own character: who "you" are in Roleplay Chat, Messenger and Adventure
 (Protagonist). Today it is a free-text field. This makes it a generated, reusable card with a portrait,
@@ -180,3 +181,44 @@ macro bug.
 - Home: hide personas from the main grid by default, or mix them in with a badge?
 - A 🎭 tab in Character Gen's library sidebar, or just the marker?
 - SillyTavern export of a persona: as a character card (macros swapped) or as ST's persona JSON?
+
+## What was built (2026-11-26)
+
+All six phases, in one go. Where it differs from the plan above:
+
+- **Persona text uses the persona's real name, not `{{user}}`.** That removed the macro swap entirely:
+  the same text reads right as "you" and as a character the AI plays, so a persona cast as an AI
+  character needs nothing special. A character card picked as your persona still has `{{char}}`
+  for itself; `services/persona.py` turns that into its name.
+- **"How I talk" lives in the `persona` JSON** (`voice`), not `mes_example`. It is appended to the
+  persona's detail as "How X talks: …".
+- **Following the card** is done by refreshing the chat's copied fields from the card on open, on
+  every generation and on a switch (`persona.sync_chat` / `sync_adventure`), so every existing reader
+  of `user_persona_*` works unchanged.
+- **Roleplay Chat card text now gets `{{char}}` / `{{user}}` filled in** (it reached the model
+  literally; open review finding). Needed for the persona's name to reach the cards at all.
+- **Remembered per character in localStorage** (`cardgen.personaFor.v1`), per device, not from the
+  chat list.
+- **Session indicator:** Roleplay Chat has a "🙋 As X" chip in the ＋ tray that opens the picker
+  (switching mid-chat is new there: its PATCH now takes the persona). Messenger and Adventure switch
+  from their existing ⚙️ Chat settings / 🎛️ This adventure sheets. No portrait on your bubbles and
+  no "playing as" in Adventure's top bar.
+- **Same card both sides:** the picker greys out cards already in the chat and drops its pick if you
+  add that card as a character; the backend does not refuse it.
+- **Personas are mixed into Home's grid** with a 🎭 badge and a 🎭 Personas chip (open question
+  answered that way). Other card pickers list them with everything else, not in a separate group.
+- **Same tag vocabulary** for personas, plus the tag `persona`.
+- **Make a persona from this card** is a server Revise run (`kind: revise` with the card marked
+  persona, so `_revisePersona` writes it), saved to the Library as a new card with the original's
+  portrait. From Home's card sheet only.
+- **Quick create** in the picker: 💾 Save as typed (no AI) or ✨ Write it for me (a server card run,
+  no portrait). A run whose page went away is finished by the next picker to open
+  (`cardgen.personaRun.v1`).
+- `/api/personas` reads and writes persona cards; `saved_user_personas` is no longer written and can
+  be dropped after a release.
+- **Not built:** Story Writer personas; SillyTavern persona export; a 🎭 tab in Character Gen's
+  library sidebar (`kind` is in the library list, unused there yet).
+
+**Tested:** backend `tests/test_personas.py` (11; 117 backend tests in all);
+`tests/cardgen/persona.test.js` (53: proxy + WebKit at 390 light and 320 dark). Not tested: a real
+model writing a persona, the iPhone.

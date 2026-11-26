@@ -1,19 +1,37 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-25 (light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (🎭 personas built, not deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## Next: 🎭 Persona mode (planned 2026-11-25, nothing built)
+## 🎭 Personas (2026-11-26) — built, **not deployed** (needs storywriterbackend + proxy + frontend)
 
-The player's own character as a generated card (`kind='persona'`), made in Character Gen, picked the
-same way in Chat, Messenger and Adventure, and followed by id (edits reach every chat).
-`saved_user_personas` moves into it. Plan, decisions and phases: `plans/persona-mode.md`. Found while
-planning: Chat's "use a card as persona" copies the card's `{{char}}` text as the persona and never
-reads `user_persona_card_id`.
+The player's own character as a card (`character_cards.kind = 'persona'`, extras in `persona` JSON:
+age, gender, voice, isDefault). Plan, decisions and deviations: `plans/persona-mode.md`.
+- **Make one:** Character Gen → Card Type → 🎭 Persona (you): a short "facts, not behaviour" template
+  with the persona's real name (no `{{char}}`), no POV / cast, finishing = tags only; the editor hides
+  scenario, first message, examples, notes, post-history, lorebook and greetings and shows Age,
+  Gender / pronouns, How they talk. Revise / Remaster have a persona branch. Server runs handle it.
+  Or from the picker (✨ New: save as typed, or ✨ Write it for me on the server), or Home → a
+  character's sheet → 🎭 Make a persona.
+- **Pick one:** `src/scripts/persona-picker.js`, the same in Roleplay Chat's new-chat sheet,
+  Messenger's new / ⚙️ settings sheets and Adventure (Protagonist) new / 🎛️ sheets. Pre-picks the
+  persona last played with those characters, else the ★ default. Roleplay Chat: "🙋 As X" chip in the
+  ＋ tray switches mid-chat.
+- **Chats follow the card** (`storywriterbackend/app/services/persona.py`): the copied
+  `user_persona_*` fields are refreshed from the card on open and every turn; a deleted card leaves
+  the last copy. Roleplay Chat cards now get `{{char}}`/`{{user}}` filled in.
+- **On startup** `saved_user_personas` rows become persona cards once (exact duplicates merged;
+  matching chats and adventures linked; marker `personas_migrated_v1` in `app_secrets`).
+- **Home:** 🎭 badge on persona tiles, 🎭 Personas chip, ★ Make my default on a persona's sheet.
+- **Tested:** backend 117 (11 new); `persona.test.js` 53 (proxy + WebKit 390 / 320 dark, incl. page
+  hidden mid-write and the tab discarded mid-write); parser, runs 79, phase 0 50, runs-page 81 and
+  the other cardgen suites re-run. **Not tested:** a real model writing a persona, the iPhone.
+- **To try after deploying:** Character Gen → 🎭 Persona, generate, Save to Library; ★ it on Home;
+  start a Messenger chat (it should be pre-picked); edit the persona and see the next reply use it.
 
 ## Light card lists at start-up; new app icon (2026-11-25) — deployed 2026-11-25 (`57f8f5b`, proxy + frontend; live light list 74 KB / 155 ms vs 11.3 MB)
 
