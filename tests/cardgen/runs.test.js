@@ -142,6 +142,29 @@ const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   await until(() => backend.pushes.some((p) => p.items[0].ok === false), { what: "failure report" });
   check("a failed run is reported as failed", backend.pushes.some((p) => p.items[0].ok === false && /401/.test(p.items[0].error)));
 
+  // 8b. The provider's own reason reaches the user (nano-gpt's billing outage, 2026-11-26).
+  const NANO_503 = { error: "Billing reservation failed", reason: "admission_unavailable", limit_source: "prepaid_reservation", scope: "payer", retry_advice: "retry_with_backoff", code: "async_billing_reservation_failed", status: 503 };
+  model.failAll.card = 503;
+  model.failBody.card = NANO_503;
+  r = await begin({ key: "k8c", spec: spec() });
+  done = await settled(r.json.id);
+  check("a provider outage names the provider's reason in the run's error",
+    done.status === "error" && /^API Error: 503 /.test(done.error) && /Billing reservation failed \(admission_unavailable\)/.test(done.error) && /try again in a few minutes/.test(done.error), done.error);
+  const cardPrompt = model.calls.find((c) => c.kind === "card").body.messages;
+  r = await api("POST", "/api/text/chat/completions", { model: "fake-model", messages: cardPrompt, stream: false }, token, { "x-api-key": "fake-key", "x-api-url": config.api.text.baseUrl });
+  check("the page's own text route says the same, without a second \"API Error\"",
+    r.status === 503 && /^Service Unavailable: Billing reservation failed \(admission_unavailable\)\. The AI provider is having trouble/.test(r.json?.error?.message) && !/API Error/.test(r.json.error.message), r.text);
+  model.failAll.card = 500;
+  model.failBody.card = { error: { message: "Internal server error", type: "server_error", code: null } };
+  r = await api("POST", "/api/text/chat/completions", { model: "fake-model", messages: cardPrompt, stream: false }, token, { "x-api-key": "fake-key", "x-api-url": config.api.text.baseUrl });
+  check("a reason that only repeats the status isn't said twice", r.status === 500 && r.json?.error?.message === "Internal Server Error. The AI provider is having trouble; try again in a few minutes.", r.json?.error?.message);
+  model.failAll.card = 400;
+  model.failBody.card = "<html>bad gateway</html>";
+  r = await api("POST", "/api/text/chat/completions", { model: "fake-model", messages: cardPrompt, stream: false }, token, { "x-api-key": "fake-key", "x-api-url": config.api.text.baseUrl });
+  check("an HTML body adds nothing, and a 4xx gets no 'try again'", r.status === 400 && r.json?.error?.message === "Bad Request", r.json?.error?.message);
+  delete model.failAll.card;
+  delete model.failBody.card;
+
   // 9. Card types and the reference image.
   await clearHistory();
   r = await begin({ key: "k9", spec: spec({ cardType: "scenario", concept: "a haunted lighthouse", referenceImage: PNG }) });
