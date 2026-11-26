@@ -7,7 +7,12 @@ chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## ⤢ Extend rebuilt on Qwen Lightning: green canvas, as an edit (2026-11-26) — committed, **not deployed**
+## ⤢ Extend rebuilt on Qwen Lightning: green canvas, as an edit (2026-11-26) — deployed 2026-11-26 (`c4e43d7`, proxy + frontend)
+
+After deploying: both healthy, the running proxy has `buildQwenExtendGraph` (no `ANYPAINT`) and the text-error fix,
+the site serves `?v=20261126-qwenext`, and the proxy reaches ComfyUI 0.46 through the gateway. No extend run on the
+live site yet. MOSS edit with the same green canvas was tried too: 13 of 14 left the green untouched (its text encoder
+never sees the picture), the other drew giant boots; ~16 s.
 
 Joe extended a 16:9 fantasy picture to 1:1 with all the room below, twice, on MOSS AnyPaint: both came back with a
 made-up book-cover title over a grey band, and with "Extend the picture itself - do not add any words or logos" in
