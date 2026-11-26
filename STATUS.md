@@ -1,13 +1,28 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (⤢ Playground Extend built, not deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (✨ Edit + Reimagine merged, not deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
 something or find something worth remembering: it is the hand-over between machines, since
 Claude's own memory does not travel between them.
 
-## ⤢ Playground Extend (2026-11-26) — built, **not deployed** (needs proxy + frontend)
+## ✨ Playground Edit and Reimagine merged (2026-11-26) — built, **not deployed** (frontend only)
+
+The 🔄 Reimagine tab is gone; ✨ Edit has a two-way switch at the top (`_setPlaygroundEditMode` in
+`image-playground.js`, remembered as `api.image.editMode`):
+- **✏️ Change it**: the old Edit (presets, edit model, ✨ Edit Image).
+- **🔄 New shot**: the old Reimagine (pinned source, Likeness for local Qwen, Shape, How many, the written Prompt,
+  🔄 Make the new shot). Same handlers as before; only the controls moved.
+- One instruction box (`#playground-edit-instruction`, relabelled per mode) and one row of 📐 angle buttons
+  (`data-angle-mode="auto"`: an edit instruction or a new-shot phrase, decided at the tap; switching modes rewords an
+  angle already in the box). Each mode keeps its own model (`editModel` / `reimagineModel`). The panel's `newshot`
+  class hides the other mode's controls (`.pg-change-only` / `.pg-newshot-only`). Anything that opened the Reimagine
+  tab (`_setPlaygroundToolTab("reimagine")`, reusing a history entry) opens Edit in New shot.
+- **Tested:** `edit-modes.test.js` (new, 25: WebKit 390 / 320 dark); playground 63, extend 70, lightbox 28. **Not
+  tested:** the iPhone, a real model.
+
+## ⤢ Playground Extend (2026-11-26) — deployed 2026-11-26 (`63fdc52`, then the paste-back in `a5e4032`, proxy + frontend)
 
 Outpainting, local GPU only (Joe's choice), with **MOSS AnyPaint**: the inpainting LoRA on MOSS-Image *Base* plus
 a DMD2 8-step LoRA, already on the PC for SparkleImage (its 2026-11-17 evaluation: seamless outpainting, ~3 s warm;
@@ -49,8 +64,7 @@ Qwen edit can't outpaint). A new ⤢ Extend tab after Reimagine:
 - **Licence note:** AnyPaint LoRA's licence not checked here; MOSS-Image itself is OpenMOSS's.
 
 ## Queue (2026-11-26)
-1. **Edit vs Reimagine**: merge into one tab with a "how far it can move from the original" switch.
-2. **🖌️ Paint to change** (masked edit) with AnyPaint: paint over an area, redraw only that. AnyPaint does take a mask
+1. **🖌️ Paint to change** (masked edit) with AnyPaint: paint over an area, redraw only that. AnyPaint does take a mask
    (SparkleImage's Mark & remove uses it) and keeps everything else. From SparkleImage's tests: great for removing
    things and replacing whole objects (~3 s); weak on faces and fine detail (it never sees what's under the mask and
    redraws whole 16 px blocks, ArcFace 0.76 vs Qwen edit's 0.90), so composite by the blocks it redrew. Needs a

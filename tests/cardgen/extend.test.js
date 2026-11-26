@@ -233,7 +233,7 @@ const pads = (graph) => {
   let page = await open(context);
 
   const tabOrder = await page.evaluate(() => [...document.querySelectorAll("#playground-tool-tabs button")].map((b) => b.id.replace("pg-tab-", "")).join(","));
-  check("⤢ Extend sits after Reimagine in the tool tabs", /reimagine,extend,enhance/.test(tabOrder), tabOrder);
+  check("⤢ Extend sits after Edit in the tool tabs", /edit,extend,enhance/.test(tabOrder), tabOrder);
   await page.click("#pg-tab-extend");
   check("the Extend panel opens", await page.locator("#pg-panel-extend").isVisible());
   check("with no picture: no frame, a hint, the button off",

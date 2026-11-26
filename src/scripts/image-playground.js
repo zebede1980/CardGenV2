@@ -147,7 +147,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     // just using Edit with a good image-to-image model. Generate is the only
     // tab that doesn't require an existing working image — it's how one gets
     // created from nothing but a prompt.
-    ["generate", "crop", "edit", "reimagine", "extend", "enhance", "combine", "library"].forEach(tab => {
+    ["generate", "crop", "edit", "extend", "enhance", "combine", "library"].forEach(tab => {
       const btn = document.getElementById(`pg-tab-${tab}`);
       if (btn) btn.addEventListener("click", () => this._setPlaygroundToolTab(tab));
     });
@@ -252,6 +252,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     this._initPlaygroundReimagine();
+    this._initPlaygroundEditMode();
     this._initPlaygroundExtend();
   },
 
@@ -261,9 +262,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
   // its canvas, so selecting that tab triggers the same
   // openCropModal('playground') a button click used to.
   _setPlaygroundToolTab(tab) {
+    // Reimagine is Edit's 🔄 New shot mode now.
+    if (tab === "reimagine") {
+      this._setPlaygroundEditMode("newshot");
+      tab = "edit";
+    }
     this._pgActiveTab = tab;
-    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", reimagine: "pg-tab-reimagine", extend: "pg-tab-extend", enhance: "pg-tab-enhance", combine: "pg-tab-combine", library: "pg-tab-library" };
-    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", reimagine: "pg-panel-reimagine", extend: "pg-panel-extend", enhance: "pg-panel-enhance", combine: "pg-panel-combine", library: "pg-panel-library" };
+    const tabs = { generate: "pg-tab-generate", crop: "pg-tab-crop", edit: "pg-tab-edit", extend: "pg-tab-extend", enhance: "pg-tab-enhance", combine: "pg-tab-combine", library: "pg-tab-library" };
+    const panels = { generate: "pg-panel-generate", crop: "pg-panel-crop", edit: "pg-panel-edit", extend: "pg-panel-extend", enhance: "pg-panel-enhance", combine: "pg-panel-combine", library: "pg-panel-library" };
 
     Object.entries(tabs).forEach(([key, id]) => {
       const btn = document.getElementById(id);
@@ -282,7 +288,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.renderPlaygroundLibrary();
     }
 
-    if (tab === "reimagine") this._renderReimagineSource();
+    if (tab === "edit" && this._pgEditMode === "newshot") this._renderReimagineSource();
     if (tab === "extend") this._renderExtendPreview();
 
     if (!this.playgroundImageUrl) return;
@@ -1107,7 +1113,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       this.showNotification("Upload, paste or generate an image first", "warning");
       return null;
     }
-    const change = document.getElementById("playground-reimagine-change")?.value?.trim() || "";
+    const change = document.getElementById("playground-edit-instruction")?.value?.trim() || "";
     const model = document.getElementById("playground-reimagine-model")?.value;
     const promptEl = document.getElementById("playground-reimagine-prompt");
     const writeBtn = document.getElementById("playground-reimagine-write-btn");
@@ -1157,7 +1163,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
       return;
     }
     const route = window.apiHandler.reimagineRoute(model);
-    const change = document.getElementById("playground-reimagine-change")?.value?.trim() || "";
+    const change = document.getElementById("playground-edit-instruction")?.value?.trim() || "";
     const promptEl = document.getElementById("playground-reimagine-prompt");
     const btn = document.getElementById("reimagine-playground-image-btn");
     const statusEl = document.getElementById("playground-reimagine-status");
@@ -1225,6 +1231,62 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } finally {
       if (btn) btn.disabled = false;
       if (statusEl) statusEl.style.display = "none";
+    }
+  },
+
+  // ── Edit's two modes ───────────────────────────────────────────────────────
+  // ✏️ Change it keeps the picture and changes what was asked (an edit model);
+  // 🔄 New shot is a new picture of the same character, scene and style (the
+  // Reimagine code above). One instruction box and one row of angle buttons
+  // serve both; each mode keeps its own model choice. The panel's `newshot`
+  // class shows one mode's controls (CSS: "Playground → Edit modes").
+
+  _initPlaygroundEditMode() {
+    document.querySelectorAll("#pg-edit-mode button[data-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => this._setPlaygroundEditMode(btn.dataset.mode, { remember: true }));
+    });
+    const saved = this.config.get("api.image.editMode");
+    this._setPlaygroundEditMode(this._pgEditMode || (saved === "newshot" ? "newshot" : "change"));
+  },
+
+  _setPlaygroundEditMode(mode, { remember = false } = {}) {
+    const newShot = mode === "newshot";
+    const previous = this._pgEditMode;
+    this._pgEditMode = newShot ? "newshot" : "change";
+    if (remember) this.config.set("api.image.editMode", this._pgEditMode);
+
+    document.getElementById("pg-panel-edit")?.classList.toggle("newshot", newShot);
+    document.querySelectorAll("#pg-edit-mode button[data-mode]").forEach((btn) => {
+      const on = btn.dataset.mode === this._pgEditMode;
+      btn.className = on ? "btn-primary" : "btn-outline";
+      btn.setAttribute("aria-pressed", String(on));
+    });
+    const note = document.getElementById("pg-edit-mode-note");
+    if (note) {
+      note.textContent = newShot
+        ? "A new picture of the same character, scene and style: a new angle, pose or moment. Your picture goes in as the reference."
+        : "Keeps your picture and changes only what you ask: the outfit, the background, the light, the style.";
+    }
+    const label = document.getElementById("playground-edit-instruction-label");
+    if (label) label.textContent = newShot ? "What should the new picture show?" : "✨ Describe the change:";
+    const box = document.getElementById("playground-edit-instruction");
+    if (box) {
+      box.placeholder = newShot
+        ? "e.g. from the front, facing us | a low angle, standing on top of the tank | the same scene at night, sitting by a campfire"
+        : "e.g. change the outfit to a red hoodie, keep the face and pose the same | convert to a realistic photo, same character | remove the background";
+      // An angle picked in the other mode is reworded for this one.
+      if (previous && previous !== this._pgEditMode) {
+        const angle = PLAYGROUND_ANGLES.find((a) => box.value === a.phrase || box.value === playgroundAngleInstruction(a));
+        if (angle) box.value = newShot ? angle.phrase : playgroundAngleInstruction(angle);
+      }
+    }
+    document.querySelectorAll('.pg-angle-row[data-angle-mode="auto"] .pg-angle-btn').forEach((btn, i) => {
+      const angle = PLAYGROUND_ANGLES[i];
+      if (angle) btn.title = newShot ? angle.phrase : playgroundAngleInstruction(angle);
+    });
+    if (newShot) {
+      this._renderReimagineSource();
+      this._syncReimagineControls();
     }
   },
 
@@ -1647,13 +1709,14 @@ Object.assign(CharacterGeneratorApp.prototype, {
     } else if (meta.tool === "edit") {
       setValue("playground-edit-instruction", meta.prompt);
       setValue("playground-edit-model", meta.model);
+      this._setPlaygroundEditMode("change");
       this._setPlaygroundToolTab("edit");
     } else if (meta.tool === "combine") {
       setValue("playground-combine-instruction", meta.prompt);
       setValue("playground-combine-model", meta.model);
       this._setPlaygroundToolTab("combine");
     } else if (meta.tool === "reimagine") {
-      setValue("playground-reimagine-change", meta.change);
+      setValue("playground-edit-instruction", meta.change);
       setValue("playground-reimagine-prompt", meta.prompt);
       setValue("playground-reimagine-model", meta.model);
       setValue("playground-reimagine-likeness", meta.likeness);
@@ -1685,15 +1748,20 @@ Object.assign(CharacterGeneratorApp.prototype, {
       const field = document.getElementById(row.dataset.angleTarget);
       if (!field || row.dataset.ready) return;
       row.dataset.ready = "1";
-      const forReimagine = row.dataset.angleMode === "reimagine";
+      const mode = row.dataset.angleMode;
       PLAYGROUND_ANGLES.forEach((angle) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn-small pg-angle-btn";
         btn.textContent = angle.label;
-        const text = forReimagine ? angle.phrase : playgroundAngleInstruction(angle);
-        btn.title = text;
+        // "auto" follows Edit's mode: a phrase for a new shot, an edit instruction otherwise.
+        const textFor = () => {
+          const forNewShot = mode === "reimagine" || (mode === "auto" && this._pgEditMode === "newshot");
+          return forNewShot ? angle.phrase : playgroundAngleInstruction(angle);
+        };
+        btn.title = textFor();
         btn.addEventListener("click", () => {
+          const text = textFor();
           field.value = text;
           field.dispatchEvent(new Event("input", { bubbles: true }));
           field.dispatchEvent(new Event("change", { bubbles: true }));

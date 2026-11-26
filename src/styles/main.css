@@ -2139,7 +2139,14 @@ h6.rcf-heading { font-size: 0.75rem; }
     pointer-events: none;
 }
 
-/* Playground → Reimagine: the pinned source picture */
+/* Playground → Edit modes: the panel's `newshot` class shows 🔄 New shot's
+   controls, otherwise ✏️ Change it's (_setPlaygroundEditMode). */
+#pg-panel-edit.newshot .pg-change-only,
+#pg-panel-edit:not(.newshot) .pg-newshot-only {
+    display: none !important;
+}
+
+/* Playground → Edit → New shot: the pinned source picture */
 .pg-reimagine-source {
     display: flex;
     align-items: center;
