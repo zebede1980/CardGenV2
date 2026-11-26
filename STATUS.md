@@ -1,6 +1,6 @@
 # CardGenV2 — where things stand
 
-Last updated 2026-11-26 (⤢ Extend rebuilt on Qwen Lightning with a green canvas, committed; 🖌️ Paint an area deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
+Last updated 2026-11-26 (⤢ Extend rebuilt on Qwen Lightning with a green canvas, deployed; provider error reasons shown, deployed; 🖌️ Paint an area deployed; ✨ Edit + Reimagine merged, deployed; ⤢ Playground Extend deployed; 🎭 personas deployed; light card lists at app start + new app icon; Home character browser + AI tagging deployed, all 481 cards tagged; notification tap no longer replaces the open app, deployed; 🔊 Faster Kokoro deployed; Character Gen backend-driven phases 0–2 + server portrait deployed; 🔒 App lock PIN deployed; 🖼️ MiniMax H3-Image deployed; 🔔 push Stage 3 deployed; 📱 Home Screen app + push Stages 1–2 deployed; 💌 Messenger photos deployed; Messenger and the Adventure overhaul deployed 2026-11-08; Story Writer reader and story list portraits deployed). Branch `ChatTest`. MOSS-Image editing, Bria FIBO 2.0 and FLUX.3
 Klein deployed 2026-10-26 (`f837558`). Roleplay Chat variety work committed 2026-11-03. Auto-written stories, the
 output-token change, Qwen Lightning and Z-Image fp8 **deployed 2026-11-06 (`475442f`)**, with the earlier
 chat work, in one rebuild of frontend, proxy and storywriterbackend. Update this file when you ship
@@ -45,7 +45,24 @@ CFG 1 there is no negative prompt.
   mostly green itself (the templates say to change the fill colour then), the iPhone.
 - **Deploy:** proxy (`api-image.js` is a shared script) + frontend.
 
-## 🖌️ Paint an area (2026-11-26) — deployed 2026-11-26 (`da28c1e`, proxy + frontend)
+## Text model errors say why (2026-11-26) — proxy only
+
+Joe got bare "API Error: 503 Service Unavailable" on two new cards. The proxy log had the reason: **nano-gpt's
+billing service was down** (`{"error":"Billing reservation failed","reason":"admission_unavailable",
+"limit_source":"prepaid_reservation",…}`, one 500 too), with $7.56 spendable and nothing pending on the account
+(checked with `/api/check-balance`). DeepSeek V4 Pro and Gemini 3.5 Flash both failed; a Gemini call two minutes
+earlier had worked.
+- `upstreamErrorReason` / `upstreamErrorDetail` in `server.js` read the provider's body (`error` as a string or
+  `{message}`, plus `reason`/`code`), drop a reason that only repeats the status, and add "The AI provider is
+  having trouble; try again in a few minutes." on a 5xx. Used by server card runs (`callTextUpstream`) and the page's
+  `/api/text/chat/completions` (its `message` no longer starts with "API Error", since `api.js` adds
+  "API Error: <status> - "). Now reads e.g. "API Error: 503 - Service Unavailable: Billing reservation failed
+  (admission_unavailable). The AI provider is having trouble; try again in a few minutes."
+- Not changed: image routes, and Story Writer / Chat / Adventure / Messenger (the Python backend's own errors).
+- **Tested:** `runs.test.js` 83 (4 new, all 4 fail on the old code; the fake model takes `failBody`), phase0 50,
+  runs-page 81. **Not tested:** a real provider error on the iPhone.
+
+## 🖌️ Paint an area (2026-11-26) — deployed 2026-11-26 (`da28c1e`, proxy + frontend; the running proxy has `addPaintPasteBack`)
 
 After deploying: both healthy, the running proxy has `addPaintPasteBack`, the site serves the new scripts. **Confirmed by Joe
 in the app 2026-11-26: works well.**

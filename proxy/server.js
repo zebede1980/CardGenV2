@@ -398,6 +398,44 @@ function upstreamFailureStatus(status) {
   return status === 401 || status === 403 ? 502 : status;
 }
 
+/**
+ * What a provider's error body says went wrong, in one short line: the
+ * `error` text (string or `{message}`), plus its `reason`/`code` when that
+ * adds something. nano-gpt's billing outage reads "Billing reservation failed
+ * (admission_unavailable)". Empty for an empty or HTML body.
+ */
+function upstreamErrorReason(bodyText) {
+  const text = String(bodyText || "").trim();
+  if (!text) return "";
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch { /* not JSON */ }
+  if (!parsed || typeof parsed !== "object") {
+    return text.startsWith("<") ? "" : text.replace(/\s+/g, " ").slice(0, 200);
+  }
+  const err = parsed.error;
+  const pick = (...values) => values.find((v) => typeof v === "string" && v.trim()) || "";
+  let out = pick(typeof err === "string" ? err : err?.message, parsed.message, parsed.detail).trim();
+  const reason = pick(parsed.reason, err && typeof err === "object" ? err.reason : null, err && typeof err === "object" ? err.code : null, parsed.code);
+  if (reason && !out.toLowerCase().includes(reason.toLowerCase())) out = out ? `${out} (${reason})` : reason;
+  return out.slice(0, 200);
+}
+
+/**
+ * The text after "API Error: <status>" for a failed model call:
+ * "Service Unavailable: Billing reservation failed (admission_unavailable).
+ * The AI provider is having trouble; try again in a few minutes."
+ */
+function upstreamErrorDetail(status, statusText, bodyText) {
+  const label = String(statusText || "").trim();
+  let reason = upstreamErrorReason(bodyText);
+  if (reason && label && reason.toLowerCase() === label.toLowerCase()) reason = "";
+  let detail = [label, reason].filter(Boolean).join(": ");
+  if (status >= 500) {
+    detail = `${detail ? detail.replace(/[.\s]+$/, "") + ". " : ""}The AI provider is having trouble; try again in a few minutes.`;
+  }
+  return detail;
+}
+
 function requireAuth(req, res, next) {
   // Accept Bearer header OR ?token= query param (needed for <img src> which can't send headers)
   const authHeader = req.headers["authorization"];
@@ -3370,7 +3408,7 @@ async function callTextUpstream({ apiUrl, apiKey, body, signal, onContent, onRea
   if (!response.ok) {
     const details = await response.text().catch(() => "");
     console.error("Text API error (server run):", response.status, details.slice(0, 300));
-    const error = new Error(`API Error: ${response.status} ${response.statusText || ""}`.trim());
+    const error = new Error(`API Error: ${response.status} ${upstreamErrorDetail(response.status, response.statusText, details)}`.trim());
     error.status = response.status;
     throw error;
   }
@@ -3518,15 +3556,17 @@ app.post("/api/text/chat/completions", requireAuth, async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Text API error:", response.status, errorText);
+      const detail = upstreamErrorDetail(response.status, response.statusText, errorText);
       if (job) {
         finishGenerationJob(job, "error", {
-          error: `API Error: ${response.status} ${response.statusText}`,
+          error: `API Error: ${response.status} ${detail}`.trim(),
         });
       }
+      // The page adds "API Error: <status> - " in front of this message.
       return res.status(response.status).json({
         error: {
           code: response.status.toString(),
-          message: `API Error: ${response.statusText}`,
+          message: detail || `API Error: ${response.status}`,
           details: errorText,
         },
       });

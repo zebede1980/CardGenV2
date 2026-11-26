@@ -175,6 +175,7 @@ function startModel() {
     holds: {},
     failNext: {},         // kind -> status code to fail the next call with
     failAll: {},          // kind -> status code to fail every call with, until removed
+    failBody: {},         // kind -> error body (object) to send instead of the default, until removed
     imageDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
   };
   control.hold = (kind, afterChunks = 2) => {
@@ -219,7 +220,8 @@ function startModel() {
       const status = control.failNext[kind] || control.failAll[kind];
       delete control.failNext[kind];
       res.writeHead(status, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ error: { message: `fake failure ${status}` } }));
+      const failBody = control.failBody[kind] || { error: { message: `fake failure ${status}` } };
+      return res.end(typeof failBody === "string" ? failBody : JSON.stringify(failBody));
     }
     const reply = control.replies[kind] ?? control.replies.other;
     const text = typeof reply === "function" ? reply(body) : reply;
