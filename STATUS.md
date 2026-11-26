@@ -9,9 +9,8 @@ Claude's own memory does not travel between them.
 
 ## 🖌️ Paint an area (2026-11-26) — deployed 2026-11-26 (`da28c1e`, proxy + frontend)
 
-After deploying: both healthy, the running proxy has `addPaintPasteBack`, the site serves the new scripts. **No painted
-edit has gone through the live site yet** (a check from inside the container would have needed a token minted as Joe;
-not done). To try: Playground → ✨ Edit → ✏️ Change it → 🖌️ Paint an area, a local model, paint, type, edit.
+After deploying: both healthy, the running proxy has `addPaintPasteBack`, the site serves the new scripts. **Confirmed by Joe
+in the app 2026-11-26: works well.**
 
 ✨ Edit → ✏️ Change it → **🖌️ Paint an area**: paint over the picture (S / M / L brush, 🧽 Erase, ↶ Undo, ✕ Clear),
 type the change as usual, **✨ Edit the painted area**. Only the painted part changes.
@@ -48,7 +47,7 @@ The 🔄 Reimagine tab is gone; ✨ Edit has a two-way switch at the top (`_setP
 - **Tested:** `edit-modes.test.js` (new, 25: WebKit 390 / 320 dark); playground 63, extend 70, lightbox 28. **Not
   tested:** the iPhone, a real model.
 
-## ⤢ Playground Extend (2026-11-26) — deployed 2026-11-26 (`63fdc52`, then the paste-back in `a5e4032`, proxy + frontend)
+## ⤢ Playground Extend (2026-11-26) — deployed 2026-11-26 (`63fdc52`, then the paste-back in `a5e4032`, proxy + frontend); **confirmed by Joe in the app: works well**
 
 Outpainting, local GPU only (Joe's choice), with **MOSS AnyPaint**: the inpainting LoRA on MOSS-Image *Base* plus
 a DMD2 8-step LoRA, already on the PC for SparkleImage (its 2026-11-17 evaluation: seamless outpainting, ~3 s warm;
