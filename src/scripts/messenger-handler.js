@@ -274,7 +274,9 @@
                     chip.appendChild(x);
                     chips.appendChild(chip);
                 });
+                form?.picker.refreshCast(); // who you play may follow who you're texting
             };
+            let form = null;
             paint();
             sheet.querySelector('[data-add]').addEventListener('click', async () => {
                 if (!window.cardGallery || !window.characterStorage) return;
@@ -289,24 +291,34 @@
                 });
             });
             const last = window.config?.get('messenger.lastSettings') || {};
-            const form = this._settingsForm(sheet.querySelector('[data-settings]'), { opener: true, time_aware: true, ...last }, {
-                persona_name: last.persona_name || '', persona_detail: last.persona_detail || '',
-            }, true);
+            // The last typed name prefills "Just a name"; the picker still suggests
+            // the persona you last played with these characters, or your default.
+            form = this._settingsForm(sheet.querySelector('[data-settings]'), { opener: true, time_aware: true, ...last }, {
+                hint: true, persona_name: last.persona_name || '', persona_detail: last.persona_detail || '',
+            }, true, () => this.selected.map((c) => c.id));
             sheet.querySelector('[data-start]').addEventListener('click', async (e) => {
                 const err = sheet.querySelector('.pb-error');
                 if (!this.selected.length) { err.textContent = 'Pick at least one character.'; err.hidden = false; return; }
+                if (form.picker.busy()) { err.textContent = 'Your new persona is still being written.'; err.hidden = false; return; }
                 e.currentTarget.disabled = true;
                 const { settings, persona } = form.get();
-                try { window.config?.set('messenger.lastSettings', { ...settings, persona_name: persona.name, persona_detail: persona.detail }); } catch (_) { /* not critical */ }
                 try {
+                    window.config?.set('messenger.lastSettings', persona.cardId
+                        ? { ...settings, persona_name: last.persona_name || '', persona_detail: last.persona_detail || '' }
+                        : { ...settings, persona_name: persona.name, persona_detail: persona.detail });
+                } catch (_) { /* not critical */ }
+                try {
+                    const cardIds = this.selected.map((c) => c.id);
                     const r = await window.authFetch('/api/sw/messenger/', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            card_ids: this.selected.map((c) => c.id), settings,
+                            card_ids: cardIds, settings,
                             user_persona_name: persona.name || 'You', user_persona_detail: persona.detail,
+                            user_persona_card_id: persona.cardId,
                         }),
                     });
                     if (!r.ok) throw new Error(await errorText(r));
+                    window.PersonaPicker.remember(cardIds, persona.cardId);
                     const chat = await r.json();
                     this._closeSheet(sheet);
                     this.openChat(chat.id);
@@ -320,7 +332,7 @@
         }
 
         /** Style, relationship, persona and options; shared by New and Chat settings. */
-        _settingsForm(box, cfg, persona, isNew) {
+        _settingsForm(box, cfg, persona, isNew, cast = () => []) {
             const uid = `msg${Math.random().toString(36).slice(2, 8)}`;
             box.innerHTML = `
                 <section class="pb-panel">
@@ -334,11 +346,10 @@
                     <label class="pb-label" for="${uid}-rel">You are their…</label>
                     <select id="${uid}-rel" class="input pb-input" data-rel>${RELATIONSHIPS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
                     <input type="text" class="input pb-input" data-rel-text maxlength="300" placeholder="e.g. old flame from university, back in touch" hidden>
-                    <label class="pb-label" for="${uid}-name">Your name</label>
-                    <input type="text" id="${uid}-name" class="input pb-input" data-p-name maxlength="80" placeholder="What they call you">
-                    <label class="pb-label" for="${uid}-detail">About you <span class="pb-soft">(optional)</span></label>
-                    <textarea id="${uid}-detail" class="input pb-input" data-p-detail rows="3" maxlength="2000" placeholder="Anything they'd know about you"></textarea>
-                    <select class="input pb-input" data-p-saved hidden aria-label="Use a saved persona"><option value="">Use a saved persona…</option></select>
+                </section>
+                <section class="pb-panel">
+                    <div class="pb-label">🎭 You are</div>
+                    <div data-persona-picker></div>
                 </section>
                 <section class="pb-panel">
                     ${isNew ? '<label class="msg-check"><input type="checkbox" data-opener> <span>They text first</span></label>' : ''}
@@ -397,8 +408,15 @@
             q('[data-rel-text]').value = cfg.relationship_text || '';
             q('[data-rel]').addEventListener('change', paint);
             q('[data-checkin]').addEventListener('change', paint);
-            q('[data-p-name]').value = persona.persona_name || '';
-            q('[data-p-detail]').value = persona.persona_detail || '';
+            const picker = window.PersonaPicker.mount(q('[data-persona-picker]'), {
+                // An open chat shows who you are in it; a new one lets the picker suggest.
+                value: !persona.hint && (persona.persona_card_id || persona.persona_name)
+                    ? { cardId: persona.persona_card_id || null, name: persona.persona_name || '', detail: persona.persona_detail || '' }
+                    : null,
+                nameHint: persona.hint ? persona.persona_name : '',
+                detailHint: persona.hint ? persona.persona_detail : '',
+                cast,
+            });
             if (q('[data-opener]')) q('[data-opener]').checked = cfg.opener !== false;
             q('[data-time]').checked = cfg.time_aware !== false;
             q('[data-checkin]').checked = !!cfg.checkin;
@@ -415,20 +433,8 @@
             fill(q('[data-photo-model]'), window.config?.get('messenger.photoModel') || '', `Automatic (${this._photoModels().primary || 'no edit model'})`);
             fill(q('[data-photo-fallback]'), window.config?.get('messenger.photoFallback') || '', `Automatic (${this._photoModels().fallback || 'none'})`);
             paint();
-            window.authFetch('/api/sw/personas').then((r) => (r.ok ? r.json() : [])).then((list) => {
-                const sel = q('[data-p-saved]');
-                if (!Array.isArray(list) || !list.length) return;
-                list.forEach((p, i) => sel.insertAdjacentHTML('beforeend', `<option value="${i}">${esc(p.name)}</option>`));
-                sel.hidden = false;
-                sel.addEventListener('change', () => {
-                    const p = list[Number(sel.value)];
-                    if (!p) return;
-                    q('[data-p-name]').value = p.name || '';
-                    q('[data-p-detail]').value = [p.age && `Age ${p.age}`, p.gender, p.detail].filter(Boolean).join('. ');
-                    sel.value = '';
-                });
-            }).catch(() => {});
             return {
+                picker,
                 get: () => {
                     const rel = q('[data-rel]').value;
                     const temp = parseFloat(q('[data-temp]').value);
@@ -447,7 +453,7 @@
                         window.config?.set('messenger.photoModel', q('[data-photo-model]').value);
                         window.config?.set('messenger.photoFallback', q('[data-photo-fallback]').value);
                     } catch (_) { /* not critical */ }
-                    return { settings, persona: { name: q('[data-p-name]').value.trim(), detail: q('[data-p-detail]').value.trim() } };
+                    return { settings, persona: picker.get() };
                 },
             };
         }
@@ -1522,20 +1528,33 @@
                 '<button type="button" class="btn-primary pb-wide" data-save>Save</button>');
             const form = this._settingsForm(sheet.querySelector('[data-settings]'), c.messenger_config || {}, {
                 persona_name: c.user_persona_name === 'User' ? '' : c.user_persona_name, persona_detail: c.user_persona_detail,
-            }, false);
+                persona_card_id: c.user_persona_card_id || null,
+            }, false, () => (c.characters || []).map((x) => x.id));
             sheet.querySelector('[data-save]').addEventListener('click', async (e) => {
+                const err = sheet.querySelector('.pb-error');
+                if (form.picker.busy()) { err.textContent = 'Your new persona is still being written.'; err.hidden = false; return; }
                 e.currentTarget.disabled = true;
                 const { settings, persona } = form.get();
                 try {
+                    // A persona card fills name, age, gender and detail on the server;
+                    // "Just a name" clears what a card had set.
                     const r = await window.authFetch(`/api/sw/messenger/${c.id}`, {
                         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ settings, user_persona_name: persona.name || 'You', user_persona_detail: persona.detail }),
+                        body: JSON.stringify({
+                            settings, user_persona_card_id: persona.cardId,
+                            ...(persona.cardId ? {} : {
+                                user_persona_name: persona.name || 'You', user_persona_detail: persona.detail,
+                                user_persona_age: '', user_persona_gender: '',
+                            }),
+                        }),
                     });
                     if (!r.ok) throw new Error(await errorText(r));
                     const out = await r.json();
+                    window.PersonaPicker.remember((c.characters || []).map((x) => x.id), persona.cardId);
                     c.messenger_config = out.messenger_config;
                     c.user_persona_name = out.user_persona_name;
                     c.user_persona_detail = out.user_persona_detail;
+                    c.user_persona_card_id = out.user_persona_card_id;
                     this._paintHeader();
                     this.render();
                     this._closeSheet(sheet);

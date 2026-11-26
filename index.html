@@ -24,7 +24,7 @@
                 document.querySelector('meta[name="theme-color"]').content = dark ? "#0d1117" : "#f3f7fb";
             })();
         </script>
-        <link rel="stylesheet" href="src/styles/main.css?v=20261124-browse" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20261126-persona" />
         <style>
             /* API Log Popup Styles */
             .api-log-entry {
@@ -539,8 +539,12 @@
                                     <option value="scenario">
                                         Scenario / Location
                                     </option>
+                                    <option value="persona">
+                                        🎭 Persona (you)
+                                    </option>
                                 </select>
                                 <p
+                                    id="card-type-hint"
                                     style="
                                         font-size: 0.75rem;
                                         color: var(--text-secondary);
@@ -555,6 +559,7 @@
                             <div
                                 class="form-group"
                                 style="flex: 1; margin-bottom: 0"
+                                data-hide-making-persona
                             >
                                 <label for="pov-select" class="label"
                                     >Point of View</label
@@ -627,7 +632,7 @@
                             </div>
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <div class="form-group" style="margin-bottom: 1.5rem;" data-hide-making-persona>
                             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                                 <input type="checkbox" id="auto-generate-cast" style="width: 1.2rem; height: 1.2rem;" />
                                 <span style="font-weight: 500;">Auto-generate Supporting Cast</span>
@@ -906,8 +911,30 @@
                                 ></textarea>
                             </div>
 
+                            <!-- 🎭 Persona-only fields (shown when the card is a persona) -->
+                            <div class="character-field persona-fields" data-persona-only style="margin-bottom: 1.5rem">
+                                <div class="persona-fields-row">
+                                    <label class="persona-field">
+                                        <span class="label">Age</span>
+                                        <input type="text" id="persona-age" class="content-box" maxlength="40" placeholder="e.g. 34" autocomplete="off" />
+                                    </label>
+                                    <label class="persona-field">
+                                        <span class="label">Gender / pronouns</span>
+                                        <input type="text" id="persona-gender" class="content-box" maxlength="40" placeholder="e.g. Woman, she/her" autocomplete="off" />
+                                    </label>
+                                </div>
+                                <label class="persona-field">
+                                    <span class="label">How they talk</span>
+                                    <textarea id="persona-voice" class="content-box" rows="3" maxlength="600" placeholder="Accent, register, habits. Used when the AI writes your next message for you."></textarea>
+                                </label>
+                                <p class="persona-fields-note">
+                                    A persona is you. The AI reads it to know who it is talking to, in Roleplay Chat,
+                                    💌 Messenger and Adventure. Keep it short: it is sent with every message.
+                                </p>
+                            </div>
+
                             <!-- Scenario Field -->
-                            <div
+                            <div data-hide-persona
                                 class="character-field"
                                 style="margin-bottom: 1.5rem"
                             >
@@ -963,7 +990,7 @@
                             </div>
 
                             <!-- First Message Field -->
-                            <div
+                            <div data-hide-persona
                                 class="character-field"
                                 style="margin-bottom: 1.5rem"
                             >
@@ -1019,7 +1046,7 @@
                             </div>
 
                             <!-- Example Messages Generator Section -->
-                            <div
+                            <div data-hide-persona
                                 class="character-field example-messages-section"
                                 style="margin-bottom: 1.5rem"
                             >
@@ -1135,7 +1162,7 @@
                             </div>
 
                             <!-- Post-History Instructions Field -->
-                            <div
+                            <div data-hide-persona
                                 class="character-field"
                                 style="margin-bottom: 1.5rem"
                             >
@@ -1200,7 +1227,7 @@
                             </div>
 
                             <!-- Creator's Notes Field -->
-                            <div
+                            <div data-hide-persona
                                 class="character-field"
                                 style="margin-bottom: 1.5rem"
                             >
@@ -1276,7 +1303,7 @@
                                 </div>
                             </div>
 
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;" data-hide-persona>
                                 <!-- Lorebook Generator Section -->
                                 <div class="character-field lorebook-section" style="margin-bottom: 0;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -2238,6 +2265,7 @@
                         <div id="chat-tools-tray" class="chat-tools-tray">
                           <button type="button" id="chat-toggle-ooc-btn" class="chat-tool-chip" title="Add an out-of-character note for the AI">🎭 OOC note</button>
                           <button type="button" id="roleplay-impersonate-btn" class="chat-tool-chip" title="Make the AI write your next message">✍️ Impersonate</button>
+                          <button type="button" id="chat-persona-btn" class="chat-tool-chip" title="Who you play in this chat">🙋 You</button>
                           <label id="chat-speaker-wrap" class="chat-tool-chip chat-speaker-wrap" style="display: none;">
                             <span>🗣️</span>
                             <select id="chat-speaker-select" aria-label="Who replies next"></select>
@@ -2972,20 +3000,20 @@
         <script src="src/scripts/api.js?v=20261120-reopen"></script>
         <script src="src/scripts/name-bank-data.js?v=20260919-namebank"></script>
         <script src="src/scripts/name-bank.js?v=20260919-namebank"></script>
-        <script src="src/scripts/api-character.js?v=20261124-tags"></script>
-        <script src="src/scripts/character-search.js?v=20260526"></script>
+        <script src="src/scripts/api-character.js?v=20261126-persona"></script>
+        <script src="src/scripts/character-search.js?v=20261126-persona"></script>
         <script src="src/scripts/prompt-look.js?v=20261018-cardlooks"></script>
         <script src="src/scripts/h3-edit-caption-prompt.js?v=20261113-h3image"></script>
         <script src="src/scripts/api-image.js?v=20261122-describe"></script>
         <script src="src/scripts/api-lorebook.js?v=20261119-cast"></script>
-        <script src="src/scripts/character-generator.js?v=20261119-titles"></script>
+        <script src="src/scripts/character-generator.js?v=20261126-persona"></script>
         <script src="src/scripts/image-generator.js?v=20260922-imagefixes"></script>
         <script src="src/scripts/png-encoder.js?v=20260218"></script> 
         <script src="src/scripts/storage.js?v=20261125-lib"></script> 
         <script src="src/scripts/lorebook-generator.js?v=20261014-lore"></script>
-        <script src="src/scripts/main.js?v=20261119-revise"></script>
+        <script src="src/scripts/main.js?v=20261126-persona"></script>
         <script src="src/scripts/app-ui.js?v=20261102-scroll"></script>
-        <script src="src/scripts/character-display.js?v=20261119-revise"></script>
+        <script src="src/scripts/character-display.js?v=20261126-persona"></script>
         <script src="src/scripts/image-handler.js?v=20261120-reopen"></script>
         <script src="src/scripts/image-cropper.js?v=20260922-imagefixes"></script>
         <script src="src/scripts/image-playground.js?v=20261122-describe2"></script>
@@ -3007,15 +3035,16 @@
         <script src="src/scripts/storywriter.js?v=20261123-ttsmerge"></script>
         <script src="src/scripts/story-autowriter.js?v=20261123-freeform"></script>
         <script src="src/scripts/story-reader.js?v=20261108-reader"></script>
-        <script src="src/scripts/adventure-handler.js?v=20261108-adv4"></script>
+        <script src="src/scripts/adventure-handler.js?v=20261126-persona"></script>
         <script src="src/scripts/chat-core.js?v=20261108-msg2"></script>
-        <script src="src/scripts/messenger-handler.js?v=20261109-reframe"></script>
+        <script src="src/scripts/messenger-handler.js?v=20261126-persona"></script>
         <script src="src/scripts/inspire-me.js?v=20261119-portrait"></script>
         <script src="src/scripts/gallery-mode.js"></script>
-        <script src="src/scripts/chat-handler.js?v=20261125-lib"></script>
+        <script src="src/scripts/persona-picker.js?v=20261126-persona"></script>
+        <script src="src/scripts/chat-handler.js?v=20261126-persona"></script>
         <script src="src/scripts/chat-settings.js"></script>
         <script src="src/scripts/chat-character-cards.js?v=20260805"></script>
-        <script src="src/scripts/home-handler.js?v=20261124-browse"></script>
+        <script src="src/scripts/home-handler.js?v=20261126-persona"></script>
         <script src="src/scripts/pwa.js?v=20261116-lock"></script>
         <!-- API Settings Modal -->
 
@@ -3974,38 +4003,8 @@
               </div>
               <button id="chat-new-add-char-btn" class="btn-outline btn-small" style="width: 100%; margin-bottom: 1rem;">🖼️ Add Character from Gallery</button>
 
-              <label class="label">User Persona</label>
-              <div style="margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--surface-muted);">
-                  <div style="display: flex; gap: 1rem; margin-bottom: 0.75rem;">
-                      <label style="cursor:pointer; display:flex; align-items:center; gap:0.25rem;"><input type="radio" name="chat_user_persona_type" value="manual" checked> Manual Entry</label>
-                      <label style="cursor:pointer; display:flex; align-items:center; gap:0.25rem;"><input type="radio" name="chat_user_persona_type" value="card"> Select Card</label>
-                  </div>
-                  
-                  <div id="chat-new-persona-manual">
-                      <div id="chat-new-persona-saved-select-container" style="margin-bottom: 0.5rem; display: none;">
-                          <select id="chat-new-persona-saved-select" class="content-box" style="width: 100%; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-color);">
-                              <option value="">-- Select a saved persona --</option>
-                          </select>
-                      </div>
-                      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
-                          <input type="text" id="chat-new-persona-name" class="content-box" style="flex: 2 1 120px; min-width: 0;" placeholder="Name (e.g. User)" />
-                          <input type="text" id="chat-new-persona-age" class="content-box" style="flex: 1 1 60px; min-width: 0;" placeholder="Age" />
-                          <input type="text" id="chat-new-persona-gender" class="content-box" style="flex: 1 1 80px; min-width: 0;" placeholder="Gender" />
-                      </div>
-                      <textarea id="chat-new-persona-detail" class="content-box" rows="2" style="width:100%;" placeholder="Basic Detail (appearance, background...)"></textarea>
-                      <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                          <input type="checkbox" id="chat-new-persona-save" />
-                          <label for="chat-new-persona-save" style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;">Save this persona for later use</label>
-                      </div>
-                  </div>
-                  
-                  <div id="chat-new-persona-card" style="display: none;">
-                      <div style="display: flex; align-items: center; gap: 0.5rem;">
-                          <span id="chat-new-persona-card-name" style="flex:1; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">No card selected</span>
-                          <button id="chat-new-persona-pick-btn" class="btn-outline btn-small">Pick Card</button>
-                      </div>
-                  </div>
-              </div>
+              <label class="label">🎭 You play</label>
+              <div id="chat-new-persona-picker" style="margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--surface-muted);"></div>
               
               <div id="chat-new-first-message-section" style="display: none; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--surface-muted);">
                   <label class="label">Starting Message</label>

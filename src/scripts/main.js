@@ -375,6 +375,12 @@ class CharacterGeneratorApp {
     document.getElementById("character-personality").addEventListener("input", () => this.handleCharacterEdit("personality"));
     document.getElementById("character-scenario").addEventListener("input", () => this.handleCharacterEdit("scenario"));
     document.getElementById("character-first-message").addEventListener("input", () => this.handleCharacterEdit("firstMessage"));
+    for (const [id, key] of [["persona-age", "age"], ["persona-gender", "gender"], ["persona-voice", "voice"]]) {
+      document.getElementById(id)?.addEventListener("input", (e) => {
+        if (!this.currentCharacter) return;
+        this.currentCharacter.persona = { ...(this.currentCharacter.persona || {}), [key]: e.target.value };
+      });
+    }
 
     const postHistoryEl = document.getElementById("character-post-history");
     if (postHistoryEl) {
@@ -632,14 +638,21 @@ class CharacterGeneratorApp {
       const cardType = cardTypeSelect?.value;
       const nameLabel = document.querySelector('label[for="character-name"]');
       const nameInput = document.getElementById("character-name");
-      if (cardType === "group" || cardType === "scenario") {
+      if (cardType === "group" || cardType === "scenario" || cardType === "persona") {
         if (povSelect) { povSelect.value = "third"; povSelect.disabled = true; }
-        if (nameLabel) nameLabel.textContent = cardType === "group" ? "Group Name (optional)" : "Scenario Title (optional)";
-        if (nameInput) nameInput.placeholder = cardType === "group" ? "e.g. The Red Cobras" : "e.g. The Haunted Lighthouse";
+        if (nameLabel) nameLabel.textContent = { group: "Group Name (optional)", scenario: "Scenario Title (optional)", persona: "Your Name (optional)" }[cardType];
+        if (nameInput) nameInput.placeholder = { group: "e.g. The Red Cobras", scenario: "e.g. The Haunted Lighthouse", persona: "The name you go by in roleplays" }[cardType];
       } else {
         if (povSelect) povSelect.disabled = false;
         if (nameLabel) nameLabel.textContent = "Character Name (optional)";
         if (nameInput) nameInput.placeholder = "";
+      }
+      // 🎭 Persona: hide what a persona doesn't use (POV, supporting cast) and say what it is.
+      document.getElementById("view-cardgen")?.classList.toggle("cg-make-persona", cardType === "persona");
+      const hint = document.getElementById("card-type-hint");
+      if (hint) {
+        hint.textContent = cardType === "persona" ? "Who you play in chats and adventures" : "Placeholder for alignment";
+        hint.style.visibility = cardType === "persona" ? "visible" : "hidden";
       }
     };
     if (cardTypeSelect) cardTypeSelect.addEventListener("change", applyCardTypeConstraints);

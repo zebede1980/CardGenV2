@@ -957,9 +957,20 @@ function translateDbCard(c) {
     post_history_instructions: c.post_history_instructions || "",
     character_book: charBook,
   };
+  // 🎭 A persona card: the player's own character. Group and scenario cards
+  // carry their type as a tag; a persona has its own column.
+  if (c.kind === "persona") {
+    character.cardType = "persona";
+    try {
+      character.persona = c.persona ? JSON.parse(c.persona) : {};
+    } catch (e) {
+      character.persona = {};
+    }
+  }
 
   return {
     id: c.id,
+    kind: c.kind === "persona" ? "persona" : "character",
     // Library list renderer uses characterName and isPermanent
     characterName: c.name || "Unnamed Character",
     isPermanent: true,
@@ -1046,6 +1057,8 @@ app.get("/api/storage/cards/summary", requireAuth, async (req, res) => {
       uses: c.uses || 0,
       lastUsedAt: c.last_used_at || null,
       hasImage: pictures.has(String(c.id)),
+      kind: c.kind === "persona" ? "persona" : "character",
+      ...(c.kind === "persona" ? { persona: c.persona || {} } : {}),
     })));
   } catch (e) {
     console.error("[Card Storage] GET /api/storage/cards/summary Error:", e.message);
@@ -1069,13 +1082,15 @@ app.get("/api/storage/cards/library", requireAuth, async (req, res) => {
       isPermanent,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt || c.createdAt,
+      ...(c.kind === "persona" ? { kind: "persona" } : {}),
     });
     res.json([
       ...rows.map((c) => lite({
-        id: c.id, characterName: c.name,
+        id: c.id, characterName: c.name, kind: c.kind,
         createdAt: c.created_at, updatedAt: c.updated_at || c.created_at,
       }, true)),
-      ...histItems.map((h) => lite(h, false)),
+      // History items keep the page's own record, card type included.
+      ...histItems.map((h) => lite({ ...h, kind: h.character?.cardType === "persona" ? "persona" : undefined }, false)),
     ]);
   } catch (e) {
     console.error("[Card Storage] GET /api/storage/cards/library Error:", e.message);
@@ -1267,6 +1282,15 @@ app.post("/api/storage/cards", requireAuth, async (req, res) => {
         : (char.character_book || ""),
       image_path: "",
     };
+    // Only sent when the page knows the type: the backend keeps what the card
+    // has when these are left out, so an older page can't undo a persona.
+    if (char.cardType) {
+      dbPayload.kind = char.cardType === "persona" ? "persona" : "character";
+      if (char.cardType === "persona") {
+        const p = char.persona && typeof char.persona === "object" ? char.persona : {};
+        dbPayload.persona = JSON.stringify({ age: p.age || "", gender: p.gender || "", voice: p.voice || "" });
+      }
+    }
 
     const internalUrl = (process.env.STORY_APP_URL || "http://storywriterbackend:8000").replace(/\/$/, "");
     let url = `${internalUrl}/api/cards/`;

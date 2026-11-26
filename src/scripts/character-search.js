@@ -54,7 +54,7 @@ class CharacterSearch {
           lorebook,
           cardType,
         );
-        return window.characterGenerator.parseCharacterData(rawCharacter);
+        return window.characterGenerator.parseCharacterData(rawCharacter, cardType, characterName);
       } else {
         this._updateSearchStatus("⚠️ No details found — generating from context only", "not-found");
       }

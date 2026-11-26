@@ -212,6 +212,7 @@ class RoleplayChatHandler {
             sendBtn: document.getElementById('roleplay-send-btn'),
             stopBtn: document.getElementById('roleplay-stop-btn'),
             impBtn: document.getElementById('roleplay-impersonate-btn'),
+            personaBtn: document.getElementById('chat-persona-btn'),
 
             oocToggleBtn: document.getElementById('chat-toggle-ooc-btn'),
             oocContainer: document.getElementById('chat-ooc-container'),
@@ -227,17 +228,6 @@ class RoleplayChatHandler {
             newWritingStyle: document.getElementById('chat-new-writing-style'),
             newResponseLength: document.getElementById('chat-new-response-length'),
             createSubmitBtn: document.getElementById('chat-create-submit-btn'),
-            newPersonaManual: document.getElementById('chat-new-persona-manual'),
-            newPersonaCard: document.getElementById('chat-new-persona-card'),
-            newPersonaName: document.getElementById('chat-new-persona-name'),
-            newPersonaAge: document.getElementById('chat-new-persona-age'),
-            newPersonaGender: document.getElementById('chat-new-persona-gender'),
-            newPersonaDetail: document.getElementById('chat-new-persona-detail'),
-            newPersonaCardName: document.getElementById('chat-new-persona-card-name'),
-            newPersonaPickBtn: document.getElementById('chat-new-persona-pick-btn'),
-            newPersonaSavedSelectContainer: document.getElementById('chat-new-persona-saved-select-container'),
-            newPersonaSavedSelect: document.getElementById('chat-new-persona-saved-select'),
-            newPersonaSaveCheckbox: document.getElementById('chat-new-persona-save'),
 
             zoomOutBtn: document.getElementById('chat-zoom-out-btn'),
             zoomResetBtn: document.getElementById('chat-zoom-reset-btn'),
@@ -316,50 +306,7 @@ class RoleplayChatHandler {
             this.els.newAddCharBtn.addEventListener('click', () => this.openGalleryForNewChat());
         }
 
-        if (this.els.newPersonaSavedSelect) {
-            this.els.newPersonaSavedSelect.addEventListener('change', (e) => {
-                const selectedId = e.target.value;
-                if (!selectedId) {
-                    this.els.newPersonaName.value = '';
-                    this.els.newPersonaAge.value = '';
-                    this.els.newPersonaGender.value = '';
-                    this.els.newPersonaDetail.value = '';
-                    return;
-                }
-                const persona = this.savedPersonas.find(p => String(p.id) === String(selectedId));
-                if (persona) {
-                    this.els.newPersonaName.value = persona.name || '';
-                    this.els.newPersonaAge.value = persona.age || '';
-                    this.els.newPersonaGender.value = persona.gender || '';
-                    this.els.newPersonaDetail.value = persona.detail || '';
-                }
-            });
-        }
-
-        const personaRadios = document.querySelectorAll('input[name="chat_user_persona_type"]');
-        personaRadios.forEach(r => r.addEventListener('change', (e) => {
-            if (e.target.value === 'manual') {
-                this.els.newPersonaManual.style.display = 'block';
-                this.els.newPersonaCard.style.display = 'none';
-            } else {
-                this.els.newPersonaManual.style.display = 'none';
-                this.els.newPersonaCard.style.display = 'block';
-            }
-        }));
-
-        if (this.els.newPersonaPickBtn) {
-            this.els.newPersonaPickBtn.addEventListener('click', () => {
-                if (!window.cardGallery) return alert("Gallery module not loaded.");
-                window.cardGallery.open(this.availableCards || [], (cardId) => {
-                    const card = (this.availableCards || []).find(c => c.id === cardId);
-                    if (card) {
-                        this.userPersonaSelectedCard = card;
-                        this.els.newPersonaCardName.textContent = card.name || 'Unnamed';
-                        this.els.newPersonaCardName.style.color = 'var(--text-primary)';
-                    }
-                });
-            });
-        }
+        this.els.personaBtn?.addEventListener('click', () => this.openPersonaSheet());
 
         this.els.oocToggleBtn.addEventListener('click', () => {
             const isHidden = this.els.oocContainer.style.display === 'none';
@@ -823,40 +770,13 @@ class RoleplayChatHandler {
         // style — unlike style, there's a clear default length preference.
         if (this.els.newResponseLength) this.els.newResponseLength.value = 'medium';
 
-        this.userPersonaSelectedCard = null;
-        this.els.newPersonaName.value = '';
-        this.els.newPersonaAge.value = '';
-        this.els.newPersonaGender.value = '';
-        this.els.newPersonaDetail.value = '';
-        this.els.newPersonaCardName.textContent = 'No card selected';
-        this.els.newPersonaCardName.style.color = 'var(--text-secondary)';
-        if (this.els.newPersonaSaveCheckbox) this.els.newPersonaSaveCheckbox.checked = false;
-
-        try {
-            const pRes = await window.authFetch('/api/sw/personas');
-            if (pRes.ok) {
-                this.savedPersonas = await pRes.json();
-                if (this.savedPersonas.length > 0 && this.els.newPersonaSavedSelectContainer) {
-                    this.els.newPersonaSavedSelectContainer.style.display = 'block';
-                    this.els.newPersonaSavedSelect.innerHTML = '<option value="">-- Select a saved persona --</option>';
-                    this.savedPersonas.forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p.id;
-                        opt.textContent = p.name + (p.age ? ` (${p.age})` : '');
-                        this.els.newPersonaSavedSelect.appendChild(opt);
-                    });
-                } else if (this.els.newPersonaSavedSelectContainer) {
-                    this.els.newPersonaSavedSelectContainer.style.display = 'none';
-                }
-            }
-        } catch (e) {
-            console.error("Failed to load saved personas", e);
-        }
-
-        const radioManual = document.querySelector('input[name="chat_user_persona_type"][value="manual"]');
-        if (radioManual) radioManual.checked = true;
-        if (this.els.newPersonaManual) this.els.newPersonaManual.style.display = 'block';
-        if (this.els.newPersonaCard) this.els.newPersonaCard.style.display = 'none';
+        // 🎭 Who you play: the shared persona picker. It suggests the persona
+        // last played with these characters, or your default (persona-picker.js).
+        const lastName = window.config?.get("chat.lastPersonaName") || '';
+        this.personaPicker = window.PersonaPicker.mount(document.getElementById('chat-new-persona-picker'), {
+            nameHint: lastName,
+            cast: () => (this.newChatSelectedCards || []).map((c) => c.id),
+        });
 
         const segments = window.config?.get("chat.systemPromptSegments") || [];
         this.els.newSysPrompt.value = segments.join("\n\n");
@@ -909,6 +829,7 @@ class RoleplayChatHandler {
 
     renderNewChatSelectedChars() {
         if (!this.els.newSelectedChars) return;
+        this.personaPicker?.refreshCast(); // who you play may follow who's in the chat
 
         this.els.newSelectedChars.innerHTML = '';
         if (!this.newChatSelectedCards || this.newChatSelectedCards.length === 0) {
@@ -1001,26 +922,18 @@ class RoleplayChatHandler {
         const sysPrompt = this.els.newSysPrompt.value.trim();
         const cardIds = (this.newChatSelectedCards || []).map(c => c.id);
 
-        let userPersonaName = "User";
-        let userPersonaAge = "";
-        let userPersonaGender = "";
-        let userPersonaDetail = "";
-
-        let userPersonaCardId = null;
-
-        const typeEl = document.querySelector('input[name="chat_user_persona_type"]:checked');
-        const pType = typeEl ? typeEl.value : 'manual';
-
-        if (pType === 'manual') {
-            userPersonaName = this.els.newPersonaName.value.trim() || "User";
-            userPersonaAge = this.els.newPersonaAge.value.trim();
-            userPersonaGender = this.els.newPersonaGender.value.trim();
-            userPersonaDetail = this.els.newPersonaDetail.value.trim();
-        } else if (pType === 'card' && this.userPersonaSelectedCard) {
-            userPersonaName = this.userPersonaSelectedCard.name || "User";
-            userPersonaDetail = [this.userPersonaSelectedCard.description, this.userPersonaSelectedCard.personality]
-                .filter(x => x).join('\n\n');
-            userPersonaCardId = this.userPersonaSelectedCard.id;
+        if (this.personaPicker?.busy()) {
+            alert('Your new persona is still being written.');
+            return;
+        }
+        // With a persona card the server fills name, age, gender and detail from
+        // it, and keeps the chat following it.
+        const persona = this.personaPicker ? this.personaPicker.get() : { cardId: null, name: '', detail: '' };
+        const userPersonaName = persona.name || "User";
+        const userPersonaDetail = persona.cardId ? "" : persona.detail;
+        const userPersonaCardId = persona.cardId || null;
+        if (!persona.cardId) {
+            try { window.config?.set("chat.lastPersonaName", persona.name || ''); } catch (_) { /* not critical */ }
         }
 
         let firstMessageIndex = -1;
@@ -1053,23 +966,6 @@ class RoleplayChatHandler {
             this.els.createSubmitBtn.disabled = true;
             this.els.createSubmitBtn.textContent = 'Creating...';
 
-            if (pType === 'manual' && this.els.newPersonaSaveCheckbox && this.els.newPersonaSaveCheckbox.checked) {
-                try {
-                    await window.authFetch('/api/sw/personas', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name: userPersonaName,
-                            age: userPersonaAge,
-                            gender: userPersonaGender,
-                            detail: userPersonaDetail
-                        })
-                    });
-                } catch (e) {
-                    console.error("Failed to save persona", e);
-                }
-            }
-
             const payload = {
                 title,
                 system_prompt: sysPrompt,
@@ -1077,8 +973,6 @@ class RoleplayChatHandler {
                 response_length: this.els.newResponseLength?.value || "",
                 card_ids: cardIds,
                 user_persona_name: userPersonaName,
-                user_persona_age: userPersonaAge,
-                user_persona_gender: userPersonaGender,
                 user_persona_detail: userPersonaDetail,
                 user_persona_card_id: userPersonaCardId,
                 first_message_index: firstMessageIndex
@@ -1091,6 +985,7 @@ class RoleplayChatHandler {
             });
 
             if (res.ok) {
+                window.PersonaPicker.remember(cardIds, userPersonaCardId);
                 const newChat = await res.json();
                 this.closeNewChatModal();
                 await this.loadSessionList();
@@ -1364,6 +1259,8 @@ class RoleplayChatHandler {
             this.els.activeTitle.textContent = chat.title;
             this.els.activeChars.textContent = chat.characters.map(c => c.name).join(', ') || 'No characters linked';
             this.activeChatCharacters = chat.characters || [];
+            this._activePersona = { cardId: chat.user_persona_card_id || null, name: chat.user_persona_name || '', detail: chat.user_persona_detail || '' };
+            this._paintPersonaChip();
             // Cache character data for lobby avatars
             this._saveToCharCache(chatId, this.activeChatCharacters);
             this._applyChatBackground();
@@ -1504,6 +1401,74 @@ class RoleplayChatHandler {
         oocEl.style.fontSize = '0.82rem';
         oocEl.innerHTML = `<summary style="cursor: pointer; opacity: 0.7; font-weight: 500;">OOC Instruction</summary><div style="margin-top: 0.25rem; font-style: italic; opacity: 0.8; padding-left: 0.5rem; border-left: 2px solid var(--border);">${this.escapeHtml(note)}</div>`;
         return oocEl;
+    }
+
+    _paintPersonaChip() {
+        if (!this.els.personaBtn) return;
+        const name = (this._activePersona?.name || '').trim();
+        this.els.personaBtn.textContent = name && name !== 'User' ? `🙋 As ${name}` : '🙋 You';
+    }
+
+    /**
+     * 🎭 Switch who you play in the open chat. Later turns only: the history
+     * stays as it is. A persona card is followed from then on (the backend
+     * refreshes the chat's copy from it each turn).
+     */
+    openPersonaSheet() {
+        if (!this.activeChatId || !window.PersonaPicker) return;
+        const chatId = this.activeChatId;
+        const overlay = document.createElement('div');
+        overlay.className = 'pb-overlay';
+        overlay.style.zIndex = '1990'; // under the card gallery (2000), which the picker opens
+        overlay.innerHTML = `
+            <div class="pb-sheet" role="dialog" aria-modal="true" aria-label="Who you play">
+                <div class="pb-scroll">
+                    <div class="pb-head"><h2>🎭 Who you play</h2><button type="button" class="pp-link" data-close aria-label="Close">✕</button></div>
+                    <p class="pb-hint">From your next message on. What has been said stays as it is.</p>
+                    <div data-picker></div>
+                    <p class="pb-error" hidden></p>
+                </div>
+                <div class="pb-footer"><button type="button" class="btn-primary pb-wide" data-save>Save</button></div>
+            </div>`;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-close]')) close(); });
+        overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        const castIds = () => (this.activeChatCharacters || []).map((c) => c.id);
+        const picker = window.PersonaPicker.mount(overlay.querySelector('[data-picker]'), {
+            value: this._activePersona?.cardId || this._activePersona?.name ? this._activePersona : null,
+            cast: castIds,
+        });
+        overlay.querySelector('[data-save]').addEventListener('click', async (e) => {
+            const err = overlay.querySelector('.pb-error');
+            if (picker.busy()) { err.textContent = 'Your new persona is still being written.'; err.hidden = false; return; }
+            const btn = e.currentTarget;
+            btn.disabled = true;
+            const p = picker.get();
+            try {
+                const res = await window.authFetch(`/api/sw/chats/${chatId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_persona_card_id: p.cardId,
+                        ...(p.cardId ? {} : { user_persona_name: p.name || 'User', user_persona_detail: p.detail, user_persona_age: '', user_persona_gender: '' }),
+                    }),
+                });
+                if (!res.ok) throw new Error(`The server said ${res.status}`);
+                const out = await res.json();
+                window.PersonaPicker.remember(castIds(), p.cardId);
+                this._activePersona = { cardId: out.user_persona_card_id || null, name: out.user_persona_name || '', detail: out.user_persona_detail || '' };
+                const listed = (this.chats || []).find((c) => c.id === chatId);
+                if (listed) Object.assign(listed, { user_persona_card_id: out.user_persona_card_id, user_persona_name: out.user_persona_name });
+                if (this.activeChatId === chatId) this._paintPersonaChip();
+                close();
+            } catch (ex) {
+                err.textContent = `Couldn’t switch: ${ex.message}`;
+                err.hidden = false;
+                btn.disabled = false;
+            }
+        });
+        overlay.hidden = false;
     }
 
     getUserPersonaData() {

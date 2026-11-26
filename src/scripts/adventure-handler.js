@@ -364,6 +364,7 @@
         async renderSelectedCharacters() {
             const box = this.selectedCharsContainer;
             box.innerHTML = '';
+            this._newPlay?.picker.refreshCast(); // who you play may follow who's in it
             for (const id of this.selectedCharacters) {
                 const card = await window.characterStorage?.getCard(id);
                 if (!card) continue;
@@ -1522,7 +1523,7 @@
          * Render the play settings into box and return { get() } for the
          * resulting config. Shared by the New adventure sheet and "This adventure".
          */
-        _playControls(box, cfg = {}) {
+        _playControls(box, cfg = {}, { isNew = false, cast = () => [] } = {}) {
             const persona = cfg.persona || {};
             const uid = `advp${Math.random().toString(36).slice(2, 8)}`;
             box.innerHTML = `
@@ -1534,11 +1535,8 @@
                     </div>
                     <p class="pb-hint" data-mode-hint></p>
                     <div class="adv-persona" data-persona>
-                        <label class="pb-label" for="${uid}-name">Your character’s name</label>
-                        <input type="text" id="${uid}-name" class="input pb-input" maxlength="80" placeholder="e.g. Wren" data-p-name>
-                        <label class="pb-label" for="${uid}-detail">Who they are <span class="pb-soft">(optional)</span></label>
-                        <textarea id="${uid}-detail" class="input pb-input" rows="3" maxlength="2000" placeholder="A smuggler’s daughter with a debt to pay…" data-p-detail></textarea>
-                        <select class="input pb-input" data-p-saved aria-label="Use a saved persona" hidden><option value="">Use a saved persona…</option></select>
+                        <div class="pb-label">🎭 You play</div>
+                        <div data-persona-picker></div>
                     </div>
                 </section>
                 <section class="pb-panel">
@@ -1586,8 +1584,17 @@
                 if (b.dataset.length) state.length = b.dataset.length;
                 paint();
             });
-            q('[data-p-name]').value = persona.name || '';
-            q('[data-p-detail]').value = persona.detail || '';
+            // An open adventure shows who you play in it; a new one lets the
+            // picker suggest (last played with this cast, or your default), with
+            // the last typed name kept for "Just a name".
+            const picker = window.PersonaPicker.mount(q('[data-persona-picker]'), {
+                value: !isNew && (persona.cardId || persona.name)
+                    ? { cardId: persona.cardId || null, name: persona.name || '', detail: persona.detail || '' }
+                    : null,
+                nameHint: isNew && !persona.cardId ? persona.name || '' : '',
+                detailHint: isNew && !persona.cardId ? persona.detail || '' : '',
+                cast,
+            });
             q('[data-variety]').checked = cfg.variety !== false;
             q('[data-dice]').checked = !!cfg.dice;
             const arc = q('[data-arc]');
@@ -1601,25 +1608,14 @@
                 sel.value = cfg.style || '';
                 paint();
             });
-            window.authFetch('/api/sw/personas').then((r) => (r.ok ? r.json() : [])).then((list) => {
-                const sel = q('[data-p-saved]');
-                if (!Array.isArray(list) || !list.length) return;
-                list.forEach((p, i) => sel.insertAdjacentHTML('beforeend', `<option value="${i}">${esc(p.name)}</option>`));
-                sel.hidden = false;
-                sel.addEventListener('change', () => {
-                    const p = list[Number(sel.value)];
-                    if (!p) return;
-                    q('[data-p-name]').value = p.name || '';
-                    const bits = [p.age && `Age ${p.age}`, p.gender, p.detail].filter(Boolean);
-                    q('[data-p-detail]').value = bits.join('. ');
-                    sel.value = '';
-                });
-            }).catch(() => {});
-
             return {
+                picker,
                 get: () => ({
                     mode: state.mode,
-                    persona: { name: q('[data-p-name]').value.trim(), detail: q('[data-p-detail]').value.trim() },
+                    persona: (() => {
+                        const p = picker.get();
+                        return p.cardId ? { name: p.name, detail: '', cardId: p.cardId } : { name: p.name, detail: p.detail };
+                    })(),
                     length: state.length,
                     style: q('[data-style]').value,
                     variety: q('[data-variety]').checked,
@@ -1635,12 +1631,14 @@
 
         onNewSheetOpen() {
             const last = window.config?.get('adventure.lastPlay') || {};
-            this._newPlay = this._playControls(document.getElementById('adv-new-play'), last);
+            this._newPlay = this._playControls(document.getElementById('adv-new-play'), last,
+                { isNew: true, cast: () => this.selectedCharacters || [] });
         }
 
         newSheetConfig() {
             const cfg = this._newPlay ? this._newPlay.get() : {};
             if (cfg.mode === 'protagonist' && !cfg.persona.name) cfg.persona.name = 'Wren';
+            if (cfg.mode === 'protagonist') window.PersonaPicker.remember(this.selectedCharacters || [], cfg.persona.cardId || null);
             try { window.config?.set('adventure.lastPlay', cfg); } catch (_) { /* not critical */ }
             return cfg;
         }
@@ -1662,7 +1660,8 @@
                 <p class="pb-hint">Changes apply from the next beat.</p>
                 <div class="pb-error" hidden></div>`,
                 '<button type="button" class="btn-primary pb-wide" data-act="save">Save</button>');
-            const controls = this._playControls(sheet.querySelector('[data-play]'), s.config || {});
+            const controls = this._playControls(sheet.querySelector('[data-play]'), s.config || {},
+                { cast: () => (s.characters || []).map((c) => c.id) });
             sheet.querySelector('#adv-this-prompt').value = s.system_prompt || '';
             sheet.querySelector('[data-act="save"]').addEventListener('click', async (e) => {
                 const btn = e.currentTarget;

@@ -24,7 +24,7 @@ class CharacterGenerator {
         lorebook,
         cardType,
       );
-      this.parsedCharacter = this.parseCharacterData(this.rawCharacterData);
+      this.parsedCharacter = this.parseCharacterData(this.rawCharacterData, cardType, characterName);
       return this.parsedCharacter;
     } catch (error) {
       console.error("Error generating character:", error);
@@ -92,8 +92,59 @@ class CharacterGenerator {
     return heading;
   }
 
+  /**
+   * 🎭 A persona reply (api-character.js _buildPersonaPrompt): "# Name", an
+   * intro and **Age:** / **Gender:** / **Appearance:** / **Background:** lines,
+   * then "## Personality" and "## Voice". Age, gender and voice go to
+   * character.persona; the card has no scenario or first message. The real
+   * name stays in the text (no {{char}}), and any macro the model wrote anyway
+   * becomes the name.
+   */
+  parsePersonaData(rawData, nameHint = "") {
+    const text = String(rawData || "").replace(/\r\n/g, "\n").trim();
+    const section = (title) => {
+      const m = text.match(new RegExp(`^##\\s*${title}\\s*$([\\s\\S]*?)(?=^##?\\s|(?![\\s\\S]))`, "im"));
+      return m ? m[1].trim() : "";
+    };
+    const field = (label, from) => {
+      const m = from.match(new RegExp(`^\\s*\\**${label}:\\**\\s*(.+)$`, "im"));
+      return m ? m[1].replace(/\*+/g, "").trim() : "";
+    };
+
+    const heading = text.match(/^#(?!#)\s*(.+?)\s*$/m);
+    const headingName = heading ? heading[1].replace(/[*_]/g, "").replace(/['’]s\s+(?:Profile|Persona)$/i, "").trim() : "";
+    const isPlaceholder = (n) => !n || /\{\{|\}\}|\[|\]|^name$/i.test(n);
+    let name = (nameHint || "").trim();
+    if (!name) name = isPlaceholder(headingName) ? this.extractCharacterName(text) : headingName;
+    if (!name) name = "Unnamed Persona";
+    const ownName = (s) => (s || "").replace(/\{\{\s*(?:char|user)\s*\}\}/gi, name);
+
+    const firstSection = text.search(/^##\s/m);
+    let top = (firstSection === -1 ? text : text.slice(0, firstSection))
+      .replace(/^#(?!#)[^\n]*\n*/, "").trim();
+    const age = field("Age", top);
+    const gender = field("Gender", top);
+    top = top.split("\n").filter((line) => !/^\s*\**(?:Age|Gender):/i.test(line)).join("\n")
+      .replace(/\n{3,}/g, "\n\n").trim();
+
+    if (typeof this.apiHandlerInstance?.recordGeneratedName === "function") {
+      this.apiHandlerInstance.recordGeneratedName(name);
+    }
+    return {
+      name,
+      description: ownName(`# ${name}\n\n${top}`),
+      personality: ownName(section("Personality")),
+      scenario: "",
+      firstMessage: "",
+      mesExample: "",
+      cardType: "persona",
+      persona: { age: age.slice(0, 40), gender: gender.slice(0, 40), voice: ownName(section("Voice")).slice(0, 600) },
+    };
+  }
+
   // Parse character data using simple string splitting based on template
-  parseCharacterData(rawData) {
+  parseCharacterData(rawData, cardType = "single", nameHint = "") {
+    if (cardType === "persona") return this.parsePersonaData(rawData, nameHint);
     const character = {
       name: "",
       description: "",

@@ -36,6 +36,7 @@ const STOPPED = "Generation stopped by user";
 const STEPS = ["card", "finishing", "cast", "portrait"];
 const OPTIONAL_STEPS = { cast: (spec) => spec.cast.want, portrait: (spec) => spec.portrait.want };
 const REVISE_STEPS = ["revise", "finishing"];
+const CARD_TYPES = ["group", "scenario", "persona"]; // anything else is "single"
 const PUSH_LABELS = { "new-card": "New character", revise: "Card revision" };
 const LIMITS = {
   MAX_RUNNING_PER_USER: 2,
@@ -271,7 +272,7 @@ function register(app, deps) {
         // Out of the sandbox as plain data.
         const card = JSON.parse(JSON.stringify(character));
         card.cardType = spec.cardType;
-        if (spec.cardType === "group" || spec.cardType === "scenario") {
+        if (CARD_TYPES.includes(spec.cardType)) {
           card.tags = Array.isArray(card.tags) ? card.tags : [];
           if (!card.tags.includes(spec.cardType)) card.tags.push(spec.cardType);
         }
@@ -291,7 +292,9 @@ function register(app, deps) {
       });
 
       await runStep(run, "finishing", async () => {
-        say(run, "\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
+        say(run, spec.cardType === "persona"
+          ? "\n\n🏷️ Tagging the persona...\n"
+          : "\n\n💬 Generating example messages, creator's notes and post-history instructions...\n");
         await host.api.fillFinishingFields(run.card, {
           count: spec.exampleCount,
           pov: spec.pov,
@@ -508,13 +511,14 @@ function register(app, deps) {
       searchScenario: cleanText(spec.searchScenario, 20000),
       characterName: cleanText(spec.characterName, 200),
       pov: spec.pov === "first" ? "first" : "third",
-      cardType: ["group", "scenario"].includes(spec.cardType) ? spec.cardType : "single",
+      cardType: CARD_TYPES.includes(spec.cardType) ? spec.cardType : "single",
       lorebook: spec.lorebook && typeof spec.lorebook === "object" ? spec.lorebook : null,
       exampleCount: Math.min(10, Math.max(1, parseInt(spec.exampleCount, 10) || 3)),
       exampleStyle: cleanText(spec.exampleStyle, 4000),
       referenceImage,
       hasReferenceImage: !!referenceImage,
-      cast: { want: spec.cast?.want === true },
+      // A persona has no supporting cast: it is you, not a world.
+      cast: { want: spec.cast?.want === true && spec.cardType !== "persona" },
       // A reference image is the portrait already, so none is drawn then.
       portrait: {
         want: spec.portrait?.want === true && !referenceImage,
@@ -532,7 +536,7 @@ function register(app, deps) {
       card,
       instruction: cleanText(spec.instruction, 60000),
       pov: spec.pov === "first" ? "first" : "third",
-      cardType: ["group", "scenario"].includes(card?.cardType) ? card.cardType : "single",
+      cardType: CARD_TYPES.includes(card?.cardType) ? card.cardType : "single",
       withFinishing: spec.withFinishing === true,
       exampleCount: Math.min(10, Math.max(1, parseInt(spec.exampleCount, 10) || 3)),
       exampleStyle: cleanText(spec.exampleStyle, 4000),

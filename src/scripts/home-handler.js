@@ -235,6 +235,7 @@ class HomeHandler {
             if (!chip) return;
             const kind = chip.dataset.chip;
             if (kind === 'desc') this._setBrowse({ desc: !this.browse.desc });
+            else if (kind === 'personas') this._setBrowse({ personas: !this.browse.personas });
             else if (kind === 'used') this._setBrowse({ used: this.browse.used === chip.dataset.value ? 'all' : chip.dataset.value });
             else if (kind === 'tag') {
                 const tag = chip.dataset.value;
@@ -243,7 +244,7 @@ class HomeHandler {
             } else if (kind === 'clear') {
                 if (search) search.value = '';
                 if (clear) clear.hidden = true;
-                this._setBrowse({ q: '', used: 'all', tags: [] });
+                this._setBrowse({ q: '', used: 'all', tags: [], personas: false });
             }
         });
         // A mouse wheel scrolls the chip row sideways (a trackpad already can).
@@ -383,10 +384,11 @@ class HomeHandler {
     }
 
     _filtered() {
-        const { used, tags } = this.browse;
+        const { used, tags, personas } = this.browse;
         const words = this.browse.q.toLowerCase().trim().split(/\s+/).filter(Boolean);
         const sorter = HomeHandler.SORTS[this.browse.sort]?.compare || HomeHandler.SORTS.newest.compare;
         let list = this.cards.filter((c) => (used === 'all' || (used === 'used' ? c.uses > 0 : c.uses === 0))
+            && (!personas || c.kind === 'persona')
             && tags.every((t) => c.tags.includes(t)));
         if (!words.length) return list.sort(sorter);
         const scored = [];
@@ -471,8 +473,10 @@ class HomeHandler {
         const meta = card.uses
             ? `💬 ${card.uses} · ${this.formatRelativeDate(new Date(card._used))}`
             : (Date.now() - card._created < 3 * 86400000 ? '✨ New' : '');
+        const persona = card.kind === 'persona'
+            ? `<span class="hc-persona" title="${card.persona?.isDefault ? 'Your default persona' : 'A persona: someone you play'}">🎭${card.persona?.isDefault ? '★' : ''}</span>` : '';
         tile.innerHTML = `
-            <span class="hc-pic${card.hasImage ? '' : ' hc-noimg'}" data-initial="${initial}">${pic}</span>
+            <span class="hc-pic${card.hasImage ? '' : ' hc-noimg'}" data-initial="${initial}">${pic}${persona}</span>
             <span class="hc-name">${this.escapeHtml(card.name)}</span>
             <span class="hc-meta">${meta || '&nbsp;'}</span>`;
         const img = tile.querySelector('img');
@@ -491,9 +495,11 @@ class HomeHandler {
             .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, HomeHandler.MAX_TAG_CHIPS);
         const chip = (kind, value, label, on, extra = '') =>
             `<button type="button" class="hc-chip${on ? ' hc-on' : ''}${extra}" data-chip="${kind}" data-value="${this.escapeHtml(value)}" aria-pressed="${on}">${label}</button>`;
-        const active = this.browse.q.trim() || used !== 'all' || tags.length;
+        const active = this.browse.q.trim() || used !== 'all' || tags.length || this.browse.personas;
+        const hasPersonas = this.cards.some((c) => c.kind === 'persona');
         row.innerHTML = [
             active ? chip('clear', '', '✕ Clear', false, ' hc-chip-clear') : '',
+            hasPersonas || this.browse.personas ? chip('personas', '', '🎭 Personas', !!this.browse.personas) : '',
             chip('desc', '', '📝 Descriptions', desc),
             chip('used', 'used', '💬 Used', used === 'used'),
             chip('used', 'unused', '🌱 Never used', used === 'unused'),
@@ -511,7 +517,7 @@ class HomeHandler {
         const el = document.getElementById('home-chars-summary');
         if (!el) return;
         const q = this.browse.q.trim();
-        const filtered = q || this.browse.used !== 'all' || this.browse.tags.length;
+        const filtered = q || this.browse.used !== 'all' || this.browse.tags.length || this.browse.personas;
         if (!this.cards.length) { el.textContent = ''; return; }
         let text = filtered
             ? `${this.results.length} of ${this.cards.length} characters`
@@ -546,6 +552,8 @@ class HomeHandler {
                     <button type="button" class="btn-primary" data-act="story">📖 Story</button>
                     <button type="button" class="btn-outline" data-act="text">💌 Text</button>
                     <button type="button" class="btn-outline" data-act="edit">✏️ Edit</button>
+                    <button type="button" class="btn-outline" data-act="persona-default" hidden>★ Make my default</button>
+                    <button type="button" class="btn-outline" data-act="make-persona" hidden title="Rewrite this character as a persona you can play as. The card itself is left as it is.">🎭 Make a persona</button>
                     <button type="button" class="btn-outline" data-act="details">📄 Full card</button>
                     <button type="button" class="btn-outline hcs-delete" data-act="delete">🗑️ Delete</button>
                 </div>
@@ -595,6 +603,14 @@ class HomeHandler {
         const blurb = sheet.querySelector('.hcs-blurb');
         blurb.textContent = card.blurb ? `${card.blurb}${card.blurb.length >= 240 ? '…' : ''}` : '';
         blurb.hidden = !card.blurb;
+        const isPersona = card.kind === 'persona';
+        sheet.querySelector('[data-act="persona-default"]').hidden = !isPersona || !!card.persona?.isDefault;
+        sheet.querySelector('[data-act="make-persona"]').hidden = isPersona;
+        if (isPersona) {
+            const who = [card.persona?.age, card.persona?.gender].filter(Boolean).join(' · ');
+            sheet.querySelector('.hcs-meta').insertAdjacentHTML('afterbegin',
+                `<span>🎭 Persona${card.persona?.isDefault ? ' · ★ your default' : ''}${who ? ` · ${this.escapeHtml(who)}` : ''}</span>`);
+        }
         sheet.hidden = false;
         document.documentElement.classList.add('hcs-open');
         sheet.querySelector('.hcs-close').focus({ preventScroll: true });
@@ -631,6 +647,37 @@ class HomeHandler {
             return;
         }
         if (act === 'delete') return this.showDeleteConfirmation('card', card, card.hasImage ? this._thumbUrl(card, 640) : null);
+        if (act === 'persona-default') {
+            try {
+                const r = await window.authFetch(`/api/sw/cards/${encodeURIComponent(card.id)}/default-persona`, { method: 'POST' });
+                if (!r.ok) throw new Error(`The server said ${r.status}`);
+                this.cards.forEach((c) => { if (c.kind === 'persona') c.persona = { ...(c.persona || {}), isDefault: c.id === card.id }; });
+                window.PersonaPicker?._reset();
+                this.render({ keepPlace: true });
+                window.app?.showNotification?.(`★ ${card.name} is now who you play by default`, 'success');
+            } catch (e) {
+                alert(`Couldn’t make it the default: ${e.message}`);
+            }
+            return;
+        }
+        if (act === 'make-persona') {
+            // A server run: it carries on if the phone locks, and the next page
+            // to open a persona picker saves it if this one is gone by then.
+            window.app?.showNotification?.(`🎭 Making a persona from ${card.name}…`, 'info');
+            try {
+                const id = await window.PersonaPicker.makeFromCard(card.id);
+                window.app?.showNotification?.(`🎭 ${card.name} is now a persona too`, 'success');
+                await this.loadCards({ keepPlace: true });
+                this._setBrowse({ personas: true });
+                if (id) {
+                    const made = this.cards.find((c) => c.id === id);
+                    if (made) this.openSheet(made);
+                }
+            } catch (e) {
+                alert(`Couldn’t make a persona: ${e.message}`);
+            }
+            return;
+        }
         if (act === 'details') {
             try {
                 const full = await window.characterStorage.getCard(card.id);

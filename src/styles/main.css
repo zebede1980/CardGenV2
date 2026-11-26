@@ -6093,3 +6093,67 @@ html.pwa .gallery-toolbar { padding-top: calc(0.75rem + env(safe-area-inset-top,
 #lock-sheet .ls-ask { align-items: center; text-align: center; }
 #lock-sheet .ls-ask .al-padwrap { --al-key: clamp(2.75rem, min(17vw, 9vh), 4rem); }
 #lock-sheet .ls-cancel { min-height: 2.75rem; min-width: 8rem; margin-top: 0.3rem; }
+
+/* ── 🎭 Persona mode in Character Gen ─────────────────────────────────────────
+   A persona is the player's own card: no point of view or supporting cast when
+   making one, and no scenario, first message, example messages, notes,
+   post-history, lorebook or greetings on the card. Age, gender and voice instead. */
+#view-cardgen [data-persona-only] { display: none; }
+#view-cardgen.cg-persona-card [data-persona-only] { display: block; }
+#view-cardgen.cg-persona-card [data-hide-persona],
+#view-cardgen.cg-make-persona [data-hide-making-persona] { display: none !important; }
+.persona-fields-row { display: flex; flex-wrap: wrap; gap: 0 0.75rem; }
+.persona-field { display: flex; flex-direction: column; gap: 0.3rem; flex: 1 1 10rem; min-width: 0; margin-bottom: 0.75rem; }
+.persona-field .content-box {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 1rem; /* 16px: no iOS zoom on focus */
+  padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: 0.5rem;
+  background: var(--surface-color); color: var(--text-color);
+}
+.persona-field textarea.content-box { resize: vertical; }
+.persona-fields-note { font-size: 0.8rem; color: var(--text-secondary); margin: 0; }
+
+/* ── 🎭 Persona picker (persona-picker.js): Roleplay Chat, Messenger, Adventure ──
+   Tiles are <label>s round hidden radios, not <button>s, so main.js's dark-theme
+   button rule can't repaint the picked one. */
+.pp { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.pp-row {
+  display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.15rem 0.1rem 0.4rem;
+  scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+}
+.pp-tile {
+  flex: 0 0 4.6rem; display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+  padding: 0.4rem 0.2rem; border: 2px solid transparent; border-radius: 0.75rem; cursor: pointer;
+  scroll-snap-align: start; color: var(--text-color); font: inherit; min-height: 44px;
+}
+.pp-tile input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+.pp-tile.is-on { border-color: var(--accent); background: var(--accent-soft); }
+.pp-tile:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pp-tile.is-off { opacity: 0.4; cursor: not-allowed; }
+.pp-face {
+  width: 3.4rem; height: 3.4rem; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: var(--surface-muted); border: 1px solid var(--border); font-size: 1.3rem; font-weight: 600;
+  color: var(--text-secondary);
+}
+.pp-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pp-name {
+  font-size: 0.75rem; line-height: 1.2; text-align: center; width: 100%;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.pp-tile-action .pp-face { border-style: dashed; }
+.pp-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; font-size: 0.9rem; }
+.pp-link {
+  background: none !important; border: none !important; padding: 0.25rem 0; color: var(--accent) !important;
+  font: inherit; font-size: 0.85rem; cursor: pointer; min-height: 44px;
+}
+.pp-panel { display: flex; flex-direction: column; gap: 0.35rem; }
+.pp-panel .pb-input { font-size: 1rem; }
+.pp-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem; }
+.pp-actions button { flex: 1 1 9rem; min-height: 44px; }
+
+/* 🎭 A persona tile on Home */
+.hc-persona {
+  position: absolute; top: 0.3rem; left: 0.3rem; z-index: 1; padding: 0.1rem 0.35rem; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 0.75rem; line-height: 1.4; pointer-events: none;
+}
+/* The panels set display, which would otherwise beat the hidden attribute. */
+.pp [hidden] { display: none !important; }

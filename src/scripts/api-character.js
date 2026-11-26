@@ -437,6 +437,7 @@ Object.assign(APIHandler.prototype, {
     // Delegate non-single card types to existing builders unchanged
     if (cardType === "group") return this._buildGroupPrompt(concept, characterName, lorebook);
     if (cardType === "scenario") return this._buildScenarioPrompt(concept, characterName, lorebook);
+    if (cardType === "persona") return this._buildPersonaPrompt(concept, characterName, lorebook);
 
     // Start with the existing base prompts
     const basePrompt = this.buildCharacterPrompt(concept, characterName, pov, lorebook, cardType);
@@ -547,6 +548,7 @@ ${NameGenShared.BANNED_NAMES_BLOCK}${recentBan}`;
     // Delegate to type-specific builders
     if (cardType === "group") return this._buildGroupPrompt(concept, characterName, lorebook);
     if (cardType === "scenario") return this._buildScenarioPrompt(concept, characterName, lorebook);
+    if (cardType === "persona") return this._buildPersonaPrompt(concept, characterName, lorebook);
 
     const nameInstruction = this._buildNameInstruction();
     // Empty in "Any culture" mode; the trailing newlines go with it so the
@@ -856,6 +858,64 @@ ${lorebookContent}`;
     return { systemPrompt, userPrompt: `${userPrompt}\n\nTemplate to fill:\n${templateContent}` };
   },
 
+  /**
+   * 🎭 A persona: the player's own character, for Roleplay Chat, Messenger and
+   * Adventure. Unlike every other card the AI never plays it; it is the facts
+   * the AI must respect about the person it is talking to. So: short (it goes
+   * into every prompt, every turn), portable (no scenario, no first message, no
+   * relationship to anyone), facts rather than behaviour rules (rules about
+   * "you" invite the model to act for the player), and the persona's real name
+   * throughout, never {{char}} or {{user}}, so the same text reads right
+   * whether it is you or, picked as one, a character the AI plays.
+   */
+  _buildPersonaPrompt(concept, personaName, lorebook) {
+    const lorebookContent = this._buildLorebookContent(lorebook);
+    const nameInstruction = this._buildNameInstruction();
+    const cultureSection = CultureSteer.block() ? `${CultureSteer.block()}\n\n` : "";
+
+    const systemPrompt = `You are a persona creator for AI-assisted roleplaying. A persona is the PLAYER'S OWN character: who the player is when they roleplay. Another AI will be playing the other characters, and it reads this persona to know who it is talking to.
+
+**PERSONA PURPOSE:** Facts the other characters can see or know about the player's character: appearance, role, background, reputation, a sketch of their temperament. It is NOT instructions for playing them. The player decides everything their character says, does, thinks and feels, so never write rules for their behaviour ("always…", "never…", "will…", "must…") and never describe their current thoughts or feelings.
+
+**SHORT:** This text goes into every message of every chat it is used in. The whole persona, all sections together, must be about 150–300 words. No padding, no lyrical flourish.
+
+**PORTABLE:** It will be used with many different characters and stories. Write no scenario, no current situation, no first message, and no relationship to any particular other character.
+
+**NAMES:** Write the persona's actual name wherever you refer to them, and he/she/they. Do NOT use {{char}} or {{user}} anywhere.
+
+**PERSPECTIVE:** Third person throughout. No dialogue or quotes.
+
+${cultureSection}${nameInstruction}
+
+**PLAYER REQUIREMENTS OVERRIDE TEMPLATE DEFAULTS:** If the player's concept asks for something specific (details to include, a tone, a length), follow it over the template's defaults.`;
+
+    const templateContent = `
+# [Name]
+
+([Name] is… One or two sentences: who they are and what they do.)
+
+**Age:** (a number, or a short range)
+**Gender:** (gender and pronouns, e.g. "Woman, she/her")
+**Appearance:** (Height, build, hair, eyes, skin, how they dress, anything distinctive. Specific and visual; one short paragraph.)
+**Background:** (Two or three sentences: where they come from, what they do, what others know about them.)
+
+## Personality
+
+(3–5 short bullet points: observable temperament and habits, as another person would notice them. Facts, not rules.)
+
+## Voice
+
+(Two or three sentences on how they talk: register, accent, verbosity, habits. No quotes.)
+
+${lorebookContent}`;
+
+    const userPrompt = personaName
+      ? `Create a persona based on this concept: ${concept}. IMPORTANT: The persona's name MUST be: ${personaName}. Use it in the header (# ${personaName}) and wherever you refer to them.`
+      : `Create a persona based on this concept: ${concept}. Choose a realistic name that fits it, and use it in the header (# [Name]) and wherever you refer to them.`;
+
+    return { systemPrompt, userPrompt: `${userPrompt}\n\nTemplate to fill:\n${templateContent}` };
+  },
+
   _buildScenarioPrompt(concept, scenarioTitle, lorebook) {
     const lorebookContent = this._buildLorebookContent(lorebook);
     const cultureSection = CultureSteer.block() ? `${CultureSteer.block()}\n\n` : "";
@@ -1011,6 +1071,10 @@ ${lorebookContent}`;
     const model = this.config.get("api.text.model");
     const povText = pov === "third" ? "third-person" : "first-person";
 
+    if (currentCharacter.cardType === "persona") {
+      return this._revisePersona(currentCharacter, revisionInstruction, model);
+    }
+
     const data = {
       model,
       messages: [
@@ -1058,6 +1122,65 @@ ${lorebookContent}`;
       console.error("=== REVISION FAILED ===", error);
       throw error;
     }
+  },
+
+  /**
+   * Revise / Remaster for a 🎭 persona: the same rules as _buildPersonaPrompt
+   * (facts not behaviour, short, portable, the real name), so a rewrite never
+   * turns it back into a character card with {{char}}, a scenario and a first
+   * message.
+   */
+  async _revisePersona(currentCharacter, revisionInstruction, model) {
+    const persona = currentCharacter.persona || {};
+    const current = {
+      name: currentCharacter.name || "",
+      age: persona.age || "",
+      gender: persona.gender || "",
+      description: currentCharacter.description || "",
+      personality: currentCharacter.personality || "",
+      voice: persona.voice || "",
+    };
+    const data = {
+      model,
+      messages: [
+        {
+          role: "system",
+          content: "You revise personas for AI roleplay. A persona is the PLAYER'S OWN character: facts the other characters can see or know (appearance, role, background, reputation, a sketch of temperament), never rules for how the player behaves and never their current thoughts or feelings. Keep it short (about 150–300 words in all), with no scenario and no relationship to any particular character. Write the persona's actual name, never {{char}} or {{user}}. Third person, no dialogue. Return strict JSON only with fields: name, age, gender, description, personality, voice. 'description' starts with '# <name>' and holds who they are, appearance and background; 'personality' is 3–5 short bullet points; 'voice' is two or three sentences on how they talk. Escape newlines as \\n inside JSON strings.",
+        },
+        {
+          role: "user",
+          content: `Revise this persona according to this request: ${revisionInstruction}\n\nCurrent persona JSON:\n${JSON.stringify(current, null, 2)}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: MAIN_CARD_MAX_TOKENS,
+      stream: true,
+    };
+    const parsed = this.parseJsonFromModelOutput(await this.streamedText(data, "Persona revision"));
+    const name = String(parsed.name || current.name || "Unnamed Persona").trim();
+    const ownName = (s) => String(s || "").replace(/\{\{\s*(?:char|user)\s*\}\}/gi, name);
+    return {
+      ...currentCharacter,
+      name,
+      description: ownName(parsed.description || current.description),
+      personality: ownName(parsed.personality || current.personality),
+      // Nothing a persona uses (and "Make a persona from this card" starts from
+      // a character card that has all of them).
+      scenario: "",
+      firstMessage: "",
+      mesExample: "",
+      creatorNotes: "",
+      postHistoryInstructions: "",
+      alternateGreetings: [],
+      character_book: undefined,
+      cardType: "persona",
+      persona: {
+        ...persona,
+        age: String(parsed.age ?? current.age).slice(0, 40),
+        gender: String(parsed.gender ?? current.gender).slice(0, 40),
+        voice: ownName(parsed.voice ?? current.voice).slice(0, 600),
+      },
+    };
   },
 
   // Exposes the persistent recently-generated-name history to other modules
@@ -1597,6 +1720,19 @@ Write the instructions now. Plain text only, no formatting.`;
    */
   async fillFinishingFields(target, { count = 3, pov = "third", brief = "", revisionNote = "", exampleStyle = "", lorebookEntries = [] } = {}) {
     if (!target) return;
+
+    // A persona has no example messages, creator's notes or post-history
+    // instructions (the AI never plays it as you); it just gets its tags.
+    if (target.cardType === "persona") {
+      try {
+        const tags = await this.generateTags(target);
+        target.tags = [...new Set(["persona", ...(Array.isArray(target.tags) ? target.tags : []), ...tags])];
+      } catch (error) {
+        if (error.message?.includes("Generation stopped by user")) throw error;
+        console.warn("Persona tags failed (non-fatal):", error);
+      }
+      return;
+    }
 
     let fields = {};
     try {

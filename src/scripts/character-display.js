@@ -102,6 +102,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     if (creatorNotesTextarea) creatorNotesTextarea.value = this.currentCharacter.creatorNotes || "";
 
     this._renderTags(this.currentCharacter.tags || []);
+    this._showPersonaFields();
 
     const resetNameBtn = document.getElementById("reset-name-btn");
     const resetDescriptionBtn = document.getElementById("reset-description-btn");
@@ -145,6 +146,18 @@ Object.assign(CharacterGeneratorApp.prototype, {
     }
 
     this.updateTokenCounts();
+  },
+
+  // 🎭 A persona card shows age / gender / voice and hides the fields a persona
+  // has no use for (scenario, first message, example messages and so on).
+  _showPersonaFields() {
+    const isPersona = this.currentCharacter?.cardType === "persona";
+    document.getElementById("view-cardgen")?.classList.toggle("cg-persona-card", isPersona);
+    const persona = (isPersona && this.currentCharacter.persona) || {};
+    for (const [id, key] of [["persona-age", "age"], ["persona-gender", "gender"], ["persona-voice", "voice"]]) {
+      const el = document.getElementById(id);
+      if (el) el.value = persona[key] || "";
+    }
   },
 
   handleCharacterEdit(field) {
@@ -786,6 +799,7 @@ Object.assign(CharacterGeneratorApp.prototype, {
     this.stSourceAvatar = null;
     this.lastConsistencyReport = null;
     this._updatePushButton();
+    this._showPersonaFields();
 
     this.lorebookData = null;
     this.lorebookEntries = [];
