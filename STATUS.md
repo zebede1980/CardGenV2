@@ -20,6 +20,13 @@ Qwen edit can't outpaint). A new ⤢ Extend tab after Reimagine:
   (the same call as 🔍 Describe, only when tapped). When over 60% of the result is new and the box is empty, the note
   under the frame warns.
 - **Room on both axes runs in two passes** (sides, then top and bottom, in one ComfyUI graph).
+- **The original is pasted back** over the result (`SolidMask` → `FeatherMask` → `ImageCompositeMasked`), fading in over
+  32 px (`ANYPAINT.seamFeatherPx`, the band AnyPaint redraws) only on sides that meet new room. Joe spotted the boy in
+  the samples turning into someone else: AnyPaint regenerates the whole canvas and only steers the original back, so
+  colours shifted and faces changed (mean difference 4–12 of 255 inside the original, up to 6% of pixels well off;
+  worst with two passes). After: 0.0–0.5 on landscape sources, no visible seams at normal size. **Still imperfect:** a
+  person cut off by the picture's own edge (a face at the seam) gets a made-up other half, and the join through the
+  face can look off. Deployed in `63fdc52` without this; the paste-back is the commit after.
 - **Proxy** (`server.js`): `extend: { sourceWidth, sourceHeight, ratio, x, y, room }` on a `local/moss-image` request →
   `parseExtendRequest` / `extendLayout` (canvas 1–1.5 MP, every size a multiple of 16) → `buildMossExtendGraph`
   (`ImageScale` then `MOSSAnyPaintPrepare` with padding, no mask). Resumable and kept in Recent (`__keep` tool

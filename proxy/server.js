@@ -4410,6 +4410,9 @@ const ANYPAINT = {
   minMegapixels: 1.0,
   maxMegapixels: 1.5,
   maxRoom: 2,
+  // The model redraws this much of the original along each seam (boundary_redraw_px);
+  // the original is faded back in across the same band.
+  seamFeatherPx: 32,
   defaultPrompt: "the same picture continued naturally beyond its original edges, the same scene, medium, style, lighting, perspective and level of detail",
 };
 
@@ -4513,7 +4516,24 @@ function buildMossExtendGraph({ prompt, seed, sourceImage, layout }) {
     graph[decode] = { class_type: "VAEDecode", inputs: { samples: [sample, 0], vae: ["5", 0] } };
     image = [decode, 0];
   });
-  graph[LOCAL_COMFY_OUTPUT_NODE] = { class_type: "SaveImage", inputs: { images: image, filename_prefix: "cardgen/extend" } };
+  // AnyPaint redraws the whole canvas, steering the original part back towards
+  // what was there rather than keeping it: colours shifted and faces changed
+  // (tested 2026-11-26, up to 6% of the original's pixels well off, and a face
+  // near the seam became another person). So the original is pasted back over
+  // the result. Only along a side that meets new room is the model's own
+  // redraw kept, fading into the original across the band it was told to
+  // redraw, so the join doesn't show.
+  const feather = (pad) => (pad > 0 ? ANYPAINT.seamFeatherPx : 0);
+  graph[200] = { class_type: "SolidMask", inputs: { value: 1.0, width: layout.width, height: layout.height } };
+  graph[201] = {
+    class_type: "FeatherMask",
+    inputs: { mask: ["200", 0], left: feather(layout.left), top: feather(layout.top), right: feather(layout.right), bottom: feather(layout.bottom) },
+  };
+  graph[202] = {
+    class_type: "ImageCompositeMasked",
+    inputs: { destination: image, source: ["17", 0], x: layout.left, y: layout.top, resize_source: false, mask: ["201", 0] },
+  };
+  graph[LOCAL_COMFY_OUTPUT_NODE] = { class_type: "SaveImage", inputs: { images: ["202", 0], filename_prefix: "cardgen/extend" } };
   return graph;
 }
 

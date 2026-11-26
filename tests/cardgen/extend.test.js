@@ -117,6 +117,15 @@ const pads = (graph) => {
   check("every size and pad is a multiple of 16", mult16(p), JSON.stringify(p));
   check("the picture keeps its shape", Math.abs(p.w / p.h - 600 / 900) < 0.03, `${p.w}x${p.h}`);
   check("no description → the default carry-on prompt", /continued naturally beyond its original edges/.test(node(g, "MOSSAnyPaintEncode").inputs.prompt));
+  // The original is pasted back over the result, fading in only along sides that meet new room.
+  const paste = node(g, "ImageCompositeMasked").inputs;
+  const fade = node(g, "FeatherMask").inputs;
+  const solid = node(g, "SolidMask").inputs;
+  check("the original is pasted back at its place, unchanged in size", g[paste.source[0]].class_type === "ImageScale"
+    && paste.x === p.left && paste.y === p.top && paste.resize_source === false
+    && solid.width === p.w && solid.height === p.h && g[g[56].inputs.images[0]] === node(g, "ImageCompositeMasked"),
+    JSON.stringify({ paste, solid }));
+  check("…fading in over 32 px only on the sides that meet new room", fade.left === 32 && fade.right === 32 && fade.top === 0 && fade.bottom === 0, JSON.stringify(fade));
   check("no mask node is needed", !node(g, "LoadImageMask") && !("generated_mask" in node(g, "MOSSAnyPaintPrepare").inputs));
 
   await extend({ sourceWidth: 600, sourceHeight: 900, ratio: 16 / 9, x: 0, y: 0.5, room: 1 }, { prompt: "a beach at sunset" });
@@ -139,7 +148,9 @@ const pads = (graph) => {
     && pass2.left === 0 && pass2.right === 0 && pass2.top > 0 && pass2.bottom > 0, JSON.stringify([pass1, pass2]));
   check("…the second pass works on the first one's result, and that's what is saved",
     decodeOf(pass1).class_type === "ImageScale" && decodeOf(pass2).class_type === "VAEDecode"
-    && g[g[56].inputs.images[0]].class_type === "VAEDecode" && g[56].inputs.images[0] !== pass2.source[0],
+    && g[g[56].inputs.images[0]].class_type === "ImageCompositeMasked"
+    && g[g[g[56].inputs.images[0]].inputs.destination[0]].class_type === "VAEDecode"
+    && g[g[56].inputs.images[0]].inputs.destination[0] !== pass2.source[0],
     JSON.stringify(Object.keys(g)));
   check("…with a different seed for each pass", new Set(Object.values(g).filter((n) => n.class_type === "KSampler").map((n) => n.inputs.seed)).size === 2);
   check("…and the picture is about 2/3 of the canvas each way", Math.abs(p.w / p.cw - 2 / 3) < 0.04 && Math.abs(p.h / p.ch - 2 / 3) < 0.04, JSON.stringify(p));
